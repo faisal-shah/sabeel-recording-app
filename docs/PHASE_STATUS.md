@@ -197,6 +197,26 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-07-22 — **Phase 3 proven end to end against the REAL project.** Driven
+  through the actual callables with real ID tokens: createCohort → createClass →
+  createStudent+enrollment → createRecording → upload through the Storage REST
+  API with a staff token (so `storage.rules` was genuinely exercised, not
+  bypassed by the Admin SDK) → finalize read back the exact 509,121 bytes →
+  publish → a student signed in, `getPlaybackUrl` returned a **real V4 signed
+  URL** (`X-Goog-Signature` present, ~12 h), it streamed the exact file, range
+  requests answered 206, a second upload was refused 403 (write-once), and a
+  NON-enrolled student was refused playback. All temporary data and accounts
+  deleted afterwards; the walkthrough script is deliberately NOT committed,
+  because it mints an account with admin claims and a known password.
+- 2026-07-22 — **`createStudent` rejected the very first student**, before any
+  class existed, with "classId must be a class id." The callable client
+  serializes an explicitly-`undefined` property as **null**, so the UI's
+  `classId: classId ?? undefined` arrived as `classId: null` and a guard testing
+  only `!== undefined` treated it as a bad value. Fixed on both sides (server
+  treats null as absent; client omits the key) and verified in production with
+  the exact failing payload. The walkthrough above had missed it by always
+  passing a classId — a reminder that a happy-path script is not coverage.
+
 - 2026-07-22 — **`firestore.indexes.json` was EMPTY, and no test could have told
   us.** The Staff and Students screens both showed
   `Live data error (decidedStaff): failed-precondition` on the first real use.

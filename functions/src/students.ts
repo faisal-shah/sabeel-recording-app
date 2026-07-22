@@ -30,11 +30,22 @@ export function validateCreateStudent(data: unknown): CreateStudentInput {
   if (!email.includes('@')) throw new HttpsError('invalid-argument', 'A valid email is required.');
 
   const out: CreateStudentInput = { displayName, email };
-  if (d?.classId !== undefined) {
-    if (typeof d.classId !== 'string' || !d.classId) {
+  // `null` counts as absent, not as a bad value.
+  //
+  // The callable wire format cannot tell them apart: the client SDK serializes
+  // an explicitly-`undefined` property as `null`, so `{ classId: undefined }`
+  // arrives as `{ classId: null }`. A guard testing only `!== undefined` then
+  // rejects "no class selected" with "classId must be a class id" — which is
+  // what happened to the very first student created in production, before any
+  // class existed to select.
+  if (d?.classId !== undefined && d?.classId !== null) {
+    // Trimmed before the emptiness check: '   ' is truthy, so testing the raw
+    // value let a whitespace-only id through to a document lookup.
+    const classId = typeof d.classId === 'string' ? d.classId.trim() : '';
+    if (!classId) {
       throw new HttpsError('invalid-argument', 'classId must be a class id.');
     }
-    out.classId = d.classId;
+    out.classId = classId;
   }
   return out;
 }

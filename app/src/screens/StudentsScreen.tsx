@@ -52,7 +52,10 @@ export function StudentsScreen({ isAdmin, uid }: { isAdmin: boolean; uid: string
       const res = await createStudent({
         displayName: displayName.trim(),
         email: email.trim(),
-        classId: classId ?? undefined,
+        // The key is OMITTED when no class is chosen, never set to undefined:
+        // the callable SDK serializes an explicitly-undefined property as null,
+        // so `classId: undefined` reaches the server as `classId: null`.
+        ...(classId ? { classId } : {}),
       });
       setDisplayName('');
       setEmail('');
