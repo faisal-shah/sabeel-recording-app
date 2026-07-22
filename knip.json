@@ -23,7 +23,8 @@
       "ignoreDependencies": [
         "expo-updates",
         "@expo/metro-runtime",
-        "expo-system-ui"
+        "expo-system-ui",
+        "react-native-worklets"
       ]
     },
     "functions": {

@@ -34,9 +34,9 @@ Two rules encode real incidents and should not be relaxed:
   time-tracker a week
   (its `docs/POSTMORTEM-2026-07-16-stale-week.md`).
 
-  **`liveQuery.ts` does not exist yet** — it arrives in Phase 1 with the first
-  live query. The rule is already in place, so the first `onSnapshot` import
-  will be rejected and point at the file to create.
+  Two files are exempt: `liveQuery.ts` is the choke point itself, and
+  `session.ts` subscribes inside `onAuthStateChanged` rather than a hook — it
+  cannot call one there, and it already does its own reset on every auth change.
 
 ## knip: expected output
 
@@ -110,3 +110,25 @@ makes a suite of denials meaningful.
   ```
 
   It must match `version` in `app/app.json`.
+
+## Verifying the dev sign-in row is not shippable
+
+`app/src/auth/devSignIn.ts` is gated on `IS_DEV && USE_EMULATORS` — two
+independent conditions, because either alone could be got wrong (a release build
+carrying a stale emulator env, or a dev build pointed at production).
+
+**Do not verify this by grepping the exported bundle.** The strings survive
+minification: the `DevRow` component is still referenced from a branch the
+minifier cannot prove dead, so `grep "Emulator sign-in" app/dist-web/` finds it
+in a perfectly safe build. That check produces a false alarm and teaches you to
+ignore it.
+
+Verify what actually matters — that it does not **render**:
+
+```bash
+npm run web:export -w @sabeel/app     # no EXPO_PUBLIC_USE_EMULATORS set
+npx serve -s app/dist-web -l 4601
+# then load it and assert the row is absent from the DOM
+```
+
+Confirmed absent on 2026-07-21 against a production export.

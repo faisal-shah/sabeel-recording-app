@@ -1,16 +1,14 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { getTheme, spacing, useTheme } from '../theme';
-import { useBackendStatus } from '../backendStatus';
 
 const t = getTheme();
 
 /**
- * Phase 0 screen: every semantic theme token, rendered.
+ * Every semantic theme token, rendered. Reachable from Home in dev builds only.
  *
- * A hello-world would prove the toolchain builds. This also proves the palette
- * is *right*, which is the part that survives a code review of the hex values
- * and then looks wrong on a phone. Screenshot it on both surfaces and read it
- * against docs/BRAND.md.
+ * It exists because the palette being *right* is the part that survives a code
+ * review of the hex values and then looks wrong on a phone. Screenshot it on
+ * both surfaces and read it against docs/BRAND.md.
  *
  * Note what this screen deliberately is NOT: there is no raspberry app bar.
  * Chrome is ivory with a dark title — a brand-coloured bar repeated on every
@@ -46,30 +44,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-/** Proves the app can actually reach the backend, not just render. */
-function BackendRow() {
-  const status = useBackendStatus();
-  const label =
-    status.state === 'checking'
-      ? 'Checking…'
-      : status.state === 'ok'
-        ? `Emulator reachable — ping returned ${status.region}`
-        : status.state === 'notConfigured'
-          ? 'Not configured — run with EXPO_PUBLIC_USE_EMULATORS=1'
-          : `Unreachable — ${status.detail}`;
-  const dot =
-    status.state === 'ok'
-      ? t.feedback.success
-      : status.state === 'error'
-        ? t.feedback.danger
-        : t.accent.sage;
-  return (
-    <View style={styles.backendRow}>
-      <View style={[styles.statusDot, { backgroundColor: dot }]} />
-      <Text style={styles.backendText}>{label}</Text>
-    </View>
-  );
-}
 
 export function TokensScreen() {
   return (
@@ -78,8 +52,6 @@ export function TokensScreen() {
       <Text style={styles.lede}>
         Design tokens — Sabeel Institute, Option 1 palette. Single light theme.
       </Text>
-
-      <BackendRow />
 
       <Section title="Backgrounds">
         <Swatch name="bg.canvas" value={t.bg.canvas} note="app background" />
@@ -154,7 +126,7 @@ export function TokensScreen() {
       </Section>
 
       <Text style={styles.footer}>
-        Phase 0 — scaffold verification. No auth, no data.
+        Reference only. Never reachable in a production build.
       </Text>
     </ScrollView>
   );
@@ -217,18 +189,4 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing(3),
   },
   footer: { fontSize: 12, color: t.text.muted, textAlign: 'center' },
-  backendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: t.bg.surface,
-    borderWidth: 1,
-    borderColor: t.border.subtle,
-    borderRadius: 8,
-    paddingVertical: spacing(2),
-    paddingHorizontal: spacing(3),
-    marginBottom: spacing(6),
-  },
-  statusDot: { width: 10, height: 10, borderRadius: 5, marginRight: spacing(2) },
-  // secondary, not muted: this line carries information
-  backendText: { flex: 1, fontSize: 13, color: t.text.secondary },
 });

@@ -1,24 +1,11 @@
-import { onCall } from 'firebase-functions/v2/https';
-import { REGION } from '@sabeel/shared';
+import './setup';
+import { initializeApp } from 'firebase-admin/app';
 
-/**
- * The payload `ping` returns, as a plain function.
- *
- * Handlers are kept separate from their `onCall`/`onDocumentWritten` wrappers
- * throughout this codebase: the wrapper needs a live functions runtime to
- * invoke, the logic does not. Everything worth asserting therefore stays a
- * unit test instead of needing the emulator.
- */
-export function pingPayload(): { ok: true; region: string } {
-  return { ok: true, region: REGION };
-}
+// Once, before any handler runs. The emulator and Cloud Functions both provide
+// credentials from the environment, so no explicit config is needed.
+initializeApp();
 
-/**
- * Phase 0 smoke callable.
- *
- * It exists so the deploy surface is exercised end to end before any real
- * function depends on it: esbuild inlining the private `@sabeel/shared` import,
- * the region constant, and the functions emulator actually registering a
- * callable. Replaced by real callables in Phase 1.
- */
-export const ping = onCall({ region: REGION }, () => pingPayload());
+export { onUserCreate } from './authTrigger';
+export { setStaffAccess } from './staff';
+export { createStudent, setStudentAccess } from './students';
+export { bootstrapAdmin } from './bootstrap';

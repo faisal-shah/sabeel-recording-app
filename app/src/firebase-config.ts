@@ -23,3 +23,13 @@ export const firebaseConfig = {
   messagingSenderId: 'PLACEHOLDER',
   appId: 'PLACEHOLDER',
 };
+
+/**
+ * The WEB OAuth client id (client_type: 3) from google-services.json, used by
+ * the native Google Sign-In SDK.
+ *
+ * It must be the *web* client id even on Android — passing the Android one is a
+ * classic source of the opaque DEVELOPER_ERROR. Only used by the native seam;
+ * the emulator dev sign-in path never reads it.
+ */
+export const WEB_CLIENT_ID = 'PLACEHOLDER.apps.googleusercontent.com';

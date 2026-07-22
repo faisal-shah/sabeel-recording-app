@@ -74,9 +74,14 @@ export default tseslint.config(
     // state showed one week's entries under another on slow connections in the
     // sibling time-tracker, and stayed invisible for a week
     // (its docs/POSTMORTEM-2026-07-16-stale-week.md). liveQuery.ts is the choke
-    // point and is therefore the only exemption.
+    // point.
+    //
+    // session.ts is the one other exemption: its listener lives inside
+    // onAuthStateChanged rather than a hook, is re-armed on every auth change,
+    // and already does its own reset — the invariants the wrapper exists to
+    // enforce. It cannot call a hook there, so the rule cannot be satisfied.
     files: ['app/src/**/*.{ts,tsx}'],
-    ignores: ['app/src/liveQuery.ts'],
+    ignores: ['app/src/liveQuery.ts', 'app/src/session.ts'],
     rules: {
       'no-restricted-imports': [
         'error',

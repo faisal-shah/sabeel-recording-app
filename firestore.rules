@@ -1,14 +1,69 @@
 rules_version = '2';
 
-// Phase 0: deny everything. Real rules arrive in Phase 1 with the two auth
-// populations (staff via Google, students via email/password) and in Phase 2
-// with class scopes.
+// Deny by default. The backend (Cloud Functions, Admin SDK) bypasses all rules;
+// clients get only the narrow paths spelled out below.
 //
-// Deny-all is not a placeholder to be skipped over in review: it is the correct
-// default, and the rules test suite asserts it holds. Every rule added later
-// must widen this deliberately, one collection at a time.
+// Role and status live in CUSTOM CLAIMS, set exclusively by Cloud Functions. The
+// user documents mirror them so the UI can render a name and a state, but the
+// token is what these rules trust — a stale or tampered mirror must never grant
+// anything. Every predicate reads request.auth.token, never resource.data.
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Domain membership, and even a successful Google sign-in, grant NOTHING on
+    // their own — an admin has to approve the account. Default '' so a claimless
+    // token (a brand-new account, or one the auth trigger is about to delete)
+    // fails every check.
+    function isActive() {
+      return isSignedIn() && request.auth.token.get('status', '') == 'active';
+    }
+
+    function role() {
+      return request.auth.token.get('role', '');
+    }
+
+    function isStaff() {
+      return isActive() && role() in ['manager', 'admin'];
+    }
+
+    // Admins alone approve staff, change roles, and manage student access.
+    function isAdmin() {
+      return isActive() && role() == 'admin';
+    }
+
+    // ---- Staff ----
+    // Read-only to clients; every write goes through the setStaffAccess
+    // callable. Role and status ARE the security model, so letting clients write
+    // any field of their own staff document would mean every field added here
+    // later needs re-auditing to be sure it is not privilege-adjacent. Denying
+    // writes outright means that audit can never be forgotten.
+    match /staffUsers/{uid} {
+      // Your own document, readable even while pending, so the gate screen can
+      // show your status and update the moment an admin approves you.
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      // Staff see the roster; admins run the approval queue from it. Both need a
+      // name and an address to know who they are looking at.
+      allow get, list: if isStaff();
+      allow write: if false;
+    }
+
+    // ---- Students ----
+    // Staff manage students; a student may read only their own record.
+    // Deliberately no self-write: a student renaming themselves would alter the
+    // accountability record staff rely on.
+    match /students/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow get, list: if isStaff();
+      allow write: if false;
+    }
+
+    // ---- Everything else ----
+    // Cohorts, classes, enrollments and the recording model arrive in 1b and
+    // later phases. Until each is opened deliberately, it stays denied.
     match /{document=**} {
       allow read, write: if false;
     }

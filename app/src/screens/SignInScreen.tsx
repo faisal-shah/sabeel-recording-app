@@ -1,0 +1,194 @@
+import { useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '../firebase';
+import { signInWithGoogle } from '../auth/google';
+import { devSignIn, devSignInAvailable } from '../auth/devSignIn';
+import { Button, Field, Notice, Screen } from '../components/ui';
+import { getTheme, spacing } from '../theme';
+
+const t = getTheme();
+
+/**
+ * The one screen both populations start from.
+ *
+ * Ivory, not a raspberry field: a full-bleed brand background here is the single
+ * most common way to blow the palette's proportion budget. Raspberry appears
+ * only on the primary button.
+ */
+export function SignInScreen() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState<null | 'google' | 'student' | 'reset'>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+
+  const run = async (kind: 'google' | 'student' | 'reset', fn: () => Promise<void>) => {
+    setBusy(kind);
+    setError(null);
+    setInfo(null);
+    try {
+      await fn();
+    } catch (e) {
+      setError(messageFor(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Screen title="Class Recordings" subtitle="Sabeel Institute">
+      <View style={styles.block}>
+        <Text style={styles.groupTitle}>Staff</Text>
+        <Text style={styles.groupHint}>
+          Sign in with your Sabeel Google account. New accounts need an admin to approve
+          them before they can be used.
+        </Text>
+        <Button
+          testID="signin-google"
+          label="Sign in with Google"
+          busy={busy === 'google'}
+          disabled={busy !== null}
+          onPress={() => void run('google', signInWithGoogle)}
+        />
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.block}>
+        <Text style={styles.groupTitle}>Students</Text>
+        <Text style={styles.groupHint}>
+          Use the email address your teacher registered, and the password you set from
+          the emailed link.
+        </Text>
+        <Field
+          testID="signin-email"
+          label="Email"
+          value={email}
+          onChangeText={setEmail}
+          placeholder="you@example.com"
+          keyboardType="email-address"
+        />
+        <Field
+          testID="signin-password"
+          label="Password"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+        <Button
+          testID="signin-student"
+          label="Sign in"
+          busy={busy === 'student'}
+          disabled={busy !== null || !email.trim() || !password}
+          onPress={() =>
+            void run('student', async () => {
+              await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+            })
+          }
+        />
+        <Button
+          label="Email me a password link"
+          variant="secondary"
+          busy={busy === 'reset'}
+          disabled={busy !== null || !email.trim()}
+          onPress={() =>
+            void run('reset', async () => {
+              await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+              // Deliberately the same message whether or not the address exists:
+              // a differing one turns this into a way to test who has an account.
+              setInfo('If that address has an account, a link is on its way.');
+            })
+          }
+        />
+      </View>
+
+      {error ? <Notice tone="error">{error}</Notice> : null}
+      {info ? <Notice tone="info">{info}</Notice> : null}
+
+      {devSignInAvailable ? <DevRow busy={busy !== null} /> : null}
+    </Screen>
+  );
+}
+
+/**
+ * Emulator-only. Present so authenticated screens can be reached by a script —
+ * the sign-in screen is the only one an unauthenticated screenshot can capture,
+ * and it is evidence about nothing else.
+ *
+ * Gated on IS_DEV *and* the emulator flag. Verify it is absent from a production
+ * export by grepping the bundle for this label.
+ */
+function DevRow({ busy }: { busy: boolean }) {
+  const [pending, setPending] = useState(false);
+  const as = (localPart: string) => async () => {
+    setPending(true);
+    try {
+      await devSignIn(localPart);
+    } finally {
+      setPending(false);
+    }
+  };
+  return (
+    <View style={styles.devRow}>
+      <Text style={styles.devLabel}>Emulator sign-in (dev only)</Text>
+      <Button
+        testID="dev-signin-first-admin"
+        label="as faisal (first admin)"
+        variant="secondary"
+        disabled={busy || pending}
+        onPress={() => void as('faisal')()}
+      />
+      <Button
+        testID="dev-signin-manager"
+        label="as manager"
+        variant="secondary"
+        disabled={busy || pending}
+        onPress={() => void as('manager')()}
+      />
+      <Button
+        testID="dev-signin-outsider"
+        label="as outsider (gets deleted)"
+        variant="secondary"
+        disabled={busy || pending}
+        onPress={() => void as('someone@gmail.com')()}
+      />
+    </View>
+  );
+}
+
+function messageFor(e: unknown): string {
+  const code = (e as { code?: string }).code ?? '';
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      // One message for all three: distinguishing them tells an attacker which
+      // addresses are registered.
+      return 'That email and password do not match an account.';
+    case 'auth/user-disabled':
+      return 'That account has been disabled. Ask your teacher.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Wait a few minutes and try again.';
+    case 'auth/network-request-failed':
+      return 'Could not reach the server. Check your connection.';
+    default:
+      return (e as Error).message || 'Something went wrong. Try again.';
+  }
+}
+
+const styles = StyleSheet.create({
+  block: { marginBottom: spacing(2) },
+  groupTitle: { fontSize: 17, fontWeight: '700', color: t.text.primary, marginBottom: spacing(1) },
+  groupHint: { fontSize: 14, color: t.text.secondary, marginBottom: spacing(1) },
+  divider: { height: 1, backgroundColor: t.accent.gold, marginVertical: spacing(6) },
+  devRow: {
+    marginTop: spacing(8),
+    padding: spacing(3),
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: t.border.strong,
+  },
+  devLabel: { fontSize: 12, color: t.text.muted, marginBottom: spacing(1) },
+});

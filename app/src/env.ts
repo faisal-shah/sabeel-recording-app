@@ -8,6 +8,16 @@ import { Platform } from 'react-native';
 // var set, then relaunch the app.
 export const USE_EMULATORS = process.env.EXPO_PUBLIC_USE_EMULATORS === '1';
 
+/**
+ * True in a development bundle, false in a release build.
+ *
+ * `__DEV__` rather than a NODE_ENV comparison: Metro substitutes it as a literal
+ * at build time on both native and web, so a `if (__DEV__)` branch can actually
+ * be eliminated, and it is the constant React Native itself is defined in terms
+ * of. NODE_ENV is not reliably set on a native release build.
+ */
+export const IS_DEV = __DEV__;
+
 // The Android emulator reaches the host machine at 10.0.2.2.
 // Web uses the LITERAL 127.0.0.1, never 'localhost': the Firebase emulators bind
 // to IPv4 only, while 'localhost' can resolve to IPv6 ::1 first — the request

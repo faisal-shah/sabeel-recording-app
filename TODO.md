@@ -4,10 +4,25 @@ Everything that needs a human with console access, a credit card, or a phone.
 The agent cannot do any of these. Keep this current — it is the list Faisal
 works from.
 
-Nothing here blocks Phase 0, which runs entirely against the emulator suite.
+Nothing here blocks development: `devSignIn` mints a Google-provider identity in
+the Auth emulator, and the Auth emulator handles password resets, so every phase
+before 6 is buildable and testable before the real Firebase project exists.
 
 ## Before Phase 1 (auth)
 
+- [ ] **Disable client-side email/password sign-up** — Firebase console →
+      Authentication → Settings → User actions → uncheck "Enable create
+      (sign-up)". **Load-bearing.** The auth-create trigger deliberately leaves
+      password accounts alone, because only the Admin SDK is supposed to make
+      them. Without this a stranger could self-register — they would get no
+      claims and could read nothing, but the accounts would accumulate.
+- [ ] **Reword the password-reset email template** (Authentication → Templates)
+      from "reset your password" to "set your password". Students receive it for
+      an account they have never had a password on, so the default wording reads
+      as though something has gone wrong.
+- [ ] **Change `FIRST_ADMIN_EMAIL`** in `functions/src/bootstrap.ts` if the first
+      admin is not `faisal@oursabeel.com`, then deploy → call once → **delete the
+      function**.
 - [ ] **Create the Firebase project.** Decide the project id (suggested
       `sabeel-class-recordings`) and who owns billing. Then paste the web app
       config into `app/src/firebase-config.ts` — it replaces the placeholders,

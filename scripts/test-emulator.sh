@@ -19,5 +19,5 @@ bash "$(dirname "$0")/free-emulator-ports.sh"
 
 exec firebase emulators:exec \
   --project demo-sabeel \
-  --only firestore,auth,storage \
+  --only firestore,auth,storage,functions \
   "npm run test:integration -w functions"
