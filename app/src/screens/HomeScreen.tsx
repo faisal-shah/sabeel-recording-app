@@ -17,50 +17,36 @@ export function HomeScreen({
 }: {
   name: string;
   role: Role;
-  onOpen: (route: 'Staff' | 'Students' | 'Cohorts' | 'MyClasses' | 'MyRecordings' | 'Tokens') => void;
+  onOpen: (route: 'Staff' | 'Students' | 'Cohorts' | 'MyClasses' | 'Tokens') => void;
 }) {
+  // Staff only — a student's landing is StudentHomeScreen (their task list).
   const isAdmin = role === 'admin';
-  const isStaff = role === 'admin' || role === 'manager';
 
   return (
     <Screen title={`Hello, ${name}`} subtitle={roleLabel(role)}>
-      {isStaff ? (
-        <>
-          <SectionTitle>Manage</SectionTitle>
-          <Card>
-            {isAdmin ? (
-              <>
-                <Button testID="nav-cohorts" label="Cohorts & classes" onPress={() => onOpen('Cohorts')} />
-                <Button
-                  testID="nav-staff"
-                  label="Staff"
-                  variant="secondary"
-                  onPress={() => onOpen('Staff')}
-                />
-              </>
-            ) : (
-              <Button testID="nav-myclasses" label="My classes" onPress={() => onOpen('MyClasses')} />
-            )}
+      <SectionTitle>Manage</SectionTitle>
+      <Card>
+        {isAdmin ? (
+          <>
+            <Button testID="nav-cohorts" label="Cohorts & classes" onPress={() => onOpen('Cohorts')} />
             <Button
-              testID="nav-students"
-              label="Students"
+              testID="nav-staff"
+              label="Staff"
               variant="secondary"
-              onPress={() => onOpen('Students')}
+              onPress={() => onOpen('Staff')}
             />
-          </Card>
-          <Notice tone="info">
-            Recordings and the accountability ledger arrive in the next phases.
-          </Notice>
-        </>
-      ) : (
-        <Card>
-          <Button
-            testID="nav-myrecordings"
-            label="My recordings"
-            onPress={() => onOpen('MyRecordings')}
-          />
-        </Card>
-      )}
+          </>
+        ) : (
+          <Button testID="nav-myclasses" label="My classes" onPress={() => onOpen('MyClasses')} />
+        )}
+        <Button
+          testID="nav-students"
+          label="Students"
+          variant="secondary"
+          onPress={() => onOpen('Students')}
+        />
+      </Card>
+      <Notice tone="info">The accountability ledger and reports arrive in the next phase.</Notice>
 
       {IS_DEV ? (
         <Button label="Design tokens" variant="secondary" onPress={() => onOpen('Tokens')} />

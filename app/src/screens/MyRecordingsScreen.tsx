@@ -5,6 +5,7 @@ import { COLLECTIONS, type ClassDoc, type RecordingDoc } from '@sabeel/shared';
 import { Card, Empty, Notice, Screen, SectionTitle } from '../components/ui';
 import { db } from '../firebase';
 import { useLiveQuery } from '../liveQuery';
+import { useMyAssignments } from '../completion';
 import { useMyEnrollments, type ClassRow } from '../structure';
 import type { RecordingRow } from '../recordings';
 import { getTheme, spacing } from '../theme';
@@ -33,13 +34,21 @@ export function MyRecordingsScreen({
     [enrollments],
   );
 
+  // Which recordings are REQUIRED for this student — everything else in a class
+  // is accessible but "not assigned" (brief § Class access & archive).
+  const assignments = useMyAssignments(uid);
+  const assignedIds = useMemo(
+    () => new Set(assignments.map((a) => a.recordingId)),
+    [assignments],
+  );
+
   return (
     <Screen subtitle="Your recordings">
       {classIds.length === 0 ? (
         <Empty>You are not enrolled in any classes yet.</Empty>
       ) : (
         classIds.map((classId) => (
-          <ClassSection key={classId} classId={classId} onOpen={onOpen} />
+          <ClassSection key={classId} classId={classId} assignedIds={assignedIds} onOpen={onOpen} />
         ))
       )}
     </Screen>
@@ -74,9 +83,11 @@ function useClass(classId: string): ClassRow | null {
 
 function ClassSection({
   classId,
+  assignedIds,
   onOpen,
 }: {
   classId: string;
+  assignedIds: Set<string>;
   onOpen: (r: RecordingRow, c: ClassRow) => void;
 }) {
   const cls = useClass(classId);
@@ -121,6 +132,9 @@ function ClassSection({
                   {r.durationSec ? `${Math.round(r.durationSec / 60)} min` : 'duration unknown'}
                   {r.dueDate ? ` · due ${r.dueDate}` : ' · no due date'}
                 </Text>
+                {!assignedIds.has(r.id) ? (
+                  <Text style={styles.notRequired}>Not required</Text>
+                ) : null}
               </View>
             </Pressable>
           </Card>
@@ -132,6 +146,18 @@ function ClassSection({
 
 const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: '600', color: t.text.primary },
-  meta: { flexDirection: 'row', alignItems: 'center', marginTop: spacing(1) },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginTop: spacing(1) },
   hint: { fontSize: 13, color: t.text.secondary },
+  notRequired: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    color: t.text.muted,
+    borderWidth: 1,
+    borderColor: t.border.subtle,
+    borderRadius: 999,
+    paddingHorizontal: spacing(2),
+    paddingVertical: 2,
+    overflow: 'hidden',
+  },
 });

@@ -4,6 +4,7 @@ import { Notice } from '../components/ui';
 import { Scrubber } from '../components/Scrubber';
 import { Transport } from '../components/Transport';
 import { usePlayback } from '../playback';
+import { useCompletion, setCompleted } from '../completion';
 import { useListenerError } from '../liveQuery';
 import type { ClassRow } from '../structure';
 import type { RecordingRow } from '../recordings';
@@ -117,6 +118,15 @@ export function PlayerScreen({
         automatically, so you can carry on from another device.
       </Text>
 
+      {studentUid ? (
+        <CompletionControl
+          studentUid={studentUid}
+          recordingId={recording.id}
+          classId={recording.classId}
+          everPlayed={state.listenedMs > 0 || state.positionMs > 0}
+        />
+      ) : null}
+
       {recording.notes ? (
         <>
           <Text style={styles.sectionHeading}>About this recording</Text>
@@ -147,6 +157,72 @@ function Hero({ recording, className }: { recording: RecordingRow; className: st
           Recorded {new Date(recording.recordedAt).toLocaleDateString()}
         </Text>
       ) : null}
+    </View>
+  );
+}
+
+/**
+ * Mark complete / completed, with the never-played gate.
+ *
+ * Completion is student-attested (brief): there is no listened-% threshold. The
+ * ONE precondition is that the student has played at all — enforced here, in the
+ * app, deliberately not in the rules, so an offline completion is never
+ * false-rejected on sync. Writes go straight to Firestore and work offline; a
+ * queued write shows as "Pending sync" until it lands.
+ */
+function CompletionControl({
+  studentUid,
+  recordingId,
+  classId,
+  everPlayed,
+}: {
+  studentUid: string;
+  recordingId: string;
+  classId: string;
+  everPlayed: boolean;
+}) {
+  const { completed, pending } = useCompletion(studentUid, recordingId);
+
+  if (completed) {
+    return (
+      <View style={styles.completeRow}>
+        <Text style={styles.completedText}>✓ Completed</Text>
+        {pending ? <Text style={styles.pendingText}>Pending sync</Text> : null}
+        <Pressable
+          testID="mark-incomplete"
+          accessibilityRole="button"
+          accessibilityLabel="Mark not complete"
+          onPress={() => void setCompleted(studentUid, recordingId, classId, false)}
+        >
+          <Text style={styles.unmark}>Unmark</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      <Pressable
+        testID="mark-complete"
+        accessibilityRole="button"
+        accessibilityLabel="Mark complete"
+        accessibilityState={{ disabled: !everPlayed }}
+        disabled={!everPlayed}
+        onPress={() => void setCompleted(studentUid, recordingId, classId, true)}
+        style={({ pressed }) => [
+          styles.completeButton,
+          pressed ? styles.completePressed : null,
+          !everPlayed ? styles.completeDisabled : null,
+        ]}
+      >
+        <Text style={[styles.completeLabel, !everPlayed ? styles.completeLabelDisabled : null]}>
+          Mark complete
+        </Text>
+      </Pressable>
+      {!everPlayed ? (
+        <Text style={styles.gateHint}>Play the recording before marking it complete.</Text>
+      ) : null}
+      {pending ? <Text style={styles.pendingText}>Pending sync</Text> : null}
     </View>
   );
 }
@@ -228,4 +304,26 @@ const styles = StyleSheet.create({
   listenedFill: { height: 6, backgroundColor: t.feedback.success },
   body: { fontSize: 15, color: t.text.secondary, lineHeight: 22 },
   due: { fontSize: 14, color: t.text.secondary, marginTop: spacing(5) },
+
+  completeButton: {
+    marginTop: spacing(4),
+    backgroundColor: t.accent.base,
+    borderRadius: 12,
+    paddingVertical: spacing(3),
+    alignItems: 'center',
+  },
+  completePressed: { opacity: 0.85 },
+  completeDisabled: { backgroundColor: t.bg.inset },
+  completeLabel: { fontSize: 16, fontWeight: '700', color: t.accent.onAccent },
+  completeLabelDisabled: { color: t.text.muted },
+  gateHint: { fontSize: 13, color: t.text.secondary, marginTop: spacing(2), textAlign: 'center' },
+  completeRow: {
+    marginTop: spacing(4),
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(3),
+  },
+  completedText: { fontSize: 16, fontWeight: '700', color: t.feedback.success, flex: 1 },
+  unmark: { fontSize: 14, color: t.text.secondary, fontWeight: '600' },
+  pendingText: { fontSize: 13, color: t.feedback.warning, fontWeight: '600' },
 });

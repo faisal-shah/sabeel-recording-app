@@ -294,7 +294,8 @@ const student = await newSession();
 await student.getByTestId('signin-email').fill('fatima@example.com');
 await student.getByTestId('signin-password').fill('StudentPass123!');
 await tap(student, 'signin-student');
-await sawText(student, 'Hello, Fatima', 25000);
+// The student lands on their task home ("Your listening"), not a staff greeting.
+await sawText(student, 'Your listening', 25000);
 check('the student signs in with their own password', true);
 await shot(student, '09-home-student');
 
@@ -417,6 +418,47 @@ check(
   `resumed at ${resumedAt}s, saved ${Math.round(savedMs / 1000)}s`,
 );
 await shot(student, '13-resumed');
+
+// ------------------------------------------------- assignments & completion --
+console.log('\nAssignments & completion');
+
+// The published recording is REQUIRED listening on the student's home (the
+// publish fan-out created the assignment; the home shows only required items).
+await goHome(student);
+await student.getByTestId('task-Session 1').waitFor({ timeout: 10000 });
+let homeText = await student.locator('body').innerText();
+check(
+  'the required recording appears on the student home with a due state',
+  /No due date|Due /.test(homeText),
+);
+await shot(student, '14-home-tasks');
+
+// Mark it complete from the player — the never-played gate is already satisfied
+// (position was restored from saved progress).
+await tap(student, 'task-Session 1');
+await student.getByTestId('mark-complete').waitFor({ timeout: 25000 });
+await tap(student, 'mark-complete');
+await student.waitForTimeout(1500);
+
+const completions = await readCollection('completions');
+check(
+  'marking complete writes a completion doc',
+  completions.length === 1 && completions[0].fields.completed.booleanValue === true,
+  `${completions.length} completion(s)`,
+);
+check(
+  'a completion event is appended (append-only audit)',
+  (await readCollection('completionEvents')).some((e) => e.fields.action?.stringValue === 'complete'),
+);
+await student.getByTestId('mark-incomplete').waitFor({ timeout: 8000 });
+check('the player reflects completion and offers unmark', true);
+
+// The home files it under Completed.
+await goHome(student);
+await student.getByTestId('task-Session 1').waitFor({ timeout: 8000 });
+homeText = await student.locator('body').innerText();
+check('the student home moves the recording to Completed', /Completed/.test(homeText));
+await shot(student, '15-home-completed');
 
 // ---------------------------------------------------------- archive cascade --
 console.log('\nArchive cascade');

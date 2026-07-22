@@ -22,6 +22,7 @@ import { ClassesScreen } from './src/screens/ClassesScreen';
 import { ClassDetailScreen } from './src/screens/ClassDetailScreen';
 import { RecordingsScreen } from './src/screens/RecordingsScreen';
 import { MyRecordingsScreen } from './src/screens/MyRecordingsScreen';
+import { StudentHomeScreen } from './src/screens/StudentHomeScreen';
 import { PlayerScreen } from './src/screens/PlayerScreen';
 import { MyClassesScreen } from './src/screens/MyClassesScreen';
 import { TokensScreen } from './src/screens/TokensScreen';
@@ -85,7 +86,7 @@ export default function App() {
                 back affordance on pushed screens, and on Home it is what provides
                 the status-bar inset. Hiding it here put the title under the clock. */}
             <Stack.Screen name="Home" options={{ title: 'Class Recordings' }}>
-              {() => <Landing name={profile.doc.displayName} role={role} />}
+              {() => <Landing name={profile.doc.displayName} role={role} uid={user.uid} />}
             </Stack.Screen>
             <Stack.Screen name="Staff" options={{ title: 'Staff' }}>
               {() => <StaffScreen selfUid={user.uid} />}
@@ -135,8 +136,18 @@ export default function App() {
   );
 }
 
-function Landing({ name, role }: { name: string; role: Role }) {
+function Landing({ name, role, uid }: { name: string; role: Role; uid: string }) {
   const navigation = useNavigation<Nav>();
+  // A student's home IS their task list; staff get the management hub.
+  if (role === 'student') {
+    return (
+      <StudentHomeScreen
+        uid={uid}
+        onOpen={(recording, cls) => navigation.navigate('Player', { recording, cls })}
+        onBrowse={() => navigation.navigate('MyRecordings')}
+      />
+    );
+  }
   return <HomeScreen name={name} role={role} onOpen={(route) => navigation.navigate(route)} />;
 }
 

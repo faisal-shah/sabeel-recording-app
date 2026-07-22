@@ -51,13 +51,21 @@ export function useListenerError(): string | null {
 // ---------------------------------------------------------------------------
 
 /** Live query results. `make`/`map` are called fresh per (re)subscription;
- *  a null query means "not subscribed" (e.g. role-gated queries) → `empty`. */
+ *  a null query means "not subscribed" (e.g. role-gated queries) → `empty`.
+ *
+ *  `includeMetadataChanges` makes the subscription also re-fire when only
+ *  metadata changes — specifically when a local write flips from pending to
+ *  synced. Screens showing a "Pending sync" state need that transition; without
+ *  it the snapshot fires once with `hasPendingWrites` true and never again when
+ *  the write lands, so the badge would stick forever. Off by default because it
+ *  doubles snapshot callbacks, and most screens do not care. */
 export function useLiveQuery<T>(
   label: string,
   make: () => Query | null,
   map: (snap: QuerySnapshot) => T,
   empty: T,
   deps: readonly unknown[],
+  includeMetadataChanges = false,
 ): T {
   const [value, setValue] = useState<T>(empty);
   useEffect(() => {
@@ -66,6 +74,7 @@ export function useLiveQuery<T>(
     if (!q) return;
     return onSnapshot(
       q,
+      { includeMetadataChanges },
       (snap) => {
         setValue(map(snap));
         reportListenerSuccess(label);

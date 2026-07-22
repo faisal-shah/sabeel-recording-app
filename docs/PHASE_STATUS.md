@@ -19,7 +19,7 @@ and commit messages, and renaming them would strand every one of those.
 | 3d | Offline downloads | deferred to its own phase |
 | 4a | Client persistence seam (offline groundwork) | **complete** (2026-07-22) |
 | 4b | Assignments model, publish fan-out trigger, rules | **complete** (2026-07-22) |
-| 4c | Student experience: home ordering, mark-complete, offline | not started |
+| 4c | Student experience: home ordering, mark-complete, offline | **in progress** (2026-07-22: home, completion, unassigned labels; native app-kill spike pending) |
 | 4d | Catch-up assignment UI + polish | not started |
 | 4 | Assignments, progress, completion | not started |
 | 5 | Staff ledger, reporting, audit | not started |
@@ -214,6 +214,21 @@ and commit messages, and renaming them would strand every one of those.
   reports nothing is worse than none.
 
 ## Verification log
+
+- 2026-07-22 — **Phase 4c (part): student home, completion, unassigned labels.**
+  A student's landing is now a task-ordered home (Overdue → Due soon → Upcoming →
+  No due date → Completed), built from their own live `assignments` + `completions`
+  joined to recording/class details. Completion is a direct client Firestore
+  write (`completions` state doc + append-only `completionEvents`), offline-capable
+  via the persistent cache, with the never-played gate enforced in the player.
+  `useLiveQuery` gained an opt-in `includeMetadataChanges` so the Pending-sync
+  badge clears when a queued write lands. The class archive labels
+  accessible-but-unassigned recordings "Not required". e2e extended and green:
+  publish → the item appears as required on the home → mark complete writes the
+  doc + event → the player shows Completed/Unmark → the home moves it to
+  Completed (screenshots looked at: on-brand, correct grouping). **Still pending
+  in 4c:** the native app-kill durability spike on the AVD (deferred from 4a) and
+  its AsyncStorage backstop if the queued write is lost across a force-kill.
 
 - 2026-07-22 — **Phase 4b: assignment model, fan-out, rules.** Pure due-date
   maths in `@sabeel/shared` (`todayInZone`/`isOverdue`/`dueBucket`) — 16 unit
