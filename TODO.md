@@ -17,7 +17,7 @@ Signing a URL needs a service account. The Storage emulator has no signing
 service, so the central mechanism of Phase 3 is the one thing that can only be
 proven against a real project. Everything else in Phase 3 proceeds meanwhile.
 
-### 1. Create the Firebase project
+### 1. Create the Firebase project  ✅ done
 
 1. <https://console.firebase.google.com> → **Add project**.
 2. Project id: **`sabeel-class-recordings`** (or tell me what you chose and I
@@ -30,7 +30,7 @@ proven against a real project. Everything else in Phase 3 proceeds meanwhile.
    and paste it over the placeholders in `app/src/firebase-config.ts`. It is not
    a secret — it ships in every client bundle.
 
-### 2. Create the Storage bucket — region matters
+### 2. Create the Storage bucket — region matters  ✅ done
 
 Build → **Storage** → Get started → **location `us-central1`** (or `us-west1` /
 `us-east1`; **only those three** carry the no-cost quotas). Take the modern
@@ -39,41 +39,59 @@ rows cap downloads at 1 GB/day instead of 100 GB/month.
 
 **This choice is permanent.** A bucket's location cannot be changed afterwards.
 
-### 3. Grant the signing permission
+### 3. Enable the APIs FIRST — this creates the account you grant to
 
-To sign a URL without a downloaded key file, the function's runtime service
-account has to be allowed to **impersonate itself** through the IAM Credentials
-API (`signBlob`).
-
-Our functions are **gen 2** (`firebase-functions/v2`), so they run as the
-**Compute Engine default** service account —
-`PROJECT_NUMBER-compute@developer.gserviceaccount.com` — *not* the App Engine
-`…@appspot.gserviceaccount.com` one that most older tutorials name. Granting the
-wrong account leaves signing broken with an identical-looking error, so this
-derives the id rather than hardcoding it:
+The service account that runs gen-2 functions,
+`977423479850-compute@developer.gserviceaccount.com`, **does not exist on a
+fresh Firebase project.** It is created when the Compute Engine API is enabled.
+Granting before that fails with `NOT_FOUND: Unknown service account`, which
+reads like an authentication problem and is not one. (Learned the hard way,
+2026-07-22 — an earlier version of this file had these two steps the wrong way
+round.)
 
 ```bash
-PROJECT_ID=sabeel-class-recordings   # change if you chose a different id
-PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
-SA="$PROJECT_NUMBER-compute@developer.gserviceaccount.com"
-
-gcloud iam service-accounts add-iam-policy-binding "$SA" \
-  --member="serviceAccount:$SA" \
-  --role="roles/iam.serviceAccountTokenCreator" \
-  --project="$PROJECT_ID"
-
-# Confirm it took:
-gcloud iam service-accounts get-iam-policy "$SA" --project="$PROJECT_ID"
+gcloud services enable \
+  compute.googleapis.com \
+  cloudfunctions.googleapis.com \
+  cloudbuild.googleapis.com \
+  run.googleapis.com \
+  artifactregistry.googleapis.com \
+  eventarc.googleapis.com \
+  iamcredentials.googleapis.com \
+  --project=sabeel-class-recordings
 ```
 
-Run it yourself — type `! gcloud …` in the prompt if you want the output here.
-If `gcloud` is not authenticated yet: `gcloud auth login`.
+Takes a minute or two. Confirm the account now exists before moving on:
+
+```bash
+gcloud iam service-accounts list --project=sabeel-class-recordings
+```
+
+### 4. Grant the signing permission
+
+To sign a URL without a downloaded key file, the runtime service account has to
+be allowed to **impersonate itself** through the IAM Credentials API
+(`signBlob`). Gen-2 functions run as the **Compute Engine default** account, not
+the App Engine `…@appspot.gserviceaccount.com` one most older tutorials name.
+
+```bash
+gcloud iam service-accounts add-iam-policy-binding \
+  977423479850-compute@developer.gserviceaccount.com \
+  --member="serviceAccount:977423479850-compute@developer.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountTokenCreator" \
+  --project=sabeel-class-recordings
+
+# Confirm it took:
+gcloud iam service-accounts get-iam-policy \
+  977423479850-compute@developer.gserviceaccount.com \
+  --project=sabeel-class-recordings
+```
 
 **This is the failure that looks like working code.** Without it, signing throws
 only in production; every local test passes. It is why the plan front-loads a
 real deploy instead of trusting the emulator.
 
-### 4. Tell me when these are done
+### 5. Tell me when these are done
 
 Then paste me the web-app config object (it is not a secret) and the project id,
 and I will wire `firebase-config.ts`, `.firebaserc`, and deploy the minting
@@ -96,15 +114,6 @@ callable to verify a real signed URL end to end.
 - [ ] **Change `FIRST_ADMIN_EMAIL`** in `functions/src/bootstrap.ts` if the first
       admin is not `faisal@oursabeel.com`, then deploy → call once → **delete the
       function**.
-- [ ] **Create the Firebase project.** Decide the project id (suggested
-      `sabeel-class-recordings`) and who owns billing. Then paste the web app
-      config into `app/src/firebase-config.ts` — it replaces the placeholders,
-      and it is not a secret.
-- [ ] **Create the Storage bucket in `us-central1`** (or us-west1/us-east1).
-      It must be a modern `*.firebasestorage.app` bucket: only those get the
-      5 GB-month storage / 100 GB-month download no-cost quotas, and only in
-      those three regions. A legacy `*.appspot.com` bucket is capped at 1 GB/day
-      of downloads. See `docs/research/firebase-recording-costs.md`.
 - [ ] **OAuth consent screen** for Google sign-in. If "Make internal" is greyed
       out, the project is not in a Cloud organisation — either move it into the
       Workspace org or accept External **and publish it**, because in `Testing`
@@ -115,15 +124,21 @@ callable to verify a real signed URL end to end.
       web working fine.
 - [ ] **An `oursabeel.com` test account** so the domain restriction can be
       exercised against a real Google identity.
+- [ ] **Change `authDomain` to `sabeel-class-recordings.web.app`** in
+      `app/src/firebase-config.ts` — the config you pasted has the default
+      `…firebaseapp.com`. Hosting serves `/__/auth/*` itself, which keeps the
+      sign-in redirect same-origin; without it, sign-in from a link opened
+      inside WhatsApp or Slack dies with `auth/missing-initial-state`, because
+      those in-app webviews partition storage.
+      **Order matters:** register `https://sabeel-class-recordings.web.app/__/auth/handler`
+      as an authorized redirect URI on the Web OAuth client FIRST, or sign-in
+      breaks for everyone in between. Harmless to do now — nobody is signing in
+      to production yet.
 - [ ] **Institute timezone** for date-only due-date rollover (one constant, not
       per-student).
 
 ## Before Phase 3 (media)
 
-- [ ] **Grant `roles/iam.serviceAccountTokenCreator`** to the Functions runtime
-      service account, so it can sign URLs through the IAM Credentials API
-      without a key file. This is a **first-deploy 403 that the emulator cannot
-      reproduce** — it will look like working code until it is deployed.
 - [ ] **Register App Check**: Play Integrity (Android) + reCAPTCHA Enterprise
       (web), and register **debug tokens** for the `tb_emu` AVD and local web.
       Without the debug tokens, App Check locks out your own dev builds.
