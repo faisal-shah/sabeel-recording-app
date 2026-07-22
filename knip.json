@@ -7,6 +7,9 @@
       ],
       "project": [
         "scripts/**/*.mjs"
+      ],
+      "ignoreDependencies": [
+        "firebase-admin"
       ]
     },
     "app": {

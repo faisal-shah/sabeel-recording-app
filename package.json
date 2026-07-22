@@ -24,7 +24,8 @@
     "check:text": "node scripts/check-text-sources.mjs",
     "emulators:free": "bash scripts/free-emulator-ports.sh",
     "test:e2e": "node scripts/web-e2e.mjs",
-    "smoke:prod": "node scripts/prod-smoke.mjs"
+    "smoke:prod": "node scripts/prod-smoke.mjs",
+    "check:queries": "node scripts/check-query-shapes.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

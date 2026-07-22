@@ -190,6 +190,20 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-07-22 — **`firestore.indexes.json` was EMPTY, and no test could have told
+  us.** The Staff and Students screens both showed
+  `Live data error (decidedStaff): failed-precondition` on the first real use.
+  The Firestore **emulator builds indexes on demand and never returns
+  FAILED_PRECONDITION**, so all 119 emulator tests and every e2e check passed
+  against an index file containing nothing at all. Four composite indexes were
+  needed (staffUsers status+createdAt, staffUsers status+displayName, classes
+  cohortId+createdAt, recordings classId+createdAt) and are now deployed.
+  `npm run check:queries` (new, committed) runs all twelve query shapes the app
+  issues against the REAL project and fails on any that needs a missing index —
+  the only check that can catch this, since shape rather than data determines it.
+  Note the two staffUsers indexes reported "currently building" for ~2 minutes
+  AFTER `gcloud` reported them READY.
+
 - 2026-07-22 — **First admin bootstrapped in production, and the endpoint
   removed.** `onUserCreate` provisioned the real Google sign-in as
   `role: manager, status: pending` — domain membership granting nothing, as
