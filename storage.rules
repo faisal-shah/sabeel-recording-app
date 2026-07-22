@@ -1,0 +1,20 @@
+rules_version = '2';
+
+// Phase 0: deny everything.
+//
+// This bucket holds class audio, and the access design (docs/PRODUCT_BRIEF.md,
+// PLAN.md) is that clients never read it through the Storage SDK at all:
+// playback goes through a 12-hour V4 signed URL minted by a callable that has
+// already checked enrollment. Signed URLs are generated with the service
+// account's own credentials and bypass these rules entirely.
+//
+// So deny-all here is not a temporary state to be relaxed later — it is the
+// intended end state for reads. Phase 3 opens exactly one hole, for staff
+// uploading a draft recording, and nothing else.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

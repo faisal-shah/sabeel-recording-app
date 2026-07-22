@@ -1,0 +1,28 @@
+{
+  "name": "@sabeel/app",
+  "version": "0.0.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "web": "expo start --web",
+    "web:export": "expo export --platform web --output-dir dist-web --clear",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@sabeel/shared": "*",
+    "expo": "~57.0.4",
+    "expo-status-bar": "~57.0.0",
+    "firebase": "^12.15.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-web": "^0.21.2"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": [
+        "scripts/*.mjs"
+      ],
+      "project": [
+        "scripts/**/*.mjs"
+      ]
+    },
+    "app": {
+      "entry": [
+        "App.tsx",
+        "babel.config.js",
+        "metro.config.js",
+        "src/**/*.web.ts",
+        "src/**/*.web.tsx"
+      ],
+      "project": [
+        "**/*.{ts,tsx,js}"
+      ],
+      "ignoreDependencies": [
+        "expo-updates",
+        "@expo/metro-runtime",
+        "expo-system-ui"
+      ]
+    },
+    "functions": {
+      "entry": [
+        "test/**/*.test.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "test/**/*.ts"
+      ],
+      "ignoreDependencies": [
+        "@sabeel/shared"
+      ]
+    },
+    "packages/shared": {
+      "entry": [],
+      "project": [
+        "src/**/*.ts",
+        "test/**/*.ts"
+      ]
+    }
+  },
+  "ignoreBinaries": [
+    "firebase"
+  ],
+  "ignoreExportsUsedInFile": {
+    "interface": true,
+    "type": true
+  }
+}

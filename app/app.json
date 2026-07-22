@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "Class Recordings",
+    "slug": "sabeel-class-recordings",
+    "scheme": "sabeelclassrecordings",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": [
+      "android",
+      "web"
+    ],
+    "android": {
+      "package": "com.sabeelinstitute.classrecordings",
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    }
+  }
+}

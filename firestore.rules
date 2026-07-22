@@ -1,0 +1,16 @@
+rules_version = '2';
+
+// Phase 0: deny everything. Real rules arrive in Phase 1 with the two auth
+// populations (staff via Google, students via email/password) and in Phase 2
+// with class scopes.
+//
+// Deny-all is not a placeholder to be skipped over in review: it is the correct
+// default, and the rules test suite asserts it holds. Every rule added later
+// must widen this deliberately, one collection at a time.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

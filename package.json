@@ -1,0 +1,36 @@
+{
+  "name": "sabeel-class-recordings",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Sabeel Class Recordings — Hikam Foundations class recordings with in-app listening and a staff accountability ledger (Android + web from one Expo codebase, Firebase backend)",
+  "workspaces": [
+    "packages/*",
+    "functions",
+    "app"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "prepare": "npm run build -w @sabeel/shared",
+    "lint": "eslint . && npm run check:text",
+    "pretypecheck": "npm run build -w @sabeel/shared",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "pretest": "npm run build -w @sabeel/shared",
+    "test": "npm run test --workspaces --if-present",
+    "test:emulator": "bash scripts/test-emulator.sh",
+    "build": "npm run build -w @sabeel/shared && npm run build -w functions",
+    "knip": "knip",
+    "check:text": "node scripts/check-text-sources.mjs",
+    "emulators:free": "bash scripts/free-emulator-ports.sh"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@types/node": "^22.10.0",
+    "eslint": "^9.39.0",
+    "globals": "^16.5.0",
+    "knip": "^5.88.1",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.53.0"
+  }
+}

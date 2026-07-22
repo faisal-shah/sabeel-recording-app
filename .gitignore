@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Builds
+packages/shared/lib/
+functions/lib/
+app/dist-web/
+app/.expo/
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+storage-debug.log
+ui-debug.log
+pubsub-debug.log
+
+# Google services file is per-project and carries the OAuth client ids —
+# regenerated from the console, never committed.
+app/google-services.json
+
+# Env / local secrets (client DSNs etc. — names only in docs/SECRETS.md)
+.env
+.env.local
+*.local.env
+functions/.env
+
+# Never commit a binary: per-release APKs bloated the sibling pages repo's
+# history and had to be rewritten out. The APK ships as a GitHub Release asset.
+*.apk
+*.aab
+build-artifacts/
+
+# e2e artifacts
+e2e-shots/
+shots/
+
+# Logs & misc
+*.log
+.DS_Store
+app/android/sentry.properties
