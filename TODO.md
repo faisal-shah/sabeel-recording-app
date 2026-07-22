@@ -11,11 +11,11 @@ cannot be minted against the emulator at all.
 
 ---
 
-## ⛔ BLOCKING NOW — Phase 3 cannot be finished without these
+## ✅ Phase 3 setup — DONE (2026-07-22)
 
-Signing a URL needs a service account. The Storage emulator has no signing
-service, so the central mechanism of Phase 3 is the one thing that can only be
-proven against a real project. Everything else in Phase 3 proceeds meanwhile.
+Kept for the record, because the ordering trap in step 3 is easy to hit again.
+Signing was proven against the real project on 2026-07-22: a V4 URL streamed the
+file and a short-TTL one was refused with `ExpiredToken`.
 
 ### 1. Create the Firebase project  ✅ done
 
@@ -39,7 +39,7 @@ rows cap downloads at 1 GB/day instead of 100 GB/month.
 
 **This choice is permanent.** A bucket's location cannot be changed afterwards.
 
-### 3. Enable the APIs FIRST — this creates the account you grant to
+### 3. Enable the APIs FIRST — this creates the account you grant to  ✅ done
 
 The service account that runs gen-2 functions,
 `977423479850-compute@developer.gserviceaccount.com`, **does not exist on a
@@ -67,7 +67,7 @@ Takes a minute or two. Confirm the account now exists before moving on:
 gcloud iam service-accounts list --project=sabeel-class-recordings
 ```
 
-### 4. Grant the signing permission
+### 4. Grant the signing permission  ✅ done
 
 To sign a URL without a downloaded key file, the runtime service account has to
 be allowed to **impersonate itself** through the IAM Credentials API
@@ -91,57 +91,98 @@ gcloud iam service-accounts get-iam-policy \
 only in production; every local test passes. It is why the plan front-loads a
 real deploy instead of trusting the emulator.
 
-### 5. Tell me when these are done
+### 5. Wire it up  ✅ done
 
-Then paste me the web-app config object (it is not a secret) and the project id,
-and I will wire `firebase-config.ts`, `.firebaserc`, and deploy the minting
-callable to verify a real signed URL end to end.
+`firebase-config.ts` and `.firebaserc` point at the project.
 
 ---
 
-## Before Phase 1 (auth)
+## Before real sign-in — Firebase Auth, IN THIS ORDER
 
-- [ ] **Disable client-side email/password sign-up** — Firebase console →
-      Authentication → Settings → User actions → uncheck "Enable create
-      (sign-up)". **Load-bearing.** The auth-create trigger deliberately leaves
-      password accounts alone, because only the Admin SDK is supposed to make
-      them. Without this a stranger could self-register — they would get no
-      claims and could read nothing, but the accounts would accumulate.
-- [ ] **Reword the password-reset email template** (Authentication → Templates)
-      from "reset your password" to "set your password". Students receive it for
-      an account they have never had a password on, so the default wording reads
-      as though something has gone wrong.
-- [ ] **Change `FIRST_ADMIN_EMAIL`** in `functions/src/bootstrap.ts` if the first
-      admin is not `faisal@oursabeel.com`, then deploy → call once → **delete the
-      function**.
-- [ ] **OAuth consent screen** for Google sign-in. If "Make internal" is greyed
-      out, the project is not in a Cloud organisation — either move it into the
-      Workspace org or accept External **and publish it**, because in `Testing`
-      only listed test users can sign in at all.
-- [ ] **Android debug SHA-1** registered, then **re-download
-      `google-services.json`** — adding the SHA-1 in the console does not update
-      a file you already have. Missing this is `DEVELOPER_ERROR` on Android with
-      web working fine.
-- [ ] **An `oursabeel.com` test account** so the domain restriction can be
-      exercised against a real Google identity.
-- [ ] **Change `authDomain` to `sabeel-class-recordings.web.app`** in
-      `app/src/firebase-config.ts` — the config you pasted has the default
-      `…firebaseapp.com`. Hosting serves `/__/auth/*` itself, which keeps the
-      sign-in redirect same-origin; without it, sign-in from a link opened
-      inside WhatsApp or Slack dies with `auth/missing-initial-state`, because
-      those in-app webviews partition storage.
-      **Order matters:** register `https://sabeel-class-recordings.web.app/__/auth/handler`
-      as an authorized redirect URI on the Web OAuth client FIRST, or sign-in
-      breaks for everyone in between. Harmless to do now — nobody is signing in
-      to production yet.
-- [ ] **Institute timezone** for date-only due-date rollover (one constant, not
-      per-student).
+Verified 2026-07-22: the Identity Platform config returns
+`CONFIGURATION_NOT_FOUND`, i.e. **Firebase Authentication has never been
+initialized on this project.** That is why the Google Cloud OAuth page shows
+only "Get started" — enabling Google sign-in *in Firebase* is what creates the
+OAuth client and the consent-screen entry. Nothing on the GCP side is
+configurable before that, and the sign-up toggle below does not exist yet
+either, because it is a field of the same config.
 
-## Before Phase 3 (media)
+Everything here is Firebase console work, so it can be done from a browser.
 
-- [ ] **Register App Check**: Play Integrity (Android) + reCAPTCHA Enterprise
-      (web), and register **debug tokens** for the `tb_emu` AVD and local web.
-      Without the debug tokens, App Check locks out your own dev builds.
+### 1. Initialize Authentication
+
+Firebase console → **Build → Authentication → Get started**.
+
+### 2. Enable the two providers this app uses
+
+Authentication → **Sign-in method**:
+
+- **Email/Password** — enable. Students use it. Leave "Email link (passwordless)"
+  off; we do not use it.
+- **Google** — enable. Staff use it. Set the support email when prompted. **This
+  is the step that creates the OAuth client**, after which the Google Cloud
+  "APIs & Services → Credentials" and consent screen pages become meaningful.
+
+### 3. Disable client-side sign-up  ← the load-bearing one
+
+Authentication → **Settings** tab → **User actions** → uncheck
+**"Enable create (sign-up)"**.
+
+This blocks the client SDK from creating accounts while the Admin SDK still can,
+which is what `createStudent` uses. It matters because `provision.ts`
+deliberately leaves password accounts alone — only the Admin SDK is supposed to
+make them. Without this a stranger could self-register; they would get no claims
+and could read nothing, but the accounts would pile up.
+
+*(The underlying field is `client.permissions.disabledUserSignup`. Once auth is
+initialized I can set and verify it through the Identity Toolkit API — just say
+so and I will, rather than you hunting for the checkbox.)*
+
+### 4. OAuth consent screen
+
+Google Cloud console → **APIs & Services → OAuth consent screen**. If **"Make
+internal" is greyed out**, the project is not in a Cloud organisation — either
+move it into the Workspace org, or accept **External and PUBLISH it**, because
+while it is in `Testing` only explicitly listed test users can sign in at all.
+
+### 5. Authorized redirect URI, then the authDomain change
+
+Add `https://sabeel-class-recordings.web.app/__/auth/handler` to the Web OAuth
+client's authorized redirect URIs. **Then** tell me and I will change
+`authDomain` in `app/src/firebase-config.ts` from the default
+`…firebaseapp.com` to `sabeel-class-recordings.web.app`.
+
+Order matters: Hosting serves `/__/auth/*` itself, which keeps the sign-in
+redirect same-origin — without it, staff opening a link inside WhatsApp or Slack
+hit `auth/missing-initial-state`, because those in-app webviews partition
+storage. Flipping `authDomain` before the URI is registered breaks sign-in for
+everyone in between. Harmless to do now while nobody signs in to production.
+
+### 6. Reword the password-reset email
+
+Authentication → **Templates → Password reset**. Students receive it for an
+account they have never had a password on, so the default "reset your password"
+wording reads as though something has gone wrong. "Set your password for Sabeel
+Class Recordings" or similar.
+
+### 7. Android Google sign-in (only when you want it on a device)
+
+Register the **debug SHA-1**, then **RE-DOWNLOAD `google-services.json`** —
+adding the SHA-1 in the console does not update a file you already have. Missing
+this is `DEVELOPER_ERROR` on Android while web works fine.
+
+```bash
+keytool -list -v -keystore app/android/app/debug.keystore \
+  -alias androiddebugkey -storepass android -keypass android
+```
+
+### 8. Not blocking anything
+
+- **Institute timezone** for date-only due-date rollover (one constant, not
+  per-student). Phase 4 needs it.
+- **App Check**: Play Integrity (Android) + reCAPTCHA Enterprise (web), plus
+  **debug tokens** for the `tb_emu` AVD and local web — without those it locks
+  out our own dev builds. Wired but not enforced until then.
 
 ## Before Phase 6 (Zoom)
 
