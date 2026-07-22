@@ -18,6 +18,7 @@ emulator — not your diff.
 | `npm run knip` | Dead-code audit — fails on unused files, exports and dependencies |
 | `npm run emulators:free` | Kills whatever is squatting on the emulator ports |
 | `npm run build` | Builds shared, then bundles functions with esbuild |
+| `npm run test:e2e` | Playwright walkthrough against the web dev server (see below) |
 | `npm run web:export -w @sabeel/app` | The web bundle that actually ships |
 | `scripts/emulator.sh headless` | Boots the `tb_emu` AVD with no window |
 
@@ -80,6 +81,40 @@ audit lie, and an audit that reports nothing is worse than no audit.
   accepts connections before it has registered anything. Poll a known callable
   until it stops 404ing.
 
+## The e2e harness
+
+`npm run test:e2e` needs TWO things already running:
+
+```bash
+firebase emulators:start --project demo-sabeel --only firestore,auth,storage,functions
+cd app && EXPO_PUBLIC_USE_EMULATORS=1 npx expo start --web --port 8083 --clear
+```
+
+**`npm run test:emulator` will kill that emulator suite.** It runs
+`free-emulator-ports.sh` first, by design — so the two cannot be used at once,
+and after running the unit-style emulator suite you must restart the long-lived
+one before the e2e will work. The symptom is every e2e check failing at once.
+
+**It resets Firestore and Auth on every run.** Leftover state silently SKIPS the
+paths that matter: an early version left an admin behind, and every later run
+then jumped straight past the pending screen while still reporting success.
+
+**It is a FLOW suite, not a security suite.** Most screens only query what the
+user is allowed to see, so a widened rule can leave every screen looking
+correct — verified by widening the manager-scope rule and watching the e2e
+checks stay green. Authorization lives in the rules tests below. The e2e check
+names say "the manager's class list omits…" rather than "a manager cannot
+see…" for exactly that reason.
+
+Two more things that cost time here:
+
+- **`page.goBack()` does not work.** React Navigation's stack is not browser
+  history; reload the page instead (the session persists).
+- **Text locators can resolve to hidden nodes.** React Navigation keeps the
+  previous screen mounted, so `getByText('Managers')` can match a stale hidden
+  element and hang until timeout. Wait on `getByTestId` instead. `innerText()`
+  is safe for assertions because it returns only visible text.
+
 ## Rules tests: the trap in the test itself
 
 `assertFails` passes when an operation fails for **any** reason — including a
@@ -88,8 +123,26 @@ testing nothing at all.
 
 So whenever the rules change shape, **mutation-test the suite**: flip the rule to
 `allow read, write: if true`, confirm the tests go red, and flip it back. Done
-for the Phase 0 baseline (see `PHASE_STATUS.md`), and it is the only thing that
-makes a suite of denials meaningful.
+for Phase 0's baseline and again for every predicate added in Phase 1 (see
+`PHASE_STATUS.md`), and it is the only thing that makes a suite of denials
+meaningful.
+
+Two Phase 1 specifics worth keeping in mind when editing `firestore.rules`:
+
+- **A `list` rule that does not reference `resource.data` grants everything.**
+  Referencing it is what forces the client's query to be constrained; a comment
+  describing the expected query shape enforces nothing.
+- **A `get()` resolved from document data costs one read per row** unless every
+  row resolves the same path, and Firestore caps document-access calls per
+  query. Keep such an arm behind a role guard that excludes any population whose
+  queries span many parents, and size the test past the limit —
+  `rules.structure.test.ts` uses 25 rows because at three it passes either way.
+
+Reading Firestore out of band (as the e2e does) needs
+`Authorization: Bearer owner`; without it the rules apply and the read is
+denied. Note the two different URL shapes: reads use
+`/v1/projects/.../documents/...`, while the wipe endpoint is
+`/emulator/v1/projects/.../documents`.
 
 ## Android
 

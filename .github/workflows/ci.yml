@@ -46,3 +46,9 @@ jobs:
       # implementation in the sibling repos — this job is what keeps them honest.
       - name: Emulator integration tests
         run: npm run test:emulator
+
+      # `npm run test:e2e` is deliberately NOT run here. It needs a live Metro
+      # dev server AND a long-running emulator suite, and it resets Firestore and
+      # Auth on every run — but `test:emulator` above frees those same ports, so
+      # the two cannot share a job. It is a local pre-commit check; see
+      # docs/DEV-TOOLING.md.

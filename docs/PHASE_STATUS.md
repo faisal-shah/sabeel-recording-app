@@ -2,12 +2,17 @@
 
 Live build status. Phases from `PLAN.md`; a commit lands at each phase boundary.
 
+Nine phases, not ten: Phase 2 was absorbed into Phase 1. The later numbers are
+deliberately NOT renumbered — they are referenced from `PLAN.md`, code comments
+and commit messages, and renaming them would strand every one of those.
+
 | Phase | What | Status |
 |---|---|---|
 | 0 | Scaffold, theme, CI green | **complete** (2026-07-21: token screen verified on tb_emu AVD + web export, rules suite mutation-tested, full chain green) |
 | 1a | Identity: two auth populations, roles, approval | **complete** (2026-07-21) |
-| 1b | Academic structure: cohorts, classes, enrollments, manager scoping | not started |
-| 1c | Rules hardening, e2e harness | not started |
+| 1b | Academic structure: cohorts, classes, enrollments, manager scoping | **complete** (2026-07-22) |
+| 1c | Rules hardening, e2e harness | **complete** (2026-07-22) |
+| ~~2~~ | *Academic structure — absorbed into Phase 1, see the decision log* | — |
 | 3 | Media spine (upload → Storage → signed-URL playback → offline downloads) | not started |
 | 4 | Assignments, progress, completion | not started |
 | 5 | Staff ledger, reporting, audit | not started |
@@ -17,6 +22,53 @@ Live build status. Phases from `PLAN.md`; a commit lands at each phase boundary.
 | 9 | Deploy, manual, release | not started |
 
 ## Decision log
+
+- 2026-07-22 — **`list` rules must reference `resource.data`.** The first draft
+  of the enrollments rule was `isAdmin() || isStudent() || isStaff()` with a
+  comment saying students would constrain their query — which would have let any
+  student list every enrollment in the institute. Referencing `resource.data` is
+  what makes Firestore reject an unconstrained query; a comment enforces nothing.
+
+- 2026-07-22 — **A `get()` resolved from document data costs one read per row.**
+  Firestore caps document-access calls per query, so such an arm is only
+  affordable when every row resolves the same path — true of a roster query
+  (`classId ==`), false of anything spanning classes. Each read-requiring arm is
+  therefore kept behind a role guard that excludes populations whose queries span
+  many parents. `rules.structure.test.ts` sizes both cases at 25 rows, because at
+  three they pass either way.
+
+- 2026-07-22 — **Arm ordering is NOT what protects the student query.** An
+  earlier comment claimed it was. Reordering the arms and re-running the scale
+  tests proved otherwise: `isStaff() &&` short-circuits before the `get()`, so a
+  student never triggers a class read whatever the order. Read-free arms are
+  still written first as defence in depth, but the guard is what holds.
+
+- 2026-07-22 — **`effectiveActive` is computed inside the callables**, not by a
+  Firestore trigger. Clients cannot write these collections at all, so there is
+  nothing for a trigger to defend against; inline means no propagation lag and
+  one testable path. The cohort cascade never writes a class's own `archived`
+  flag, which is what makes reactivation restore each class to its prior state.
+
+- 2026-07-22 — **Unenrolling sets `active: false`; it never deletes.** The brief
+  requires listening history to survive across enrollments, and a hard delete
+  removes the record that history hangs off. Re-enrolling reuses the same
+  composite-id document and preserves the original enrolment date.
+
+- 2026-07-22 — **`managerClassScopes` dropped; `managerUids` lives on the class.**
+  Recorded in the plan and implemented here. `setClassManagers` validates every
+  uid is an *active* staff member, because the rules read that array directly —
+  writing an invented or disabled uid into it is granting access.
+
+- 2026-07-22 — **Class mutation is admin-only.** The brief gives admins
+  "manage cohorts/classes globally" and "assign Managers class by class", while
+  managers get "create/manage students in assigned classes". So there is no
+  manager-write case on a class; managers get scoped read plus the roster.
+
+- 2026-07-22 — **The student directory is readable by all staff** (Faisal). A
+  manager can list every student, not only those in their classes — that is what
+  makes enrolling an existing student possible. Every student mutation is still
+  scoped or admin-only. A deliberate privacy call, noted in `firestore.rules` so
+  it is not later read as an oversight and "fixed".
 
 - 2026-07-21 — **Phases 1 and 2 merged.** Manager scopes are class-by-class and
   student quick-create takes an enrolled class, so splitting them would mean
@@ -69,6 +121,25 @@ Live build status. Phases from `PLAN.md`; a commit lands at each phase boundary.
   reports nothing is worse than none.
 
 ## Verification log
+
+- 2026-07-22 — **Phase 1b/1c verified end to end.** `npm run test:e2e` (new,
+  committed) drives 17 checks on the web dev server: pending on first sign-in,
+  live un-gating via bootstrap and via admin approval, off-domain deletion,
+  cohort and class creation, manager scoping, student created-and-enrolled in one
+  step, roster, set-password link redeemed and used to sign in, and the full
+  archive cascade round-trip read back from Firestore. Android parity confirmed
+  on the `tb_emu` AVD (`versionName=0.1.0` confirmed installed).
+- 2026-07-22 — **Six rule mutations, each caught by the right tests.** Class
+  manager-scoping removed; enrollment student arm widened; enrollment staff arm
+  widened; the student class-read enrolment check dropped; cohorts opened to any
+  signed-in user; enrollments made client-writable. Restored and green after each.
+- 2026-07-22 — **The e2e harness was itself mutation-tested, and a gap found.**
+  Widening the manager-scope rule did NOT fail the e2e, because `useMyClasses`
+  filters via `array-contains` in the query — the check was testing the query,
+  not the boundary. The check names were corrected to say what they actually
+  prove, and the harness header now states it is a flow suite, not a security
+  suite. A check whose name overstates its coverage makes a suite look stronger
+  than it is.
 
 - 2026-07-21 — **Phase 1a, end to end on both surfaces.** First staff sign-in
   lands pending; `bootstrapAdmin` promotes and the gate lifts **live with no

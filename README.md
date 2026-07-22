@@ -10,10 +10,12 @@ Storage for the audio.
 
 ## Status
 
-**Phase 0 — scaffold.** The monorepo builds on both surfaces, CI is green, and
-the brand palette is wired. There is no auth and no data yet. See
+**Phase 1 complete.** Staff sign in with Google (restricted to the org domain
+and admin-approved); students get staff-created accounts and set their own
+password. Cohorts, classes and enrollments exist, with managers scoped class by
+class. Recordings arrive in Phase 3. See
 [`docs/PHASE_STATUS.md`](docs/PHASE_STATUS.md) for live status and
-[`PLAN.md`](PLAN.md) for the ten-phase build order.
+[`PLAN.md`](PLAN.md) for the nine-phase build order.
 
 ## Documentation
 
@@ -42,6 +44,9 @@ npm ci
 npm run lint && npm run typecheck && npm run knip && npm test
 npm run test:emulator        # needs JDK 21
 
+# End-to-end (needs the emulators AND the web dev server running — see docs)
+npm run test:e2e
+
 # Web
 npm run web:export -w @sabeel/app
 
@@ -56,7 +61,7 @@ cd app && EXPO_PUBLIC_USE_EMULATORS=1 npx expo run:android
 app/               Expo app (Android + web via react-native-web)
 functions/         Cloud Functions (TS, nodejs22, us-central1)
 packages/shared/   Types and constants shared by app, functions and tests
-firestore.rules    Deny-all until Phase 1
+firestore.rules    Scoped reads; every write goes through a callable
 storage.rules      Deny-all — and stays that way for reads
 scripts/           Emulator, dead-code and text-integrity tooling
 ```

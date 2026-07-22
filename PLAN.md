@@ -57,9 +57,10 @@ skeleton. Phase 0 forks it rather than inventing a new one:
   as `.web.ts(x)` siblings.
 - Config-as-code: `firestore.rules`, `firestore.indexes.json`, and now
   `storage.rules` deploy from the repo, never console-edited.
-- `scripts/`: `test-emulator.sh`, `free-emulator-ports.sh`, `web-e2e.mjs`,
-  `release.mjs`, `publish-apk.sh`. CI = lint + typecheck + unit + emulator tests,
-  no deploys from CI.
+- `scripts/`: `test-emulator.sh`, `free-emulator-ports.sh`, `web-e2e.mjs`
+  (added in 1c), `check-text-sources.mjs`; `release.mjs` and `publish-apk.sh`
+  arrive in Phase 9. CI = lint + typecheck + knip + unit + emulator tests, no
+  deploys from CI.
 - Live Firestore reads go through a `useLiveQuery`/`useLiveDoc` wrapper,
   lint-enforced. Hand-rolled `onSnapshot` state caused a week-long stale-data bug
   in the time tracker; that postmortem is inherited, not re-learned.
@@ -86,7 +87,7 @@ skeleton. Phase 0 forks it rather than inventing a new one:
 
 ## Phases
 
-### Phase 0 — Scaffold, theme, CI green
+### Phase 0 — Scaffold, theme, CI green  ✅ complete
 
 Fork the sibling skeleton; get a hello screen running on both surfaces.
 
@@ -105,40 +106,32 @@ Fork the sibling skeleton; get a hello screen running on both surfaces.
 CI; hello screen screenshotted on the `tb_emu` AVD *and* on a web export (not
 just dev server — an exported bundle is the thing that ships).
 
-### Phase 1 — Identity and authorization
+### Phase 1 — Identity, authorization, and academic structure  ✅ complete
 
-The structurally novel part of this app: **two auth populations in one codebase.**
+**Phases 1 and 2 were merged** (2026-07-21). Manager scopes are class-by-class
+and student quick-create takes an enrolled class, so splitting them would have
+meant writing the security rules twice — once in a shape that could not be
+enforced, then again against real classes. The project is nine phases, not ten;
+the later numbers are deliberately not renumbered.
 
-- `staffUsers`: Google sign-in, `oursabeel.com` required — enforced **server-side
-  on the token**, with `hd` treated as a UI hint only, never a boundary. Every new
-  staff sign-in lands `pending`; an admin approves and assigns Admin or Manager.
-- `students`: email/password. Staff quick-create (name, email, cohort/class) via a
-  callable using the Admin SDK, then a set-password email. Disable = Auth disabled
-  + `active:false`, history preserved.
-- `managerClassScopes`: class-by-class assignment. Cohort assignment grants
-  nothing by itself — a rules test asserts exactly this.
-- First admin via the one-shot bootstrap function pattern (deploy → call → delete).
-- Firestore + Storage rules with a full three-role test suite.
+Delivered in three commits:
 
-**Risks:** `DEVELOPER_ERROR` on Android needs the SHA-1 registered (Faisal task);
-promoting a user changes claims and silently breaks the client's own user listener
-unless the token refresh is handled (both documented in the skill).
+- **1a — Identity.** Two auth populations: staff via Google restricted to
+  `oursabeel.com` (enforced server-side; the client `hd` hint is UX only) and
+  staff-created student email/password accounts. Roles as one claim
+  (`admin` | `manager` | `student`) plus a status; claims are what rules trust.
+  Admin approval queue, one-shot `bootstrapAdmin`, session polling so approval
+  un-gates live without a sign-out.
+- **1b — Academic structure.** Cohorts, classes, enrollments. `effectiveActive`
+  derived once in `@sabeel/shared` and written by the callables. Manager scoping
+  via `managerUids` on the class; enrollments at composite id
+  `{studentUid}_{classId}` with `active` rather than deletion.
+- **1c — Hardening.** `scripts/web-e2e.mjs` (17 checks), every new rule
+  predicate mutation-tested, docs.
 
-**Exit:** rules tests covering admin / manager-in-scope / manager-out-of-scope /
-student-self / student-other for every collection; both sign-in paths verified on
-web and on the AVD.
-
-### Phase 2 — Academic structure
-
-- `cohorts`, `classes`, `enrollments`, `students` CRUD.
-- Active / inactive / archived states; the archived-access flag; **effective
-  active** derivation (cohort archived ⇒ classes effectively inactive; reactivating
-  restores per-class state) lives in `@sabeel/shared` so app, functions, and rules
-  tests cannot disagree.
-- Admin assigns Manager class scopes in-app.
-
-**Exit:** rules tests for scope enforcement; e2e create cohort → class → student →
-enrol; archive/reactivate round-trip asserts per-class state is preserved.
+See `docs/PHASE_STATUS.md` for the full decision and verification logs — in
+particular why a `list` rule must reference `resource.data`, and why a `get()`
+resolved from document data is only affordable for single-parent queries.
 
 ### Phase 3 — Media spine (manual upload → protected playback)
 
