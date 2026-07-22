@@ -16,13 +16,14 @@
 //    100 GB-month no-cost quotas; a legacy appspot.com bucket is capped at
 //    1 GB/day of downloads (docs/research/firebase-recording-costs.md).
 export const firebaseConfig = {
-  apiKey: 'PLACEHOLDER',
-  authDomain: 'PLACEHOLDER.web.app',
-  projectId: 'PLACEHOLDER',
-  storageBucket: 'PLACEHOLDER.firebasestorage.app',
-  messagingSenderId: 'PLACEHOLDER',
-  appId: 'PLACEHOLDER',
+  apiKey: "AIzaSyB53BouBcPy1_dTi3sCXcDibbCFSWTSBCk",
+  authDomain: "sabeel-class-recordings.firebaseapp.com",
+  projectId: "sabeel-class-recordings",
+  storageBucket: "sabeel-class-recordings.firebasestorage.app",
+  messagingSenderId: "977423479850",
+  appId: "1:977423479850:web:ffb551dcf015bd5f33bf53"
 };
+
 
 /**
  * The WEB OAuth client id (client_type: 3) from google-services.json, used by
