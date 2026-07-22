@@ -1,11 +1,7 @@
-import { StyleSheet, Text } from 'react-native';
 import type { Role } from '@sabeel/shared';
 import { Button, Card, Notice, Screen, SectionTitle } from '../components/ui';
 import { signOut } from '../session';
 import { IS_DEV } from '../env';
-import { getTheme } from '../theme';
-
-const t = getTheme();
 
 /**
  * Role-routed landing screen.
@@ -21,7 +17,7 @@ export function HomeScreen({
 }: {
   name: string;
   role: Role;
-  onOpen: (route: 'Staff' | 'Students' | 'Cohorts' | 'MyClasses' | 'Tokens') => void;
+  onOpen: (route: 'Staff' | 'Students' | 'Cohorts' | 'MyClasses' | 'MyRecordings' | 'Tokens') => void;
 }) {
   const isAdmin = role === 'admin';
   const isStaff = role === 'admin' || role === 'manager';
@@ -58,9 +54,11 @@ export function HomeScreen({
         </>
       ) : (
         <Card>
-          <Text style={styles.body}>
-            Your class recordings will appear here once your teacher publishes them.
-          </Text>
+          <Button
+            testID="nav-myrecordings"
+            label="My recordings"
+            onPress={() => onOpen('MyRecordings')}
+          />
         </Card>
       )}
 
@@ -76,6 +74,3 @@ function roleLabel(role: Role): string {
   return role === 'admin' ? 'Administrator' : role === 'manager' ? 'Staff' : 'Student';
 }
 
-const styles = StyleSheet.create({
-  body: { fontSize: 15, color: t.text.secondary },
-});

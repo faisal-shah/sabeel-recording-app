@@ -23,7 +23,8 @@
  * palette.ts survive right up until you read the rendered screen.
  */
 import { chromium } from 'playwright';
-import { mkdirSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 
 const WEB = process.env.E2E_WEB ?? 'http://127.0.0.1:8083/';
 const FN = 'http://127.0.0.1:5001/demo-sabeel/us-central1';
@@ -31,6 +32,29 @@ const FS_READ = 'http://127.0.0.1:8080/v1/projects/demo-sabeel/databases/(defaul
 const FS_WIPE = 'http://127.0.0.1:8080/emulator/v1/projects/demo-sabeel/databases/(default)/documents';
 const AUTH = 'http://127.0.0.1:9099';
 const SHOTS = 'e2e-shots';
+const AUDIO_FIXTURE = process.env.E2E_AUDIO ?? 'e2e-shots/test-lecture.m4a';
+
+/**
+ * A real 12-minute 32 kbps mono M4A — the shape of an actual class recording
+ * (a two-hour one lands near 29 MB at this bitrate).
+ *
+ * GENERATED rather than committed: a 3 MB binary in git is exactly what this
+ * repo's "never add a binary" rule exists to prevent, and ffmpeg reproduces it
+ * identically in a second.
+ */
+function ensureAudioFixture() {
+  if (existsSync(AUDIO_FIXTURE)) return;
+  try {
+    execFileSync('ffmpeg', [
+      '-f', 'lavfi', '-i', 'sine=frequency=220:duration=720,volume=0.3',
+      '-c:a', 'aac', '-b:a', '32k', '-ac', '1', AUDIO_FIXTURE, '-y',
+    ], { stdio: 'ignore' });
+  } catch {
+    throw new Error(
+      `Could not generate ${AUDIO_FIXTURE}. Install ffmpeg, or point E2E_AUDIO at an audio file.`,
+    );
+  }
+}
 
 const failures = [];
 function check(name, ok, detail = '') {
@@ -99,6 +123,7 @@ const shot = (page, name) => page.screenshot({ path: `${SHOTS}/${name}.png` });
 
 rmSync(SHOTS, { recursive: true, force: true });
 mkdirSync(SHOTS, { recursive: true });
+ensureAudioFixture();
 await reset();
 
 // ---------------------------------------------------------------- identity --
@@ -222,6 +247,74 @@ await tap(student, 'signin-student');
 await sawText(student, 'Hello, Fatima', 25000);
 check('the student signs in with their own password', true);
 await shot(student, '09-home-student');
+
+// ---------------------------------------------------------------- playback --
+console.log('\nRecordings and playback');
+await goHome(admin);
+await tap(admin, 'nav-cohorts');
+await tap(admin, 'cohort-open-Autumn 2026');
+await tap(admin, 'class-open-Hikam Foundations');
+await tap(admin, 'nav-recordings');
+await admin.getByTestId('recording-title').fill('Session 1');
+const chooser = admin.waitForEvent('filechooser');
+await tap(admin, 'recording-pick');
+await (await chooser).setFiles(AUDIO_FIXTURE);
+await sawText(admin, 'Uploaded.', 90000);
+check('staff upload completes and finalizes', true);
+
+const recs = await readCollection('recordings');
+const rf = recs[0].fields;
+check(
+  'duration and size are recorded from the real file',
+  rf.durationSec?.integerValue === '720' && rf.sizeBytes?.integerValue === '3049585',
+  `duration=${rf.durationSec?.integerValue} size=${rf.sizeBytes?.integerValue}`,
+);
+
+await tap(admin, 'recording-published-Session 1');
+await admin.waitForTimeout(2500);
+check(
+  'publishing sets the status',
+  (await readCollection('recordings'))[0].fields.status.stringValue === 'published',
+);
+await shot(admin, '11-recordings');
+
+// The student plays it. Same session that set its own password above.
+await goHome(student);
+await tap(student, 'nav-myrecordings');
+await tap(student, 'play-Session 1');
+await student.getByTestId('player-play').waitFor({ timeout: 25000 });
+await student.waitForTimeout(1500);
+check('a student reaches the player for their class', true);
+await shot(student, '12-player');
+
+await tap(student, 'player-play');
+await student.waitForTimeout(6000);
+const pos = await student.locator('body').innerText();
+check(
+  'audio actually advances (a signed URL streamed)',
+  /0:0[2-9]|0:1[0-9]/.test(pos),
+  pos.split('\n').find((l) => l.includes('/')) ?? '',
+);
+
+// Seek, then confirm the position SURVIVES a reload — the resume path.
+await tap(student, 'player-forward');
+await student.waitForTimeout(2500);
+const progressDocs = await readCollection('listeningProgress');
+check('progress is persisted for the student', progressDocs.length === 1,
+  `${progressDocs.length} progress docs`);
+
+await goHome(student);
+await tap(student, 'nav-myrecordings');
+await tap(student, 'play-Session 1');
+await student.getByTestId('player-play').waitFor({ timeout: 25000 });
+await student.waitForTimeout(2500);
+const resumed = await student.locator('body').innerText();
+check(
+  'playback RESUMES where it left off after a reload',
+  !/^0:00 \//m.test(resumed),
+  resumed.split('\n').find((l) => l.includes('/')) ?? '',
+);
+await shot(student, '13-resumed');
 
 // ---------------------------------------------------------- archive cascade --
 console.log('\nArchive cascade');

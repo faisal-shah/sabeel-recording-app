@@ -6,7 +6,7 @@ import {
   assertSucceeds,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import {
   COLLECTIONS,
@@ -243,6 +243,95 @@ describe('storage: audio object', () => {
       uploadBytes(ref(mine().storage(), 'recordings/x/notes.txt'), bytes(), {
         contentType: 'text/plain',
       }),
+    );
+  });
+});
+
+describe('listeningProgress', () => {
+  const mineId = `${STUDENT}_${PUBLISHED}`;
+  const theirsId = `${OUTSIDER}_${PUBLISHED}`;
+  const row = (uid: string) => ({
+    studentUid: uid,
+    recordingId: PUBLISHED,
+    classId: CLASS_MINE,
+    positionMs: 1000,
+    listenedMs: 1000,
+    updatedAt: 1,
+  });
+
+  it('lets a student read their own row EVEN WHEN IT DOES NOT EXIST', async () => {
+    // The first-time resume path. Without a null guard this is not a denial but
+    // a rules EVALUATION ERROR, which surfaces to the app as a broken player.
+    await assertSucceeds(
+      getDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId)),
+    );
+  });
+
+  it('lets a student create and update their own row', async () => {
+    await assertSucceeds(
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId), row(STUDENT)),
+    );
+    await assertSucceeds(
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId), {
+        ...row(STUDENT),
+        positionMs: 5000,
+      }),
+    );
+  });
+
+  it('does NOT let a student write a row carrying someone else\'s uid', async () => {
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, theirsId), row(OUTSIDER)),
+    );
+  });
+
+  it('does NOT let a student overwrite a row that is already someone else\'s', async () => {
+    await testEnv.withSecurityRulesDisabled(async (c) => {
+      await setDoc(doc(c.firestore(), COLLECTIONS.listeningProgress, theirsId), row(OUTSIDER));
+    });
+    // Even claiming their own uid in the payload must not let them clobber it.
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, theirsId), row(STUDENT)),
+    );
+  });
+
+  it('does not let a student LIST everyone\'s progress', async () => {
+    // Added after a mutation test: widening `list` to any active student broke
+    // no test at all, because every other case here uses a get. An unconstrained
+    // list is the one shape that hands over the whole collection.
+    await assertFails(getDocs(collection(student().firestore(), COLLECTIONS.listeningProgress)));
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(student().firestore(), COLLECTIONS.listeningProgress),
+          where('studentUid', '==', STUDENT),
+        ),
+      ),
+    );
+  });
+
+  it('does not let a student read another student\'s row', async () => {
+    await testEnv.withSecurityRulesDisabled(async (c) => {
+      await setDoc(doc(c.firestore(), COLLECTIONS.listeningProgress, theirsId), row(OUTSIDER));
+    });
+    await assertFails(
+      getDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, theirsId)),
+    );
+  });
+
+  it('does not let staff touch progress — that is the Phase 5 ledger', async () => {
+    await assertFails(getDocs(collection(mine().firestore(), COLLECTIONS.listeningProgress)));
+    await assertFails(
+      setDoc(doc(admin().firestore(), COLLECTIONS.listeningProgress, mineId), row(STUDENT)),
+    );
+  });
+
+  it('never allows deletion', async () => {
+    await testEnv.withSecurityRulesDisabled(async (c) => {
+      await setDoc(doc(c.firestore(), COLLECTIONS.listeningProgress, mineId), row(STUDENT));
+    });
+    await assertFails(
+      deleteDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId)),
     );
   });
 });

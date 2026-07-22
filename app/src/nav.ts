@@ -1,3 +1,4 @@
+import type { RecordingRow } from './recordings';
 import type { ClassRow, CohortRow } from './structure';
 
 /** Routes reachable once signed in and active. Gate screens are not routes —
@@ -11,6 +12,8 @@ export type RootStackParamList = {
   Classes: { cohort: CohortRow };
   ClassDetail: { cls: ClassRow };
   Recordings: { cls: ClassRow };
+  MyRecordings: undefined;
+  Player: { recording: RecordingRow; cls: ClassRow };
   MyClasses: undefined;
   Tokens: undefined;
 };

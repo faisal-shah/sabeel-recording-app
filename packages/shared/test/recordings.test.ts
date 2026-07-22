@@ -5,6 +5,9 @@ import {
   canPublish,
   canTransition,
   isVisibleToStudents,
+  listenedFraction,
+  mergeProgress,
+  progressId,
   publishBlockers,
   type RecordingStatus,
 } from '../src';
@@ -118,5 +121,59 @@ describe('isVisibleToStudents', () => {
 describe('audioStoragePath', () => {
   it('is derived from the id, so the client, rules tests and signer agree', () => {
     expect(audioStoragePath('abc123')).toBe('recordings/abc123/audio.m4a');
+  });
+});
+
+describe('mergeProgress', () => {
+  const at = (updatedAt: number, positionMs: number, listenedMs: number) => ({
+    updatedAt,
+    positionMs,
+    listenedMs,
+  });
+
+  it('takes the position from whichever side reported most recently', () => {
+    expect(mergeProgress(at(200, 5000, 10), at(100, 999, 10)).positionMs).toBe(5000);
+    expect(mergeProgress(at(100, 999, 10), at(200, 5000, 10)).positionMs).toBe(5000);
+  });
+
+  it('never lets total listened time go backwards', () => {
+    // The newer device may have listened LESS overall — a fresh install, say.
+    // Taking its number wholesale would erase evidence of real listening.
+    const merged = mergeProgress(at(200, 5000, 1_000), at(100, 999, 60_000));
+    expect(merged.listenedMs).toBe(60_000);
+    expect(merged.positionMs).toBe(5000);
+  });
+
+  it('is symmetric', () => {
+    const a = at(200, 5000, 1_000);
+    const b = at(100, 999, 60_000);
+    expect(mergeProgress(a, b)).toEqual(mergeProgress(b, a));
+  });
+
+  it('is stable on a tie, rather than flapping between devices', () => {
+    expect(mergeProgress(at(100, 1, 5), at(100, 2, 5)).positionMs).toBe(1);
+  });
+});
+
+describe('listenedFraction', () => {
+  it('is a fraction of the duration', () => {
+    expect(listenedFraction(30_000, 60)).toBeCloseTo(0.5);
+  });
+
+  it('clamps above 1 — replays must not overflow the bar', () => {
+    expect(listenedFraction(500_000, 60)).toBe(1);
+  });
+
+  it('returns 0 rather than NaN when duration is unknown', () => {
+    // A recording whose duration could not be read still has to render.
+    expect(listenedFraction(30_000, null)).toBe(0);
+    expect(listenedFraction(30_000, 0)).toBe(0);
+  });
+});
+
+describe('progressId', () => {
+  it('is deterministic per student and recording', () => {
+    expect(progressId('stu', 'rec')).toBe('stu_rec');
+    expect(progressId('stu', 'rec')).not.toBe(progressId('rec', 'stu'));
   });
 });

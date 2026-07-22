@@ -118,3 +118,62 @@ export function isVisibleToStudents(status: RecordingStatus): boolean {
 export function audioStoragePath(recordingId: string): string {
   return `recordings/${recordingId}/audio.m4a`;
 }
+
+/**
+ * A student's position in one recording.
+ *
+ * Document id is `${studentUid}_${recordingId}`, so resume is a single get and
+ * the rules can check ownership without reading anything else.
+ *
+ * Written by the CLIENT rather than a callable, which is a deliberate departure
+ * from this codebase's "all mutation through callables" rule. A callable every
+ * fifteen seconds per listening student is pure overhead, and the stakes are
+ * low: listened time is audit evidence, not the gate. Completion is
+ * student-attested and blocked only if they never played, so inflating this
+ * gains nothing that letting the audio run would not.
+ */
+export interface ListeningProgressDoc {
+  studentUid: string;
+  recordingId: string;
+  classId: string;
+  /** Where to resume from. */
+  positionMs: number;
+  /** Total time actually listened, which is NOT the same as position — seeking
+   *  forward must not manufacture listening that did not happen. */
+  listenedMs: number;
+  updatedAt: number;
+}
+
+export function progressId(studentUid: string, recordingId: string): string {
+  return `${studentUid}_${recordingId}`;
+}
+
+/** How often progress is persisted while audio is playing. */
+export const PROGRESS_WRITE_INTERVAL_MS = 15_000;
+
+/**
+ * Merge a local progress reading with whatever the server already has.
+ *
+ * Two devices, or one device after a reinstall, will disagree. The rule is
+ * **max listened, latest position wins**: total listening only ever grows,
+ * while position follows whichever device reported most recently — that is the
+ * one the person is actually using.
+ */
+export function mergeProgress(
+  a: Pick<ListeningProgressDoc, 'positionMs' | 'listenedMs' | 'updatedAt'>,
+  b: Pick<ListeningProgressDoc, 'positionMs' | 'listenedMs' | 'updatedAt'>,
+): Pick<ListeningProgressDoc, 'positionMs' | 'listenedMs' | 'updatedAt'> {
+  const newer = a.updatedAt >= b.updatedAt ? a : b;
+  return {
+    positionMs: newer.positionMs,
+    listenedMs: Math.max(a.listenedMs, b.listenedMs),
+    updatedAt: newer.updatedAt,
+  };
+}
+
+/** Fraction listened, for a progress bar. Guards a missing or zero duration so
+ *  a recording with no duration renders an empty bar rather than NaN. */
+export function listenedFraction(listenedMs: number, durationSec: number | null): number {
+  if (!durationSec || durationSec <= 0) return 0;
+  return Math.min(1, listenedMs / (durationSec * 1000));
+}

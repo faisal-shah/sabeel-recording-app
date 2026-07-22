@@ -150,8 +150,46 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ---- Listening progress ----
+    // Document id is `${studentUid}_${recordingId}`.
+    match /listeningProgress/{progressId} {
+      // The ONLY client-written collection in this app, and the exception needs
+      // its reason recorded: a callable every 15 seconds per listening student
+      // is pure overhead, and the stakes are low. Listened time is audit
+      // EVIDENCE, not the gate — completion is student-attested and blocked
+      // only if the student never played, so inflating this gains nothing that
+      // letting the audio run would not.
+      //
+      // Everything privilege-adjacent is still denied: a student can only touch
+      // their own row, and cannot change whose it is.
+      function mine() {
+        return isStudent() && request.resource.data.studentUid == request.auth.uid;
+      }
+
+      // `resource` is NULL when the document does not exist, and dereferencing
+      // it then is a rules evaluation error — not a denial. That is what a
+      // first-time listener hits, because resume reads the progress document
+      // before anything has ever written one. Allowing the miss leaks nothing:
+      // there is no document to read, and the id is `${uid}_${recordingId}`,
+      // which the caller already knows.
+      allow get: if isStudent()
+        && (resource == null || resource.data.studentUid == request.auth.uid);
+      // A list always evaluates against real documents, so no guard is needed —
+      // and adding one would widen it.
+      allow list: if isStudent() && resource.data.studentUid == request.auth.uid;
+
+      allow create: if mine();
+      // Both halves matter: `mine()` stops a student writing someone else's uid
+      // into the row, and the second check stops them overwriting a row that is
+      // already someone else's.
+      allow update: if mine() && resource.data.studentUid == request.auth.uid;
+      allow delete: if false;
+
+      // Staff reading progress is the Phase 5 ledger, not this phase.
+    }
+
     // ---- Everything else ----
-    // Assignments, progress and the ledger arrive in Phase 4. Until each
+    // Assignments and the ledger arrive in Phase 4. Until each
     // collection is opened deliberately, it stays denied.
     match /{document=**} {
       allow read, write: if false;

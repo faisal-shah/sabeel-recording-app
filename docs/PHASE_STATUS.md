@@ -15,7 +15,7 @@ and commit messages, and renaming them would strand every one of those.
 | ~~2~~ | *Academic structure — absorbed into Phase 1, see the decision log* | — |
 | 3a | Media spike: background audio, seek, rate | **complete** (2026-07-22) |
 | 3b | Ingestion & lifecycle: upload → Storage → draft → publish | **complete** (2026-07-22) |
-| 3c | Playback: signed URLs, player, progress | **blocked** on the Firebase project (TODO.md) |
+| 3c | Playback: signed URLs, player, progress | **complete** (2026-07-22) |
 | 3d | Offline downloads | deferred to its own phase |
 | 4 | Assignments, progress, completion | not started |
 | 5 | Staff ledger, reporting, audit | not started |
@@ -25,6 +25,27 @@ and commit messages, and renaming them would strand every one of those.
 | 9 | Deploy, manual, release | not started |
 
 ## Decision log
+
+- 2026-07-22 — **GCS returns 400 on an expired signed URL, not 403.** The body is
+  `<Code>ExpiredToken</Code>`. Any refresh logic keyed on 403 would silently
+  never fire, so URLs are re-minted PROACTIVELY when under an hour remains
+  rather than in response to a failure.
+
+- 2026-07-22 — **The emulator playback URL needs a download token.** A plain
+  `?alt=media` URL is rules-governed, and `storage.rules` denies all reads by
+  design — production playback bypasses rules by being signed. The emulator
+  branch therefore uses the one other mechanism that bypasses them: a download
+  token. That is precisely the never-expiring mechanism rejected for production,
+  and it is acceptable only because that branch cannot run against a real
+  project.
+
+- 2026-07-22 — **`listeningProgress` is the only client-written collection.** A
+  callable every 15 seconds per listening student is pure overhead, and listened
+  time is audit evidence rather than the gate — completion is student-attested
+  and blocked only if they never played. The rule is self-only and field-scoped.
+  Note the null guard: `resource` is null when the document does not exist,
+  which is the first-time resume path, and dereferencing it is an evaluation
+  ERROR rather than a denial — it surfaced as a broken player.
 
 - 2026-07-22 — **The emulator Storage bucket needs an explicit constant.**
   Neither side has a usable default: the client's `firebaseConfig.storageBucket`
@@ -168,6 +189,18 @@ and commit messages, and renaming them would strand every one of those.
   reports nothing is worse than none.
 
 ## Verification log
+
+- 2026-07-22 — **Signing proven against the real project**, which no emulator
+  test can do. A V4 URL signed by the compute service account streamed the exact
+  3,049,585 bytes, answered a range request with 206, and a deliberately
+  10-second URL was then refused with `ExpiredToken`. The probe function and its
+  object were deleted immediately after.
+- 2026-07-22 — **Phase 3c end to end.** The committed e2e now covers upload →
+  publish → a student playing: audio advances (0:06 after six seconds), progress
+  is persisted, and playback **resumes at 0:36 after a reload**. 119 emulator
+  tests. Three mutations on the progress rules; the third initially caught
+  nothing, which exposed a missing list-coverage test — now added and verified
+  to fail under the same mutation.
 
 - 2026-07-22 — **Phase 3b end to end on the web dev server.** A real 12-minute
   32 kbps M4A uploaded through the UI: duration 720 s read client-side, size

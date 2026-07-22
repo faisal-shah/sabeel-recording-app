@@ -92,6 +92,23 @@ export function useRoster(classId: string | null): EnrollmentRow[] {
 }
 
 
+/**
+ * A student's own enrollments. Must carry the studentUid constraint — the rule
+ * depends on resource.data, so Firestore rejects an unconstrained list.
+ */
+export function useMyEnrollments(uid: string | null): EnrollmentRow[] {
+  return useLiveQuery<EnrollmentRow[]>(
+    'myEnrollments',
+    () =>
+      uid
+        ? query(collection(db, COLLECTIONS.enrollments), where('studentUid', '==', uid))
+        : null,
+    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as EnrollmentDoc) })),
+    [],
+    [uid],
+  );
+}
+
 const call = <T,>(name: string) => (input: T) => httpsCallable(functions, name)(input).then(() => undefined);
 
 export const createCohort = call<{ name: string }>('createCohort');

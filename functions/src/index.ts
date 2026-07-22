@@ -26,4 +26,5 @@ export {
   setRecordingStatus,
   clearRecordingAudio,
 } from './recordings';
+export { getPlaybackUrl } from './playback';
 export { bootstrapAdmin } from './bootstrap';
