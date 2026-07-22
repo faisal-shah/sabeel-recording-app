@@ -97,75 +97,78 @@ real deploy instead of trusting the emulator.
 
 ---
 
-## Before real sign-in — Firebase Auth, IN THIS ORDER
+## ✅ Auth setup — DONE (2026-07-22)
 
-Verified 2026-07-22: the Identity Platform config returns
-`CONFIGURATION_NOT_FOUND`, i.e. **Firebase Authentication has never been
-initialized on this project.** That is why the Google Cloud OAuth page shows
-only "Get started" — enabling Google sign-in *in Firebase* is what creates the
-OAuth client and the consent-screen entry. Nothing on the GCP side is
-configurable before that, and the sign-up toggle below does not exist yet
-either, because it is a field of the same config.
+The ordering trap is kept for the record, because it is the thing that made this
+confusing: the Google Cloud OAuth page showed only "Get started" because
+**Firebase Authentication had never been initialized**, and enabling Google
+sign-in *in Firebase* is what creates the OAuth client and the consent-screen
+entry. Nothing on the GCP side was configurable before that, and
+`disabledUserSignup` did not exist yet either, because it is a field of the same
+config that did not exist.
 
-Everything here is Firebase console work, so it can be done from a browser.
+Verified against the live Identity Toolkit config after Faisal's console work:
 
-### 1. Initialize Authentication
+| Setting | Value |
+|---|---|
+| `client.permissions.disabledUserSignup` | **true** ← the load-bearing one |
+| Email/Password | enabled |
+| Email link (passwordless) | disabled |
+| Anonymous | disabled |
+| `authorizedDomains` | `localhost`, `…firebaseapp.com`, `…web.app` |
+| OAuth consent screen | External, **published** (not Testing) |
 
-Firebase console → **Build → Authentication → Get started**.
+Redirect URIs and JavaScript origins registered for **both** `…web.app` and
+`…firebaseapp.com`, so `authDomain` can be switched either way without further
+console work. It now points at **`sabeel-class-recordings.web.app`**: Hosting
+serves `/__/auth/*` itself, which keeps the sign-in redirect same-origin —
+otherwise staff opening a link inside WhatsApp or Slack hit
+`auth/missing-initial-state`, because those in-app webviews partition storage.
 
-### 2. Enable the two providers this app uses
+`WEB_CLIENT_ID` in `firebase-config.ts` is filled in from the created OAuth
+client. It is not a secret; it ships in every client bundle.
 
-Authentication → **Sign-in method**:
+### Disabling client-side sign-up — what it buys, for the record
 
-- **Email/Password** — enable. Students use it. Leave "Email link (passwordless)"
-  off; we do not use it.
-- **Google** — enable. Staff use it. Set the support email when prompted. **This
-  is the step that creates the OAuth client**, after which the Google Cloud
-  "APIs & Services → Credentials" and consent screen pages become meaningful.
-
-### 3. Disable client-side sign-up  ← the load-bearing one
-
-Authentication → **Settings** tab → **User actions** → uncheck
-**"Enable create (sign-up)"**.
-
-This blocks the client SDK from creating accounts while the Admin SDK still can,
+It blocks the client SDK from creating accounts while the Admin SDK still can,
 which is what `createStudent` uses. It matters because `provision.ts`
 deliberately leaves password accounts alone — only the Admin SDK is supposed to
-make them. Without this a stranger could self-register; they would get no claims
+make them. Without it a stranger could self-register; they would get no claims
 and could read nothing, but the accounts would pile up.
 
-*(The underlying field is `client.permissions.disabledUserSignup`. Once auth is
-initialized I can set and verify it through the Identity Toolkit API — just say
-so and I will, rather than you hunting for the checkbox.)*
+---
 
-### 4. OAuth consent screen
+## Still to do
 
-Google Cloud console → **APIs & Services → OAuth consent screen**. If **"Make
-internal" is greyed out**, the project is not in a Cloud organisation — either
-move it into the Workspace org, or accept **External and PUBLISH it**, because
-while it is in `Testing` only explicitly listed test users can sign in at all.
+### 0. Sign in once, so I can bootstrap you as admin  ← **the only blocking one**
 
-### 5. Authorized redirect URI, then the authDomain change
+**<https://sabeel-class-recordings.web.app>** is live (deployed 2026-07-22:
+rules, indexes, all 18 functions, and Hosting). Open it on any device, **Sign in
+with Google**, use your `@oursabeel.com` account. You will land on a "pending
+approval" screen — that is correct and expected; nobody is an admin yet.
 
-Add `https://sabeel-class-recordings.web.app/__/auth/handler` to the Web OAuth
-client's authorized redirect URIs. **Then** tell me and I will change
-`authDomain` in `app/src/firebase-config.ts` from the default
-`…firebaseapp.com` to `sabeel-class-recordings.web.app`.
+Then tell me, and I will call `bootstrapAdmin` to promote you and **delete the
+function immediately afterwards**. It is safe by construction — one hardcoded
+address, and it refuses once any admin exists — but a live endpoint that grants
+admin should not outlive its single use.
 
-Order matters: Hosting serves `/__/auth/*` itself, which keeps the sign-in
-redirect same-origin — without it, staff opening a link inside WhatsApp or Slack
-hit `auth/missing-initial-state`, because those in-app webviews partition
-storage. Flipping `authDomain` before the URI is registered breaks sign-in for
-everyone in between. Harmless to do now while nobody signs in to production.
+Note that domain enforcement is now **running**: `onUserCreate` deletes any
+Google account that is not a verified `@oursabeel.com` address. If you want to
+watch it work, sign in with a personal Gmail account first and then check
+`gcloud functions logs read onUserCreate`.
 
-### 6. Reword the password-reset email
+### 1. Reword the password-reset email
 
 Authentication → **Templates → Password reset**. Students receive it for an
 account they have never had a password on, so the default "reset your password"
 wording reads as though something has gone wrong. "Set your password for Sabeel
 Class Recordings" or similar.
 
-### 7. Android Google sign-in (only when you want it on a device)
+### 2. Android Google sign-in — **only when you want it on a device**
+
+Not a prerequisite for anything else. The SHA-1 affects **only** Google sign-in
+inside the Android app; it has no bearing on deploys, on web sign-in, or on the
+functions. Deferring it costs nothing.
 
 Register the **debug SHA-1**, then **RE-DOWNLOAD `google-services.json`** —
 adding the SHA-1 in the console does not update a file you already have. Missing
@@ -176,7 +179,7 @@ keytool -list -v -keystore app/android/app/debug.keystore \
   -alias androiddebugkey -storepass android -keypass android
 ```
 
-### 8. Not blocking anything
+### 3. Not blocking anything
 
 - **Institute timezone** for date-only due-date rollover (one constant, not
   per-student). Phase 4 needs it.

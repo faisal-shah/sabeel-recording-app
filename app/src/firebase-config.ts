@@ -17,7 +17,10 @@
 //    1 GB/day of downloads (docs/research/firebase-recording-costs.md).
 export const firebaseConfig = {
   apiKey: "AIzaSyB53BouBcPy1_dTi3sCXcDibbCFSWTSBCk",
-  authDomain: "sabeel-class-recordings.firebaseapp.com",
+  // Hosting domain, NOT the console-supplied firebaseapp.com — see the note
+  // above. Both are registered as OAuth redirect URIs, so this can be switched
+  // back without console work if it ever needs to be.
+  authDomain: "sabeel-class-recordings.web.app",
   projectId: "sabeel-class-recordings",
   storageBucket: "sabeel-class-recordings.firebasestorage.app",
   messagingSenderId: "977423479850",
@@ -33,4 +36,5 @@ export const firebaseConfig = {
  * classic source of the opaque DEVELOPER_ERROR. Only used by the native seam;
  * the emulator dev sign-in path never reads it.
  */
-export const WEB_CLIENT_ID = 'PLACEHOLDER.apps.googleusercontent.com';
+export const WEB_CLIENT_ID =
+  '977423479850-k1r54fn135p62fa165n8gfngbafssv5q.apps.googleusercontent.com';

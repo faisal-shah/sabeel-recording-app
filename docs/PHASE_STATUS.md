@@ -190,6 +190,18 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-07-22 — **First production deploy: rules, indexes, 18 functions, Hosting.**
+  The Firestore database did not exist and was created by the rules deploy.
+  `npm run smoke:prod` (new, committed) then verified the *deployed* artefact
+  rather than the local one, which is the only place these can be checked:
+  Hosting serves `/__/auth/handler` (200), the bundle contacts **no** emulator
+  host, the dev sign-in row does not render, and the console is clean. Auth
+  config read back from the live Identity Toolkit API:
+  `disabledUserSignup: true`, email/password on, email-link off, anonymous off,
+  `authorizedDomains` covering both hosting domains. `authDomain` flipped to
+  `…web.app` and `WEB_CLIENT_ID` filled in from the created OAuth client.
+  **`onUserCreate` domain enforcement is now live** — before this deploy it
+  existed only in the repo, so a stray Google sign-in would have persisted.
 - 2026-07-22 — **Signing proven against the real project**, which no emulator
   test can do. A V4 URL signed by the compute service account streamed the exact
   3,049,585 bytes, answered a range request with 206, and a deliberately
