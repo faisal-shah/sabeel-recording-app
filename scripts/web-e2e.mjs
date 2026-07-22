@@ -328,6 +328,23 @@ check(
 );
 await shot(admin, '11-recordings');
 
+// The publish fan-out TRIGGER fires — this is the one place the real
+// onRecordingWritten runs (the integration tests exercise the extracted logic
+// directly). Triggers are async, so poll for the enrolled student's assignment
+// rather than reading once.
+let assignments = [];
+for (let i = 0; i < 20 && assignments.length === 0; i++) {
+  await admin.waitForTimeout(500);
+  assignments = (await readCollection('assignments')).filter(
+    (a) => a.fields.active?.booleanValue === true && a.fields.source?.stringValue === 'publish',
+  );
+}
+check(
+  'publishing fans out an assignment to the enrolled student (real trigger)',
+  assignments.length === 1,
+  `${assignments.length} active publish assignment(s)`,
+);
+
 // The student plays it. Same session that set its own password above.
 await goHome(student);
 await tap(student, 'nav-myrecordings');

@@ -28,6 +28,8 @@ export {
   clearRecordingAudio,
 } from './recordings';
 export { getPlaybackUrl } from './playback';
+export { assignCatchup } from './assignments';
+export { onRecordingWritten } from './assignmentsTrigger';
 
 /**
  * `bootstrapAdmin` exists ONLY against the emulator.

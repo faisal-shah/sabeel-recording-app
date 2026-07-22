@@ -3,14 +3,17 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
+  INSTITUTE_TIMEZONE,
   NEW_STUDENT_ACCESS,
   enrollmentId,
+  todayInZone,
   type ClassDoc,
   type EnrollmentDoc,
   type StudentDoc,
   type UserStatus,
 } from '@sabeel/shared';
 import { requireAdmin, requireClassScope, requireStaff } from './guards';
+import { assignPublishedRecordingsToStudent } from './assignmentsFanout';
 
 export interface CreateStudentInput {
   displayName: string;
@@ -125,6 +128,19 @@ export async function createStudentAccount(callerUid: string, input: CreateStude
     );
   }
   await batch.commit();
+
+  // A student enrolled at creation time inherits the same late-enrollment
+  // default as one enrolled later: accountable for the class's not-yet-due
+  // published recordings. Runs after the commit so it never blocks the account.
+  if (input.classId) {
+    await assignPublishedRecordingsToStudent(
+      db,
+      input.classId,
+      user.uid,
+      todayInZone(INSTITUTE_TIMEZONE),
+      callerUid,
+    );
+  }
 
   return { uid: user.uid, email: input.email, classId: input.classId ?? null };
 }

@@ -2,12 +2,18 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
+  INSTITUTE_TIMEZONE,
   enrollmentId,
+  todayInZone,
   type ClassDoc,
   type EnrollmentDoc,
   type StudentDoc,
 } from '@sabeel/shared';
 import { requireClassScope } from './guards';
+import {
+  assignPublishedRecordingsToStudent,
+  deactivateStudentAssignmentsInClass,
+} from './assignmentsFanout';
 
 export interface EnrollmentInput {
   studentUid: string;
@@ -65,6 +71,17 @@ export async function createEnrollmentRecord(callerUid: string, input: Enrollmen
     enrolledBy: callerUid,
   };
   await ref.set(doc);
+
+  // Late-enrollment default (brief § Late enrollment): a newly enrolled or
+  // re-enrolled student becomes accountable for the class's published recordings
+  // whose due date has NOT passed. Earlier ones are catch-up, done explicitly.
+  await assignPublishedRecordingsToStudent(
+    db,
+    input.classId,
+    input.studentUid,
+    todayInZone(INSTITUTE_TIMEZONE),
+    callerUid,
+  );
   return { id, ...doc };
 }
 
@@ -103,6 +120,21 @@ export async function applyEnrollmentActive(input: SetEnrollmentActiveInput) {
   const update: Record<string, unknown> = { active: input.active };
   if (!input.active) update.unenrolledAt = Date.now();
   await ref.update(update);
+
+  // Accountability follows membership: unenrolling turns this student's
+  // obligations in the class off (history kept); re-enrolling re-applies the
+  // late-enrollment default.
+  if (input.active) {
+    await assignPublishedRecordingsToStudent(
+      db,
+      input.classId,
+      input.studentUid,
+      todayInZone(INSTITUTE_TIMEZONE),
+      'system',
+    );
+  } else {
+    await deactivateStudentAssignmentsInClass(db, input.classId, input.studentUid);
+  }
   return { studentUid: input.studentUid, classId: input.classId, active: input.active };
 }
 

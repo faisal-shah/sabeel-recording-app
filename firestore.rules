@@ -188,9 +188,57 @@ service cloud.firestore {
       // Staff reading progress is the Phase 5 ledger, not this phase.
     }
 
+    // ---- Assignments ----
+    // Document id is `${studentUid}_${recordingId}`. The obligation itself:
+    // written ONLY by the server (the fan-out trigger and the callables), so
+    // every client write is denied. Reads follow the same read-free-arm-first,
+    // resource.data-constrained discipline as /enrollments — a student lists
+    // their own (constrained by studentUid), a manager reads their classes'
+    // (one class get() per row, affordable only for a query scoped to a class).
+    match /assignments/{assignmentId} {
+      allow get, list: if (isStudent() && resource.data.studentUid == request.auth.uid)
+        || isAdmin()
+        || (isStaff() && request.auth.uid in
+            get(/databases/$(database)/documents/classes/$(resource.data.classId)).data.managerUids);
+      allow write: if false;
+    }
+
+    // ---- Completions ----
+    // Document id is `${studentUid}_${recordingId}`. Current completion STATE,
+    // client-written — the second client-written collection, and for the same
+    // reason as listeningProgress: marking complete must work OFFLINE, which a
+    // callable cannot. The "never played" precondition is enforced in the app,
+    // not here (planning decision #5): requiring the progress doc to exist would
+    // false-reject a completion whose queued progress write has not yet synced.
+    // Everything privilege-adjacent is still denied — self-only, no forging uid.
+    match /completions/{completionId} {
+      function mineC() {
+        return isStudent() && request.resource.data.studentUid == request.auth.uid;
+      }
+      allow get: if isStudent()
+        && (resource == null || resource.data.studentUid == request.auth.uid);
+      allow list: if isStudent() && resource.data.studentUid == request.auth.uid;
+      allow create: if mineC();
+      allow update: if mineC() && resource.data.studentUid == request.auth.uid;
+      allow delete: if false;
+      // Staff reading completions is the Phase 5 ledger.
+    }
+
+    // ---- Completion events ----
+    // Append-only audit of every mark/unmark. A student may create their own and
+    // read their own; nothing may update or delete one, so the history cannot be
+    // rewritten. Staff reading is the Phase 5 ledger.
+    match /completionEvents/{eventId} {
+      allow create: if isStudent()
+        && request.resource.data.studentUid == request.auth.uid
+        && request.resource.data.actor == 'student';
+      allow get, list: if isStudent() && resource.data.studentUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
     // ---- Everything else ----
-    // Assignments and the ledger arrive in Phase 4. Until each
-    // collection is opened deliberately, it stays denied.
+    // The Phase 5 ledger, notifications and audit collections stay denied until
+    // each is opened deliberately with its consumer.
     match /{document=**} {
       allow read, write: if false;
     }

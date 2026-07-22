@@ -18,7 +18,7 @@ and commit messages, and renaming them would strand every one of those.
 | 3c | Playback: signed URLs, player, progress | **complete** (2026-07-22) |
 | 3d | Offline downloads | deferred to its own phase |
 | 4a | Client persistence seam (offline groundwork) | **complete** (2026-07-22) |
-| 4b | Assignments model, publish fan-out trigger, rules | not started |
+| 4b | Assignments model, publish fan-out trigger, rules | **complete** (2026-07-22) |
 | 4c | Student experience: home ordering, mark-complete, offline | not started |
 | 4d | Catch-up assignment UI + polish | not started |
 | 4 | Assignments, progress, completion | not started |
@@ -29,6 +29,20 @@ and commit messages, and renaming them would strand every one of those.
 | 9 | Deploy, manual, release | not started |
 
 ## Decision log
+
+- 2026-07-22 — **Phase 4 accountability model, locked in planning.** (1) Offline
+  completion uses Firestore's native persistent cache + `hasPendingWrites`, not a
+  hand-rolled queue. (2) Publish fan-out is a Firestore trigger
+  (`onRecordingWritten`), not inline in the publish callable, so publish / class
+  move / due-date edit / unpublish all funnel through one idempotent path. (3)
+  Normal (`publish`) assignments track the recording's due date; `catchup`
+  assignments keep their staff-chosen date. (4) The "never played" completion
+  gate is client-side only — a rule requiring the progress doc would false-reject
+  offline completions on replay. (5) Overdue = the day AFTER the due date in
+  `America/Chicago`; computed client-side, no cron. (6) A queryable `completions`
+  state doc AND an append-only `completionEvents` log, both client-written and
+  self-only. Completion is keyed by student+recording so it can exist for an
+  accessible-but-unassigned recording.
 
 - 2026-07-22 — **Institute timezone is `America/Chicago`** (Houston, TX). Due
   dates are date-only, so "overdue" is decided entirely by where the day rolls
@@ -200,6 +214,24 @@ and commit messages, and renaming them would strand every one of those.
   reports nothing is worse than none.
 
 ## Verification log
+
+- 2026-07-22 — **Phase 4b: assignment model, fan-out, rules.** Pure due-date
+  maths in `@sabeel/shared` (`todayInZone`/`isOverdue`/`dueBucket`) — 16 unit
+  tests incl. the Houston day boundary (due-today is *due*, next day *overdue*)
+  and a DST case. Fan-out logic (`applyRecordingFanout` + helpers) integration-
+  tested against the emulator: publish creates one active assignment per active
+  enrollment and is **idempotent** (re-publish stays at 2, not 4); unpublish
+  deactivates but keeps rows; a due-date edit moves `publish` assignments while a
+  `catchup` keeps its own date; a class move reassigns to the new roster; late
+  enrollment assigns only not-yet-due published recordings; unenroll deactivates.
+  New rules (`assignments` read-scoped like `/enrollments`; `completions`
+  self-only; `completionEvents` append-only) mutation-tested — flipping the
+  completionEvents immutability guard and the completions self-only guard each
+  reddened exactly one assertion, restored clean. 144 emulator tests (was 119).
+  **check:queries confirmed zero new composite indexes are needed** — every
+  Phase 4 query is pure equality, served by single-field zigzag joins. The e2e
+  now proves the REAL `onRecordingWritten` trigger fires: after publishing, the
+  enrolled student's assignment appears.
 
 - 2026-07-22 — **Phase 4a: Firestore persistence seam.** `app/src/firestoreInit.ts`
   / `.web.ts` mirror the existing auth seam: web gets `persistentLocalCache`

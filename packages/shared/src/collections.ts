@@ -25,7 +25,11 @@ export const COLLECTIONS = {
   assignments: 'assignments',
   /** Playback progress, listened percent, last listened, sync metadata. */
   listeningProgress: 'listeningProgress',
-  /** Completion/uncompletion events and staff overrides. */
+  /** Current completion STATE per student+recording, client-written. Keyed by
+   *  student+recording because completion can exist for an accessible recording
+   *  that was never assigned, so it cannot live on the assignment. */
+  completions: 'completions',
+  /** Completion/uncompletion events and staff overrides — append-only audit. */
   completionEvents: 'completionEvents',
   /** Student notification preferences and sent records. */
   notifications: 'notifications',

@@ -82,6 +82,35 @@ const shapes = [
     'classes — cascade over a cohort (server)',
     () => db.collection('classes').where('cohortId', '==', ID),
   ],
+  // ---- Phase 4: assignments, completions ----
+  [
+    "assignments — a student's active obligations (home)",
+    () => db.collection('assignments').where('studentUid', '==', ID).where('active', '==', true),
+  ],
+  [
+    'assignments — a class roster (staff/move)',
+    () => db.collection('assignments').where('classId', '==', ID).where('active', '==', true),
+  ],
+  [
+    "assignments — a recording's rows (deactivate fan-out)",
+    () => db.collection('assignments').where('recordingId', '==', ID).where('active', '==', true),
+  ],
+  [
+    "assignments — a recording's publish rows (due-date edit)",
+    () => db.collection('assignments').where('recordingId', '==', ID).where('source', '==', 'publish'),
+  ],
+  [
+    "assignments — a student's rows in a class (unenrol)",
+    () => db.collection('assignments').where('studentUid', '==', ID).where('classId', '==', ID),
+  ],
+  [
+    'enrollments — active roster (fan-out)',
+    () => db.collection('enrollments').where('classId', '==', ID).where('active', '==', true),
+  ],
+  [
+    "completions — a student's own (home join)",
+    () => db.collection('completions').where('studentUid', '==', ID),
+  ],
 ];
 
 console.log(`Query shapes against ${PROJECT_ID}\n`);

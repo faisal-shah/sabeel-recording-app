@@ -2,6 +2,21 @@
 export const REGION = 'us-central1';
 
 /**
+ * The institute's timezone (Houston, TX), for date-only due dates.
+ *
+ * Due dates are a calendar day, not an instant (docs/PRODUCT_BRIEF.md § Due
+ * dates), so "is this overdue?" depends entirely on where the day rolls over.
+ * It is ONE institute-wide constant, not per-student — everyone is answerable
+ * to the same calendar. IANA name so `Intl.DateTimeFormat` handles DST without
+ * a date library.
+ */
+export const INSTITUTE_TIMEZONE = 'America/Chicago';
+
+/** "Due soon" window for the student home: incomplete and due within this many
+ *  days. From the brief's § Student home ordering. */
+export const DUE_SOON_DAYS = 7;
+
+/**
  * Project id used against the emulator suite.
  *
  * The Firestore and Storage emulators PARTITION DATA BY PROJECT ID: a client
