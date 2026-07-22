@@ -155,32 +155,14 @@ Proven both ways in `npm run test:e2e`: a self-signup's credential stops working
 
 ## Still to do
 
-### 0. Turn client-side sign-up back ON  ← **blocking; sign-in is broken until this is done**
+### ✅ 0–1 done (2026-07-22)
 
-Authentication → **Settings** → **User actions** → **re-check "Enable create
-(sign-up)"**.
+Sign-up re-enabled, you signed in, `onUserCreate` provisioned you as
+`manager/pending`, `bootstrapAdmin` promoted you to `admin/active` and was then
+**deleted** (URL 404s, and it can no longer be redeployed by accident — it is
+exported only against the demo project).
 
-I was blocked from doing this via the API — relaxing a production auth setting
-needs a human, which is correct. The guarding code is already deployed, so the
-order is safe: there is no window where self-signup is possible *and*
-unguarded.
-
-### 1. Sign in once, so I can bootstrap you as admin
-
-**<https://sabeel-class-recordings.web.app>** is live (deployed 2026-07-22:
-rules, indexes, all 18 functions, and Hosting). After step 0, open it, **Sign in
-with Google**, use your `@oursabeel.com` account. You will land on a "pending
-approval" screen — that is correct and expected; nobody is an admin yet.
-
-Then tell me, and I will call `bootstrapAdmin` to promote you and **delete the
-function immediately afterwards**. It is safe by construction — one hardcoded
-address, and it refuses once any admin exists — but a live endpoint that grants
-admin should not outlive its single use.
-
-Domain enforcement is **running**: `onUserCreate` deletes any Google account that
-is not a verified `@oursabeel.com` address, and now any self-registered
-email/password account too. To watch it work, sign in with a personal Gmail
-first, then `gcloud functions logs read onUserCreate`.
+You are the admin on <https://sabeel-class-recordings.web.app>.
 
 ### 1. Reword the password-reset email
 
