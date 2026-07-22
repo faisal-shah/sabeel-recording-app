@@ -1,11 +1,12 @@
 import { initializeApp } from 'firebase/app';
 import { connectAuthEmulator } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { connectFirestoreEmulator } from 'firebase/firestore';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { EMULATOR_PROJECT_ID, EMULATOR_STORAGE_BUCKET, REGION } from '@sabeel/shared';
 import { firebaseConfig } from './firebase-config';
 import { initAuth } from './authInit';
+import { initDb } from './firestoreInit';
 import { USE_EMULATORS, EMULATOR_HOST } from './env';
 
 // Against the emulators, use the emulator's demo project id (what the emulator
@@ -31,7 +32,10 @@ const app = initializeApp(
 // Firebase JS SDK and must be wired to AsyncStorage at init, before any
 // getAuth() call anywhere in the app.
 export const auth = initAuth(app);
-export const db = getFirestore(app);
+// Platform seam: persistent IndexedDB cache on web, memory cache on native
+// (the JS SDK has no native persistence — see firestoreInit.ts). Must be the
+// FIRST Firestore call on the app, before any getFirestore elsewhere.
+export const db = initDb(app);
 export const functions = getFunctions(app, REGION);
 export const storage = getStorage(app);
 

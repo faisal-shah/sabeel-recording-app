@@ -17,6 +17,10 @@ and commit messages, and renaming them would strand every one of those.
 | 3b | Ingestion & lifecycle: upload → Storage → draft → publish | **complete** (2026-07-22) |
 | 3c | Playback: signed URLs, player, progress | **complete** (2026-07-22) |
 | 3d | Offline downloads | deferred to its own phase |
+| 4a | Client persistence seam (offline groundwork) | **complete** (2026-07-22) |
+| 4b | Assignments model, publish fan-out trigger, rules | not started |
+| 4c | Student experience: home ordering, mark-complete, offline | not started |
+| 4d | Catch-up assignment UI + polish | not started |
 | 4 | Assignments, progress, completion | not started |
 | 5 | Staff ledger, reporting, audit | not started |
 | 6 | Zoom import *(gated on credentials)* | not started |
@@ -196,6 +200,17 @@ and commit messages, and renaming them would strand every one of those.
   reports nothing is worse than none.
 
 ## Verification log
+
+- 2026-07-22 — **Phase 4a: Firestore persistence seam.** `app/src/firestoreInit.ts`
+  / `.web.ts` mirror the existing auth seam: web gets `persistentLocalCache`
+  (IndexedDB) so offline writes survive a page close and surface as
+  `hasPendingWrites`; native keeps the memory cache, because the JS SDK has no
+  IndexedDB on React Native (the same reason auth is wired to AsyncStorage). Full
+  e2e re-run green with persistence on, including the Phase 3 resume-across-reload
+  test. **Deliberately split from the plan's 4a:** the native app-kill durability
+  check needs the completion write path to exist, so it moves to 4c on the AVD,
+  where the memory-cache gap is closed by an AsyncStorage backstop over the same
+  direct-write path if the test confirms it is lost across a kill.
 
 - 2026-07-22 — **Phase 3 proven end to end against the REAL project.** Driven
   through the actual callables with real ID tokens: createCohort → createClass →
