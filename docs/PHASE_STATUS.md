@@ -26,6 +26,13 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-07-22 — **Institute timezone is `America/Chicago`** (Houston, TX). Due
+  dates are date-only, so "overdue" is decided entirely by where the day rolls
+  over; this is ONE institute-wide constant, not per-student. Recorded here
+  rather than added to `@sabeel/shared` today, because this repo adds
+  infrastructure with its first consumer and knip fails on anything unused — it
+  lands in Phase 4 alongside the code that reads it.
+
 - 2026-07-22 — **GCS returns 400 on an expired signed URL, not 403.** The body is
   `<Code>ExpiredToken</Code>`. Any refresh logic keyed on 403 would silently
   never fire, so URLs are re-minted PROACTIVELY when under an hour remains
