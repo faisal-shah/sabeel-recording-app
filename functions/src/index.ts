@@ -8,4 +8,7 @@ initializeApp();
 export { onUserCreate } from './authTrigger';
 export { setStaffAccess } from './staff';
 export { createStudent, setStudentAccess } from './students';
+export { createCohort, setCohortArchived } from './cohorts';
+export { createClass, updateClass, setClassManagers } from './classes';
+export { createEnrollment, setEnrollmentActive } from './enrollments';
 export { bootstrapAdmin } from './bootstrap';

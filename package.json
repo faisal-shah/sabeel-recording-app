@@ -22,7 +22,8 @@
     "build": "npm run build -w @sabeel/shared && npm run build -w functions",
     "knip": "knip",
     "check:text": "node scripts/check-text-sources.mjs",
-    "emulators:free": "bash scripts/free-emulator-ports.sh"
+    "emulators:free": "bash scripts/free-emulator-ports.sh",
+    "test:e2e": "node scripts/web-e2e.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",
@@ -30,6 +31,7 @@
     "eslint": "^9.39.0",
     "globals": "^16.5.0",
     "knip": "^5.88.1",
+    "playwright": "^1.61.1",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.53.0"
   }

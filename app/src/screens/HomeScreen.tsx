@@ -21,7 +21,7 @@ export function HomeScreen({
 }: {
   name: string;
   role: Role;
-  onOpen: (route: 'Staff' | 'Students' | 'Tokens') => void;
+  onOpen: (route: 'Staff' | 'Students' | 'Cohorts' | 'MyClasses' | 'Tokens') => void;
 }) {
   const isAdmin = role === 'admin';
   const isStaff = role === 'admin' || role === 'manager';
@@ -33,18 +33,27 @@ export function HomeScreen({
           <SectionTitle>Manage</SectionTitle>
           <Card>
             {isAdmin ? (
-              <Button testID="nav-staff" label="Staff" onPress={() => onOpen('Staff')} />
-            ) : null}
+              <>
+                <Button testID="nav-cohorts" label="Cohorts & classes" onPress={() => onOpen('Cohorts')} />
+                <Button
+                  testID="nav-staff"
+                  label="Staff"
+                  variant="secondary"
+                  onPress={() => onOpen('Staff')}
+                />
+              </>
+            ) : (
+              <Button testID="nav-myclasses" label="My classes" onPress={() => onOpen('MyClasses')} />
+            )}
             <Button
               testID="nav-students"
               label="Students"
-              variant={isAdmin ? 'secondary' : 'primary'}
+              variant="secondary"
               onPress={() => onOpen('Students')}
             />
           </Card>
           <Notice tone="info">
-            Cohorts and classes arrive next; recordings and the accountability ledger
-            follow after that.
+            Recordings and the accountability ledger arrive in the next phases.
           </Notice>
         </>
       ) : (

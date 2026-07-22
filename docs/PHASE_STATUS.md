@@ -6,7 +6,7 @@ Live build status. Phases from `PLAN.md`; a commit lands at each phase boundary.
 |---|---|---|
 | 0 | Scaffold, theme, CI green | **complete** (2026-07-21: token screen verified on tb_emu AVD + web export, rules suite mutation-tested, full chain green) |
 | 1a | Identity: two auth populations, roles, approval | **complete** (2026-07-21) |
-| 1b | Academic structure: cohorts, classes, enrollments, manager scoping | in progress |
+| 1b | Academic structure: cohorts, classes, enrollments, manager scoping | not started |
 | 1c | Rules hardening, e2e harness | not started |
 | 3 | Media spine (upload → Storage → signed-URL playback → offline downloads) | not started |
 | 4 | Assignments, progress, completion | not started |

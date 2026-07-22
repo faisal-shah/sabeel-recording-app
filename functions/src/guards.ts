@@ -1,5 +1,6 @@
 import { CallableRequest, HttpsError } from 'firebase-functions/v2/https';
-import type { TokenClaims } from '@sabeel/shared';
+import { getFirestore } from 'firebase-admin/firestore';
+import { COLLECTIONS, type TokenClaims } from '@sabeel/shared';
 
 /**
  * Callable authorisation, read from the TOKEN — never from a user document.
@@ -40,6 +41,31 @@ export function requireAdmin(req: CallableRequest): string {
   const uid = requireActive(req);
   if (claims(req).role !== 'admin') {
     throw new HttpsError('permission-denied', 'Admin required.');
+  }
+  return uid;
+}
+
+/**
+ * Staff authorization for one class: an admin, or a manager assigned to it.
+ *
+ * Server-side, and deliberately not expressible in security rules — rules gate
+ * *reads*, but every write in this app goes through a callable, so this is where
+ * "may you touch this class's roster?" is actually decided. Reads the class
+ * fresh rather than trusting anything the caller sent.
+ */
+export async function requireClassScope(
+  req: CallableRequest,
+  classId: string,
+): Promise<string> {
+  const uid = requireStaff(req);
+  if (claims(req).role === 'admin') return uid;
+
+  const snap = await getFirestore().collection(COLLECTIONS.classes).doc(classId).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'No such class.');
+
+  const managerUids = (snap.data() as { managerUids?: string[] }).managerUids ?? [];
+  if (!managerUids.includes(uid)) {
+    throw new HttpsError('permission-denied', 'You are not assigned to that class.');
   }
   return uid;
 }

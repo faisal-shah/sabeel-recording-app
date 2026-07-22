@@ -1,0 +1,286 @@
+#!/usr/bin/env node
+/**
+ * End-to-end walkthrough against the web dev server and the emulator suite.
+ *
+ * Exists because a sign-in screenshot is evidence about nothing else — it is the
+ * only screen an unauthenticated script can reach, and it exercises almost none
+ * of the app. This drives the real flows and screenshots the authenticated
+ * screens, so a phase can be verified without re-deriving the same manual clicks
+ * every time.
+ *
+ * Prerequisites (see docs/DEV-TOOLING.md):
+ *   firebase emulators:start --project demo-sabeel --only firestore,auth,storage,functions
+ *   cd app && EXPO_PUBLIC_USE_EMULATORS=1 npx expo start --web --port 8083 --clear
+ *
+ * Then: npm run test:e2e
+ *
+ * SCOPE: this exercises real user FLOWS end to end. It is not a security suite —
+ * most screens only query what the user may see, so a widened rule can leave
+ * every screen looking correct. Authorization is asserted in
+ * functions/test/integration/rules.*.test.ts, which are mutation-tested.
+ *
+ * Screenshots land in e2e-shots/ (gitignored). LOOK AT THEM — correct values in
+ * palette.ts survive right up until you read the rendered screen.
+ */
+import { chromium } from 'playwright';
+import { mkdirSync, rmSync } from 'node:fs';
+
+const WEB = process.env.E2E_WEB ?? 'http://127.0.0.1:8083/';
+const FN = 'http://127.0.0.1:5001/demo-sabeel/us-central1';
+const FS_READ = 'http://127.0.0.1:8080/v1/projects/demo-sabeel/databases/(default)/documents';
+const FS_WIPE = 'http://127.0.0.1:8080/emulator/v1/projects/demo-sabeel/databases/(default)/documents';
+const AUTH = 'http://127.0.0.1:9099';
+const SHOTS = 'e2e-shots';
+
+const failures = [];
+function check(name, ok, detail = '') {
+  console.log(`${ok ? '  ok  ' : '  FAIL'} ${name}${detail ? ` — ${detail}` : ''}`);
+  if (!ok) failures.push(name);
+}
+
+/**
+ * Start from nothing. Leftover emulator state silently SKIPS the paths that
+ * matter — a first run left an admin behind, and every later run then jumped
+ * straight past the pending screen while still reporting success.
+ */
+async function reset() {
+  for (const [what, url] of [
+    ['firestore', FS_WIPE],
+    ['auth', `${AUTH}/emulator/v1/projects/demo-sabeel/accounts`],
+  ]) {
+    const r = await fetch(url, { method: 'DELETE' });
+    if (!r.ok) throw new Error(`could not clear ${what}: ${r.status}`);
+  }
+}
+
+/** Out-of-band read; 'Bearer owner' bypasses rules deliberately. */
+async function readCollection(name) {
+  const r = await fetch(`${FS_READ}/${name}`, { headers: { Authorization: 'Bearer owner' } });
+  const j = await r.json();
+  return j.documents ?? [];
+}
+
+const browser = await chromium.launch();
+const consoleErrors = [];
+
+async function newSession() {
+  const ctx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2,
+  });
+  const page = await ctx.newPage();
+  page.on('console', (m) => {
+    if (m.type() === 'error') consoleErrors.push(m.text());
+  });
+  page.on('pageerror', (e) => consoleErrors.push(String(e)));
+  await page.goto(WEB, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(3000);
+  return page;
+}
+
+/** Tap by testID. Text locators are unreliable here: react-navigation keeps the
+ *  previous screen mounted, so a text match can resolve to a hidden node. */
+async function tap(page, testId, timeout = 20000) {
+  const el = page.getByTestId(testId);
+  await el.waitFor({ timeout });
+  await el.click();
+}
+
+const sawText = (page, text, timeout = 20000) =>
+  page.getByText(text, { exact: false }).first().waitFor({ timeout });
+
+/** Home is a reload, not goBack(): the navigation stack is not browser history. */
+async function goHome(page) {
+  await page.goto(WEB, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(3000);
+}
+
+const shot = (page, name) => page.screenshot({ path: `${SHOTS}/${name}.png` });
+
+rmSync(SHOTS, { recursive: true, force: true });
+mkdirSync(SHOTS, { recursive: true });
+await reset();
+
+// ---------------------------------------------------------------- identity --
+console.log('\nIdentity');
+const admin = await newSession();
+await shot(admin, '01-signin');
+check('sign-in screen renders', (await admin.locator('body').innerText()).includes('Sign in with Google'));
+
+await tap(admin, 'dev-signin-first-admin');
+await sawText(admin, 'Waiting for approval');
+check('first staff sign-in lands PENDING — domain membership grants nothing', true);
+await shot(admin, '02-pending');
+
+const boot = await fetch(`${FN}/bootstrapAdmin`);
+await admin.getByTestId('nav-cohorts').waitFor({ timeout: 30000 });
+check('bootstrapAdmin promotes and the gate lifts LIVE, with no sign-out', boot.status === 200);
+await shot(admin, '03-home-admin');
+
+const again = await fetch(`${FN}/bootstrapAdmin`);
+check('bootstrapAdmin refuses a second call', again.status === 409);
+
+// A second staff member, approved from the admin's session.
+const mgr = await newSession();
+await tap(mgr, 'dev-signin-manager');
+await sawText(mgr, 'Waiting for approval');
+await tap(admin, 'nav-staff');
+await tap(admin, 'approve-manager@oursabeel.com');
+await mgr.getByTestId('nav-myclasses').waitFor({ timeout: 30000 });
+check('approving a pending manager un-gates THEIR session live', true);
+
+// An off-domain account must be deleted outright, not marked rejected.
+const outsider = await newSession();
+await tap(outsider, 'dev-signin-outsider');
+await outsider.waitForTimeout(6000);
+check(
+  'an off-domain sign-in is deleted and lands back at sign-in',
+  (await outsider.locator('body').innerText()).includes('Emulator sign-in'),
+);
+
+// ------------------------------------------------------- academic structure --
+console.log('\nAcademic structure');
+await goHome(admin);
+await tap(admin, 'nav-cohorts');
+await admin.getByTestId('cohort-name').fill('Autumn 2026');
+await tap(admin, 'cohort-create');
+await tap(admin, 'cohort-open-Autumn 2026');
+for (const name of ['Hikam Foundations', 'Arabic I']) {
+  await admin.getByTestId('class-name').fill(name);
+  await tap(admin, 'class-create');
+  await admin.getByTestId(`class-open-${name}`).waitFor({ timeout: 20000 });
+}
+check('a cohort and two classes are created', true);
+await shot(admin, '04-classes');
+
+// Scope ONE class to the manager.
+await tap(admin, 'class-open-Hikam Foundations');
+await tap(admin, 'class-manager-manager@oursabeel.com');
+await admin.waitForTimeout(2500);
+await shot(admin, '05-class-detail');
+
+await tap(mgr, 'nav-myclasses');
+await mgr.getByTestId('class-open-Hikam Foundations').waitFor({ timeout: 20000 });
+await mgr.waitForTimeout(1500);
+// innerText returns only VISIBLE text, so retained nodes from the previous
+// screen cannot make this pass spuriously.
+const mgrSees = await mgr.locator('body').innerText();
+// These two are UI checks, NOT security checks, and the distinction matters.
+// useMyClasses() filters with array-contains in the QUERY, so this list would
+// look correct even if the rule let any staff member read any class — verified
+// by widening the rule and watching these still pass.
+//
+// The security boundary is asserted in functions/test/integration/
+// rules.structure.test.ts, which IS mutation-tested against exactly that change.
+// Naming these accurately is the point: a check called "a manager cannot see
+// another class" that only proves the query works makes the suite look stronger
+// than it is.
+check('the manager\'s class list shows the class they are scoped to', mgrSees.includes('Hikam Foundations'));
+check('the manager\'s class list omits classes they are not scoped to', !mgrSees.includes('Arabic I'));
+await shot(mgr, '06-my-classes');
+
+// --------------------------------------------------------------- enrolment --
+console.log('\nEnrolment');
+await goHome(admin);
+await tap(admin, 'nav-students');
+await admin.getByTestId('student-name').fill('Fatima Ahmed');
+await admin.getByTestId('student-email').fill('fatima@example.com');
+await tap(admin, 'student-class-Hikam Foundations');
+await tap(admin, 'student-create');
+await sawText(admin, 'Account created');
+check('a student is created and enrolled in one step', true);
+await shot(admin, '07-students');
+
+await goHome(admin);
+await tap(admin, 'nav-cohorts');
+await tap(admin, 'cohort-open-Autumn 2026');
+await tap(admin, 'class-open-Hikam Foundations');
+await sawText(admin, 'Fatima Ahmed');
+await admin.waitForTimeout(1200);
+check('the roster shows the enrolled student', true);
+await shot(admin, '08-roster');
+
+// The student sets a password from the emailed link and signs in. Redeemed
+// through the same endpoint the SDK's confirmPasswordReset() calls, so this
+// tests the real link rather than the emulator's own reset page markup.
+const oob = await (await fetch(`${AUTH}/emulator/v1/projects/demo-sabeel/oobCodes`)).json();
+const reset0 = (oob.oobCodes ?? []).filter((c) => c.email === 'fatima@example.com').pop();
+const redeem = await fetch(
+  `${AUTH}/identitytoolkit.googleapis.com/v1/accounts:resetPassword?key=fake-api-key`,
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ oobCode: reset0?.oobCode, newPassword: 'StudentPass123!' }),
+  },
+);
+check('a set-password link is issued and redeemable', redeem.status === 200);
+
+const student = await newSession();
+await student.getByTestId('signin-email').fill('fatima@example.com');
+await student.getByTestId('signin-password').fill('StudentPass123!');
+await tap(student, 'signin-student');
+await sawText(student, 'Hello, Fatima', 25000);
+check('the student signs in with their own password', true);
+await shot(student, '09-home-student');
+
+// ---------------------------------------------------------- archive cascade --
+console.log('\nArchive cascade');
+const classState = async () =>
+  Object.fromEntries(
+    (await readCollection('classes')).map((d) => [
+      d.fields.name.stringValue,
+      {
+        eff: d.fields.effectiveActive.booleanValue ?? false,
+        arch: d.fields.archived.booleanValue ?? false,
+      },
+    ]),
+  );
+
+await goHome(admin);
+await tap(admin, 'nav-cohorts');
+await tap(admin, 'cohort-open-Autumn 2026');
+await tap(admin, 'class-open-Hikam Foundations');
+await tap(admin, 'class-archive');
+await admin.waitForTimeout(2500);
+let s = await classState();
+check(
+  'archiving one class leaves the other alone',
+  s['Hikam Foundations'].eff === false && s['Arabic I'].eff === true,
+  JSON.stringify(s),
+);
+
+await goHome(admin);
+await tap(admin, 'nav-cohorts');
+await tap(admin, 'cohort-archive-Autumn 2026');
+await admin.waitForTimeout(3000);
+s = await classState();
+check(
+  'archiving the cohort deactivates every class',
+  s['Hikam Foundations'].eff === false && s['Arabic I'].eff === false,
+  JSON.stringify(s),
+);
+check(
+  'the cascade does NOT write a class\'s own archived flag',
+  s['Arabic I'].arch === false,
+  JSON.stringify(s),
+);
+await shot(admin, '10-cohort-archived');
+
+await tap(admin, 'cohort-archive-Autumn 2026');
+await admin.waitForTimeout(3000);
+s = await classState();
+check(
+  'reactivating restores each class to its OWN state',
+  s['Arabic I'].eff === true && s['Hikam Foundations'].eff === false,
+  JSON.stringify(s),
+);
+
+// ------------------------------------------------------------------ result --
+await browser.close();
+console.log(`\nconsole errors: ${consoleErrors.length ? consoleErrors.slice(0, 5).join(' | ') : 'none'}`);
+console.log(`screenshots in ${SHOTS}/ — look at them`);
+if (failures.length) {
+  console.error(`\n${failures.length} FAILED:\n  ${failures.join('\n  ')}`);
+  process.exit(1);
+}
+console.log('\nall checks passed');

@@ -168,14 +168,25 @@ describe('students', () => {
 
 describe('collections not yet opened', () => {
   it('stay denied even to an admin', async () => {
+    // Cohorts, classes and enrollments were opened in 1b and have their own
+    // suite (rules.structure.test.ts). Everything the recording model needs is
+    // still closed until the phase that earns it.
     for (const name of [
-      COLLECTIONS.cohorts,
-      COLLECTIONS.classes,
-      COLLECTIONS.enrollments,
       COLLECTIONS.recordings,
+      COLLECTIONS.assignments,
+      COLLECTIONS.listeningProgress,
+      COLLECTIONS.completionEvents,
       COLLECTIONS.auditLog,
     ]) {
       await assertFails(getDocs(collection(admin(), name)));
+      await assertFails(setDoc(doc(admin(), name, 'x'), { any: 'thing' }));
+    }
+  });
+
+  it('stay WRITE-denied on the collections 1b opened for reading', async () => {
+    // Opening a collection to reads must not have opened it to writes: every
+    // mutation goes through a callable that re-checks scope.
+    for (const name of [COLLECTIONS.cohorts, COLLECTIONS.classes, COLLECTIONS.enrollments]) {
       await assertFails(setDoc(doc(admin(), name, 'x'), { any: 'thing' }));
     }
   });

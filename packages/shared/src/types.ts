@@ -86,8 +86,20 @@ export interface EnrollmentDoc {
   studentUid: string;
   classId: string;
   cohortId: string;
+  /**
+   * Unenrolling sets this false; it never deletes the row.
+   *
+   * The brief calls enrollment "membership … over time" and requires that
+   * "listening history is preserved across enrollments" — a hard delete would
+   * remove the record that history hangs off. Re-enrolling reactivates this same
+   * document rather than creating a second one, which the composite id makes
+   * automatic.
+   */
+  active: boolean;
   enrolledAt: number;
   enrolledBy: string;
+  /** Set when `active` last became false; left in place on re-enrolment. */
+  unenrolledAt?: number;
 }
 
 export function enrollmentId(studentUid: string, classId: string): string {

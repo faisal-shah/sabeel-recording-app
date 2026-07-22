@@ -35,6 +35,10 @@ service cloud.firestore {
       return isActive() && role() == 'admin';
     }
 
+    function isStudent() {
+      return isActive() && role() == 'student';
+    }
+
     // ---- Staff ----
     // Read-only to clients; every write goes through the setStaffAccess
     // callable. Role and status ARE the security model, so letting clients write
@@ -55,15 +59,78 @@ service cloud.firestore {
     // Staff manage students; a student may read only their own record.
     // Deliberately no self-write: a student renaming themselves would alter the
     // accountability record staff rely on.
+    //
+    // The directory is readable by ALL staff, not only a manager's own classes
+    // (Faisal, 2026-07-21). That is what makes "enrol an existing student into
+    // my class" possible at all. Scoping it would also need a per-row class
+    // lookup — the same document-access-limit problem documented on
+    // /enrollments below. Every student MUTATION is still scoped or admin-only.
+    // This is a deliberate privacy call, not an oversight; do not "fix" it.
     match /students/{uid} {
       allow get: if isSignedIn() && request.auth.uid == uid;
       allow get, list: if isStaff();
       allow write: if false;
     }
 
+    // ---- Cohorts ----
+    // No scoping concept at cohort level: a manager scoped to a class inside a
+    // cohort necessarily sees that cohort's name. Mutation is admin-only, via
+    // callables.
+    match /cohorts/{cohortId} {
+      allow get, list: if isStaff();
+      allow write: if false;
+    }
+
+    // ---- Classes ----
+    match /classes/{classId} {
+      // The admin arm reads no documents, so an admin lists every class freely.
+      // The manager arm depends on resource.data, and THAT is what forces a
+      // manager's query to carry where('managerUids','array-contains',uid) —
+      // Firestore rejects a list it cannot prove is constrained. A comment
+      // saying "managers must constrain their query" would enforce nothing.
+      allow get, list: if isAdmin()
+        || (isStaff() && request.auth.uid in resource.data.managerUids);
+
+      // A student reads a class only through their own enrollment. The exists()
+      // path is built from the PATH SEGMENT classId plus their own uid, never
+      // from document data, so it costs one call on a get. Students never LIST
+      // classes — they list their enrollments and then get each class.
+      allow get: if isStudent()
+        && exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + classId));
+
+      allow write: if false;
+    }
+
+    // ---- Enrollments ----
+    // Document id is `${studentUid}_${classId}`.
+    match /enrollments/{enrollmentId} {
+      // The staff arm resolves a class get() FROM EACH ROW'S DATA. Firestore caps
+      // document-access calls per query, so that arm is only affordable when
+      // every row resolves the same path — which a roster query
+      // (where classId == X) guarantees, and nothing else does.
+      //
+      // What keeps a student's cross-class query cheap is the `isStaff() &&`
+      // guard, not the order of the arms: `&&` short-circuits, so a student
+      // token never evaluates the get() at all. Verified by reordering the arms
+      // and re-running the 25-row scale tests in rules.structure.test.ts — they
+      // stay green either way. Read-free arms are still written first as
+      // defence in depth and to match the sibling kanban app's card rule, but do
+      // not rely on ordering alone: keep every read-requiring arm behind a role
+      // guard that excludes the population whose queries span many parents.
+      //
+      // An unconstrained enrollments list by a manager exceeds the limit and
+      // fails closed, which is the correct outcome.
+      allow get, list: if (isStudent() && resource.data.studentUid == request.auth.uid)
+        || isAdmin()
+        || (isStaff() && request.auth.uid in
+            get(/databases/$(database)/documents/classes/$(resource.data.classId)).data.managerUids);
+
+      allow write: if false;
+    }
+
     // ---- Everything else ----
-    // Cohorts, classes, enrollments and the recording model arrive in 1b and
-    // later phases. Until each is opened deliberately, it stays denied.
+    // The recording model arrives in Phase 3. Until each collection is opened
+    // deliberately, it stays denied.
     match /{document=**} {
       allow read, write: if false;
     }

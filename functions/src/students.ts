@@ -4,14 +4,19 @@ import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
   NEW_STUDENT_ACCESS,
+  enrollmentId,
+  type ClassDoc,
+  type EnrollmentDoc,
   type StudentDoc,
   type UserStatus,
 } from '@sabeel/shared';
-import { requireAdmin, requireStaff } from './guards';
+import { requireAdmin, requireClassScope, requireStaff } from './guards';
 
 export interface CreateStudentInput {
   displayName: string;
   email: string;
+  /** Optional: enrol into this class in the same operation. */
+  classId?: string;
 }
 
 export function validateCreateStudent(data: unknown): CreateStudentInput {
@@ -23,7 +28,15 @@ export function validateCreateStudent(data: unknown): CreateStudentInput {
   // malformed address on creation. Duplicating its rules here would only add a
   // second, subtly different definition of "valid email".
   if (!email.includes('@')) throw new HttpsError('invalid-argument', 'A valid email is required.');
-  return { displayName, email };
+
+  const out: CreateStudentInput = { displayName, email };
+  if (d?.classId !== undefined) {
+    if (typeof d.classId !== 'string' || !d.classId) {
+      throw new HttpsError('invalid-argument', 'classId must be a class id.');
+    }
+    out.classId = d.classId;
+  }
+  return out;
 }
 
 /**
@@ -74,14 +87,42 @@ export async function createStudentAccount(callerUid: string, input: CreateStude
     createdAt: Date.now(),
     createdBy: callerUid,
   };
-  await db.collection(COLLECTIONS.students).doc(user.uid).set(doc);
 
-  return { uid: user.uid, email: input.email };
+  // Student record and enrolment in one batch, so a class picked at creation
+  // time cannot end up half-applied — an account with no class is recoverable,
+  // an enrolment pointing at a student record that was never written is not.
+  const batch = db.batch();
+  batch.set(db.collection(COLLECTIONS.students).doc(user.uid), doc);
+  if (input.classId) {
+    const cls = await db.collection(COLLECTIONS.classes).doc(input.classId).get();
+    if (!cls.exists) throw new HttpsError('not-found', 'No such class.');
+    const enrollment: EnrollmentDoc = {
+      studentUid: user.uid,
+      classId: input.classId,
+      cohortId: (cls.data() as ClassDoc).cohortId,
+      active: true,
+      enrolledAt: Date.now(),
+      enrolledBy: callerUid,
+    };
+    batch.set(
+      db.collection(COLLECTIONS.enrollments).doc(enrollmentId(user.uid, input.classId)),
+      enrollment,
+    );
+  }
+  await batch.commit();
+
+  return { uid: user.uid, email: input.email, classId: input.classId ?? null };
 }
 
 export const createStudent = onCall(async (req) => {
-  const callerUid = requireStaff(req);
-  return createStudentAccount(callerUid, validateCreateStudent(req.data));
+  const input = validateCreateStudent(req.data);
+  // Scope is checked BEFORE the account is created: a manager naming a class
+  // they do not run must fail with nothing written, not leave an orphan Auth
+  // user behind.
+  const callerUid = input.classId
+    ? await requireClassScope(req, input.classId)
+    : requireStaff(req);
+  return createStudentAccount(callerUid, input);
 });
 
 export interface StudentAccessInput {
