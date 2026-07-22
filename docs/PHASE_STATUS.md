@@ -14,7 +14,7 @@ and commit messages, and renaming them would strand every one of those.
 | 1c | Rules hardening, e2e harness | **complete** (2026-07-22) |
 | ~~2~~ | *Academic structure — absorbed into Phase 1, see the decision log* | — |
 | 3a | Media spike: background audio, seek, rate | **complete** (2026-07-22) |
-| 3b | Ingestion & lifecycle: upload → Storage → draft → publish | not started |
+| 3b | Ingestion & lifecycle: upload → Storage → draft → publish | **complete** (2026-07-22) |
 | 3c | Playback: signed URLs, player, progress | **blocked** on the Firebase project (TODO.md) |
 | 3d | Offline downloads | deferred to its own phase |
 | 4 | Assignments, progress, completion | not started |
@@ -25,6 +25,29 @@ and commit messages, and renaming them would strand every one of those.
 | 9 | Deploy, manual, release | not started |
 
 ## Decision log
+
+- 2026-07-22 — **The emulator Storage bucket needs an explicit constant.**
+  Neither side has a usable default: the client's `firebaseConfig.storageBucket`
+  is a placeholder until the real project exists, and the Admin SDK throws
+  "Bucket name not specified" without one. Overriding only `projectId` for the
+  emulator left the client uploading to one bucket while the server looked in
+  another — and the only symptom was finalize reporting "no audio found" for a
+  file that had uploaded successfully. `EMULATOR_STORAGE_BUCKET` in
+  `@sabeel/shared` is now used by the app, the functions and the tests. The
+  integration suite had hidden the mismatch by hardcoding its own bucket name.
+
+- 2026-07-22 — **Recording audio is write-once in Storage.** `resource == null`
+  in `storage.rules` means a published recording's audio can never be swapped
+  underneath students who already listened. Replacing it goes through
+  `clearRecordingAudio`, which refuses unless the recording is a draft. Storage
+  rules cannot read Firestore, so class scope is enforced in `createRecording`
+  (before the id is handed out) and again at publish; the rule can only ask "is
+  this active staff".
+
+- 2026-07-22 — **Uploading is web-only for now** (`filePicker.ts` seam). It needs
+  a document-picker native module, and the brief describes upload as the staff
+  exception path done from the recording library. Android explains this rather
+  than showing a control that cannot work.
 
 - 2026-07-22 — **`expo-audio` config had to be made explicit**, found by the 3a
   spike. Config plugins only run during `prebuild`, and this is the bare workflow
@@ -145,6 +168,14 @@ and commit messages, and renaming them would strand every one of those.
   reports nothing is worse than none.
 
 ## Verification log
+
+- 2026-07-22 — **Phase 3b end to end on the web dev server.** A real 12-minute
+  32 kbps M4A uploaded through the UI: duration 720 s read client-side, size
+  3,049,585 bytes read server-side from Storage (matching the file), then
+  published with `publishedAt` stamped. 111 emulator tests. Five rule mutations
+  each caught by the right tests: recordings' student `published` check, its
+  enrolment check, its staff `managerUids` check, Storage write-once, and
+  Storage staff-only upload.
 
 - 2026-07-22 — **Phase 3a spike, on the AVD.** `expo-audio` background playback
   survives backgrounding and 60 s of screen-off (position advanced 0:00 → 1:57,

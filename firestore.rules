@@ -128,9 +128,31 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ---- Recordings ----
+    match /recordings/{recordingId} {
+      // Same discipline as /classes and /enrollments: the admin arm reads no
+      // documents, and the other arms depend on resource.data, which is what
+      // forces a caller's query to be constrained. Ordering keeps the
+      // read-free arms first.
+      //
+      // The staff arm resolves a class lookup PER ROW, so it is affordable only
+      // for a query constrained to one classId — which every staff recordings
+      // list is. A student's arm costs no reads at all.
+      allow get, list: if isAdmin()
+        || (isStudent()
+            && resource.data.status == 'published'
+            && exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + resource.data.classId)))
+        || (isStaff() && request.auth.uid in
+            get(/databases/$(database)/documents/classes/$(resource.data.classId)).data.managerUids);
+
+      // Every mutation goes through a callable that re-checks class scope and
+      // the lifecycle state machine.
+      allow write: if false;
+    }
+
     // ---- Everything else ----
-    // The recording model arrives in Phase 3. Until each collection is opened
-    // deliberately, it stays denied.
+    // Assignments, progress and the ledger arrive in Phase 4. Until each
+    // collection is opened deliberately, it stays denied.
     match /{document=**} {
       allow read, write: if false;
     }

@@ -2,7 +2,8 @@ import { initializeApp } from 'firebase/app';
 import { connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
-import { EMULATOR_PROJECT_ID, REGION } from '@sabeel/shared';
+import { getStorage, connectStorageEmulator } from 'firebase/storage';
+import { EMULATOR_PROJECT_ID, EMULATOR_STORAGE_BUCKET, REGION } from '@sabeel/shared';
 import { firebaseConfig } from './firebase-config';
 import { initAuth } from './authInit';
 import { USE_EMULATORS, EMULATOR_HOST } from './env';
@@ -13,7 +14,17 @@ import { USE_EMULATORS, EMULATOR_HOST } from './env';
 // up as writes that succeed while the client insists the document does not
 // exist. The real projectId in firebaseConfig is for production only.
 const app = initializeApp(
-  USE_EMULATORS ? { ...firebaseConfig, projectId: EMULATOR_PROJECT_ID } : firebaseConfig,
+  USE_EMULATORS
+    ? {
+        ...firebaseConfig,
+        projectId: EMULATOR_PROJECT_ID,
+        // The bucket has to be overridden too, not just the project id. Leaving
+        // the placeholder here uploads to a bucket the server never looks in,
+        // and the only symptom is finalize reporting "no audio found" for a
+        // file that uploaded fine.
+        storageBucket: EMULATOR_STORAGE_BUCKET,
+      }
+    : firebaseConfig,
 );
 
 // initAuth is a platform seam: React Native has no default persistence in the
@@ -22,11 +33,11 @@ const app = initializeApp(
 export const auth = initAuth(app);
 export const db = getFirestore(app);
 export const functions = getFunctions(app, REGION);
+export const storage = getStorage(app);
 
 if (USE_EMULATORS) {
   connectAuthEmulator(auth, `http://${EMULATOR_HOST}:9099`, { disableWarnings: true });
   connectFirestoreEmulator(db, EMULATOR_HOST, 8080);
   connectFunctionsEmulator(functions, EMULATOR_HOST, 5001);
+  connectStorageEmulator(storage, EMULATOR_HOST, 9199);
 }
-
-// Storage arrives in Phase 3, with the first upload.

@@ -152,14 +152,37 @@ export function Notice({ tone, children }: { tone: 'info' | 'error' | 'success';
   );
 }
 
-/** A status word. The dot carries the colour; the label stays readable text. */
+/**
+ * A status word. The dot carries the colour; the label stays readable text —
+ * colouring the label itself fails the moment the colour is a light one.
+ *
+ * Mapped explicitly rather than "anything unrecognised is a warning": that
+ * default painted `published` amber, which reads as a problem on a recording
+ * that is working exactly as intended. Amber is reserved for states a human
+ * has to act on.
+ */
+const STATUS_TONE: Record<string, 'good' | 'bad' | 'attention' | 'neutral'> = {
+  active: 'good',
+  published: 'good',
+  disabled: 'bad',
+  needsAttention: 'attention',
+  pending: 'attention',
+  draft: 'neutral',
+  unpublished: 'neutral',
+  archived: 'neutral',
+  inactive: 'neutral',
+};
+
 export function StatusChip({ status }: { status: string }) {
+  const tone = STATUS_TONE[status] ?? 'neutral';
   const dot =
-    status === 'active'
+    tone === 'good'
       ? t.feedback.success
-      : status === 'disabled'
+      : tone === 'bad'
         ? t.feedback.danger
-        : t.feedback.warning;
+        : tone === 'attention'
+          ? t.feedback.warning
+          : t.text.muted;
   return (
     <View style={styles.chip}>
       <View style={[styles.chipDot, { backgroundColor: dot }]} />

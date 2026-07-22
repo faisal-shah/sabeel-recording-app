@@ -33,7 +33,15 @@ const t = getTheme();
  * enrollments rule, whose staff arm resolves a class lookup per row and is only
  * affordable when every row shares one class.
  */
-export function ClassDetailScreen({ cls, isAdmin }: { cls: ClassRow; isAdmin: boolean }) {
+export function ClassDetailScreen({
+  cls,
+  isAdmin,
+  onOpenRecordings,
+}: {
+  cls: ClassRow;
+  isAdmin: boolean;
+  onOpenRecordings: () => void;
+}) {
   const roster = useRoster(cls.id);
   const students = useStudents(true);
   const staff = useDecidedStaff(isAdmin);
@@ -71,6 +79,7 @@ export function ClassDetailScreen({ cls, isAdmin }: { cls: ClassRow; isAdmin: bo
       {error ? <Notice tone="error">{error}</Notice> : null}
 
       <Card>
+        <Button testID="nav-recordings" label="Recordings" onPress={onOpenRecordings} />
         <View style={styles.meta}>
           <StatusChip status={cls.effectiveActive ? 'active' : 'inactive'} />
           {!cls.effectiveActive ? (

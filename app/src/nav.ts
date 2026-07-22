@@ -10,6 +10,7 @@ export type RootStackParamList = {
   Cohorts: undefined;
   Classes: { cohort: CohortRow };
   ClassDetail: { cls: ClassRow };
+  Recordings: { cls: ClassRow };
   MyClasses: undefined;
   Tokens: undefined;
 };

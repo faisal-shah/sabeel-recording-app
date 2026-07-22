@@ -20,6 +20,7 @@ import { StudentsScreen } from './src/screens/StudentsScreen';
 import { CohortsScreen } from './src/screens/CohortsScreen';
 import { ClassesScreen } from './src/screens/ClassesScreen';
 import { ClassDetailScreen } from './src/screens/ClassDetailScreen';
+import { RecordingsScreen } from './src/screens/RecordingsScreen';
 import { MyClassesScreen } from './src/screens/MyClassesScreen';
 import { TokensScreen } from './src/screens/TokensScreen';
 import type { RootStackParamList } from './src/nav';
@@ -99,6 +100,9 @@ export default function App() {
             <Stack.Screen name="ClassDetail" options={{ title: 'Class' }}>
               {() => <ClassDetail isAdmin={isAdmin} />}
             </Stack.Screen>
+            <Stack.Screen name="Recordings" options={{ title: 'Recordings' }}>
+              {() => <Recordings />}
+            </Stack.Screen>
             <Stack.Screen name="MyClasses" options={{ title: 'My classes' }}>
               {() => <MyClasses uid={user.uid} />}
             </Stack.Screen>
@@ -147,8 +151,20 @@ function Classes() {
 }
 
 function ClassDetail({ isAdmin }: { isAdmin: boolean }) {
+  const navigation = useNavigation<Nav>();
   const { cls } = useRoute<RouteProp<RootStackParamList, 'ClassDetail'>>().params;
-  return <ClassDetailScreen cls={cls} isAdmin={isAdmin} />;
+  return (
+    <ClassDetailScreen
+      cls={cls}
+      isAdmin={isAdmin}
+      onOpenRecordings={() => navigation.navigate('Recordings', { cls })}
+    />
+  );
+}
+
+function Recordings() {
+  const { cls } = useRoute<RouteProp<RootStackParamList, 'Recordings'>>().params;
+  return <RecordingsScreen classId={cls.id} className={cls.name} />;
 }
 
 function MyClasses({ uid }: { uid: string }) {

@@ -168,11 +168,11 @@ describe('students', () => {
 
 describe('collections not yet opened', () => {
   it('stay denied even to an admin', async () => {
-    // Cohorts, classes and enrollments were opened in 1b and have their own
-    // suite (rules.structure.test.ts). Everything the recording model needs is
-    // still closed until the phase that earns it.
+    // Each collection is opened by the phase that earns it, and gets its own
+    // suite: cohorts/classes/enrollments in 1b (rules.structure.test.ts),
+    // recordings in 3b (rules.recordings.test.ts). What remains is the
+    // accountability model, which Phase 4 and 5 open.
     for (const name of [
-      COLLECTIONS.recordings,
       COLLECTIONS.assignments,
       COLLECTIONS.listeningProgress,
       COLLECTIONS.completionEvents,
@@ -183,10 +183,15 @@ describe('collections not yet opened', () => {
     }
   });
 
-  it('stay WRITE-denied on the collections 1b opened for reading', async () => {
+  it('stay WRITE-denied on the collections opened for reading', async () => {
     // Opening a collection to reads must not have opened it to writes: every
     // mutation goes through a callable that re-checks scope.
-    for (const name of [COLLECTIONS.cohorts, COLLECTIONS.classes, COLLECTIONS.enrollments]) {
+    for (const name of [
+      COLLECTIONS.cohorts,
+      COLLECTIONS.classes,
+      COLLECTIONS.enrollments,
+      COLLECTIONS.recordings,
+    ]) {
       await assertFails(setDoc(doc(admin(), name, 'x'), { any: 'thing' }));
     }
   });
