@@ -4,7 +4,7 @@ Live build status. Phases from `PLAN.md`; a commit lands at each phase boundary.
 
 | Phase | What | Status |
 |---|---|---|
-| 0 | Scaffold, theme, CI green | **in progress** |
+| 0 | Scaffold, theme, CI green | **complete** (2026-07-21: token screen verified on tb_emu AVD + web export, rules suite mutation-tested, full chain green) |
 | 1 | Identity & authorization (staff Google + student email/password, class scopes) | not started |
 | 2 | Academic structure (cohorts, classes, enrollments) | not started |
 | 3 | Media spine (upload → Storage → signed-URL playback → offline downloads) | not started |
