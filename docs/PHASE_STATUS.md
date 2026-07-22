@@ -13,7 +13,10 @@ and commit messages, and renaming them would strand every one of those.
 | 1b | Academic structure: cohorts, classes, enrollments, manager scoping | **complete** (2026-07-22) |
 | 1c | Rules hardening, e2e harness | **complete** (2026-07-22) |
 | ~~2~~ | *Academic structure — absorbed into Phase 1, see the decision log* | — |
-| 3 | Media spine (upload → Storage → signed-URL playback → offline downloads) | not started |
+| 3a | Media spike: background audio, seek, rate | **complete** (2026-07-22) |
+| 3b | Ingestion & lifecycle: upload → Storage → draft → publish | not started |
+| 3c | Playback: signed URLs, player, progress | **blocked** on the Firebase project (TODO.md) |
+| 3d | Offline downloads | deferred to its own phase |
 | 4 | Assignments, progress, completion | not started |
 | 5 | Staff ledger, reporting, audit | not started |
 | 6 | Zoom import *(gated on credentials)* | not started |
@@ -22,6 +25,27 @@ and commit messages, and renaming them would strand every one of those.
 | 9 | Deploy, manual, release | not started |
 
 ## Decision log
+
+- 2026-07-22 — **`expo-audio` config had to be made explicit**, found by the 3a
+  spike. Config plugins only run during `prebuild`, and this is the bare workflow
+  with a committed `android/`, so adding the plugin to `app.json` silently added
+  nothing: no `FOREGROUND_SERVICE`, no media service, no notification permission.
+  Background audio still *worked* on the emulator without them, which is exactly
+  how this would have shipped broken. `npx expo prebuild --platform android`
+  regenerates the manifest; `recordAudioAndroid: false` keeps the plugin from
+  requesting a microphone this app never uses; `POST_NOTIFICATIONS` is requested
+  explicitly because the plugin only adds it for background *recording*, not
+  playback. Generalised into the `expo-firebase-stack` skill (`9bef5a0`).
+
+- 2026-07-22 — **Offline downloads deferred out of Phase 3** into their own
+  phase. The brief calls them optional while streaming is required, and Phase 3
+  is the highest-risk phase already.
+
+- 2026-07-22 — **`listeningProgress` moved from Phase 4 into Phase 3.** "Resume
+  progress" is a Phase 3 playback requirement and is meaningless without
+  persistence; building it locally now and again in Firestore later is waste.
+  Phase 4 keeps assignments, completion and the ledger — accountability, not
+  playback.
 
 - 2026-07-22 — **`list` rules must reference `resource.data`.** The first draft
   of the enrollments rule was `isAdmin() || isStudent() || isStaff()` with a
@@ -121,6 +145,15 @@ and commit messages, and renaming them would strand every one of those.
   reports nothing is worse than none.
 
 ## Verification log
+
+- 2026-07-22 — **Phase 3a spike, on the AVD.** `expo-audio` background playback
+  survives backgrounding and 60 s of screen-off (position advanced 0:00 → 1:57,
+  matching wall-clock); a media3 `MediaSession` registers and media transport
+  controls appear in the shade; seek to 10:00 into a 12-minute file works over
+  HTTP range requests (6 GETs observed); 2x playback rate applies with no
+  buffering stall; duration is read correctly from a remote URL. Signed-URL
+  streaming is the one spike item still unproven — it needs the real project.
+  Spike code deleted; the `app.json` and manifest fixes it produced are kept.
 
 - 2026-07-22 — **Phase 1b/1c verified end to end.** `npm run test:e2e` (new,
   committed) drives 17 checks on the web dev server: pending on first sign-in,

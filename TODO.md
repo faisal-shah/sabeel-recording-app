@@ -4,9 +4,82 @@ Everything that needs a human with console access, a credit card, or a phone.
 The agent cannot do any of these. Keep this current — it is the list Faisal
 works from.
 
-Nothing here blocks development: `devSignIn` mints a Google-provider identity in
-the Auth emulator, and the Auth emulator handles password resets, so every phase
-before 6 is buildable and testable before the real Firebase project exists.
+Phases 0 and 1 needed nothing from this list — `devSignIn` mints a
+Google-provider identity in the Auth emulator, and the emulator handles password
+resets. **Phase 3 is the first that genuinely blocks**, because signed URLs
+cannot be minted against the emulator at all.
+
+---
+
+## ⛔ BLOCKING NOW — Phase 3 cannot be finished without these
+
+Signing a URL needs a service account. The Storage emulator has no signing
+service, so the central mechanism of Phase 3 is the one thing that can only be
+proven against a real project. Everything else in Phase 3 proceeds meanwhile.
+
+### 1. Create the Firebase project
+
+1. <https://console.firebase.google.com> → **Add project**.
+2. Project id: **`sabeel-class-recordings`** (or tell me what you chose and I
+   will update `.firebaserc`). Disable Google Analytics — nothing uses it.
+3. **Upgrade to the Blaze plan.** Cloud Functions require it. Expected spend is
+   $0/month at this scale — see `docs/research/firebase-recording-costs.md` —
+   but set a **budget alert at $5** anyway (Google Cloud console → Billing →
+   Budgets & alerts) so a mistake surfaces as an email, not a bill.
+4. Project settings → **Your apps** → add a **Web app**. Copy the config object
+   and paste it over the placeholders in `app/src/firebase-config.ts`. It is not
+   a secret — it ships in every client bundle.
+
+### 2. Create the Storage bucket — region matters
+
+Build → **Storage** → Get started → **location `us-central1`** (or `us-west1` /
+`us-east1`; **only those three** carry the no-cost quotas). Take the modern
+`*.firebasestorage.app` bucket, not a legacy `*.appspot.com` one — the legacy
+rows cap downloads at 1 GB/day instead of 100 GB/month.
+
+**This choice is permanent.** A bucket's location cannot be changed afterwards.
+
+### 3. Grant the signing permission
+
+To sign a URL without a downloaded key file, the function's runtime service
+account has to be allowed to **impersonate itself** through the IAM Credentials
+API (`signBlob`).
+
+Our functions are **gen 2** (`firebase-functions/v2`), so they run as the
+**Compute Engine default** service account —
+`PROJECT_NUMBER-compute@developer.gserviceaccount.com` — *not* the App Engine
+`…@appspot.gserviceaccount.com` one that most older tutorials name. Granting the
+wrong account leaves signing broken with an identical-looking error, so this
+derives the id rather than hardcoding it:
+
+```bash
+PROJECT_ID=sabeel-class-recordings   # change if you chose a different id
+PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+SA="$PROJECT_NUMBER-compute@developer.gserviceaccount.com"
+
+gcloud iam service-accounts add-iam-policy-binding "$SA" \
+  --member="serviceAccount:$SA" \
+  --role="roles/iam.serviceAccountTokenCreator" \
+  --project="$PROJECT_ID"
+
+# Confirm it took:
+gcloud iam service-accounts get-iam-policy "$SA" --project="$PROJECT_ID"
+```
+
+Run it yourself — type `! gcloud …` in the prompt if you want the output here.
+If `gcloud` is not authenticated yet: `gcloud auth login`.
+
+**This is the failure that looks like working code.** Without it, signing throws
+only in production; every local test passes. It is why the plan front-loads a
+real deploy instead of trusting the emulator.
+
+### 4. Tell me when these are done
+
+Then paste me the web-app config object (it is not a secret) and the project id,
+and I will wire `firebase-config.ts`, `.firebaserc`, and deploy the minting
+callable to verify a real signed URL end to end.
+
+---
 
 ## Before Phase 1 (auth)
 

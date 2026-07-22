@@ -12,14 +12,23 @@
     ],
     "android": {
       "package": "com.sabeelinstitute.classrecordings",
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS"
+      ]
     },
     "web": {
       "bundler": "metro",
       "output": "single"
     },
     "plugins": [
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-audio",
+        {
+          "recordAudioAndroid": false
+        }
+      ]
     ]
   }
 }
