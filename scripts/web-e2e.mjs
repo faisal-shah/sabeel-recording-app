@@ -287,13 +287,23 @@ await student.waitForTimeout(1500);
 check('a student reaches the player for their class', true);
 await shot(student, '12-player');
 
+/** Elapsed time as seconds, read from the player's own readout.
+ *  Parsed rather than pattern-matched against the whole page: an earlier version
+ *  scraped body text for a "/" and silently started matching the recorded DATE
+ *  when the layout changed, which made the assertions meaningless. */
+const elapsedSeconds = async (page) => {
+  const raw = (await page.getByTestId('player-elapsed').innerText()).trim();
+  const [m, s] = raw.split(':').map(Number);
+  return (m || 0) * 60 + (s || 0);
+};
+
 await tap(student, 'player-play');
 await student.waitForTimeout(6000);
-const pos = await student.locator('body').innerText();
+const advanced = await elapsedSeconds(student);
 check(
   'audio actually advances (a signed URL streamed)',
-  /0:0[2-9]|0:1[0-9]/.test(pos),
-  pos.split('\n').find((l) => l.includes('/')) ?? '',
+  advanced >= 3,
+  `elapsed ${advanced}s after 6s of playback`,
 );
 
 // Seek, then confirm the position SURVIVES a reload — the resume path.
@@ -303,16 +313,41 @@ const progressDocs = await readCollection('listeningProgress');
 check('progress is persisted for the student', progressDocs.length === 1,
   `${progressDocs.length} progress docs`);
 
+// Drag the scrubber. This is hand-built on PanResponder because React Native
+// has no slider primitive, so it is the one control here that could plausibly
+// not work at all on web.
+const bar = await student.getByTestId('player-scrubber').boundingBox();
+await student.mouse.move(bar.x + bar.width * 0.1, bar.y + bar.height / 2);
+await student.mouse.down();
+await student.mouse.move(bar.x + bar.width * 0.5, bar.y + bar.height / 2, { steps: 10 });
+await student.mouse.up();
+await student.waitForTimeout(2500);
+const draggedTo = await elapsedSeconds(student);
+check(
+  'dragging the scrubber seeks',
+  // Half way through a 12-minute recording is ~360s; allow slack for where the
+  // drag actually landed and for playback continuing during the wait.
+  draggedTo > 240 && draggedTo < 460,
+  `landed at ${draggedTo}s (~half of 720s)`,
+);
+await tap(student, 'player-play'); // pause, so the saved position settles
+
+const savedMs = Number(
+  (await readCollection('listeningProgress'))[0].fields.positionMs.integerValue,
+);
+
 await goHome(student);
 await tap(student, 'nav-myrecordings');
 await tap(student, 'play-Session 1');
 await student.getByTestId('player-play').waitFor({ timeout: 25000 });
 await student.waitForTimeout(2500);
-const resumed = await student.locator('body').innerText();
+const resumedAt = await elapsedSeconds(student);
 check(
   'playback RESUMES where it left off after a reload',
-  !/^0:00 \//m.test(resumed),
-  resumed.split('\n').find((l) => l.includes('/')) ?? '',
+  // Must be back near the SAVED position, not merely non-zero — the previous
+  // form of this check passed for any layout at all.
+  resumedAt > 0 && Math.abs(resumedAt - savedMs / 1000) <= 5,
+  `resumed at ${resumedAt}s, saved ${Math.round(savedMs / 1000)}s`,
 );
 await shot(student, '13-resumed');
 

@@ -1,7 +1,10 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { canPlayFromClass, listenedFraction } from '@sabeel/shared';
-import { Button, Card, Notice, Row, Screen, SectionTitle } from '../components/ui';
+import { Notice } from '../components/ui';
+import { Scrubber } from '../components/Scrubber';
+import { Transport } from '../components/Transport';
 import { usePlayback } from '../playback';
+import { useListenerError } from '../liveQuery';
 import type { ClassRow } from '../structure';
 import type { RecordingRow } from '../recordings';
 import { getTheme, spacing } from '../theme';
@@ -12,9 +15,11 @@ const RATES = [1, 1.25, 1.5, 2];
 /**
  * Listening to one recording.
  *
- * When the class is archived with listening turned off, this says so plainly
- * rather than showing controls that would fail — the callable refuses the URL
- * either way, so a working-looking button would only produce a confusing error.
+ * Laid out like a video page rather than a dashboard: the controls own the top
+ * of the screen and everything else — notes, listening detail — sits BELOW the
+ * fold, reached by scrolling. Notes are shared with everyone who can access the
+ * recording and can run long, so putting them inline would push the transport
+ * off a phone screen.
  */
 export function PlayerScreen({
   recording,
@@ -25,6 +30,7 @@ export function PlayerScreen({
   cls: ClassRow;
   studentUid: string | null;
 }) {
+  const listenerError = useListenerError();
   const allowed = canPlayFromClass(cls);
   const { state, play, pause, seek, setRate } = usePlayback(
     recording.id,
@@ -34,81 +40,114 @@ export function PlayerScreen({
 
   if (!allowed) {
     return (
-      <Screen subtitle={recording.title}>
+      <ScrollView style={styles.canvas} contentContainerStyle={styles.content}>
+        <Hero recording={recording} className={cls.name} />
         <Notice tone="info">
           This class has been archived and listening has been turned off. Your listening
           history is kept — ask your teacher if you need access again.
         </Notice>
-      </Screen>
+      </ScrollView>
     );
   }
 
   const durationMs = (recording.durationSec ?? 0) * 1000;
-  const fraction = durationMs > 0 ? Math.min(1, state.positionMs / durationMs) : 0;
+  const remainingMs = Math.max(0, durationMs - state.positionMs);
   const listened = listenedFraction(state.listenedMs, recording.durationSec);
 
   return (
-    <Screen subtitle={recording.title}>
+    <ScrollView style={styles.canvas} contentContainerStyle={styles.content}>
+      {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {state.error ? <Notice tone="error">{state.error}</Notice> : null}
-      {recording.notes ? <Notice tone="info">{recording.notes}</Notice> : null}
 
-      <Card>
-        <Text style={styles.time}>
-          {fmt(state.positionMs)} <Text style={styles.of}>/ {fmt(durationMs)}</Text>
-        </Text>
+      <Hero recording={recording} className={cls.name} />
 
-        <View style={styles.track}>
-          <View style={[styles.played, { width: `${Math.round(fraction * 100)}%` }]} />
-        </View>
-        <Text style={styles.listened}>
-          {Math.round(listened * 100)}% listened
-          {state.listenedMs > 0 && listened < 0.02 ? ' (just started)' : ''}
-        </Text>
+      <Scrubber
+        testID="player-scrubber"
+        positionMs={state.positionMs}
+        durationMs={durationMs}
+        disabled={!state.ready}
+        onSeek={seek}
+      />
+      <View style={styles.times}>
+        <Text testID="player-elapsed" style={styles.time}>{fmt(state.positionMs)}</Text>
+        {/* Remaining, not total: mid-lecture, "how much is left" is the question
+            anyone actually has. */}
+        <Text style={styles.time}>−{fmt(remainingMs)}</Text>
+      </View>
 
-        <Row>
-          <Button
-            testID="player-back"
-            label="← 15s"
-            variant="secondary"
-            disabled={!state.ready}
-            onPress={() => seek(Math.max(0, state.positionMs - 15_000))}
-          />
-          <Button
-            testID="player-play"
-            label={state.playing ? 'Pause' : 'Play'}
-            disabled={!state.ready}
-            onPress={state.playing ? pause : play}
-          />
-          <Button
-            testID="player-forward"
-            label="30s →"
-            variant="secondary"
-            disabled={!state.ready}
-            onPress={() => seek(state.positionMs + 30_000)}
-          />
-        </Row>
+      <Transport
+        playing={state.playing}
+        disabled={!state.ready}
+        onPlayPause={state.playing ? pause : play}
+        onBack={() => seek(Math.max(0, state.positionMs - 15_000))}
+        onForward={() => seek(Math.min(durationMs, state.positionMs + 30_000))}
+      />
 
-        <SectionTitle>Speed</SectionTitle>
-        <Row>
-          {RATES.map((r) => (
-            <Button
+      <View style={styles.speedRow}>
+        {RATES.map((r) => {
+          const on = state.rate === r;
+          return (
+            <Pressable
               key={r}
               testID={`player-rate-${r}`}
-              label={`${r}×`}
-              variant={state.rate === r ? 'primary' : 'secondary'}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              accessibilityLabel={`Playback speed ${r} times`}
               disabled={!state.ready}
               onPress={() => setRate(r)}
-            />
-          ))}
-        </Row>
+              style={[styles.speedChip, on ? styles.speedChipOn : null]}
+            >
+              <Text style={[styles.speedText, on ? styles.speedTextOn : null]}>{r}×</Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
-        {!state.ready && !state.error ? <Text style={styles.hint}>Preparing…</Text> : null}
-      </Card>
+      {!state.ready && !state.error ? <Text style={styles.preparing}>Preparing…</Text> : null}
 
-      <Text style={styles.footnote}>
-        Your place is saved automatically, so you can carry on from another device.
+      {/* ---- below the fold ---- */}
+      <View style={styles.divider} />
+
+      <Text style={styles.sectionHeading}>Your listening</Text>
+      <View style={styles.listenedTrack}>
+        <View style={[styles.listenedFill, { width: `${Math.round(listened * 100)}%` }]} />
+      </View>
+      <Text style={styles.body}>
+        {Math.round(listened * 100)}% of this recording listened. Your place is saved
+        automatically, so you can carry on from another device.
       </Text>
-    </Screen>
+
+      {recording.notes ? (
+        <>
+          <Text style={styles.sectionHeading}>About this recording</Text>
+          <Text style={styles.body}>{recording.notes}</Text>
+        </>
+      ) : null}
+
+      {recording.dueDate ? (
+        <Text style={styles.due}>Due {recording.dueDate}</Text>
+      ) : (
+        <Text style={styles.due}>No due date</Text>
+      )}
+    </ScrollView>
+  );
+}
+
+/**
+ * Stands where Spotify puts album art. A lecture has none, so the panel carries
+ * the type instead — same visual anchor, nothing invented.
+ */
+function Hero({ recording, className }: { recording: RecordingRow; className: string }) {
+  return (
+    <View style={styles.hero}>
+      <Text style={styles.heroClass}>{className.toUpperCase()}</Text>
+      <Text style={styles.heroTitle}>{recording.title}</Text>
+      {recording.recordedAt ? (
+        <Text style={styles.heroDate}>
+          Recorded {new Date(recording.recordedAt).toLocaleDateString()}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -122,17 +161,71 @@ function fmt(ms: number) {
 }
 
 const styles = StyleSheet.create({
-  time: { fontSize: 32, fontWeight: '700', color: t.text.primary, fontVariant: ['tabular-nums'] },
-  of: { fontSize: 18, fontWeight: '400', color: t.text.secondary },
-  track: {
-    height: 8,
-    borderRadius: 4,
+  canvas: { flex: 1, backgroundColor: t.bg.canvas },
+  content: {
+    padding: spacing(5),
+    paddingBottom: spacing(12),
+    maxWidth: 560,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  hero: {
+    backgroundColor: t.bg.sage,
+    borderRadius: 16,
+    paddingVertical: spacing(10),
+    paddingHorizontal: spacing(5),
+    marginBottom: spacing(5),
+    minHeight: 200,
+    justifyContent: 'center',
+  },
+  heroClass: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    color: t.text.secondary,
+    marginBottom: spacing(2),
+  },
+  heroTitle: { fontSize: 28, fontWeight: '700', color: t.text.primary },
+  heroDate: { fontSize: 14, color: t.text.secondary, marginTop: spacing(2) },
+  times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: -spacing(1) },
+  time: { fontSize: 13, color: t.text.secondary, fontVariant: ['tabular-nums'] },
+  speedRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing(2),
+    marginTop: spacing(5),
+  },
+  speedChip: {
+    paddingVertical: spacing(2),
+    paddingHorizontal: spacing(3),
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: t.border.strong,
+    minWidth: 56,
+    alignItems: 'center',
+  },
+  speedChipOn: { backgroundColor: t.accent.base, borderColor: t.accent.base },
+  speedText: { fontSize: 14, fontWeight: '600', color: t.text.secondary },
+  speedTextOn: { color: t.accent.onAccent },
+  preparing: { fontSize: 13, color: t.text.secondary, textAlign: 'center', marginTop: spacing(3) },
+  divider: { height: 1, backgroundColor: t.accent.gold, marginVertical: spacing(7) },
+  sectionHeading: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    color: t.text.secondary,
+    marginBottom: spacing(2),
+    marginTop: spacing(4),
+  },
+  listenedTrack: {
+    height: 6,
+    borderRadius: 3,
     backgroundColor: t.bg.inset,
     overflow: 'hidden',
-    marginTop: spacing(3),
+    marginBottom: spacing(2),
   },
-  played: { height: 8, backgroundColor: t.accent.base },
-  listened: { fontSize: 13, color: t.text.secondary, marginTop: spacing(2) },
-  hint: { fontSize: 13, color: t.text.secondary, marginTop: spacing(2) },
-  footnote: { fontSize: 13, color: t.text.secondary, marginTop: spacing(2) },
+  listenedFill: { height: 6, backgroundColor: t.feedback.success },
+  body: { fontSize: 15, color: t.text.secondary, lineHeight: 22 },
+  due: { fontSize: 14, color: t.text.secondary, marginTop: spacing(5) },
 });
