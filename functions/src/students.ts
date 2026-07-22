@@ -47,8 +47,12 @@ export function validateCreateStudent(data: unknown): CreateStudentInput {
  * staff, and completing the set-password link is itself proof of mailbox
  * control.
  *
- * The auth-create trigger deliberately ignores password accounts (see
- * provision.ts) so it cannot race this function.
+ * Creating the account WITHOUT a password is what keeps the auth-create trigger
+ * from racing this function — a password-less user has no provider at all, which
+ * is the trigger's signal for "Admin-SDK provisioned, leave alone" (see
+ * provision.ts). It is also, therefore, load-bearing for security: the trigger
+ * deletes any account that already has a `password` provider when it fires,
+ * because that can only have come from a client-side sign-up.
  */
 export async function createStudentAccount(callerUid: string, input: CreateStudentInput) {
   const auth = getAuth();

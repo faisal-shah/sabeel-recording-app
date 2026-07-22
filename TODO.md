@@ -111,7 +111,7 @@ Verified against the live Identity Toolkit config after Faisal's console work:
 
 | Setting | Value |
 |---|---|
-| `client.permissions.disabledUserSignup` | **true** ← the load-bearing one |
+| `client.permissions.disabledUserSignup` | **must be `false`** — see below |
 | Email/Password | enabled |
 | Email link (passwordless) | disabled |
 | Anonymous | disabled |
@@ -128,22 +128,47 @@ otherwise staff opening a link inside WhatsApp or Slack hit
 `WEB_CLIENT_ID` in `firebase-config.ts` is filled in from the created OAuth
 client. It is not a secret; it ships in every client bundle.
 
-### Disabling client-side sign-up — what it buys, for the record
+### "Disable client-side sign-up" was WRONG advice — undo it
 
-It blocks the client SDK from creating accounts while the Admin SDK still can,
-which is what `createStudent` uses. It matters because `provision.ts`
-deliberately leaves password accounts alone — only the Admin SDK is supposed to
-make them. Without it a stranger could self-register; they would get no claims
-and could read nothing, but the accounts would pile up.
+This file used to call that setting load-bearing. It is not usable at all, and
+finding out cost a failed sign-in.
+
+**`disabledUserSignup` blocks ALL client-side account creation — including a
+staff member's first Google sign-in**, because creating their account *is* a
+sign-up. It fails with `auth/admin-restricted-operation` before `onUserCreate`
+ever runs; verified 2026-07-22, no user was created and the trigger logged
+nothing. Staff self-onboarding and disabled sign-up are mutually exclusive, and
+this app requires staff self-onboarding.
+
+The protection it was meant to provide now lives in `provision.ts`, where it can
+tell the two populations apart:
+
+- A real student is created by `createStudent` **without a password**, so it has
+  **no provider at all** when the trigger fires → left alone.
+- Therefore anything that already has a `password` provider at creation came
+  from the client SDK → **deleted**.
+
+Proven both ways in `npm run test:e2e`: a self-signup's credential stops working
+(`EMAIL_NOT_FOUND`), and reverting the rule makes that check fail.
 
 ---
 
 ## Still to do
 
-### 0. Sign in once, so I can bootstrap you as admin  ← **the only blocking one**
+### 0. Turn client-side sign-up back ON  ← **blocking; sign-in is broken until this is done**
+
+Authentication → **Settings** → **User actions** → **re-check "Enable create
+(sign-up)"**.
+
+I was blocked from doing this via the API — relaxing a production auth setting
+needs a human, which is correct. The guarding code is already deployed, so the
+order is safe: there is no window where self-signup is possible *and*
+unguarded.
+
+### 1. Sign in once, so I can bootstrap you as admin
 
 **<https://sabeel-class-recordings.web.app>** is live (deployed 2026-07-22:
-rules, indexes, all 18 functions, and Hosting). Open it on any device, **Sign in
+rules, indexes, all 18 functions, and Hosting). After step 0, open it, **Sign in
 with Google**, use your `@oursabeel.com` account. You will land on a "pending
 approval" screen — that is correct and expected; nobody is an admin yet.
 
@@ -152,10 +177,10 @@ function immediately afterwards**. It is safe by construction — one hardcoded
 address, and it refuses once any admin exists — but a live endpoint that grants
 admin should not outlive its single use.
 
-Note that domain enforcement is now **running**: `onUserCreate` deletes any
-Google account that is not a verified `@oursabeel.com` address. If you want to
-watch it work, sign in with a personal Gmail account first and then check
-`gcloud functions logs read onUserCreate`.
+Domain enforcement is **running**: `onUserCreate` deletes any Google account that
+is not a verified `@oursabeel.com` address, and now any self-registered
+email/password account too. To watch it work, sign in with a personal Gmail
+first, then `gcloud functions logs read onUserCreate`.
 
 ### 1. Reword the password-reset email
 

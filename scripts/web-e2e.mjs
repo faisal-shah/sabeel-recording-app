@@ -163,6 +163,56 @@ check(
   (await outsider.locator('body').innerText()).includes('Emulator sign-in'),
 );
 
+// A stranger self-registering with email/password must also be deleted.
+//
+// This is driven through the REST API rather than the UI because the app offers
+// no sign-up control at all — which is exactly why it has to be tested this way:
+// the absence of a button is not a control, and anyone can post to this
+// endpoint with the public API key.
+//
+// It matters because the console setting that would block it
+// (`disabledUserSignup`) cannot be used — it also blocks a staff member's first
+// Google sign-in with `auth/admin-restricted-operation`. The trigger is the only
+// thing standing here.
+const strangerEmail = `stranger-${Date.now()}@example.com`;
+const signUp = await fetch(
+  `${AUTH}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake-api-key`,
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: strangerEmail, password: 'hunter2hunter2', returnSecureToken: true }),
+  },
+);
+check('a self-signup is not blocked at the door (so the trigger must catch it)', signUp.ok);
+
+// Asserted by trying to USE the credential, not by listing accounts.
+//
+// The first version of this check polled the emulator's
+// /emulator/v1/projects/*/accounts endpoint — which is DELETE-only, so the GET
+// returned `{"message":"Method GET not allowed"}`, `userInfo` was undefined, and
+// the check passed unconditionally. It survived a deliberate mutation of the
+// rule it was written to protect, which is the only reason it was caught.
+// Signing in cannot be vacuous: either the credential works or it does not.
+let strangerDenied = '';
+for (let i = 0; i < 20 && !strangerDenied; i++) {
+  await outsider.waitForTimeout(1000);
+  const r = await fetch(
+    `${AUTH}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: strangerEmail, password: 'hunter2hunter2', returnSecureToken: true }),
+    },
+  );
+  const body = await r.json();
+  if (body.error) strangerDenied = body.error.message;
+}
+check(
+  'a self-registered account is deleted — its credential stops working',
+  strangerDenied === 'EMAIL_NOT_FOUND',
+  strangerDenied || 'sign-in still succeeded',
+);
+
 // ------------------------------------------------------- academic structure --
 console.log('\nAcademic structure');
 await goHome(admin);

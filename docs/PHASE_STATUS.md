@@ -190,6 +190,23 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-07-22 — **Self-signup is deleted by the trigger, proven in both
+  directions.** The first version of this e2e check was VACUOUS: it polled the
+  Auth emulator's `/emulator/v1/projects/*/accounts` endpoint, which is
+  DELETE-only, so the GET returned `Method GET not allowed`, `userInfo` was
+  undefined and the check passed unconditionally. It survived a deliberate
+  mutation of the very rule it protects, which is the only reason it was caught.
+  Rewritten to assert on *using* the credential — mutation in place: FAIL
+  ("sign-in still succeeded"); mutation removed: ok (`EMAIL_NOT_FOUND`).
+- 2026-07-22 — **`disabledUserSignup` is unusable, discovered on the first real
+  sign-in.** Google sign-in returned `auth/admin-restricted-operation`; the live
+  project showed **0 users** and `onUserCreate` had **0 log entries**, so the
+  block happens before the trigger. Creating a staff member's account IS a
+  sign-up, so that console setting and staff self-onboarding are mutually
+  exclusive. The guard moved into `provision.ts`, which can distinguish the two
+  populations: a real student has NO provider at creation (created without a
+  password), so a `password` provider at creation can only be a client sign-up.
+
 - 2026-07-22 — **First production deploy: rules, indexes, 18 functions, Hosting.**
   The Firestore database did not exist and was created by the rules deploy.
   `npm run smoke:prod` (new, committed) then verified the *deployed* artefact

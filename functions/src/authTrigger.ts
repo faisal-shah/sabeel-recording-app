@@ -9,12 +9,21 @@ import { decideProvision } from './provision';
  * Server-side account provisioning and domain enforcement, for every new
  * Firebase Auth user. The decision is in `provision.ts`; this performs it.
  *
+ * This is the ONLY gate on who gets an account, which was not the original
+ * intent. The plan was to disable client-side sign-up in the console and let
+ * this handle domain enforcement alone; that setting
+ * (`client.permissions.disabledUserSignup`) turns out to block a staff member's
+ * FIRST Google sign-in too — creating their account is a sign-up — so it fails
+ * with `auth/admin-restricted-operation` before this trigger ever runs. Staff
+ * self-onboarding and disabled sign-up are mutually exclusive. Verified against
+ * the live project, 2026-07-22.
+ *
  * Gen-1 auth trigger: `beforeUserCreated` (a blocking function) would reject
- * before the auth user exists at all, but it requires upgrading the project to
- * Identity Platform. Worth doing if stray sign-ups become a nuisance — the
- * window it would close is not exploitable today, because an account this
- * trigger rejects has no custom claims, and every rule gates on
- * `status == 'active'` defaulting to `''`.
+ * before the auth user exists at all, closing the seconds-long window in which a
+ * rejected account exists. It needs the project upgraded to Identity Platform.
+ * Worth doing now that this is the only gate — but the window is still not
+ * exploitable, because an account this trigger rejects has no custom claims, and
+ * every rule gates on `status == 'active'` defaulting to `''`.
  *
  * Deleting a rejected account rather than marking it `rejected` keeps
  * `staffUsers` meaningful: everything in it is someone who legitimately reached

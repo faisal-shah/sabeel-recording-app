@@ -18,7 +18,11 @@ import type { Role, UserStatus } from '@sabeel/shared';
  */
 
 export type ProvisionDecision =
-  | { action: 'reject'; reason: 'bad-domain' | 'unsupported-provider'; email: string | null }
+  | {
+      action: 'reject';
+      reason: 'bad-domain' | 'unsupported-provider' | 'self-signup';
+      email: string | null;
+    }
   | { action: 'ignore'; reason: 'admin-sdk-provisioned' }
   | {
       action: 'provision';
@@ -37,30 +41,38 @@ export interface NewUser {
 export function decideProvision(user: NewUser): ProvisionDecision {
   const { email, emailVerified = false, providerIds } = user;
 
-  // Students, in both the states they can be in.
+  // A legitimate student has NO PROVIDER AT ALL at creation time.
   //
-  // `password` is the obvious one. The subtle one is NO PROVIDER AT ALL: a user
-  // the Admin SDK creates without a password — which is exactly what
-  // createStudent does, so the student can set their own — has an empty
-  // providerData until they first set one. Treating that as an unknown provider
-  // deleted every student account moments after it was created, and the failure
-  // looked intermittent because it depended on trigger timing.
+  // That is not an edge case, it is the normal path: `createStudent` creates the
+  // user without a password so the student can set their own from the emailed
+  // link, and a password-less Admin-SDK user has empty providerData until one is
+  // set. Reading that as an unknown provider deleted every student account
+  // moments after it was created, and the failure looked intermittent because it
+  // depended on trigger timing.
   //
   // An email is what separates that case from an anonymous sign-in, which also
   // has no provider data but never has an address.
-  //
-  // Both rely on client-side email/password sign-up being disabled in the
-  // Firebase console (Authentication → Settings → User actions). That setting is
-  // load-bearing. If it were missed a stranger could mint an account — but this
-  // trigger gives it no claims, and every rule gates on status == 'active' with
-  // a default of '', so it could read nothing. Untidy, not exploitable.
-  if (providerIds.includes('password')) {
-    return { action: 'ignore', reason: 'admin-sdk-provisioned' };
-  }
   if (providerIds.length === 0) {
     return email
       ? { action: 'ignore', reason: 'admin-sdk-provisioned' }
       : { action: 'reject', reason: 'unsupported-provider', email: null };
+  }
+
+  // ...and therefore a `password` provider AT CREATION means a client-side
+  // sign-up, which no legitimate flow in this app performs. Reject it.
+  //
+  // This branch used to return 'ignore', on the assumption that client-side
+  // sign-up was disabled in the console. It cannot be: that setting
+  // (`client.permissions.disabledUserSignup`) blocks ALL client account
+  // creation including a staff member's first Google sign-in, which fails with
+  // `auth/admin-restricted-operation` before this trigger ever runs. Staff
+  // self-onboarding and disabled sign-up are mutually exclusive, so the guard
+  // has to live here instead — where it can tell the two populations apart.
+  //
+  // Note onCreate does not fire again when a student later sets their password,
+  // so a real student is never seen with this provider.
+  if (providerIds.includes('password')) {
+    return { action: 'reject', reason: 'self-signup', email: email ?? null };
   }
 
   if (!providerIds.includes('google.com')) {

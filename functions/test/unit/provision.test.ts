@@ -44,16 +44,22 @@ describe('decideProvision — staff via Google', () => {
 });
 
 describe('decideProvision — students via email/password', () => {
-  it('IGNORES password accounts rather than deleting them', () => {
-    // The whole reason this app cannot reuse the kanban trigger: there, anything
-    // off-domain is deleted, which would destroy every student account the
-    // moment createStudent made one.
+  it('REJECTS a password account, because that can only be a client sign-up', () => {
+    // The counterpart to the test below. A real student is created WITHOUT a
+    // password, so it has no provider at creation; anything that already has
+    // `password` when the trigger fires got it from the client SDK, which no
+    // legitimate flow in this app uses.
+    //
+    // This branch returned 'ignore' until 2026-07-22, on the assumption that
+    // console-level sign-up was disabled. It cannot be — that setting also
+    // blocks a staff member's first Google sign-in — so the guard lives here.
     const d = decideProvision({
-      email: 'student@example.com',
+      email: 'stranger@example.com',
       emailVerified: false,
       providerIds: ['password'],
     });
-    expect(d.action).toBe('ignore');
+    expect(d.action).toBe('reject');
+    expect(d.action === 'reject' && d.reason).toBe('self-signup');
   });
 
   it('ignores an Admin-SDK account that has NO provider yet', () => {
@@ -77,11 +83,20 @@ describe('decideProvision — students via email/password', () => {
     expect(d.action).toBe('reject');
   });
 
-  it('ignores password accounts regardless of domain', () => {
-    // Students are not org members and never will be. Applying the staff domain
-    // gate to them would be exactly the bug this branch exists to prevent.
+  it('rejects a self-signup regardless of domain', () => {
+    // Including the staff domain: staff sign in with Google, so a password
+    // account on the org domain is someone guessing at the front door, not a
+    // colleague.
     for (const email of ['a@gmail.com', `b@${ALLOWED_EMAIL_DOMAIN}`, null]) {
-      expect(decideProvision({ email, providerIds: ['password'] }).action).toBe('ignore');
+      expect(decideProvision({ email, providerIds: ['password'] }).action).toBe('reject');
+    }
+  });
+
+  it('ignores a providerless student regardless of domain', () => {
+    // The rule that survives from before: students are not org members and never
+    // will be, so the staff domain gate must not be applied to them.
+    for (const email of ['a@gmail.com', `b@${ALLOWED_EMAIL_DOMAIN}`]) {
+      expect(decideProvision({ email, providerIds: [] }).action).toBe('ignore');
     }
   });
 });
@@ -95,14 +110,17 @@ describe('decideProvision — everything else', () => {
     }
   });
 
-  it('treats password as authoritative when an account carries both providers', () => {
-    // A linked account is staff-created first; deleting it because of the other
-    // provider would lose a real student.
+  it('rejects an account that arrives already carrying both providers', () => {
+    // No flow here produces this at CREATION time: a student is created with no
+    // provider, and a staff member's first Google sign-in has only google.com.
+    // Linking happens later and does not re-fire onCreate. So both-at-once is
+    // anomalous, and the safe reading of anomalous is reject — the account has
+    // no claims and nothing to lose.
     expect(
       decideProvision({
         email: 'student@example.com',
         providerIds: ['password', 'google.com'],
       }).action,
-    ).toBe('ignore');
+    ).toBe('reject');
   });
 });
