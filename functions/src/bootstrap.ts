@@ -1,7 +1,7 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
-import { ALLOWED_EMAIL_DOMAIN, COLLECTIONS, isAllowedStaffEmail } from '@sabeel/shared';
+import { COLLECTIONS, FIRST_ADMIN_EMAIL, isAllowedStaffEmail } from '@sabeel/shared';
 
 /**
  * ONE-SHOT: promotes the first admin, then must be deleted.
@@ -24,8 +24,6 @@ import { ALLOWED_EMAIL_DOMAIN, COLLECTIONS, isAllowedStaffEmail } from '@sabeel/
  * Deploy → call once → delete. The success response says so, so the cleanup step
  * is hard to forget.
  */
-const FIRST_ADMIN_EMAIL = `faisal@${ALLOWED_EMAIL_DOMAIN}`;
-
 export const bootstrapAdmin = onRequest(async (_req, res) => {
   const db = getFirestore();
 

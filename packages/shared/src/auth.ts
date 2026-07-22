@@ -2,6 +2,18 @@
 export const ALLOWED_EMAIL_DOMAIN = 'oursabeel.com';
 
 /**
+ * The one address `bootstrapAdmin` will promote, and the account the emulator
+ * dev sign-in row mints for its first admin.
+ *
+ * Shared because it must be the SAME address in both places, and it was not: the
+ * function and the dev row each hardcoded their own local part, so correcting
+ * the function to the real address left the e2e bootstrapping a user the
+ * function would not promote. One constant, both consumers.
+ */
+export const FIRST_ADMIN_LOCAL_PART = 'faisal.shah';
+export const FIRST_ADMIN_EMAIL = `${FIRST_ADMIN_LOCAL_PART}@${ALLOWED_EMAIL_DOMAIN}`;
+
+/**
  * Roles, in one claim.
  *
  * `admin` and `manager` are staff; `student` is a learner. Deliberately a single

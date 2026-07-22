@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { FIRST_ADMIN_LOCAL_PART } from '@sabeel/shared';
 import { auth } from '../firebase';
 import { signInWithGoogle } from '../auth/google';
 import { devSignIn, devSignInAvailable } from '../auth/devSignIn';
@@ -134,10 +135,10 @@ function DevRow({ busy }: { busy: boolean }) {
       <Text style={styles.devLabel}>Emulator sign-in (dev only)</Text>
       <Button
         testID="dev-signin-first-admin"
-        label="as faisal (first admin)"
+        label={`as ${FIRST_ADMIN_LOCAL_PART} (first admin)`}
         variant="secondary"
         disabled={busy || pending}
-        onPress={() => void as('faisal')()}
+        onPress={() => void as(FIRST_ADMIN_LOCAL_PART)()}
       />
       <Button
         testID="dev-signin-manager"

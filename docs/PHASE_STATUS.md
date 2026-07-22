@@ -190,6 +190,24 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-07-22 — **First admin bootstrapped in production, and the endpoint
+  removed.** `onUserCreate` provisioned the real Google sign-in as
+  `role: manager, status: pending` — domain membership granting nothing, as
+  designed. `bootstrapAdmin` then promoted it to `admin/active`, refused a replay
+  with 409, and was deleted (URL 404s).
+  It is now exported ONLY against the demo project: it cannot be deleted from the
+  repo because the e2e uses it for the same bootstrap problem in miniature, and
+  leaving it in the export list would silently recreate an unauthenticated
+  admin-granting endpoint on the next deploy. Verified by loading the built
+  bundle under each project id — 17 functions and ABSENT for the real project,
+  18 and PRESENT for demo — and then by a full `deploy --only functions` that
+  left the URL 404ing.
+- 2026-07-22 — **The first-admin address was duplicated and drifted.** The
+  callable hardcoded a guessed local part while the dev sign-in row hardcoded
+  another; correcting the callable to the real address made the e2e bootstrap a
+  user the callable would not promote, and it failed at the first authenticated
+  screen. Now one `FIRST_ADMIN_EMAIL` in `@sabeel/shared`, consumed by both.
+
 - 2026-07-22 — **Self-signup is deleted by the trigger, proven in both
   directions.** The first version of this e2e check was VACUOUS: it polled the
   Auth emulator's `/emulator/v1/projects/*/accounts` endpoint, which is

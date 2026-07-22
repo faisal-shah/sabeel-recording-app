@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { getStorage } from 'firebase-admin/storage';
-import { EMULATOR_PROJECT_ID, EMULATOR_STORAGE_BUCKET, SIGNED_URL_TTL_MS } from '@sabeel/shared';
+import { EMULATOR_STORAGE_BUCKET, SIGNED_URL_TTL_MS } from '@sabeel/shared';
+import { isEmulatorProject } from './env';
 
 /**
  * Mint a time-limited URL for a stored audio object.
@@ -24,10 +25,6 @@ import { EMULATOR_PROJECT_ID, EMULATOR_STORAGE_BUCKET, SIGNED_URL_TTL_MS } from 
  *     an unsigned or permanent URL would be a data leak wearing the costume of
  *     a working feature.
  */
-function isEmulatorProject(): boolean {
-  return (process.env.GCLOUD_PROJECT ?? '') === EMULATOR_PROJECT_ID;
-}
-
 export interface SignedPlayback {
   url: string;
   expiresAt: number;
