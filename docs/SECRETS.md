@@ -10,6 +10,7 @@
 | `google-services.json` | No, but not committed | Regenerated from the console; gitignored because it is per-project and carries OAuth client ids |
 | Sentry **client** DSNs (web, android) | No, but not committed | Gitignored `app/.env.local` as `EXPO_PUBLIC_SENTRY_DSN_WEB` and `EXPO_PUBLIC_SENTRY_DSN_ANDROID`. Send-only, and they ship in the bundle anyway; kept out of git so they can rotate per environment |
 | Sentry **functions** DSN | **Yes** | Secret Manager as `SENTRY_DSN` (server-side, never shipped to a client) |
+| Sentry **auth token** (source-map upload) | **Yes** | Gitignored `app/android/sentry.properties` (`auth.token=`). An **org** token (org `devnull-ke`), shared across all the Sabeel Sentry projects; the web pipeline reads it via `SENTRY_PROPERTIES`, overriding the project to `sabeel-recording-web` |
 | Zoom account id / client id / client secret | **Yes** | Secret Manager, via `firebase functions:secrets:set` |
 | Service account keys | **Yes** | Should not exist — see below |
 

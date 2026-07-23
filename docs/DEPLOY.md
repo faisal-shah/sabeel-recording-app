@@ -54,6 +54,30 @@ webviews partition storage and the cross-origin handoff loses its state.
 **Register the redirect URI on the OAuth client before flipping `authDomain`**,
 or sign-in breaks for everyone in between.
 
+## Sentry source maps
+
+Web source-map upload is wired into the hosting deploy: the predeploy runs
+`scripts/web-release.mjs`, which exports **with** source maps, injects Sentry
+debug ids, uploads the maps to the `sabeel-recording-web` project, then
+**deletes the `.map` files from the deploy dir** so Firebase never serves them
+publicly. The shipped JS keeps its debug id, so production errors symbolicate
+against the maps in Sentry. Debug ids mean no release/version coordination.
+
+The upload needs the auth token in gitignored `app/android/sentry.properties`
+(see `docs/SECRETS.md`); without it the script still builds and strips maps,
+just skips the upload — so a fresh clone or CI can deploy, they just won't
+upload maps. (CI does not deploy anyway.)
+
+Note a `.map` URL on the live site returns **200 with `text/html`** — that is the
+SPA `** → /index.html` rewrite catching a missing file, not a served map. Verify
+the *content-type*, not the status, to confirm maps are not leaked.
+
+**Native source maps are deferred to the first release build (Phase 9).** They
+need the `@sentry/react-native` Gradle plugin active — which means a `prebuild`
+(this is the bare workflow) — and only upload on `assembleRelease`, and there is
+no release APK yet. The token is already in place for when that happens; Sentry
+reporting itself works on native today, just with minified release stack traces.
+
 ## After deploying
 
 "Deployed" is not "working." Load the production URL, sign in, and check the

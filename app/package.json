@@ -8,6 +8,7 @@
     "android": "expo run:android",
     "web": "expo start --web",
     "web:export": "expo export --platform web --output-dir dist-web --clear",
+    "web:export:maps": "expo export --platform web --output-dir dist-web --clear --source-maps",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
