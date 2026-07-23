@@ -1,5 +1,5 @@
 import { HttpsError } from 'firebase-functions/v2/https';
-import { reportedCall } from './reported';
+import { auditedCall } from './audited';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
@@ -29,7 +29,9 @@ export async function createCohortRecord(callerUid: string, name: string) {
   return { id: ref.id };
 }
 
-export const createCohort = reportedCall(async (req) => {
+// Cohort-level actions are not class-scoped: their audit entries carry no
+// classId and are admin-only to read.
+export const createCohort = auditedCall('createCohort', async (req) => {
   const uid = requireAdmin(req);
   return createCohortRecord(uid, validateCohortName(req.data));
 });
@@ -81,7 +83,7 @@ export async function applyCohortArchived(input: { cohortId: string; archived: b
   return { cohortId: input.cohortId, archived: input.archived, classesUpdated: classes.size };
 }
 
-export const setCohortArchived = reportedCall(async (req) => {
+export const setCohortArchived = auditedCall('setCohortArchived', async (req) => {
   requireAdmin(req);
   return applyCohortArchived(validateSetCohortArchived(req.data));
 });

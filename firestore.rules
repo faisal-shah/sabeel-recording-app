@@ -236,9 +236,24 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ---- Audit log ----
+    // Server-written only (the auditedCall wrapper + the auth trigger). Reads
+    // are scoped like the rest of staff data: an admin sees everything; a manager
+    // sees only entries tagged with a class they run. Class-less entries (cohort,
+    // staff, student-directory changes) have classId == null and are therefore
+    // ADMIN-ONLY — which is exactly "managers manage audit within their classes".
+    // The `classId != null` guard also keeps a manager's list query constrained.
+    match /auditLog/{entryId} {
+      allow get, list: if isAdmin()
+        || (isStaff() && resource.data.classId != null
+            && request.auth.uid in
+               get(/databases/$(database)/documents/classes/$(resource.data.classId)).data.managerUids);
+      allow write: if false;
+    }
+
     // ---- Everything else ----
-    // The Phase 5 ledger, notifications and audit collections stay denied until
-    // each is opened deliberately with its consumer.
+    // Notifications and backend-stats collections stay denied until each is
+    // opened deliberately with its consumer.
     match /{document=**} {
       allow read, write: if false;
     }

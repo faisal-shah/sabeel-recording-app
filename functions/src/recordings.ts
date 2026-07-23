@@ -1,5 +1,5 @@
 import { HttpsError } from 'firebase-functions/v2/https';
-import { reportedCall } from './reported';
+import { auditedCall } from './audited';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import {
@@ -77,9 +77,10 @@ export async function createRecordingDraft(callerUid: string, input: CreateRecor
   return { id: ref.id, audioPath: audioStoragePath(ref.id) };
 }
 
-export const createRecording = reportedCall(async (req) => {
+export const createRecording = auditedCall('createRecording', async (req, audit) => {
   const input = validateCreateRecording(req.data);
   const uid = await requireClassScope(req, input.classId);
+  audit.classId = input.classId;
   return createRecordingDraft(uid, input);
 });
 
@@ -142,11 +143,13 @@ export async function finalizeRecording(input: FinalizeInput) {
   return { recordingId: input.recordingId, audioPath: path, sizeBytes };
 }
 
-export const finalizeRecordingUpload = reportedCall(async (req) => {
+export const finalizeRecordingUpload = auditedCall('finalizeRecordingUpload', async (req, audit) => {
   const input = validateFinalize(req.data);
   const rec = await getFirestore().collection(COLLECTIONS.recordings).doc(input.recordingId).get();
   if (!rec.exists) throw new HttpsError('not-found', 'No such recording.');
-  await requireClassScope(req, (rec.data() as RecordingDoc).classId);
+  const classId = (rec.data() as RecordingDoc).classId;
+  await requireClassScope(req, classId);
+  audit.classId = classId;
   return finalizeRecording(input);
 });
 
@@ -209,11 +212,13 @@ export async function applyRecordingUpdate(input: UpdateRecordingInput) {
   return { recordingId: input.recordingId, ...fields };
 }
 
-export const updateRecording = reportedCall(async (req) => {
+export const updateRecording = auditedCall('updateRecording', async (req, audit) => {
   const input = validateUpdateRecording(req.data);
   const rec = await getFirestore().collection(COLLECTIONS.recordings).doc(input.recordingId).get();
   if (!rec.exists) throw new HttpsError('not-found', 'No such recording.');
-  await requireClassScope(req, (rec.data() as RecordingDoc).classId);
+  const classId = (rec.data() as RecordingDoc).classId;
+  await requireClassScope(req, classId);
+  audit.classId = classId;
   return applyRecordingUpdate(input);
 });
 
@@ -283,11 +288,14 @@ export async function applyRecordingStatus(input: SetStatusInput) {
   return { recordingId: input.recordingId, status: input.status };
 }
 
-export const setRecordingStatus = reportedCall(async (req) => {
+export const setRecordingStatus = auditedCall('setRecordingStatus', async (req, audit) => {
   const input = validateSetStatus(req.data);
   const rec = await getFirestore().collection(COLLECTIONS.recordings).doc(input.recordingId).get();
   if (!rec.exists) throw new HttpsError('not-found', 'No such recording.');
-  await requireClassScope(req, (rec.data() as RecordingDoc).classId);
+  const classId = (rec.data() as RecordingDoc).classId;
+  await requireClassScope(req, classId);
+  audit.classId = classId;
+  audit.detail = { status: input.status };
   return applyRecordingStatus(input);
 });
 
@@ -323,13 +331,15 @@ export async function clearAudio(recordingId: string) {
   return { recordingId };
 }
 
-export const clearRecordingAudio = reportedCall(async (req) => {
+export const clearRecordingAudio = auditedCall('clearRecordingAudio', async (req, audit) => {
   const d = req.data as { recordingId?: unknown };
   if (typeof d?.recordingId !== 'string' || !d.recordingId) {
     throw new HttpsError('invalid-argument', 'recordingId is required.');
   }
   const rec = await getFirestore().collection(COLLECTIONS.recordings).doc(d.recordingId).get();
   if (!rec.exists) throw new HttpsError('not-found', 'No such recording.');
-  await requireClassScope(req, (rec.data() as RecordingDoc).classId);
+  const classId = (rec.data() as RecordingDoc).classId;
+  await requireClassScope(req, classId);
+  audit.classId = classId;
   return clearAudio(d.recordingId);
 });

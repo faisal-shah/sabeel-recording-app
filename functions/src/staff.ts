@@ -1,5 +1,5 @@
 import { HttpsError } from 'firebase-functions/v2/https';
-import { reportedCall } from './reported';
+import { auditedCall } from './audited';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { COLLECTIONS, type Role, type UserStatus } from '@sabeel/shared';
@@ -69,7 +69,10 @@ export async function applyStaffAccess(callerUid: string, input: StaffAccessInpu
 }
 
 /** Only admins approve staff, change roles, or disable accounts. */
-export const setStaffAccess = reportedCall(async (req) => {
+// Staff access changes are platform-level (not class-scoped) → admin-only audit.
+export const setStaffAccess = auditedCall('setStaffAccess', async (req, audit) => {
   const callerUid = requireAdmin(req);
-  return applyStaffAccess(callerUid, validateStaffAccess(req.data));
+  const input = validateStaffAccess(req.data);
+  audit.detail = { role: input.role, status: input.status };
+  return applyStaffAccess(callerUid, input);
 });

@@ -565,6 +565,38 @@ check(
   JSON.stringify(s),
 );
 
+// -------------------------------------------------------------------- audit --
+// The auditedCall wrapper writes one entry per staff mutation — this whole run
+// has performed many, through the real functions emulator. Assert the log is
+// populated and correctly attributed (comprehensiveness by construction).
+console.log('\nAudit log');
+const audit = await readCollection('auditLog');
+const actions = new Set(audit.map((e) => e.fields.action?.stringValue));
+check(
+  'the audit log captured the staff mutations that happened',
+  ['createCohort', 'createClass', 'createStudent', 'setRecordingStatus'].every((a) =>
+    actions.has(a),
+  ),
+  [...actions].sort().join(', '),
+);
+const publish = audit.find(
+  (e) =>
+    e.fields.action?.stringValue === 'setRecordingStatus' &&
+    e.fields.detail?.mapValue?.fields?.status?.stringValue === 'published',
+);
+check(
+  'a class-scoped entry (publish) carries its classId + actor + detail',
+  !!publish &&
+    !!publish.fields.classId?.stringValue &&
+    !!publish.fields.actorUid?.stringValue &&
+    publish.fields.actorRole?.stringValue === 'admin',
+);
+const cohortEntry = audit.find((e) => e.fields.action?.stringValue === 'createCohort');
+check(
+  'a cohort-level entry is class-less (null classId → admin-only)',
+  !!cohortEntry && cohortEntry.fields.classId?.nullValue !== undefined,
+);
+
 // ------------------------------------------------------------------ result --
 await browser.close();
 console.log(`\nconsole errors: ${consoleErrors.length ? consoleErrors.slice(0, 5).join(' | ') : 'none'}`);

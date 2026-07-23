@@ -5,6 +5,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { COLLECTIONS, REGION, type StaffUserDoc } from '@sabeel/shared';
 import { decideProvision } from './provision';
 import { reportError } from './sentry';
+import { writeAudit } from './audited';
 
 /**
  * Server-side account provisioning and domain enforcement, for every new
@@ -58,6 +59,15 @@ export const onUserCreate = functionsV1
           reason: decision.reason,
         });
         await getAuth().deleteUser(user.uid);
+        await writeAudit({
+          at: Date.now(),
+          actorUid: user.uid,
+          actorRole: 'system',
+          action: 'authReject',
+          classId: null,
+          targets: { uid: user.uid },
+          detail: { reason: decision.reason, email: decision.email },
+        });
         return;
       }
 
@@ -82,6 +92,15 @@ export const onUserCreate = functionsV1
       functionsV1.logger.info('Provisioned pending staff account', {
         uid: user.uid,
         email: profile.email,
+      });
+      await writeAudit({
+        at: Date.now(),
+        actorUid: user.uid,
+        actorRole: 'system',
+        action: 'authProvision',
+        classId: null,
+        targets: { uid: user.uid },
+        detail: { email: profile.email, status: 'pending' },
       });
     } catch (e) {
       // Provisioning failures are invisible (no caller) yet security-relevant —

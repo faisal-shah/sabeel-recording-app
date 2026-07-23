@@ -1,5 +1,5 @@
 import { HttpsError } from 'firebase-functions/v2/https';
-import { reportedCall } from './reported';
+import { auditedCall } from './audited';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
@@ -86,9 +86,10 @@ export async function createEnrollmentRecord(callerUid: string, input: Enrollmen
   return { id, ...doc };
 }
 
-export const createEnrollment = reportedCall(async (req) => {
+export const createEnrollment = auditedCall('createEnrollment', async (req, audit) => {
   const input = validateEnrollment(req.data);
   const uid = await requireClassScope(req, input.classId);
+  audit.classId = input.classId;
   return createEnrollmentRecord(uid, input);
 });
 
@@ -139,8 +140,9 @@ export async function applyEnrollmentActive(input: SetEnrollmentActiveInput) {
   return { studentUid: input.studentUid, classId: input.classId, active: input.active };
 }
 
-export const setEnrollmentActive = reportedCall(async (req) => {
+export const setEnrollmentActive = auditedCall('setEnrollmentActive', async (req, audit) => {
   const input = validateSetEnrollmentActive(req.data);
   await requireClassScope(req, input.classId);
+  audit.classId = input.classId;
   return applyEnrollmentActive(input);
 });

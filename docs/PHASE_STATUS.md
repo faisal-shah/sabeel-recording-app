@@ -21,6 +21,10 @@ and commit messages, and renaming them would strand every one of those.
 | 4b | Assignments model, publish fan-out trigger, rules | **complete** (2026-07-22) |
 | 4c | Student experience: home ordering, mark-complete, offline | **complete** (2026-07-22) |
 | 4d | Catch-up assignment UI + polish | **complete** (2026-07-22) |
+| 5a | Audit spine: auditedCall wrapper + auditLog | **complete** (2026-07-22) |
+| 5b | Staff ledger reads + completion override | not started |
+| 5c | Ledger + library + audit UI | not started |
+| 5d | CSV export + polish | not started |
 | 4 | Assignments, progress, completion | not started |
 | 5 | Staff ledger, reporting, audit | not started |
 | 6 | Zoom import *(gated on credentials)* | not started |
@@ -29,6 +33,15 @@ and commit messages, and renaming them would strand every one of those.
 | 9 | Deploy, manual, release | not started |
 
 ## Decision log
+
+- 2026-07-22 — **Phase 5 locked in planning.** (1) Audit via a wrapper
+  (`auditedCall`) — comprehensiveness by construction, not per-callable
+  discipline. (2) Staff completion override is a SEPARATE server-only doc
+  (`completionOverrides`) the student cannot clobber; effective status = override
+  ?? student. (3) Ledger aggregation is a client-side live join (no server
+  aggregation); manager queries stay class-scoped. (4) Scope = ledger/reporting/
+  audit only — the cross-cohort recording library + CSV are in; admin backend
+  stats stays Phase 8; permanent deletion is out (no delete callables exist).
 
 - 2026-07-22 — **Phase 4 accountability model, locked in planning.** (1) Offline
   completion uses Firestore's native persistent cache + `hasPendingWrites`, not a
@@ -214,6 +227,18 @@ and commit messages, and renaming them would strand every one of those.
   reports nothing is worse than none.
 
 ## Verification log
+
+- 2026-07-22 — **Phase 5a: audit spine.** `auditedCall(action, handler)` extends
+  `reportedCall` so all 16 mutating callables write one `auditLog` entry per
+  successful call automatically (reads like `getPlaybackUrl` stay `reportedCall`);
+  the auth trigger audits its provision/reject decisions. Class-scoped handlers
+  set `audit.classId` so a manager can read their-class entries; class-less
+  actions (cohort/staff/student-directory) are admin-only. The audit write is
+  best-effort — a failed audit never undoes or fails a completed mutation. New
+  `auditLog` rule mutation-tested (widening manager scope reddened exactly the
+  three scope tests; opening writes reddened the write test). e2e proved it end
+  to end: after a full run the log held all 13 distinct staff actions, class
+  entries carrying classId, cohort entries null. 151 emulator tests (was 144).
 
 - 2026-07-22 — **Phase 4 proven in PRODUCTION, end to end.** Driven through the
   real callables with temporary accounts (deleted after): the deployed

@@ -1,5 +1,5 @@
 import { HttpsError } from 'firebase-functions/v2/https';
-import { reportedCall } from './reported';
+import { auditedCall } from './audited';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
@@ -146,7 +146,7 @@ export async function createStudentAccount(callerUid: string, input: CreateStude
   return { uid: user.uid, email: input.email, classId: input.classId ?? null };
 }
 
-export const createStudent = reportedCall(async (req) => {
+export const createStudent = auditedCall('createStudent', async (req, audit) => {
   const input = validateCreateStudent(req.data);
   // Scope is checked BEFORE the account is created: a manager naming a class
   // they do not run must fail with nothing written, not leave an orphan Auth
@@ -154,6 +154,8 @@ export const createStudent = reportedCall(async (req) => {
   const callerUid = input.classId
     ? await requireClassScope(req, input.classId)
     : requireStaff(req);
+  // classId when enrolled at creation, so the scoped manager sees it in audit.
+  if (input.classId) audit.classId = input.classId;
   return createStudentAccount(callerUid, input);
 });
 
@@ -191,7 +193,10 @@ export async function applyStudentAccess(input: StudentAccessInput) {
   return { uid: input.uid, status: input.status };
 }
 
-export const setStudentAccess = reportedCall(async (req) => {
+// Enable/disable is directory-level (a student spans classes) → admin-only audit.
+export const setStudentAccess = auditedCall('setStudentAccess', async (req, audit) => {
   requireAdmin(req);
-  return applyStudentAccess(validateStudentAccess(req.data));
+  const input = validateStudentAccess(req.data);
+  audit.detail = { status: input.status };
+  return applyStudentAccess(input);
 });

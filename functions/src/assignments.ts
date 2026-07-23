@@ -1,5 +1,5 @@
 import { HttpsError } from 'firebase-functions/v2/https';
-import { reportedCall } from './reported';
+import { auditedCall } from './audited';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
@@ -80,7 +80,7 @@ export async function applyCatchup(callerUid: string, input: CatchupInput, class
   return { studentUid: input.studentUid, recordingId: input.recordingId };
 }
 
-export const assignCatchup = reportedCall(async (req) => {
+export const assignCatchup = auditedCall('assignCatchup', async (req, audit) => {
   const input = validateAssignCatchup(req.data);
   const recSnap = await getFirestore()
     .collection(COLLECTIONS.recordings)
@@ -94,5 +94,7 @@ export const assignCatchup = reportedCall(async (req) => {
     throw new HttpsError('failed-precondition', 'That recording is not published.');
   }
   const uid = await requireClassScope(req, rec.classId);
+  audit.classId = rec.classId;
+  audit.detail = { dueDate: input.dueDate };
   return applyCatchup(uid, input, rec.classId);
 });

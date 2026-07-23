@@ -1,5 +1,5 @@
 import { HttpsError } from 'firebase-functions/v2/https';
-import { reportedCall } from './reported';
+import { auditedCall } from './audited';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
@@ -49,9 +49,11 @@ export async function createClassRecord(callerUid: string, input: CreateClassInp
   return { id: ref.id };
 }
 
-export const createClass = reportedCall(async (req) => {
+export const createClass = auditedCall('createClass', async (req, audit) => {
   const uid = requireAdmin(req);
-  return createClassRecord(uid, validateCreateClass(req.data));
+  const res = await createClassRecord(uid, validateCreateClass(req.data));
+  audit.classId = res.id;
+  return res;
 });
 
 export interface UpdateClassInput {
@@ -114,9 +116,11 @@ export async function applyClassUpdate(input: UpdateClassInput) {
   return { classId: input.classId, ...update };
 }
 
-export const updateClass = reportedCall(async (req) => {
+export const updateClass = auditedCall('updateClass', async (req, audit) => {
   requireAdmin(req);
-  return applyClassUpdate(validateUpdateClass(req.data));
+  const input = validateUpdateClass(req.data);
+  audit.classId = input.classId;
+  return applyClassUpdate(input);
 });
 
 export interface SetClassManagersInput {
@@ -167,7 +171,9 @@ export async function applyClassManagers(input: SetClassManagersInput) {
   return { classId: input.classId, managerUids: input.managerUids };
 }
 
-export const setClassManagers = reportedCall(async (req) => {
+export const setClassManagers = auditedCall('setClassManagers', async (req, audit) => {
   requireAdmin(req);
-  return applyClassManagers(validateSetClassManagers(req.data));
+  const input = validateSetClassManagers(req.data);
+  audit.classId = input.classId;
+  return applyClassManagers(input);
 });

@@ -170,15 +170,14 @@ describe('collections not yet opened', () => {
   it('stay denied even to an admin', async () => {
     // Each collection is opened by the phase that earns it, and gets its own
     // suite: cohorts/classes/enrollments in 1b (rules.structure.test.ts),
-    // recordings in 3b, assignments in 4b (rules.assignments.test.ts). What
-    // remains here has NO staff access yet — listeningProgress and completions
-    // are student-only (staff reads are the Phase 5 ledger), completionEvents is
-    // student-append, and the audit log is untouched.
+    // recordings in 3b, assignments in 4b, auditLog in 5a (rules.audit.test.ts).
+    // What remains here has NO staff access yet — listeningProgress and
+    // completions are student-only (staff reads are the Phase 5b ledger), and
+    // completionEvents is student-append.
     for (const name of [
       COLLECTIONS.listeningProgress,
       COLLECTIONS.completions,
       COLLECTIONS.completionEvents,
-      COLLECTIONS.auditLog,
     ]) {
       await assertFails(getDocs(collection(admin(), name)));
       await assertFails(setDoc(doc(admin(), name, 'x'), { any: 'thing' }));
@@ -188,13 +187,15 @@ describe('collections not yet opened', () => {
   it('stay WRITE-denied on the collections opened for reading', async () => {
     // Opening a collection to reads must not have opened it to writes: every
     // mutation goes through a callable (or the fan-out trigger) that re-checks
-    // scope. Assignments are readable by an admin but still server-written only.
+    // scope. Assignments and the audit log are readable by an admin but still
+    // server-written only.
     for (const name of [
       COLLECTIONS.cohorts,
       COLLECTIONS.classes,
       COLLECTIONS.enrollments,
       COLLECTIONS.recordings,
       COLLECTIONS.assignments,
+      COLLECTIONS.auditLog,
     ]) {
       await assertFails(setDoc(doc(admin(), name, 'x'), { any: 'thing' }));
     }
