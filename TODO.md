@@ -155,17 +155,13 @@ Proven both ways in `npm run test:e2e`: a self-signup's credential stops working
 
 ## Still to do
 
-### Optional — a ~10-minute production student-flow walkthrough (Phase 4)
+### ✅ Phase 4 production walkthrough — DONE by the agent (2026-07-22)
 
-Not blocking; the whole flow is proven on the emulator and the AVD, and Phase 3's
-staff flow was driven against the real project. But two emulator-green flows have
-failed in production this project (the empty index file, the null `classId`), so
-a real pass is cheap insurance now that accountability is live. From
-<https://sabeel-class-recordings.web.app>, as yourself (admin): create a cohort →
-class → student (enrolled) → upload a recording → publish it. Then sign in as
-that student (set their password from the emailed link) and confirm the recording
-appears under "Your listening", plays, and can be marked complete. Tell me any
-step that misbehaves.
+Verified against the real project with temporary accounts (deleted after):
+publish drove the **deployed `onRecordingWritten` trigger** to fan out an
+assignment, a student marked complete (client write accepted, `completed=true`),
+and a non-enrolled student's forge attempt was refused 403 — the self-only rule
+holding in production. Nothing left for you here.
 
 ### ✅ 0–1 done (2026-07-22)
 

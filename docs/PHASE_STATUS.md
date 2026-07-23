@@ -215,6 +215,15 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-07-22 — **Phase 4 proven in PRODUCTION, end to end.** Driven through the
+  real callables with temporary accounts (deleted after): the deployed
+  `onRecordingWritten` trigger fanned out an assignment (`source:publish`,
+  active) — the first time the real trigger has been exercised in prod, and it
+  survived the Eventarc first-deploy retry; a student's completion write was
+  accepted by the self-only rule (`completed=true`); and a non-enrolled student's
+  forge attempt was refused 403. Doubles as a happy-path check that the
+  Sentry-instrumented functions still work after redeploy.
+
 - 2026-07-22 — **Sentry live on all three surfaces.** Web reporting deployed;
   the functions `SENTRY_DSN` secret set in Secret Manager and the functions
   redeployed, so server reporting is active — the secret is bound to all 19
