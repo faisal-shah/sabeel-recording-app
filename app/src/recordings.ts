@@ -132,33 +132,3 @@ export function uploadRecordingAudio(
   });
 }
 
-/**
- * Read a file's duration by decoding just enough of it.
- *
- * Client-side because the server would need ffmpeg to find out, and the value is
- * advisory — it draws a progress bar. Resolves null rather than throwing if the
- * browser cannot read it, so an odd file does not block an otherwise fine
- * upload.
- *
- * Native has no `<audio>`/`URL.createObjectURL`, so it resolves null and the
- * recording simply carries no duration until it is next opened on the web — a
- * cosmetic gap, never a blocked upload.
- */
-export function readAudioDuration(file: Blob): Promise<number | null> {
-  if (typeof Audio === 'undefined' || typeof URL === 'undefined' || !URL.createObjectURL) {
-    return Promise.resolve(null);
-  }
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    const el = new Audio();
-    const done = (v: number | null) => {
-      URL.revokeObjectURL(url);
-      resolve(v);
-    };
-    el.addEventListener('loadedmetadata', () =>
-      done(Number.isFinite(el.duration) && el.duration > 0 ? Math.round(el.duration) : null),
-    );
-    el.addEventListener('error', () => done(null));
-    el.src = url;
-  });
-}

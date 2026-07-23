@@ -24,7 +24,6 @@ import {
   clearRecordingAudio,
   createRecording,
   finalizeRecordingUpload,
-  readAudioDuration,
   setRecordingStatus,
   updateRecording,
   uploadRecordingAudio,
@@ -90,10 +89,9 @@ export function RecordingsScreen({
 
   const addRecording = () =>
     void run('create', async () => {
-      const file = await pickAudioFile();
-      if (!file) return; // user changed their mind
+      const picked = await pickAudioFile();
+      if (!picked) return; // user changed their mind
       setInfo(null);
-      const duration = await readAudioDuration(file);
       const { id } = await createRecording({
         classId,
         title: title.trim(),
@@ -101,8 +99,8 @@ export function RecordingsScreen({
       });
       setProgress(0);
       try {
-        await uploadRecordingAudio(id, file, setProgress);
-        await finalizeRecordingUpload({ recordingId: id, durationSec: duration });
+        await uploadRecordingAudio(id, picked.blob, setProgress);
+        await finalizeRecordingUpload({ recordingId: id, durationSec: picked.durationSec });
         setTitle('');
         setInfo('Uploaded. Review the details, then publish.');
       } finally {
