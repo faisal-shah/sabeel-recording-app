@@ -40,11 +40,27 @@ A release bumps one version and ships it to both surfaces. In order:
    `v<version> · <commit>` label, and — crucially — that the dev sign-in panel is
    **absent** (which proves it is a production build, not an emulator one).
 
-4. **Publish the APKs** to the pages repo's `recording-latest` release, renamed
-   `sabeel-recording-app-<abi>.apk` to match the sibling pages, with
-   `gh release upload recording-latest … --clobber -R faisal-shah/faisal-shah.github.io`.
-   Never commit an APK to any repo (`*.apk` is gitignored — committed APKs bloated
-   the sibling pages history and had to be rewritten out).
+4. **Publish the APKs to BOTH release homes** (never commit an APK — `*.apk` is
+   gitignored; committed APKs bloated the sibling pages history and had to be
+   rewritten out):
+   - **This (source) repo — the versioned archive.** Tag the build commit and cut
+     a matching GitHub Release, or the repo's own release history falls behind the
+     shipped version (easy to forget, because the public download comes from the
+     pages repo — do NOT skip it):
+     ```bash
+     git tag vX.Y.Z <build-commit> && git push origin vX.Y.Z   # tag first
+     gh release create vX.Y.Z -R faisal-shah/sabeel-recording-app \
+       --title "vX.Y.Z — Android" --notes-file NOTES.md \
+       "…-0.1.2-arm64-v8a.apk#Android — arm64-v8a (most phones, 40 MB)" …
+     ```
+     Assets are named `sabeel-class-recordings-X.Y.Z-<abi>.apk` (versioned) with a
+     per-version changelog. (`gh release create --target <sha>` on a not-yet-tagged
+     release 422s; create and push the tag first, then the release.)
+   - **Pages repo — the public download.** Upload the same APKs to the rolling
+     `recording-latest` release, renamed `sabeel-recording-app-<abi>.apk`, with
+     `gh release upload recording-latest … --clobber -R faisal-shah/faisal-shah.github.io`.
+     Private-repo release assets are not publicly downloadable — that is the whole
+     reason the public download lives on the pages repo.
 
 5. **Bump the download-page version** in
    `faisal-shah.github.io/sabeel-recording-app/index.html` and push. The APK
