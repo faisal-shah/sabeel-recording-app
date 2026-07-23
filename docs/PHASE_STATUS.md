@@ -20,7 +20,7 @@ and commit messages, and renaming them would strand every one of those.
 | 4a | Client persistence seam (offline groundwork) | **complete** (2026-07-22) |
 | 4b | Assignments model, publish fan-out trigger, rules | **complete** (2026-07-22) |
 | 4c | Student experience: home ordering, mark-complete, offline | **complete** (2026-07-22) |
-| 4d | Catch-up assignment UI + polish | not started |
+| 4d | Catch-up assignment UI + polish | **complete** (2026-07-22) |
 | 4 | Assignments, progress, completion | not started |
 | 5 | Staff ledger, reporting, audit | not started |
 | 6 | Zoom import *(gated on credentials)* | not started |
@@ -214,6 +214,16 @@ and commit messages, and renaming them would strand every one of those.
   reports nothing is worse than none.
 
 ## Verification log
+
+- 2026-07-22 — **Phase 4d: catch-up staff UI, end to end.** A published
+  recording's card now offers "Assign as catch-up", listing enrolled students who
+  are NOT already accountable (normal publishing covered the rest) with an
+  optional due date. e2e proves the whole scenario: a recording driven past-due,
+  a genuinely late student enrolled (and confirmed NOT auto-assigned it), then
+  staff assigning it as catch-up with its own due date — one `source:'catchup'`
+  assignment created, and the candidate list correctly emptied afterward
+  (screenshot looked at, on-brand). The callable itself was already integration-
+  tested in 4b (scope, enrolment, published-only, due-date protection).
 
 - 2026-07-22 — **Phase 4c native durability spike, PROVEN on the tb_emu AVD.**
   The deferred 4a question is resolved with a real force-kill test, not an

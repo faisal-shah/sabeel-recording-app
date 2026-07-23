@@ -4,6 +4,7 @@ import { ref, uploadBytesResumable } from 'firebase/storage';
 import {
   COLLECTIONS,
   audioStoragePath,
+  type AssignmentDoc,
   type RecordingDoc,
   type RecordingStatus,
 } from '@sabeel/shared';
@@ -45,6 +46,34 @@ export const createRecording = call<
   { classId: string; title: string; recordedAt: number | null },
   { id: string; audioPath: string }
 >('createRecording');
+
+/** Assign an earlier recording to a late-enrolled student as catch-up. */
+export const assignCatchup = call<
+  { studentUid: string; recordingId: string; dueDate: string | null },
+  { studentUid: string; recordingId: string }
+>('assignCatchup');
+
+/**
+ * Who already has an obligation for this recording — so the catch-up picker can
+ * show, and skip, students who are already accountable. Staff-scoped: the rule's
+ * manager arm resolves the recording's class per row, affordable for this
+ * single-recording query.
+ */
+export interface AssignmentRow extends AssignmentDoc {
+  id: string;
+}
+export function useRecordingAssignments(recordingId: string | null): AssignmentRow[] {
+  return useLiveQuery<AssignmentRow[]>(
+    'recordingAssignments',
+    () =>
+      recordingId
+        ? query(collection(db, COLLECTIONS.assignments), where('recordingId', '==', recordingId))
+        : null,
+    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as AssignmentDoc) })),
+    [],
+    [recordingId],
+  );
+}
 
 export const finalizeRecordingUpload = call<
   { recordingId: string; durationSec: number | null },

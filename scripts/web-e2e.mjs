@@ -460,6 +460,59 @@ homeText = await student.locator('body').innerText();
 check('the student home moves the recording to Completed', /Completed/.test(homeText));
 await shot(student, '15-home-completed');
 
+// ---------------------------------------------------------------- catch-up --
+console.log('\nCatch-up assignment');
+
+// Make Session 1 past-due, so a newly enrolled student is NOT auto-assigned it
+// (the late-enrollment default only covers not-yet-due recordings). A direct
+// emulator write drives the recording's due date into the past; the fan-out
+// trigger carries it onto existing publish assignments.
+const recId = (await readCollection('recordings'))[0].name.split('/').pop();
+await fetch(`${FS_READ}/recordings/${recId}?updateMask.fieldPaths=dueDate`, {
+  method: 'PATCH',
+  headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+  body: JSON.stringify({ fields: { dueDate: { stringValue: '2020-01-01' } } }),
+});
+await admin.waitForTimeout(1500);
+
+// A genuinely late student: enrolled after the recording went past-due, so they
+// have no obligation for it — the exact case catch-up exists for.
+await goHome(admin);
+await tap(admin, 'nav-students');
+await admin.getByTestId('student-name').fill('Bilal Khan');
+await admin.getByTestId('student-email').fill('bilal@example.com');
+await tap(admin, 'student-class-Hikam Foundations');
+await tap(admin, 'student-create');
+await admin.waitForTimeout(2500);
+const beforeCatchup = (await readCollection('assignments')).filter(
+  (a) => a.fields.source?.stringValue === 'catchup',
+);
+check('a late student is NOT auto-assigned a past-due recording', beforeCatchup.length === 0);
+
+// Staff assign it as catch-up, with a due date.
+await goHome(admin);
+await tap(admin, 'nav-cohorts');
+await tap(admin, 'cohort-open-Autumn 2026');
+await tap(admin, 'class-open-Hikam Foundations');
+await tap(admin, 'nav-recordings');
+await tap(admin, 'catchup-open-Session 1');
+await admin.getByTestId('catchup-duedate-Session 1').fill('2026-12-01');
+await tap(admin, 'catchup-assign-Bilal Khan');
+
+let catchups = [];
+for (let i = 0; i < 20 && catchups.length === 0; i++) {
+  await admin.waitForTimeout(500);
+  catchups = (await readCollection('assignments')).filter(
+    (a) => a.fields.source?.stringValue === 'catchup' && a.fields.active?.booleanValue === true,
+  );
+}
+check(
+  'staff assign a catch-up obligation with its own due date',
+  catchups.length === 1 && catchups[0].fields.dueDate?.stringValue === '2026-12-01',
+  `${catchups.length} catch-up assignment(s)`,
+);
+await shot(admin, '16-catchup');
+
 // ---------------------------------------------------------- archive cascade --
 console.log('\nArchive cascade');
 const classState = async () =>

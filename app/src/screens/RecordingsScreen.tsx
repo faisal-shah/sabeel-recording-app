@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import {
   allowedTransitions,
@@ -17,6 +17,7 @@ import {
   StatusChip,
 } from '../components/ui';
 import {
+  assignCatchup,
   clearRecordingAudio,
   createRecording,
   finalizeRecordingUpload,
@@ -25,8 +26,11 @@ import {
   updateRecording,
   uploadRecordingAudio,
   useClassRecordings,
+  useRecordingAssignments,
   type RecordingRow,
 } from '../recordings';
+import { useRoster } from '../structure';
+import { useStudents } from '../students';
 import { canPickAudio, pickAudioFile } from '../filePicker';
 import { getTheme, spacing } from '../theme';
 
@@ -41,6 +45,18 @@ const t = getTheme();
  */
 export function RecordingsScreen({ classId, className }: { classId: string; className: string }) {
   const recordings = useClassRecordings(classId);
+  // For catch-up assignment: the class roster and student names, loaded once.
+  const roster = useRoster(classId);
+  const students = useStudents(true);
+  const nameByUid = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of students) m.set(s.uid, s.displayName);
+    return m;
+  }, [students]);
+  const activeStudentUids = useMemo(
+    () => roster.filter((e) => e.active).map((e) => e.studentUid),
+    [roster],
+  );
   const [title, setTitle] = useState('');
   const [progress, setProgress] = useState<number | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -128,7 +144,14 @@ export function RecordingsScreen({ classId, className }: { classId: string; clas
         <Empty>No recordings in this class yet.</Empty>
       ) : (
         recordings.map((r) => (
-          <RecordingCard key={r.id} recording={r} busy={busy} onRun={run} />
+          <RecordingCard
+            key={r.id}
+            recording={r}
+            busy={busy}
+            onRun={run}
+            activeStudentUids={activeStudentUids}
+            nameByUid={nameByUid}
+          />
         ))
       )}
     </Screen>
@@ -139,10 +162,14 @@ function RecordingCard({
   recording: r,
   busy,
   onRun,
+  activeStudentUids,
+  nameByUid,
 }: {
   recording: RecordingRow;
   busy: string | null;
   onRun: (key: string, fn: () => Promise<void>) => void;
+  activeStudentUids: string[];
+  nameByUid: Map<string, string>;
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(r.title);
@@ -232,7 +259,97 @@ function RecordingCard({
           ) : null}
         </Row>
       )}
+
+      {/* Catch-up: assign this recording to a late student who was not on the
+          roster when it published. Only meaningful once it is published. */}
+      {r.status === 'published' ? (
+        <CatchupControl
+          recording={r}
+          activeStudentUids={activeStudentUids}
+          nameByUid={nameByUid}
+          busy={busy}
+          onRun={onRun}
+        />
+      ) : null}
     </Card>
+  );
+}
+
+/**
+ * Assign a published recording to a late-enrolled student as catch-up.
+ *
+ * Lists enrolled students who do NOT already have an active obligation for this
+ * recording — normal publishing already made the rest accountable, so catch-up
+ * is only for those who missed it. An optional due date; blank means required
+ * with no deadline.
+ */
+function CatchupControl({
+  recording: r,
+  activeStudentUids,
+  nameByUid,
+  busy,
+  onRun,
+}: {
+  recording: RecordingRow;
+  activeStudentUids: string[];
+  nameByUid: Map<string, string>;
+  busy: string | null;
+  onRun: (key: string, fn: () => Promise<void>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [dueDate, setDueDate] = useState('');
+  const assignments = useRecordingAssignments(r.id);
+  const assignedActive = new Set(
+    assignments.filter((a) => a.active).map((a) => a.studentUid),
+  );
+  const candidates = activeStudentUids.filter((uid) => !assignedActive.has(uid));
+
+  if (!open) {
+    return (
+      <Button
+        testID={`catchup-open-${r.title}`}
+        label="Assign as catch-up…"
+        variant="secondary"
+        onPress={() => setOpen(true)}
+      />
+    );
+  }
+
+  return (
+    <View style={styles.catchup}>
+      <Text style={styles.catchupHeading}>Assign as catch-up</Text>
+      <Field
+        testID={`catchup-duedate-${r.title}`}
+        label="Due date (YYYY-MM-DD, blank for none)"
+        value={dueDate}
+        onChangeText={setDueDate}
+        placeholder="2026-08-01"
+      />
+      {candidates.length === 0 ? (
+        <Text style={styles.hint}>Everyone enrolled is already accountable for this recording.</Text>
+      ) : (
+        candidates.map((uid) => (
+          <Row key={uid}>
+            <Text style={styles.candidate}>{nameByUid.get(uid) ?? uid}</Text>
+            <Button
+              testID={`catchup-assign-${nameByUid.get(uid) ?? uid}`}
+              label="Assign"
+              busy={busy === `catchup-${uid}`}
+              onPress={() =>
+                onRun(`catchup-${uid}`, () =>
+                  assignCatchup({
+                    studentUid: uid,
+                    recordingId: r.id,
+                    dueDate: dueDate.trim() ? dueDate.trim() : null,
+                  }).then(() => undefined),
+                )
+              }
+            />
+          </Row>
+        ))
+      )}
+      <Button label="Done" variant="secondary" onPress={() => setOpen(false)} />
+    </View>
   );
 }
 
@@ -261,6 +378,15 @@ const styles = StyleSheet.create({
   },
   hint: { fontSize: 13, color: t.text.secondary },
   notes: { fontSize: 14, color: t.text.secondary, marginTop: spacing(2) },
+  catchup: {
+    marginTop: spacing(3),
+    paddingTop: spacing(3),
+    borderTopWidth: 1,
+    borderTopColor: t.border.subtle,
+    gap: spacing(2),
+  },
+  catchupHeading: { fontSize: 14, fontWeight: '700', color: t.text.primary },
+  candidate: { flex: 1, fontSize: 15, color: t.text.primary, alignSelf: 'center' },
   progressWrap: {
     marginTop: spacing(3),
     backgroundColor: t.bg.inset,
