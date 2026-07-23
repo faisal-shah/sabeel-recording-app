@@ -1,12 +1,11 @@
 // Firebase WEB APP client config — NOT a secret (it ships in every client bundle).
 // From Firebase console → Project settings → Your apps → Web app.
 //
-// PLACEHOLDERS. Phase 0 runs entirely against the emulator suite, so no real
-// project exists yet; firebase.ts overrides projectId to the demo project under
-// EXPO_PUBLIC_USE_EMULATORS=1 and never reads the rest. These are replaced when
-// the real Firebase project is created (see TODO.md).
+// These are the REAL `sabeel-class-recordings` values (live since Phase 3).
+// Under EXPO_PUBLIC_USE_EMULATORS=1, firebase.ts overrides projectId to the demo
+// project and ignores the rest, so a dev/emulator bundle never touches them.
 //
-// Two things to get right at that point, both recorded in docs/DEPLOY.md:
+// Two things that were got right here, both recorded in docs/DEPLOY.md:
 //  - `authDomain` must be the HOSTING domain (<project>.web.app), not
 //    firebaseapp.com. Hosting serves /__/auth/* itself, keeping the sign-in
 //    redirect same-origin — required in storage-partitioned in-app webviews,
