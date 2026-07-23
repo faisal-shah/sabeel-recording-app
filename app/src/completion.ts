@@ -1,13 +1,13 @@
-import { addDoc, collection, doc, query, setDoc, where } from 'firebase/firestore';
+import { addDoc, collection, query, where } from 'firebase/firestore';
 import {
   COLLECTIONS,
-  completionId,
   type AssignmentDoc,
   type CompletionDoc,
   type CompletionEventDoc,
 } from '@sabeel/shared';
 import { db } from './firebase';
 import { useLiveQuery } from './liveQuery';
+import { persistCompletionState } from './completionOutbox';
 
 export interface AssignmentRow extends AssignmentDoc {
   id: string;
@@ -137,8 +137,9 @@ export async function setCompleted(
     actor: 'student',
     at: now,
   };
-  // Not awaited together: offline, setDoc's promise does not resolve until sync,
-  // so awaiting both would hang the caller. Fire the state write, then the event.
-  void setDoc(doc(db, COLLECTIONS.completions, completionId(studentUid, recordingId)), state);
+  // The STATE write goes through the durability seam (a native AsyncStorage
+  // outbox; a plain setDoc on web). Not awaited: offline it would not resolve
+  // until sync and would hang the caller. The event is best-effort audit.
+  void persistCompletionState(state);
   void addDoc(collection(db, COLLECTIONS.completionEvents), event);
 }

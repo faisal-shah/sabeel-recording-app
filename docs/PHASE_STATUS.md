@@ -19,7 +19,7 @@ and commit messages, and renaming them would strand every one of those.
 | 3d | Offline downloads | deferred to its own phase |
 | 4a | Client persistence seam (offline groundwork) | **complete** (2026-07-22) |
 | 4b | Assignments model, publish fan-out trigger, rules | **complete** (2026-07-22) |
-| 4c | Student experience: home ordering, mark-complete, offline | **in progress** (2026-07-22: home, completion, unassigned labels; native app-kill spike pending) |
+| 4c | Student experience: home ordering, mark-complete, offline | **complete** (2026-07-22) |
 | 4d | Catch-up assignment UI + polish | not started |
 | 4 | Assignments, progress, completion | not started |
 | 5 | Staff ledger, reporting, audit | not started |
@@ -214,6 +214,19 @@ and commit messages, and renaming them would strand every one of those.
   reports nothing is worse than none.
 
 ## Verification log
+
+- 2026-07-22 — **Phase 4c native durability spike, PROVEN on the tb_emu AVD.**
+  The deferred 4a question is resolved with a real force-kill test, not an
+  assumption. On native the JS SDK has only a memory cache, so a completion
+  marked offline is lost across an app kill — confirmed: after marking complete
+  with wifi off and force-stopping the app, Firestore held **0 completions**. A
+  native-only AsyncStorage outbox (`completionOutbox.ts`, a no-op on web where the
+  persistent cache suffices) closes the gap: on relaunch with the network back,
+  `drainCompletionOutbox` replayed the queued write and it synced
+  (`completed=true`), with the home showing Completed and the session still
+  signed in (AsyncStorage auth survived the kill too — the same durability
+  substrate the outbox relies on). Every player control rendered correctly on
+  native (screenshots looked at). The web e2e re-run green through the seam.
 
 - 2026-07-22 — **Phase 4c (part): student home, completion, unassigned labels.**
   A student's landing is now a task-ordered home (Overdue → Due soon → Upcoming →

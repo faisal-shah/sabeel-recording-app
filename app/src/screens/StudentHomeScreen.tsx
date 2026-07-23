@@ -16,6 +16,7 @@ import { db } from '../firebase';
 import { signOut } from '../session';
 import { useListenerError } from '../liveQuery';
 import { useMyAssignments, useMyCompletions } from '../completion';
+import { drainCompletionOutbox } from '../completionOutbox';
 import type { ClassRow } from '../structure';
 import type { RecordingRow } from '../recordings';
 import { getTheme, spacing } from '../theme';
@@ -45,6 +46,13 @@ export function StudentHomeScreen({
   const assignments = useMyAssignments(uid);
   const completions = useMyCompletions(uid);
   const resolved = useResolvedRecordings(assignments.map((a) => a.recordingId));
+
+  // On launch, replay any completion this device marked offline and then lost to
+  // an app kill before it synced (native only; a no-op on web). Runs once the
+  // student is signed in, so the replayed writes carry their auth.
+  useEffect(() => {
+    void drainCompletionOutbox(uid);
+  }, [uid]);
 
   const today = todayInZone(INSTITUTE_TIMEZONE);
 
