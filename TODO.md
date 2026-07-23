@@ -191,20 +191,19 @@ account they have never had a password on, so the default "reset your password"
 wording reads as though something has gone wrong. "Set your password for Sabeel
 Class Recordings" or similar.
 
-### 2. Android Google sign-in — **only when you want it on a device**
+### ✅ 2. Android app registered — DONE (2026-07-23)
 
-Not a prerequisite for anything else. The SHA-1 affects **only** Google sign-in
-inside the Android app; it has no bearing on deploys, on web sign-in, or on the
-functions. Deferring it costs nothing.
+Faisal registered the Android app (`com.sabeelinstitute.classrecordings`) with the
+debug SHA-1 `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` and
+downloaded `google-services.json`. It is wired in: the Google Services Gradle
+plugin is applied, and the file lives at `app/android/app/google-services.json`
+(and `app/google-services.json`), **gitignored** — regenerate it from the console
+on a fresh clone or the Android build fails. A signed release APK was built,
+verified against production (student sign-in + streaming) and shipped as a GitHub
+Release. Staff Google sign-in on-device should now work; students already did.
 
-Register the **debug SHA-1**, then **RE-DOWNLOAD `google-services.json`** —
-adding the SHA-1 in the console does not update a file you already have. Missing
-this is `DEVELOPER_ERROR` on Android while web works fine.
-
-```bash
-keytool -list -v -keystore app/android/app/debug.keystore \
-  -alias androiddebugkey -storepass android -keypass android
-```
+Still for a PUBLIC release (Phase 9): a dedicated **release keystore** (the APK is
+currently debug-signed) and **its** SHA-1 registered.
 
 ### 3. Not blocking anything
 

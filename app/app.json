@@ -12,6 +12,7 @@
     ],
     "android": {
       "package": "com.sabeelinstitute.classrecordings",
+      "googleServicesFile": "./google-services.json",
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.POST_NOTIFICATIONS"
