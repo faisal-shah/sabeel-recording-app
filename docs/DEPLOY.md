@@ -1,9 +1,57 @@
 # Deploy
 
-**Nothing is deployed yet.** Phase 0 runs entirely against the emulator suite;
-`.firebaserc` has no project alias and `app/src/firebase-config.ts` holds
-placeholders. This file records the order and the traps so the first deploy is
-not improvised. It is filled out properly in Phase 9.
+**The app is live** — web at `sabeel-class-recordings.web.app`, functions and
+rules deployed, `.firebaserc` aliased to `sabeel-class-recordings`, and
+`firebase-config.ts` holds the real (non-secret) client config. This file records
+the order, the traps, and the versioned release cycle so a deploy is never
+improvised. (The Android build ships separately — see "Cutting a release".)
+
+## Cutting a release (versioned Android + web)
+
+A release bumps one version and ships it to both surfaces. In order:
+
+1. **Bump the version in BOTH files, together:**
+   - `app/app.json` → `expo.version` (drives the sign-in build label and the
+     manual cover).
+   - `app/android/app/build.gradle` → `versionName` **and** `versionCode` — the
+     code MUST increment or Android refuses the upgrade.
+
+   Commit the bump **first**, so the build carries that commit: the sign-in label
+   is `v<version> · <commit>`, injected from `EXPO_PUBLIC_COMMIT` (the
+   `web:export` / `android` npm scripts inject it; the release gradle build takes
+   it from the environment — see below).
+
+2. **Web:** `firebase deploy --only hosting`. The predeploy
+   (`scripts/web-release.mjs`) exports the production bundle with the commit
+   injected, uploads source maps to Sentry, and strips the `.map` files. Make
+   sure `EXPO_PUBLIC_USE_EMULATORS` is **not** set in the shell, or you ship an
+   emulator bundle. Verify against the LIVE site (not "Deploy complete"):
+   - the commit is inlined in the deployed JS bundle;
+   - `EXPO_PUBLIC_USE_EMULATORS` does not appear in the bundle — the emulator path
+     is compiled out, so the dev sign-in panel cannot render;
+   - a `.map` URL returns `text/html` (the SPA rewrite for a stripped file), not a
+     served map — check the CONTENT-TYPE, not the status.
+
+3. **Android:** from `app/android`,
+   `EXPO_PUBLIC_COMMIT=$(git rev-parse --short HEAD) ./gradlew assembleRelease`
+   — default **JDK 17** (not the emulator's JDK 21), and NO emulator flag (it must
+   point at production). `BUILD SUCCESSFUL` is not proof: install
+   `app-x86_64-release.apk` on the AVD, launch, and confirm `versionName`, the
+   `v<version> · <commit>` label, and — crucially — that the dev sign-in panel is
+   **absent** (which proves it is a production build, not an emulator one).
+
+4. **Publish the APKs** to the pages repo's `recording-latest` release, renamed
+   `sabeel-recording-app-<abi>.apk` to match the sibling pages, with
+   `gh release upload recording-latest … --clobber -R faisal-shah/faisal-shah.github.io`.
+   Never commit an APK to any repo (`*.apk` is gitignored — committed APKs bloated
+   the sibling pages history and had to be rewritten out).
+
+5. **Bump the download-page version** in
+   `faisal-shah.github.io/sabeel-recording-app/index.html` and push. The APK
+   filenames are unversioned, so the download link itself never changes.
+
+There is no `npm run release` script yet (the sibling time-tracker has one); this
+is the manual recipe until one exists.
 
 ## Order
 

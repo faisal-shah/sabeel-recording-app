@@ -25,8 +25,11 @@ installed copy looks identical to a current one. Re-run after every pull.
 
 **Contribute back in the same batch as the fix.** This app is the first Sabeel
 project to use Cloud Storage, long-media playback, background audio and offline
-media — none of which the skill covers yet. When one of those costs real time,
-write the entry into the skill alongside the code change.
+media. The skill now has a **"Cloud Storage and long media"** section (upload,
+URL→Blob, media-duration seam, signed URLs) and the offline-outbox pattern under
+**"Offline persistence"**; **background-audio setup** (audio mode, foreground
+service, lock-screen controls) is still uncovered — write it into the skill when
+it next costs real time, in the same batch as the code change.
 
 **Never copy the skill's content into this repo.** `docs/STACK-GOTCHAS.md` is a
 stub for that reason. A stub cannot drift.

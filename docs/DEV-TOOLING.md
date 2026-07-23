@@ -76,7 +76,11 @@ audit lie, and an audit that reports nothing is worse than no audit.
   leftover process.
 - **Never `pkill -f firebase`.** The pattern matches the cleanup script's own
   command line and the shell that spawned it, so the "cleanup" kills the caller.
-  The script looks up owners by port instead.
+  The script looks up owners by port instead. The same trap catches
+  `pkill -f "expo start"` / `pkill -f "expo run"` — it matches the agent's own
+  tool process and the command exits **144** as its shell is killed mid-run.
+  **Kill dev servers by port:** `lsof -ti tcp:8083 tcp:8081 | xargs -r kill`
+  (or `free-emulator-ports.sh` for the emulator suite).
 - **Waiting for the port is not waiting for readiness.** The functions emulator
   accepts connections before it has registered anything. Poll a known callable
   until it stops 404ing.
@@ -163,6 +167,27 @@ denied. Note the two different URL shapes: reads use
   ```
 
   It must match `version` in `app/app.json`.
+
+### Driving the app by adb (headless verification)
+
+There is no device — the AVD `tb_emu` is a Pixel 6 at **1080×2400**. When a
+screenshot is read back it is displayed at 900×2000, so **multiply the
+coordinates you read off the image by 1.2** to get the real `adb shell input tap
+X Y` target. Sign in headlessly with the emulator dev row
+(`dev-signin-first-admin`), then `curl` the emulator's `bootstrapAdmin` to
+promote (409 = already an admin, fine).
+
+- **A pure-JS change needs a reload, not a rebuild.** After editing only JS,
+  Metro fast-refreshes, but to be sure the running app has the new bundle,
+  `adb shell am force-stop <pkg>` then relaunch — it refetches from Metro. Only a
+  new *native* module (a new dependency) needs `expo run:android` again.
+- **Uploads go through the Android SAF picker**, not the app. `adb push` a file
+  to `/sdcard/Download`, tap the app's file button, then in the system picker:
+  hamburger → Downloads → the file. The picker OPENING at all is already proof
+  the native picker module is wired.
+- The `Open debugger to view warnings` toast is dev-only LogBox noise; check
+  `adb logcat -d | grep -i deprecated` for the actual warning rather than trusting
+  the toast — and it never appears in a release build.
 
 ## Verifying the dev sign-in row is not shippable
 
