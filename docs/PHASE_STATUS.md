@@ -215,6 +215,15 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-07-22 — **Sentry live on all three surfaces.** Web reporting deployed;
+  the functions `SENTRY_DSN` secret set in Secret Manager and the functions
+  redeployed, so server reporting is active — the secret is bound to all 19
+  functions (verified by name: callables via `reportedCall`, the fan-out trigger,
+  and the gen-1 auth trigger). `@sentry/react-native` proven to autolink into the
+  committed `android/` build and run on the AVD. Reporting is gated OFF in
+  dev/debug bundles, so events come only from deployed surfaces. Source-map
+  upload deferred (needs a Sentry auth token + prebuild). No DSN value is in git.
+
 - 2026-07-22 — **Phase 4d: catch-up staff UI, end to end.** A published
   recording's card now offers "Assign as catch-up", listing enrolled students who
   are NOT already accountable (normal publishing covered the rest) with an
