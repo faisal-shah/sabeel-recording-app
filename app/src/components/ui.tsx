@@ -2,7 +2,6 @@ import { Children, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -10,6 +9,7 @@ import {
 } from 'react-native';
 import { getTheme, spacing } from '../theme';
 import { useListenerError } from '../liveQuery';
+import { KbScroll } from './KbScroll';
 
 const t = getTheme();
 
@@ -30,7 +30,7 @@ export function Screen({ title, subtitle, children }: {
 }) {
   const listenerError = useListenerError();
   return (
-    <ScrollView style={styles.canvas} contentContainerStyle={styles.content}>
+    <KbScroll style={styles.canvas} contentContainerStyle={styles.content}>
       {/* Chrome is ivory with a dark title, never a raspberry app bar: a
           brand-coloured bar on every screen puts raspberry far past its share. */}
       {title ? <Text style={styles.h1}>{title}</Text> : null}
@@ -41,7 +41,7 @@ export function Screen({ title, subtitle, children }: {
         </View>
       ) : null}
       {children}
-    </ScrollView>
+    </KbScroll>
   );
 }
 

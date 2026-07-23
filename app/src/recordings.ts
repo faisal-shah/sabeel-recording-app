@@ -125,7 +125,11 @@ export function uploadRecordingAudio(
   return new Promise((resolve, reject) => {
     task.on(
       'state_changed',
-      (s) => onProgress(s.totalBytes ? s.bytesTransferred / s.totalBytes : 0),
+      // Clamp to 1: a React Native resumable upload can re-send a chunk on a
+      // network hiccup, so bytesTransferred can briefly exceed totalBytes and the
+      // raw ratio reads past 100% (seen at ~140%). The bar is advisory; never
+      // show more than done.
+      (s) => onProgress(s.totalBytes ? Math.min(1, s.bytesTransferred / s.totalBytes) : 0),
       reject,
       () => resolve(),
     );

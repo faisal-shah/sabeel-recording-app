@@ -19,6 +19,7 @@ import {
   SectionTitle,
   StatusChip,
 } from '../components/ui';
+import { DateField } from '../components/DateField';
 import {
   assignCatchup,
   clearRecordingAudio,
@@ -219,12 +220,7 @@ function RecordingCard({
         <>
           <Field label="Title" value={title} onChangeText={setTitle} autoCapitalize="words" />
           <Field label="Notes (everyone with access sees these)" value={notes} onChangeText={setNotes} />
-          <Field
-            label="Due date (YYYY-MM-DD, blank for none)"
-            value={dueDate}
-            onChangeText={setDueDate}
-            placeholder="2026-08-01"
-          />
+          <DateField label="Due date (optional)" value={dueDate} onChange={setDueDate} />
           <Row>
             <Button
               label="Save"
@@ -247,7 +243,15 @@ function RecordingCard({
       ) : (
         <Row>
           <Button label="Edit details" variant="secondary" onPress={() => setEditing(true)} />
-          {moves.map((to) => (
+          {/* `needsAttention` is a review state for problematic IMPORTS — it is
+              set by the import pipeline, not something staff flag on their own
+              fresh upload. Offering "Flag a problem" beside Publish only muddied
+              the manual flow (it reads like it does something to publishing, and
+              it does not), so it is left off the manual actions. The reverse move
+              (needsAttention → draft) still shows on a flagged import. */}
+          {moves
+            .filter((to) => to !== 'needsAttention')
+            .map((to) => (
             <Button
               key={to}
               testID={`recording-${to}-${r.title}`}
@@ -349,13 +353,7 @@ function CatchupControl({
   return (
     <View style={styles.catchup}>
       <Text style={styles.catchupHeading}>Assign as catch-up</Text>
-      <Field
-        testID={`catchup-duedate-${r.title}`}
-        label="Due date (YYYY-MM-DD, blank for none)"
-        value={dueDate}
-        onChangeText={setDueDate}
-        placeholder="2026-08-01"
-      />
+      <DateField label="Due date (optional)" value={dueDate} onChange={setDueDate} />
       {candidates.length === 0 ? (
         <Text style={styles.hint}>Everyone enrolled is already accountable for this recording.</Text>
       ) : (
