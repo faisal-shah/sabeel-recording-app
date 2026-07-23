@@ -1,4 +1,5 @@
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { HttpsError } from 'firebase-functions/v2/https';
+import { reportedCall } from './reported';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
@@ -145,7 +146,7 @@ export async function createStudentAccount(callerUid: string, input: CreateStude
   return { uid: user.uid, email: input.email, classId: input.classId ?? null };
 }
 
-export const createStudent = onCall(async (req) => {
+export const createStudent = reportedCall(async (req) => {
   const input = validateCreateStudent(req.data);
   // Scope is checked BEFORE the account is created: a manager naming a class
   // they do not run must fail with nothing written, not leave an orphan Auth
@@ -190,7 +191,7 @@ export async function applyStudentAccess(input: StudentAccessInput) {
   return { uid: input.uid, status: input.status };
 }
 
-export const setStudentAccess = onCall(async (req) => {
+export const setStudentAccess = reportedCall(async (req) => {
   requireAdmin(req);
   return applyStudentAccess(validateStudentAccess(req.data));
 });

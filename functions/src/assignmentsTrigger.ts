@@ -3,6 +3,8 @@ import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { getFirestore } from 'firebase-admin/firestore';
 import { COLLECTIONS, type RecordingDoc } from '@sabeel/shared';
 import { applyRecordingFanout } from './assignmentsFanout';
+import { reportError } from './sentry';
+import { SENTRY_DSN } from './reported';
 
 /**
  * Fan out required-listening obligations as a recording moves through its
@@ -16,13 +18,20 @@ import { applyRecordingFanout } from './assignmentsFanout';
  * never `recordings`, so it cannot trigger itself.
  */
 export const onRecordingWritten = onDocumentWritten(
-  `${COLLECTIONS.recordings}/{recordingId}`,
+  { document: `${COLLECTIONS.recordings}/{recordingId}`, secrets: [SENTRY_DSN] },
   async (event) => {
-    await applyRecordingFanout(
-      getFirestore(),
-      event.params.recordingId,
-      event.data?.before.data() as RecordingDoc | undefined,
-      event.data?.after.data() as RecordingDoc | undefined,
-    );
+    try {
+      await applyRecordingFanout(
+        getFirestore(),
+        event.params.recordingId,
+        event.data?.before.data() as RecordingDoc | undefined,
+        event.data?.after.data() as RecordingDoc | undefined,
+      );
+    } catch (e) {
+      // A background trigger has no caller to surface a failure to — an
+      // unreported throw here would silently leave obligations un-fanned-out.
+      await reportError(e, { source: 'onRecordingWritten' });
+      throw e;
+    }
   },
 );

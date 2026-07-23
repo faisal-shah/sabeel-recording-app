@@ -1,4 +1,5 @@
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { HttpsError } from 'firebase-functions/v2/https';
+import { reportedCall } from './reported';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
@@ -28,7 +29,7 @@ export async function createCohortRecord(callerUid: string, name: string) {
   return { id: ref.id };
 }
 
-export const createCohort = onCall(async (req) => {
+export const createCohort = reportedCall(async (req) => {
   const uid = requireAdmin(req);
   return createCohortRecord(uid, validateCohortName(req.data));
 });
@@ -80,7 +81,7 @@ export async function applyCohortArchived(input: { cohortId: string; archived: b
   return { cohortId: input.cohortId, archived: input.archived, classesUpdated: classes.size };
 }
 
-export const setCohortArchived = onCall(async (req) => {
+export const setCohortArchived = reportedCall(async (req) => {
   requireAdmin(req);
   return applyCohortArchived(validateSetCohortArchived(req.data));
 });

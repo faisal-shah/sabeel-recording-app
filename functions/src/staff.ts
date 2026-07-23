@@ -1,4 +1,5 @@
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { HttpsError } from 'firebase-functions/v2/https';
+import { reportedCall } from './reported';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { COLLECTIONS, type Role, type UserStatus } from '@sabeel/shared';
@@ -68,7 +69,7 @@ export async function applyStaffAccess(callerUid: string, input: StaffAccessInpu
 }
 
 /** Only admins approve staff, change roles, or disable accounts. */
-export const setStaffAccess = onCall(async (req) => {
+export const setStaffAccess = reportedCall(async (req) => {
   const callerUid = requireAdmin(req);
   return applyStaffAccess(callerUid, validateStaffAccess(req.data));
 });

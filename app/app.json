@@ -28,7 +28,8 @@
         {
           "recordAudioAndroid": false
         }
-      ]
+      ],
+      "@sentry/react-native"
     ]
   }
 }

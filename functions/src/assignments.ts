@@ -1,4 +1,5 @@
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { HttpsError } from 'firebase-functions/v2/https';
+import { reportedCall } from './reported';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
@@ -79,7 +80,7 @@ export async function applyCatchup(callerUid: string, input: CatchupInput, class
   return { studentUid: input.studentUid, recordingId: input.recordingId };
 }
 
-export const assignCatchup = onCall(async (req) => {
+export const assignCatchup = reportedCall(async (req) => {
   const input = validateAssignCatchup(req.data);
   const recSnap = await getFirestore()
     .collection(COLLECTIONS.recordings)

@@ -1,4 +1,5 @@
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { HttpsError } from 'firebase-functions/v2/https';
+import { reportedCall } from './reported';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
@@ -85,7 +86,7 @@ export async function createEnrollmentRecord(callerUid: string, input: Enrollmen
   return { id, ...doc };
 }
 
-export const createEnrollment = onCall(async (req) => {
+export const createEnrollment = reportedCall(async (req) => {
   const input = validateEnrollment(req.data);
   const uid = await requireClassScope(req, input.classId);
   return createEnrollmentRecord(uid, input);
@@ -138,7 +139,7 @@ export async function applyEnrollmentActive(input: SetEnrollmentActiveInput) {
   return { studentUid: input.studentUid, classId: input.classId, active: input.active };
 }
 
-export const setEnrollmentActive = onCall(async (req) => {
+export const setEnrollmentActive = reportedCall(async (req) => {
   const input = validateSetEnrollmentActive(req.data);
   await requireClassScope(req, input.classId);
   return applyEnrollmentActive(input);

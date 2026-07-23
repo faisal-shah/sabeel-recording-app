@@ -1,4 +1,5 @@
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { HttpsError } from 'firebase-functions/v2/https';
+import { reportedCall } from './reported';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
@@ -10,7 +11,7 @@ import {
   type RecordingDoc,
   type TokenClaims,
 } from '@sabeel/shared';
-import { signedPlaybackUrl, type SignedPlayback } from './mediaUrl';
+import { signedPlaybackUrl } from './mediaUrl';
 
 export type PlaybackDenial =
   | 'not-published'
@@ -68,8 +69,7 @@ const MESSAGES: Record<PlaybackDenial, string> = {
  * with the service account's own credentials and bypasses rules entirely. This
  * callable is the only thing standing between a signed-in user and the audio.
  */
-export const getPlaybackUrl = onCall<{ recordingId?: unknown }, Promise<SignedPlayback>>(
-  async (req) => {
+export const getPlaybackUrl = reportedCall(async (req) => {
     if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const claims = (req.auth.token ?? {}) as TokenClaims;
     if (claims.status !== 'active') {
@@ -105,5 +105,4 @@ export const getPlaybackUrl = onCall<{ recordingId?: unknown }, Promise<SignedPl
     if (denial) throw new HttpsError('permission-denied', MESSAGES[denial]);
 
     return signedPlaybackUrl(recording.audioPath as string);
-  },
-);
+  });

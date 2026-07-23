@@ -8,7 +8,8 @@
 |---|---|---|
 | Firebase web config (apiKey, appId, …) | **No** | Committed in `app/src/firebase-config.ts` — it ships in every client bundle |
 | `google-services.json` | No, but not committed | Regenerated from the console; gitignored because it is per-project and carries OAuth client ids |
-| Sentry client DSN | No, but not committed | Gitignored `app/.env.local` as `EXPO_PUBLIC_SENTRY_DSN` |
+| Sentry **client** DSNs (web, android) | No, but not committed | Gitignored `app/.env.local` as `EXPO_PUBLIC_SENTRY_DSN_WEB` and `EXPO_PUBLIC_SENTRY_DSN_ANDROID`. Send-only, and they ship in the bundle anyway; kept out of git so they can rotate per environment |
+| Sentry **functions** DSN | **Yes** | Secret Manager as `SENTRY_DSN` (server-side, never shipped to a client) |
 | Zoom account id / client id / client secret | **Yes** | Secret Manager, via `firebase functions:secrets:set` |
 | Service account keys | **Yes** | Should not exist — see below |
 
@@ -21,13 +22,19 @@ to hide it and then commit something that genuinely matters.
 The agent never handles values. It outputs the command; Faisal runs it:
 
 ```bash
+firebase functions:secrets:set SENTRY_DSN        # paste the FUNCTIONS DSN when prompted
 firebase functions:secrets:set ZOOM_ACCOUNT_ID
 firebase functions:secrets:set ZOOM_CLIENT_ID
 firebase functions:secrets:set ZOOM_CLIENT_SECRET
 ```
 
 Then bind them in the function definition, and redeploy — a secret that is set
-but not bound is not available at runtime.
+but not bound is not available at runtime. `SENTRY_DSN` is already bound (every
+callable via `reportedCall`, plus the two triggers), so once it is set, the next
+functions deploy turns on server error reporting. Until then the binding is inert
+and the functions run normally. Locally, `functions/.secret.local` (gitignored)
+holds `SENTRY_DSN=disabled` so the emulator does not probe Secret Manager and
+reporting stays off in tests.
 
 ## No service account key files
 

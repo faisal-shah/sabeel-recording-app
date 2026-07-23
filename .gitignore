@@ -39,3 +39,5 @@ shots/
 *.log
 .DS_Store
 app/android/sentry.properties
+functions/.secret.local
+**/.secret.local

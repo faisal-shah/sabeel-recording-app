@@ -4,6 +4,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { COLLECTIONS, REGION, type StaffUserDoc } from '@sabeel/shared';
 import { decideProvision } from './provision';
+import { reportError } from './sentry';
 
 /**
  * Server-side account provisioning and domain enforcement, for every new
@@ -31,53 +32,61 @@ import { decideProvision } from './provision';
  * be mentally filtered.
  */
 export const onUserCreate = functionsV1
+  .runWith({ secrets: ['SENTRY_DSN'] })
   .region(REGION)
   .auth.user()
   .onCreate(async (user) => {
-    const decision = decideProvision({
-      email: user.email,
-      emailVerified: user.emailVerified,
-      displayName: user.displayName,
-      photoURL: user.photoURL,
-      providerIds: user.providerData.map((p) => p.providerId),
-    });
-
-    if (decision.action === 'ignore') {
-      // A student, created by the createStudent callable, which sets its own
-      // claims and document. Touching it here would race that callable.
-      return;
-    }
-
-    if (decision.action === 'reject') {
-      functionsV1.logger.warn('Rejected sign-up', {
-        uid: user.uid,
-        email: decision.email,
-        reason: decision.reason,
+    try {
+      const decision = decideProvision({
+        email: user.email,
+        emailVerified: user.emailVerified,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        providerIds: user.providerData.map((p) => p.providerId),
       });
-      await getAuth().deleteUser(user.uid);
-      return;
+
+      if (decision.action === 'ignore') {
+        // A student, created by the createStudent callable, which sets its own
+        // claims and document. Touching it here would race that callable.
+        return;
+      }
+
+      if (decision.action === 'reject') {
+        functionsV1.logger.warn('Rejected sign-up', {
+          uid: user.uid,
+          email: decision.email,
+          reason: decision.reason,
+        });
+        await getAuth().deleteUser(user.uid);
+        return;
+      }
+
+      const { claims, profile } = decision;
+
+      // Claims BEFORE the mirror document. The token is what rules trust, so if
+      // the second write failed we would have a user who can do nothing (pending
+      // grants nothing) rather than one with a document but no claims — which the
+      // client would misread as approved-but-broken.
+      await getAuth().setCustomUserClaims(user.uid, claims);
+
+      const doc: StaffUserDoc = {
+        displayName: profile.displayName,
+        email: profile.email,
+        photoUrl: profile.photoUrl,
+        role: 'manager',
+        status: 'pending',
+        createdAt: Date.now(),
+      };
+      await getFirestore().collection(COLLECTIONS.staffUsers).doc(user.uid).set(doc);
+
+      functionsV1.logger.info('Provisioned pending staff account', {
+        uid: user.uid,
+        email: profile.email,
+      });
+    } catch (e) {
+      // Provisioning failures are invisible (no caller) yet security-relevant —
+      // a botched claims/delete leaves an account in a wrong state.
+      await reportError(e, { source: 'onUserCreate' });
+      throw e;
     }
-
-    const { claims, profile } = decision;
-
-    // Claims BEFORE the mirror document. The token is what rules trust, so if
-    // the second write failed we would have a user who can do nothing (pending
-    // grants nothing) rather than one with a document but no claims — which the
-    // client would misread as approved-but-broken.
-    await getAuth().setCustomUserClaims(user.uid, claims);
-
-    const doc: StaffUserDoc = {
-      displayName: profile.displayName,
-      email: profile.email,
-      photoUrl: profile.photoUrl,
-      role: 'manager',
-      status: 'pending',
-      createdAt: Date.now(),
-    };
-    await getFirestore().collection(COLLECTIONS.staffUsers).doc(user.uid).set(doc);
-
-    functionsV1.logger.info('Provisioned pending staff account', {
-      uid: user.uid,
-      email: profile.email,
-    });
   });

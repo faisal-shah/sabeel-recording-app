@@ -1,4 +1,5 @@
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { HttpsError } from 'firebase-functions/v2/https';
+import { reportedCall } from './reported';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import {
@@ -76,7 +77,7 @@ export async function createRecordingDraft(callerUid: string, input: CreateRecor
   return { id: ref.id, audioPath: audioStoragePath(ref.id) };
 }
 
-export const createRecording = onCall(async (req) => {
+export const createRecording = reportedCall(async (req) => {
   const input = validateCreateRecording(req.data);
   const uid = await requireClassScope(req, input.classId);
   return createRecordingDraft(uid, input);
@@ -141,7 +142,7 @@ export async function finalizeRecording(input: FinalizeInput) {
   return { recordingId: input.recordingId, audioPath: path, sizeBytes };
 }
 
-export const finalizeRecordingUpload = onCall(async (req) => {
+export const finalizeRecordingUpload = reportedCall(async (req) => {
   const input = validateFinalize(req.data);
   const rec = await getFirestore().collection(COLLECTIONS.recordings).doc(input.recordingId).get();
   if (!rec.exists) throw new HttpsError('not-found', 'No such recording.');
@@ -208,7 +209,7 @@ export async function applyRecordingUpdate(input: UpdateRecordingInput) {
   return { recordingId: input.recordingId, ...fields };
 }
 
-export const updateRecording = onCall(async (req) => {
+export const updateRecording = reportedCall(async (req) => {
   const input = validateUpdateRecording(req.data);
   const rec = await getFirestore().collection(COLLECTIONS.recordings).doc(input.recordingId).get();
   if (!rec.exists) throw new HttpsError('not-found', 'No such recording.');
@@ -282,7 +283,7 @@ export async function applyRecordingStatus(input: SetStatusInput) {
   return { recordingId: input.recordingId, status: input.status };
 }
 
-export const setRecordingStatus = onCall(async (req) => {
+export const setRecordingStatus = reportedCall(async (req) => {
   const input = validateSetStatus(req.data);
   const rec = await getFirestore().collection(COLLECTIONS.recordings).doc(input.recordingId).get();
   if (!rec.exists) throw new HttpsError('not-found', 'No such recording.');
@@ -322,7 +323,7 @@ export async function clearAudio(recordingId: string) {
   return { recordingId };
 }
 
-export const clearRecordingAudio = onCall(async (req) => {
+export const clearRecordingAudio = reportedCall(async (req) => {
   const d = req.data as { recordingId?: unknown };
   if (typeof d?.recordingId !== 'string' || !d.recordingId) {
     throw new HttpsError('invalid-argument', 'recordingId is required.');

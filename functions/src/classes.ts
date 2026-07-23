@@ -1,4 +1,5 @@
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { HttpsError } from 'firebase-functions/v2/https';
+import { reportedCall } from './reported';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
@@ -48,7 +49,7 @@ export async function createClassRecord(callerUid: string, input: CreateClassInp
   return { id: ref.id };
 }
 
-export const createClass = onCall(async (req) => {
+export const createClass = reportedCall(async (req) => {
   const uid = requireAdmin(req);
   return createClassRecord(uid, validateCreateClass(req.data));
 });
@@ -113,7 +114,7 @@ export async function applyClassUpdate(input: UpdateClassInput) {
   return { classId: input.classId, ...update };
 }
 
-export const updateClass = onCall(async (req) => {
+export const updateClass = reportedCall(async (req) => {
   requireAdmin(req);
   return applyClassUpdate(validateUpdateClass(req.data));
 });
@@ -166,7 +167,7 @@ export async function applyClassManagers(input: SetClassManagersInput) {
   return { classId: input.classId, managerUids: input.managerUids };
 }
 
-export const setClassManagers = onCall(async (req) => {
+export const setClassManagers = reportedCall(async (req) => {
   requireAdmin(req);
   return applyClassManagers(validateSetClassManagers(req.data));
 });
