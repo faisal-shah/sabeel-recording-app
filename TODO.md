@@ -176,14 +176,37 @@ exported only against the demo project).
 
 You are the admin on <https://sabeel-class-recordings.web.app>.
 
-### 1. Reword the password-reset email
+### 1. Set the Sentry **functions** DSN, so I can deploy server error reporting
+
+Sentry is wired on all three surfaces. Web and native use the client DSNs (in
+gitignored `app/.env.local`), and **web reporting is already live** on the
+deployed site. The functions use a server DSN that only you can set:
+
+```bash
+firebase functions:secrets:set SENTRY_DSN
+# paste the sabeel-recording-FUNCTIONS DSN when prompted (NOT the web/android one)
+```
+
+Then tell me and I will redeploy the functions — they already bind the secret, so
+the deploy is what turns on server-side error reporting. Until then the functions
+run normally with reporting off. (A functions deploy will *fail* until this
+secret exists, which is why I have not redeployed them yet.)
+
+Two smaller Sentry notes, neither blocking:
+- **Source-map upload is deferred** — it needs a Sentry auth token and a
+  `prebuild`. Until then, release-build native/web stack traces are minified but
+  the errors still report.
+- Reporting is off in dev/debug bundles by design, so you will only see events
+  from the deployed web app (and, later, release APKs).
+
+### 2. Reword the password-reset email
 
 Authentication → **Templates → Password reset**. Students receive it for an
 account they have never had a password on, so the default "reset your password"
 wording reads as though something has gone wrong. "Set your password for Sabeel
 Class Recordings" or similar.
 
-### 2. Android Google sign-in — **only when you want it on a device**
+### 3. Android Google sign-in — **only when you want it on a device**
 
 Not a prerequisite for anything else. The SHA-1 affects **only** Google sign-in
 inside the Android app; it has no bearing on deploys, on web sign-in, or on the
