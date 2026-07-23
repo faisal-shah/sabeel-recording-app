@@ -155,6 +155,18 @@ Proven both ways in `npm run test:e2e`: a self-signup's credential stops working
 
 ## Still to do
 
+### Optional — a ~10-minute production student-flow walkthrough (Phase 4)
+
+Not blocking; the whole flow is proven on the emulator and the AVD, and Phase 3's
+staff flow was driven against the real project. But two emulator-green flows have
+failed in production this project (the empty index file, the null `classId`), so
+a real pass is cheap insurance now that accountability is live. From
+<https://sabeel-class-recordings.web.app>, as yourself (admin): create a cohort →
+class → student (enrolled) → upload a recording → publish it. Then sign in as
+that student (set their password from the emailed link) and confirm the recording
+appears under "Your listening", plays, and can be marked complete. Tell me any
+step that misbehaves.
+
 ### ✅ 0–1 done (2026-07-22)
 
 Sign-up re-enabled, you signed in, `onUserCreate` provisioned you as
