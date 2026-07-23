@@ -6,6 +6,7 @@ import { auth } from '../firebase';
 import { signInWithGoogle } from '../auth/google';
 import { devSignIn, devSignInAvailable } from '../auth/devSignIn';
 import { Button, Field, Notice, Screen } from '../components/ui';
+import { BUILD_LABEL } from '../buildInfo';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -108,6 +109,12 @@ export function SignInScreen() {
       {info ? <Notice tone="info">{info}</Notice> : null}
 
       {devSignInAvailable ? <DevRow busy={busy !== null} /> : null}
+
+      {/* Every Sabeel app shows its version + build commit here, so a screenshot
+          of a problem always identifies the exact build. See buildInfo.ts. */}
+      <Text style={styles.build} testID="build-label">
+        {BUILD_LABEL}
+      </Text>
     </Screen>
   );
 }
@@ -192,4 +199,10 @@ const styles = StyleSheet.create({
     borderColor: t.border.strong,
   },
   devLabel: { fontSize: 12, color: t.text.muted, marginBottom: spacing(1) },
+  build: {
+    marginTop: spacing(8),
+    textAlign: 'center',
+    fontSize: 12,
+    color: t.text.muted,
+  },
 });

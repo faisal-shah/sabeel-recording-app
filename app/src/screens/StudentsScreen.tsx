@@ -17,7 +17,7 @@ import {
   setStudentAccess,
   useStudents,
 } from '../students';
-import { useCohorts, useClassesInCohort, useMyClasses, type ClassRow } from '../structure';
+import { useAllClasses, useCohorts, useMyClasses } from '../structure';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -106,12 +106,17 @@ export function StudentsScreen({ isAdmin, uid }: { isAdmin: boolean; uid: string
                   testID={`student-class-${c.name}`}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: on }}
-                  accessibilityLabel={`Enrol in ${c.name}`}
+                  accessibilityLabel={`Enrol in ${c.name} in ${c.cohortName}`}
                   onPress={() => setClassId(on ? null : c.id)}
                   style={styles.pickRow}
                 >
                   <View style={[styles.tick, on ? styles.tickOn : null]} />
-                  <Text style={styles.pickText}>{c.name}</Text>
+                  <View style={styles.pickTextWrap}>
+                    <Text style={styles.pickText}>{c.name}</Text>
+                    {/* Cohort shown so two classes that share a name (same course
+                        in different semesters) are told apart. */}
+                    <Text style={styles.pickSub}>{c.cohortName}</Text>
+                  </View>
                 </Pressable>
               );
             })}
@@ -191,22 +196,32 @@ export function StudentsScreen({ isAdmin, uid }: { isAdmin: boolean; uid: string
   );
 }
 
+interface ClassOption {
+  id: string;
+  name: string;
+  cohortName: string;
+}
+
 /**
  * The classes this staff member may enrol into.
  *
- * An admin sees every class in every cohort; a manager sees only their own —
- * which is also all the security rules would let them read. Offering a class a
- * manager cannot use would produce a permission error at submit time instead of
- * simply not being on the list.
+ * An admin sees EVERY class in EVERY cohort (not just the latest — a class in an
+ * older semester was invisible before, and two classes that share a name across
+ * semesters looked like one). A manager sees only their own — which is also all
+ * the security rules would let them read. Each option carries its cohort name so
+ * same-named classes are distinguishable. Both roles may read cohorts.
  */
-function useClassOptions(isAdmin: boolean, uid: string): ClassRow[] {
-  const cohorts = useCohorts(isAdmin);
-  // Admin: the most recent cohort's classes — enough for the common case without
-  // a cohort picker on this screen. Full management lives under Cohorts.
-  const latestCohortId = isAdmin && cohorts.length > 0 ? cohorts[0].id : null;
-  const adminClasses = useClassesInCohort(latestCohortId);
+function useClassOptions(isAdmin: boolean, uid: string): ClassOption[] {
+  const cohorts = useCohorts(true);
+  const adminClasses = useAllClasses(isAdmin);
   const myClasses = useMyClasses(isAdmin ? null : uid);
-  return isAdmin ? adminClasses : myClasses;
+  const classes = isAdmin ? adminClasses : myClasses;
+  const cohortName = (id: string) => cohorts.find((c) => c.id === id)?.name ?? '';
+  return classes
+    .map((c) => ({ id: c.id, name: c.name, cohortName: cohortName(c.cohortId) }))
+    .sort(
+      (a, b) => a.cohortName.localeCompare(b.cohortName) || a.name.localeCompare(b.name),
+    );
 }
 
 const styles = StyleSheet.create({
@@ -221,7 +236,9 @@ const styles = StyleSheet.create({
     gap: spacing(3),
     paddingVertical: spacing(2),
   },
-  pickText: { flex: 1, fontSize: 15, color: t.text.primary },
+  pickTextWrap: { flex: 1 },
+  pickText: { fontSize: 15, color: t.text.primary },
+  pickSub: { fontSize: 13, color: t.text.secondary, marginTop: 1 },
   tick: {
     width: 22,
     height: 22,

@@ -11,7 +11,13 @@ import {
   SectionTitle,
   StatusChip,
 } from '../components/ui';
-import { createCohort, setCohortArchived, useCohorts, type CohortRow } from '../structure';
+import {
+  createCohort,
+  setCohortArchived,
+  useAllClasses,
+  useCohorts,
+  type CohortRow,
+} from '../structure';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -25,6 +31,13 @@ const t = getTheme();
  */
 export function CohortsScreen({ onOpen }: { onOpen: (cohort: CohortRow) => void }) {
   const cohorts = useCohorts(true);
+  // Classes across all cohorts, counted per cohort so each card shows its size
+  // without a tap. Admin-only screen, so the all-classes list is readable.
+  const classes = useAllClasses(true);
+  const classCounts = classes.reduce<Record<string, number>>((acc, c) => {
+    acc[c.cohortId] = (acc[c.cohortId] ?? 0) + 1;
+    return acc;
+  }, {});
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -87,7 +100,8 @@ export function CohortsScreen({ onOpen }: { onOpen: (cohort: CohortRow) => void 
               <Text style={styles.name}>{c.name}</Text>
               <View style={styles.meta}>
                 <StatusChip status={c.archived ? 'archived' : 'active'} />
-                <Text style={styles.hint}>Tap to see classes</Text>
+                <Text style={styles.count}>{classLabel(classCounts[c.id] ?? 0)}</Text>
+                <Text style={styles.hint}>Tap to open</Text>
               </View>
             </Pressable>
             <Row>
@@ -111,8 +125,13 @@ export function CohortsScreen({ onOpen }: { onOpen: (cohort: CohortRow) => void 
   );
 }
 
+function classLabel(n: number): string {
+  return n === 1 ? '1 class' : `${n} classes`;
+}
+
 const styles = StyleSheet.create({
   name: { fontSize: 16, fontWeight: '600', color: t.text.primary },
   meta: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginTop: spacing(2) },
-  hint: { fontSize: 13, color: t.text.secondary },
+  count: { fontSize: 13, fontWeight: '600', color: t.text.secondary },
+  hint: { fontSize: 13, color: t.text.muted },
 });

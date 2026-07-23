@@ -5,10 +5,10 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
-    "android": "expo run:android",
+    "android": "EXPO_PUBLIC_COMMIT=$(git rev-parse --short HEAD) expo run:android",
     "web": "expo start --web",
-    "web:export": "expo export --platform web --output-dir dist-web --clear",
-    "web:export:maps": "expo export --platform web --output-dir dist-web --clear --source-maps",
+    "web:export": "EXPO_PUBLIC_COMMIT=$(git rev-parse --short HEAD) expo export --platform web --output-dir dist-web --clear",
+    "web:export:maps": "EXPO_PUBLIC_COMMIT=$(git rev-parse --short HEAD) expo export --platform web --output-dir dist-web --clear --source-maps",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -21,6 +21,7 @@
     "@sentry/react-native": "~7.11.0",
     "expo": "~57.0.4",
     "expo-audio": "~57.0.2",
+    "expo-document-picker": "~57.0.1",
     "expo-file-system": "~57.0.1",
     "expo-sharing": "~57.0.7",
     "expo-status-bar": "~57.0.0",

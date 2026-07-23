@@ -51,6 +51,27 @@ export function useClassesInCohort(cohortId: string | null): ClassRow[] {
 }
 
 /**
+ * Every class in every cohort, oldest first — ADMIN ONLY.
+ *
+ * The rules' admin arm lists the whole `classes` collection without a per-row
+ * read (a manager must go cohort by cohort). Used where the admin needs classes
+ * across cohorts at once: the cohort class-counts and the student-enrolment
+ * picker. Single-field `createdAt` order needs no composite index.
+ */
+export function useAllClasses(enabled: boolean): ClassRow[] {
+  return useLiveQuery<ClassRow[]>(
+    'allClasses',
+    () =>
+      enabled
+        ? query(collection(db, COLLECTIONS.classes), orderBy('createdAt', 'asc'))
+        : null,
+    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as ClassDoc) })),
+    [],
+    [enabled],
+  );
+}
+
+/**
  * The classes a manager is scoped to.
  *
  * The `array-contains` constraint is not a convenience — the security rule's
