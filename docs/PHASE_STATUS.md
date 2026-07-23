@@ -23,8 +23,8 @@ and commit messages, and renaming them would strand every one of those.
 | 4d | Catch-up assignment UI + polish | **complete** (2026-07-22) |
 | 5a | Audit spine: auditedCall wrapper + auditLog | **complete** (2026-07-22) |
 | 5b | Staff ledger reads + completion override | **complete** (2026-07-22) |
-| 5c | Ledger + library + audit UI | not started |
-| 5d | CSV export + polish | not started |
+| 5c | Ledger + library + audit UI | **complete** (2026-07-22) |
+| 5d | CSV export + polish | **complete** (2026-07-22) |
 | 4 | Assignments, progress, completion | not started |
 | 5 | Staff ledger, reporting, audit | not started |
 | 6 | Zoom import *(gated on credentials)* | not started |
@@ -227,6 +227,22 @@ and commit messages, and renaming them would strand every one of those.
   reports nothing is worse than none.
 
 ## Verification log
+
+- 2026-07-22 — **Phase 5c + 5d: ledger UI, library, audit, CSV.** Contextual
+  staff views, all client-side live joins over the 5b reads, computing with the
+  pure `ledger.ts`: a **recording ledger** (accountable roster, action-first
+  Not-complete/Overdue chips, per-row effective status + listened% + override
+  form) opened from `RecordingsScreen`; a **student ledger** from the ClassDetail
+  roster; **class-level incomplete/overdue counts** on ClassDetail; the
+  cross-cohort **recording library** with status counts (Phase-3-deferred) from
+  Home; and a scoped **audit view** (per-class + admin-global). CSV export is a
+  pure `toCsv` (7 unit tests) behind a web/native seam (Blob download / share
+  sheet, `expo-sharing`+`expo-file-system`). e2e drove it end to end: the ledger
+  renders the roster, a staff override (with reason) writes the override doc and
+  shows Complete (override), the **CSV mirrors the ledger row-for-row** (the
+  brief's exit criterion), and the audit view shows the override with its reason.
+  Screens looked at — on-brand. No new indexes (recordingId reads are
+  pure-equality). 76 shared + 42 functions unit.
 
 - 2026-07-22 — **Phase 5b: staff ledger reads + completion override.** Opened
   staff-scoped reads (via a new `staffManagesClass(classId)` rules helper) on

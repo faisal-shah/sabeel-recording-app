@@ -24,7 +24,7 @@
  */
 import { chromium } from 'playwright';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 
 const WEB = process.env.E2E_WEB ?? 'http://127.0.0.1:8083/';
 const FN = 'http://127.0.0.1:5001/demo-sabeel/us-central1';
@@ -512,6 +512,69 @@ check(
   `${catchups.length} catch-up assignment(s)`,
 );
 await shot(admin, '16-catchup');
+
+// ------------------------------------------------ recording ledger + override --
+console.log('\nRecording ledger, override, CSV');
+// Admin is on the Recordings screen (Hikam Foundations). Open Session 1's ledger.
+await tap(admin, 'recording-ledger-Session 1');
+await admin.getByTestId('ledger-filter-all').waitFor({ timeout: 10000 });
+await tap(admin, 'ledger-filter-all');
+await admin.waitForTimeout(1000);
+let ledgerText = await admin.locator('body').innerText();
+check(
+  'the recording ledger lists the accountable roster (Fatima complete, Bilal not)',
+  /Fatima Ahmed/.test(ledgerText) && /Bilal Khan/.test(ledgerText),
+);
+
+// Override Bilal → complete, with a required reason.
+await tap(admin, 'ledger-filter-notComplete');
+await admin.getByTestId('override-open-Bilal Khan').waitFor({ timeout: 8000 });
+await tap(admin, 'override-open-Bilal Khan');
+await admin.getByTestId('override-reason-Bilal Khan').fill('Attended the class live');
+await tap(admin, 'override-complete-Bilal Khan');
+await admin.waitForTimeout(1800);
+const overrides = await readCollection('completionOverrides');
+check(
+  'staff override writes a completionOverrides doc with the reason',
+  overrides.length === 1 &&
+    overrides[0].fields.completed.booleanValue === true &&
+    overrides[0].fields.reason.stringValue === 'Attended the class live',
+  `${overrides.length} override(s)`,
+);
+
+await tap(admin, 'ledger-filter-all');
+await admin.waitForTimeout(1000);
+ledgerText = await admin.locator('body').innerText();
+check(
+  'the overridden student now shows Complete (override) on the ledger',
+  /Complete \(override\)/.test(ledgerText),
+);
+await shot(admin, '17-recording-ledger');
+
+// CSV equals the screen: header + one row per accountable student (Fatima, Bilal).
+const [download] = await Promise.all([admin.waitForEvent('download'), tap(admin, 'ledger-export')]);
+const csv = readFileSync(await download.path(), 'utf8');
+const csvLines = csv.trim().split('\r\n');
+check(
+  'CSV mirrors the ledger row-for-row (header + 2 accountable students)',
+  csvLines[0].startsWith('Student,Status,Listened %') && csvLines.length === 3,
+  `${csvLines.length} lines`,
+);
+check('CSV reflects the override', /Complete \(override\)/.test(csv));
+
+// The override is in the audit trail with its reason.
+await goHome(admin);
+await tap(admin, 'nav-cohorts');
+await tap(admin, 'cohort-open-Autumn 2026');
+await tap(admin, 'class-open-Hikam Foundations');
+await tap(admin, 'nav-audit');
+await admin.waitForTimeout(1500);
+const auditText = await admin.locator('body').innerText();
+check(
+  'the class audit view shows the override with its reason',
+  /Overrode completion/.test(auditText) && /Attended the class live/.test(auditText),
+);
+await shot(admin, '18-audit');
 
 // ---------------------------------------------------------- archive cascade --
 console.log('\nArchive cascade');

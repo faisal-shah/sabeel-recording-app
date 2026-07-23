@@ -11,6 +11,8 @@ import {
   SectionTitle,
   StatusChip,
 } from '../components/ui';
+import { INSTITUTE_TIMEZONE, todayInZone } from '@sabeel/shared';
+import { useClassLedger } from '../ledger';
 import { useDecidedStaff } from '../staff';
 import { useStudents } from '../students';
 import {
@@ -37,14 +39,20 @@ export function ClassDetailScreen({
   cls,
   isAdmin,
   onOpenRecordings,
+  onOpenStudent,
+  onOpenAudit,
 }: {
   cls: ClassRow;
   isAdmin: boolean;
   onOpenRecordings: () => void;
+  onOpenStudent: (studentUid: string, studentName: string) => void;
+  onOpenAudit: () => void;
 }) {
   const roster = useRoster(cls.id);
   const students = useStudents(true);
   const staff = useDecidedStaff(isAdmin);
+  const today = todayInZone(INSTITUTE_TIMEZONE);
+  const ledger = useClassLedger(cls.id, today);
   const [name, setName] = useState(cls.name);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +98,20 @@ export function ClassDetailScreen({
             </Text>
           ) : null}
         </View>
+      </Card>
+
+      {/* Class-level accountability at a glance. Zeroes out when archived (no
+          active assignments), while the recordings' history stays. */}
+      <Card>
+        <Text style={styles.ledgerLine}>
+          <Text style={styles.ledgerNum}>{ledger.rollup.incomplete}</Text> incomplete
+          {'   '}
+          <Text style={[styles.ledgerNum, ledger.rollup.overdue > 0 ? styles.overdueNum : null]}>
+            {ledger.rollup.overdue}
+          </Text>{' '}
+          overdue{'   '}of {ledger.rollup.total} required
+        </Text>
+        <Button testID="nav-audit" label="Audit history" variant="secondary" onPress={onOpenAudit} />
       </Card>
 
       {isAdmin ? (
@@ -188,6 +210,11 @@ export function ClassDetailScreen({
                 {s ? <Text style={styles.hint}>{s.email}</Text> : null}
                 <Row>
                   <Button
+                    testID={`student-ledger-${s?.email ?? r.studentUid}`}
+                    label="Ledger"
+                    onPress={() => onOpenStudent(r.studentUid, s?.displayName ?? r.studentUid)}
+                  />
+                  <Button
                     testID={`roster-remove-${s?.email ?? r.studentUid}`}
                     label="Remove from class"
                     variant="secondary"
@@ -248,6 +275,9 @@ export function ClassDetailScreen({
 const styles = StyleSheet.create({
   name: { fontSize: 15, fontWeight: '600', color: t.text.primary },
   hint: { fontSize: 13, color: t.text.secondary },
+  ledgerLine: { fontSize: 15, color: t.text.secondary, marginBottom: spacing(3) },
+  ledgerNum: { fontSize: 18, fontWeight: '700', color: t.text.primary },
+  overdueNum: { color: t.feedback.danger },
   meta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing(2) },
   pickRow: {
     flexDirection: 'row',

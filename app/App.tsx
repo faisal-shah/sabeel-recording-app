@@ -21,6 +21,10 @@ import { CohortsScreen } from './src/screens/CohortsScreen';
 import { ClassesScreen } from './src/screens/ClassesScreen';
 import { ClassDetailScreen } from './src/screens/ClassDetailScreen';
 import { RecordingsScreen } from './src/screens/RecordingsScreen';
+import { RecordingLedgerScreen } from './src/screens/RecordingLedgerScreen';
+import { StudentLedgerScreen } from './src/screens/StudentLedgerScreen';
+import { LibraryScreen } from './src/screens/LibraryScreen';
+import { AuditScreen } from './src/screens/AuditScreen';
 import { MyRecordingsScreen } from './src/screens/MyRecordingsScreen';
 import { StudentHomeScreen } from './src/screens/StudentHomeScreen';
 import { PlayerScreen } from './src/screens/PlayerScreen';
@@ -106,6 +110,18 @@ export default function App() {
             <Stack.Screen name="Recordings" options={{ title: 'Recordings' }}>
               {() => <Recordings />}
             </Stack.Screen>
+            <Stack.Screen name="RecordingLedger" options={{ title: 'Ledger' }}>
+              {() => <RecordingLedger />}
+            </Stack.Screen>
+            <Stack.Screen name="StudentLedger" options={{ title: 'Student' }}>
+              {() => <StudentLedger />}
+            </Stack.Screen>
+            <Stack.Screen name="Library" options={{ title: 'Library' }}>
+              {() => <Library uid={user.uid} isAdmin={isAdmin} />}
+            </Stack.Screen>
+            <Stack.Screen name="Audit" options={{ title: 'Audit' }}>
+              {() => <Audit />}
+            </Stack.Screen>
             <Stack.Screen name="MyClasses" options={{ title: 'My classes' }}>
               {() => <MyClasses uid={user.uid} />}
             </Stack.Screen>
@@ -148,7 +164,14 @@ function Landing({ name, role, uid }: { name: string; role: Role; uid: string })
       />
     );
   }
-  return <HomeScreen name={name} role={role} onOpen={(route) => navigation.navigate(route)} />;
+  return (
+    <HomeScreen
+      name={name}
+      role={role}
+      onOpen={(route) => navigation.navigate(route)}
+      onOpenAudit={() => navigation.navigate('Audit', { classId: null, title: 'All classes' })}
+    />
+  );
 }
 
 function Cohorts() {
@@ -177,6 +200,10 @@ function ClassDetail({ isAdmin }: { isAdmin: boolean }) {
       cls={cls}
       isAdmin={isAdmin}
       onOpenRecordings={() => navigation.navigate('Recordings', { cls })}
+      onOpenStudent={(studentUid, studentName) =>
+        navigation.navigate('StudentLedger', { studentUid, studentName, cls })
+      }
+      onOpenAudit={() => navigation.navigate('Audit', { classId: cls.id, title: cls.name })}
     />
   );
 }
@@ -197,8 +224,37 @@ function Play({ studentUid }: { studentUid: string | null }) {
 }
 
 function Recordings() {
+  const navigation = useNavigation<Nav>();
   const { cls } = useRoute<RouteProp<RootStackParamList, 'Recordings'>>().params;
-  return <RecordingsScreen classId={cls.id} className={cls.name} />;
+  return (
+    <RecordingsScreen
+      classId={cls.id}
+      className={cls.name}
+      onOpenLedger={(recording) => navigation.navigate('RecordingLedger', { recording, cls })}
+    />
+  );
+}
+function RecordingLedger() {
+  const { recording, cls } = useRoute<RouteProp<RootStackParamList, 'RecordingLedger'>>().params;
+  return <RecordingLedgerScreen recording={recording} cls={cls} />;
+}
+function StudentLedger() {
+  const { studentUid, studentName, cls } = useRoute<RouteProp<RootStackParamList, 'StudentLedger'>>().params;
+  return <StudentLedgerScreen studentUid={studentUid} studentName={studentName} cls={cls} />;
+}
+function Library({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
+  const navigation = useNavigation<Nav>();
+  return (
+    <LibraryScreen
+      uid={uid}
+      isAdmin={isAdmin}
+      onOpen={(recording, cls) => navigation.navigate('RecordingLedger', { recording, cls })}
+    />
+  );
+}
+function Audit() {
+  const { classId, title } = useRoute<RouteProp<RootStackParamList, 'Audit'>>().params;
+  return <AuditScreen classId={classId} title={title} />;
 }
 
 function MyClasses({ uid }: { uid: string }) {

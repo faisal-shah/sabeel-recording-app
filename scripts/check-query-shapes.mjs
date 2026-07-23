@@ -140,6 +140,23 @@ const shapes = [
     'auditLog — a class, newest first (manager audit view)',
     () => db.collection('auditLog').where('classId', '==', ID).orderBy('at', 'desc'),
   ],
+  [
+    'auditLog — global, newest first (admin audit view)',
+    () => db.collection('auditLog').orderBy('at', 'desc'),
+  ],
+  // ---- Phase 5c: recording-ledger reads ----
+  [
+    "completions — a recording's roster (recording ledger)",
+    () => db.collection('completions').where('recordingId', '==', ID),
+  ],
+  [
+    "completionOverrides — a recording's (recording ledger)",
+    () => db.collection('completionOverrides').where('recordingId', '==', ID),
+  ],
+  [
+    "listeningProgress — a recording's (recording ledger)",
+    () => db.collection('listeningProgress').where('recordingId', '==', ID),
+  ],
 ];
 
 console.log(`Query shapes against ${PROJECT_ID}\n`);

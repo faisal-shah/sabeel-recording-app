@@ -29,7 +29,8 @@
           "recordAudioAndroid": false
         }
       ],
-      "@sentry/react-native"
+      "@sentry/react-native",
+      "expo-sharing"
     ]
   }
 }

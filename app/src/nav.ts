@@ -12,6 +12,10 @@ export type RootStackParamList = {
   Classes: { cohort: CohortRow };
   ClassDetail: { cls: ClassRow };
   Recordings: { cls: ClassRow };
+  RecordingLedger: { recording: RecordingRow; cls: ClassRow };
+  StudentLedger: { studentUid: string; studentName: string; cls: ClassRow };
+  Library: undefined;
+  Audit: { classId: string | null; title: string };
   MyRecordings: undefined;
   Player: { recording: RecordingRow; cls: ClassRow };
   MyClasses: undefined;

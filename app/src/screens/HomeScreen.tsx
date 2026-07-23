@@ -1,5 +1,5 @@
 import type { Role } from '@sabeel/shared';
-import { Button, Card, Notice, Screen, SectionTitle } from '../components/ui';
+import { Button, Card, Screen, SectionTitle } from '../components/ui';
 import { signOut } from '../session';
 import { IS_DEV } from '../env';
 
@@ -14,10 +14,13 @@ export function HomeScreen({
   name,
   role,
   onOpen,
+  onOpenAudit,
 }: {
   name: string;
   role: Role;
-  onOpen: (route: 'Staff' | 'Students' | 'Cohorts' | 'MyClasses' | 'Tokens') => void;
+  onOpen: (route: 'Staff' | 'Students' | 'Cohorts' | 'MyClasses' | 'Library' | 'Tokens') => void;
+  /** Admin-only global audit view (managers reach a scoped one from a class). */
+  onOpenAudit: () => void;
 }) {
   // Staff only — a student's landing is StudentHomeScreen (their task list).
   const isAdmin = role === 'admin';
@@ -46,7 +49,14 @@ export function HomeScreen({
           onPress={() => onOpen('Students')}
         />
       </Card>
-      <Notice tone="info">The accountability ledger and reports arrive in the next phase.</Notice>
+
+      <SectionTitle>Reports</SectionTitle>
+      <Card>
+        <Button testID="nav-library" label="Recording library" onPress={() => onOpen('Library')} />
+        {isAdmin ? (
+          <Button testID="nav-audit-global" label="Audit history" variant="secondary" onPress={onOpenAudit} />
+        ) : null}
+      </Card>
 
       {IS_DEV ? (
         <Button label="Design tokens" variant="secondary" onPress={() => onOpen('Tokens')} />

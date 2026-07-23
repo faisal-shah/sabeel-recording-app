@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import {
+  INSTITUTE_TIMEZONE,
   allowedTransitions,
   publishBlockers,
+  todayInZone,
   type RecordingStatus,
 } from '@sabeel/shared';
+import { useClassLedger } from '../ledger';
 import {
   Button,
   Card,
@@ -43,8 +46,18 @@ const t = getTheme();
  * scope server-side) and hands back an id, and only then does the audio go
  * straight to Storage. Nothing is publishable until the upload is confirmed.
  */
-export function RecordingsScreen({ classId, className }: { classId: string; className: string }) {
+export function RecordingsScreen({
+  classId,
+  className,
+  onOpenLedger,
+}: {
+  classId: string;
+  className: string;
+  onOpenLedger: (recording: RecordingRow) => void;
+}) {
   const recordings = useClassRecordings(classId);
+  const today = todayInZone(INSTITUTE_TIMEZONE);
+  const { byRecording } = useClassLedger(classId, today);
   // For catch-up assignment: the class roster and student names, loaded once.
   const roster = useRoster(classId);
   const students = useStudents(true);
@@ -151,6 +164,8 @@ export function RecordingsScreen({ classId, className }: { classId: string; clas
             onRun={run}
             activeStudentUids={activeStudentUids}
             nameByUid={nameByUid}
+            counts={byRecording.get(r.id)}
+            onOpenLedger={() => onOpenLedger(r)}
           />
         ))
       )}
@@ -164,12 +179,16 @@ function RecordingCard({
   onRun,
   activeStudentUids,
   nameByUid,
+  counts,
+  onOpenLedger,
 }: {
   recording: RecordingRow;
   busy: string | null;
   onRun: (key: string, fn: () => Promise<void>) => void;
   activeStudentUids: string[];
   nameByUid: Map<string, string>;
+  counts: { complete: number; total: number } | undefined;
+  onOpenLedger: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(r.title);
@@ -259,6 +278,20 @@ function RecordingCard({
           ) : null}
         </Row>
       )}
+
+      {r.status === 'published' ? (
+        <View style={styles.ledgerRow}>
+          <Text style={styles.ledgerCount}>
+            {counts ? `${counts.complete}/${counts.total} complete` : 'no one accountable yet'}
+          </Text>
+          <Button
+            testID={`recording-ledger-${r.title}`}
+            label="Ledger"
+            variant="secondary"
+            onPress={onOpenLedger}
+          />
+        </View>
+      ) : null}
 
       {/* Catch-up: assign this recording to a late student who was not on the
           roster when it published. Only meaningful once it is published. */}
@@ -368,6 +401,16 @@ function fmtDuration(s: number) {
 }
 
 const styles = StyleSheet.create({
+  ledgerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing(3),
+    paddingTop: spacing(3),
+    borderTopWidth: 1,
+    borderTopColor: t.border.subtle,
+  },
+  ledgerCount: { fontSize: 14, fontWeight: '600', color: t.text.secondary },
   title: { fontSize: 16, fontWeight: '600', color: t.text.primary },
   meta: {
     flexDirection: 'row',

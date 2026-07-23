@@ -39,6 +39,21 @@ export function useClassRecordings(classId: string | null): RecordingRow[] {
   );
 }
 
+/**
+ * Every recording, newest first — ADMIN ONLY (the rules' admin arm lists
+ * recordings without a per-row read; a manager must go class by class). The
+ * library's admin view.
+ */
+export function useAllRecordings(enabled: boolean): RecordingRow[] {
+  return useLiveQuery<RecordingRow[]>(
+    'allRecordings',
+    () => (enabled ? query(collection(db, COLLECTIONS.recordings), orderBy('createdAt', 'desc')) : null),
+    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as RecordingDoc) })),
+    [],
+    [enabled],
+  );
+}
+
 const call = <I, O>(name: string) => (input: I) =>
   httpsCallable<I, O>(functions, name)(input).then((r) => r.data);
 
