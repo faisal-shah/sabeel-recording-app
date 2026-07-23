@@ -228,6 +228,14 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-07-22 — **Phase 5 proven in PRODUCTION (multi-role).** Temp admin + two
+  managers (each scoped to one class) + two students, deleted after: publish
+  fanned out the assignment; the deployed `overrideCompletion` wrote the override
+  doc with its reason and recorded it in the audit log; and the scoped reads held
+  against the real rules — the class's manager reads the override, ANOTHER class's
+  manager gets 403, a student reads their own but not another's, and no client
+  (even a manager) can write an override directly. All temp data cleaned up.
+
 - 2026-07-22 — **Phase 5c + 5d: ledger UI, library, audit, CSV.** Contextual
   staff views, all client-side live joins over the 5b reads, computing with the
   pure `ledger.ts`: a **recording ledger** (accountable roster, action-first
