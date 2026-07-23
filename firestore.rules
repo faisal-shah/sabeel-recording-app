@@ -39,6 +39,16 @@ service cloud.firestore {
       return isActive() && role() == 'student';
     }
 
+    // Staff who may see one class's data: an admin (reads nothing), or a manager
+    // assigned to that class. The per-row get() means a query using this must be
+    // constrained to a single class — the same affordability rule as /assignments
+    // and /enrollments. Introduced for the Phase 5 ledger reads.
+    function staffManagesClass(classId) {
+      return isAdmin()
+        || (isStaff() && request.auth.uid in
+            get(/databases/$(database)/documents/classes/$(classId)).data.managerUids);
+    }
+
     // ---- Staff ----
     // Read-only to clients; every write goes through the setStaffAccess
     // callable. Role and status ARE the security model, so letting clients write
@@ -172,11 +182,14 @@ service cloud.firestore {
       // before anything has ever written one. Allowing the miss leaks nothing:
       // there is no document to read, and the id is `${uid}_${recordingId}`,
       // which the caller already knows.
-      allow get: if isStudent()
-        && (resource == null || resource.data.studentUid == request.auth.uid);
+      allow get: if (isStudent()
+          && (resource == null || resource.data.studentUid == request.auth.uid))
+        || (resource != null && staffManagesClass(resource.data.classId));
       // A list always evaluates against real documents, so no guard is needed —
-      // and adding one would widen it.
-      allow list: if isStudent() && resource.data.studentUid == request.auth.uid;
+      // and adding one would widen it. Staff read it for the ledger's
+      // listened-% / last-listened columns, class-scoped.
+      allow list: if (isStudent() && resource.data.studentUid == request.auth.uid)
+        || staffManagesClass(resource.data.classId);
 
       allow create: if mine();
       // Both halves matter: `mine()` stops a student writing someone else's uid
@@ -184,8 +197,6 @@ service cloud.firestore {
       // already someone else's.
       allow update: if mine() && resource.data.studentUid == request.auth.uid;
       allow delete: if false;
-
-      // Staff reading progress is the Phase 5 ledger, not this phase.
     }
 
     // ---- Assignments ----
@@ -215,13 +226,16 @@ service cloud.firestore {
       function mineC() {
         return isStudent() && request.resource.data.studentUid == request.auth.uid;
       }
-      allow get: if isStudent()
-        && (resource == null || resource.data.studentUid == request.auth.uid);
-      allow list: if isStudent() && resource.data.studentUid == request.auth.uid;
+      allow get: if (isStudent()
+          && (resource == null || resource.data.studentUid == request.auth.uid))
+        || (resource != null && staffManagesClass(resource.data.classId));
+      // Staff read the roster's completions for the recording/class ledger,
+      // class-scoped.
+      allow list: if (isStudent() && resource.data.studentUid == request.auth.uid)
+        || staffManagesClass(resource.data.classId);
       allow create: if mineC();
       allow update: if mineC() && resource.data.studentUid == request.auth.uid;
       allow delete: if false;
-      // Staff reading completions is the Phase 5 ledger.
     }
 
     // ---- Completion events ----
@@ -232,8 +246,23 @@ service cloud.firestore {
       allow create: if isStudent()
         && request.resource.data.studentUid == request.auth.uid
         && request.resource.data.actor == 'student';
-      allow get, list: if isStudent() && resource.data.studentUid == request.auth.uid;
+      // Staff read a student's mark/unmark history for the ledger, class-scoped.
+      allow get, list: if (isStudent() && resource.data.studentUid == request.auth.uid)
+        || staffManagesClass(resource.data.classId);
       allow update, delete: if false;
+    }
+
+    // ---- Completion overrides ----
+    // Document id is `${studentUid}_${recordingId}`. A staff override of a
+    // student's completion, written ONLY by the server (the overrideCompletion
+    // callable), so a student can never clobber it — the whole point of keeping
+    // it out of the student-written completions doc. The student may READ their
+    // own (the brief lets a student see their full accountability details);
+    // staff read it scoped to their class for the ledger.
+    match /completionOverrides/{overrideId} {
+      allow get, list: if (isStudent() && resource.data.studentUid == request.auth.uid)
+        || staffManagesClass(resource.data.classId);
+      allow write: if false;
     }
 
     // ---- Audit log ----

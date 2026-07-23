@@ -111,6 +111,35 @@ const shapes = [
     "completions — a student's own (home join)",
     () => db.collection('completions').where('studentUid', '==', ID),
   ],
+  // ---- Phase 5: staff ledger reads ----
+  [
+    'completions — a class ledger (staff)',
+    () => db.collection('completions').where('classId', '==', ID),
+  ],
+  [
+    'listeningProgress — a class ledger (staff)',
+    () => db.collection('listeningProgress').where('classId', '==', ID),
+  ],
+  [
+    'completionEvents — a class ledger (staff)',
+    () => db.collection('completionEvents').where('classId', '==', ID),
+  ],
+  [
+    'completionOverrides — a class ledger (staff)',
+    () => db.collection('completionOverrides').where('classId', '==', ID),
+  ],
+  [
+    "completionOverrides — a student's own",
+    () => db.collection('completionOverrides').where('studentUid', '==', ID),
+  ],
+  [
+    "assignments — a student's rows in a class (student ledger, manager)",
+    () => db.collection('assignments').where('studentUid', '==', ID).where('classId', '==', ID),
+  ],
+  [
+    'auditLog — a class, newest first (manager audit view)',
+    () => db.collection('auditLog').where('classId', '==', ID).orderBy('at', 'desc'),
+  ],
 ];
 
 console.log(`Query shapes against ${PROJECT_ID}\n`);

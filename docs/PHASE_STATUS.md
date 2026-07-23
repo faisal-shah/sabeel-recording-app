@@ -22,7 +22,7 @@ and commit messages, and renaming them would strand every one of those.
 | 4c | Student experience: home ordering, mark-complete, offline | **complete** (2026-07-22) |
 | 4d | Catch-up assignment UI + polish | **complete** (2026-07-22) |
 | 5a | Audit spine: auditedCall wrapper + auditLog | **complete** (2026-07-22) |
-| 5b | Staff ledger reads + completion override | not started |
+| 5b | Staff ledger reads + completion override | **complete** (2026-07-22) |
 | 5c | Ledger + library + audit UI | not started |
 | 5d | CSV export + polish | not started |
 | 4 | Assignments, progress, completion | not started |
@@ -227,6 +227,20 @@ and commit messages, and renaming them would strand every one of those.
   reports nothing is worse than none.
 
 ## Verification log
+
+- 2026-07-22 — **Phase 5b: staff ledger reads + completion override.** Opened
+  staff-scoped reads (via a new `staffManagesClass(classId)` rules helper) on
+  `completions`, `completionEvents`, `listeningProgress`, plus the new
+  server-only `completionOverrides` (student reads their own; staff scoped). The
+  `overrideCompletion` callable writes a SEPARATE override doc a student cannot
+  clobber, with a REQUIRED reason (empty rejected) that lands in the audit
+  detail; `clearCompletionOverride` removes it. Pure `ledger.ts`
+  (`effectiveCompletion` = override ?? student, `rollup`, `ledgerBucket`) — 8
+  unit tests at the day boundary. 172 emulator tests (was 151). Mutation:
+  widening `staffManagesClass` reddened exactly the 8 cross-class ledger tests.
+  `check:queries` needed exactly ONE new composite — `auditLog (classId, at
+  desc)` for the ordered manager audit view — now built and servable in prod;
+  every ledger read is pure-equality.
 
 - 2026-07-22 — **Phase 5a: audit spine.** `auditedCall(action, handler)` extends
   `reportedCall` so all 16 mutating callables write one `auditLog` entry per

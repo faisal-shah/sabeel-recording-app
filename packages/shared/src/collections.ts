@@ -31,6 +31,9 @@ export const COLLECTIONS = {
   completions: 'completions',
   /** Completion/uncompletion events and staff overrides — append-only audit. */
   completionEvents: 'completionEvents',
+  /** Staff overrides of a student's completion, keyed by student+recording.
+   *  Server-written only; the effective ledger status is override ?? student. */
+  completionOverrides: 'completionOverrides',
   /** Student notification preferences and sent records. */
   notifications: 'notifications',
   /** Admin-facing operational metrics. */

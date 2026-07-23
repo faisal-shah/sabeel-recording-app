@@ -30,6 +30,7 @@ export {
 export { getPlaybackUrl } from './playback';
 export { assignCatchup } from './assignments';
 export { onRecordingWritten } from './assignmentsTrigger';
+export { overrideCompletion, clearCompletionOverride } from './overrides';
 
 /**
  * `bootstrapAdmin` exists ONLY against the emulator.

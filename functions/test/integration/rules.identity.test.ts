@@ -168,17 +168,11 @@ describe('students', () => {
 
 describe('collections not yet opened', () => {
   it('stay denied even to an admin', async () => {
-    // Each collection is opened by the phase that earns it, and gets its own
-    // suite: cohorts/classes/enrollments in 1b (rules.structure.test.ts),
-    // recordings in 3b, assignments in 4b, auditLog in 5a (rules.audit.test.ts).
-    // What remains here has NO staff access yet — listeningProgress and
-    // completions are student-only (staff reads are the Phase 5b ledger), and
-    // completionEvents is student-append.
-    for (const name of [
-      COLLECTIONS.listeningProgress,
-      COLLECTIONS.completions,
-      COLLECTIONS.completionEvents,
-    ]) {
+    // What is STILL fully closed to everyone, including an admin: the
+    // notifications and backend-stats collections, opened by Phases 7 and 8.
+    // (The Phase 5b ledger opened staff reads on completions / completionEvents /
+    // listeningProgress, so those are no longer here.)
+    for (const name of [COLLECTIONS.notifications, COLLECTIONS.backendStats]) {
       await assertFails(getDocs(collection(admin(), name)));
       await assertFails(setDoc(doc(admin(), name, 'x'), { any: 'thing' }));
     }
@@ -187,8 +181,8 @@ describe('collections not yet opened', () => {
   it('stay WRITE-denied on the collections opened for reading', async () => {
     // Opening a collection to reads must not have opened it to writes: every
     // mutation goes through a callable (or the fan-out trigger) that re-checks
-    // scope. Assignments and the audit log are readable by an admin but still
-    // server-written only.
+    // scope. An admin can READ all of these; none may be written by any client
+    // (the student-written ones reject an admin because admin is not the owner).
     for (const name of [
       COLLECTIONS.cohorts,
       COLLECTIONS.classes,
@@ -196,6 +190,10 @@ describe('collections not yet opened', () => {
       COLLECTIONS.recordings,
       COLLECTIONS.assignments,
       COLLECTIONS.auditLog,
+      COLLECTIONS.completions,
+      COLLECTIONS.completionEvents,
+      COLLECTIONS.listeningProgress,
+      COLLECTIONS.completionOverrides,
     ]) {
       await assertFails(setDoc(doc(admin(), name, 'x'), { any: 'thing' }));
     }
