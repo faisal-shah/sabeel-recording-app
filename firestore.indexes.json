@@ -25,11 +25,11 @@
       ]
     },
     {
-      "collectionGroup": "recordings",
+      "collectionGroup": "sessions",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "courseId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        { "fieldPath": "date", "order": "DESCENDING" }
       ]
     },
     {

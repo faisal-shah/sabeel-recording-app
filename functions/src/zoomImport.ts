@@ -6,6 +6,7 @@ import {
   type CourseDoc,
   type CohortDoc,
   type RecordingDoc,
+  type SessionDoc,
   type ZoomImportRow,
 } from '@sabeel/shared';
 import { auditedCall } from './audited';
@@ -28,7 +29,6 @@ async function downloadIntoRecording(
   recordingId: string,
   downloadUrl: string,
   durationSec: number,
-  dueDate: string | null,
   client: ZoomClient,
 ): Promise<void> {
   const ref = getFirestore().collection(COLLECTIONS.recordings).doc(recordingId);
@@ -39,7 +39,6 @@ async function downloadIntoRecording(
       status: 'draft',
       attentionReason: FieldValue.delete(),
       updatedAt: Date.now(),
-      ...(dueDate ? { dueDate } : {}),
     });
   } catch (e) {
     const reason = `Zoom import failed: ${(e as Error).message}`.slice(0, 300);
@@ -48,10 +47,10 @@ async function downloadIntoRecording(
   }
 }
 
-/** Import one Zoom recording into a class as a draft. Idempotent on the meeting UUID. */
+/** Import one Zoom recording into a session as its draft. Idempotent on the meeting UUID. */
 export async function applyImportZoomRecording(
   callerUid: string,
-  input: { meetingUuid: string; fileId: string; courseId: string; dueDate: string | null },
+  input: { meetingUuid: string; fileId: string; sessionId: string },
   client: ZoomClient,
 ): Promise<{ recordingId: string; alreadyExisted: boolean }> {
   const db = getFirestore();
@@ -70,16 +69,15 @@ export async function applyImportZoomRecording(
     throw new HttpsError('failed-precondition', `That recording's audio is larger than the ${mb} MB limit.`);
   }
 
-  const title = (rec.topic.trim() || 'Zoom recording').slice(0, 200);
-  const parsed = Date.parse(rec.startTime);
-  const recordedAt = Number.isFinite(parsed) ? parsed : null;
+  // The session owns title/date/due; the recording is pure media. createRecordingDraft
+  // refuses a session that already has a recording.
   const { id } = await createRecordingDraft(
     callerUid,
-    { courseId: input.courseId, title, recordedAt },
+    { sessionId: input.sessionId },
     { source: 'zoom', zoomUuid: input.meetingUuid, zoomFileId: rec.fileId },
   );
 
-  await downloadIntoRecording(id, downloadUrl, rec.durationSec, input.dueDate, client);
+  await downloadIntoRecording(id, downloadUrl, rec.durationSec, client);
   return { recordingId: id, alreadyExisted: false };
 }
 
@@ -95,7 +93,7 @@ export async function applyRetryZoomImport(
     throw new HttpsError('failed-precondition', 'That recording is not a Zoom import.');
   }
   const { rec: fresh, downloadUrl } = await client.freshAudioFile(rec.zoomUuid, rec.zoomFileId);
-  await downloadIntoRecording(recordingId, downloadUrl, fresh.durationSec, null, client);
+  await downloadIntoRecording(recordingId, downloadUrl, fresh.durationSec, client);
   return { recordingId };
 }
 
@@ -158,30 +156,30 @@ export const listZoomRecordings = reportedCall(async (req) => {
 export const importZoomRecording = auditedCall(
   'importZoomRecording',
   async (req, audit) => {
-    const d = req.data as {
-      meetingUuid?: unknown;
-      fileId?: unknown;
-      courseId?: unknown;
-      dueDate?: unknown;
-    };
+    const d = req.data as { meetingUuid?: unknown; fileId?: unknown; sessionId?: unknown };
     if (typeof d?.meetingUuid !== 'string' || !d.meetingUuid) {
       throw new HttpsError('invalid-argument', 'meetingUuid is required.');
     }
     if (typeof d?.fileId !== 'string' || !d.fileId) {
       throw new HttpsError('invalid-argument', 'fileId is required.');
     }
-    if (typeof d?.courseId !== 'string' || !d.courseId) {
-      throw new HttpsError('invalid-argument', 'courseId is required.');
+    if (typeof d?.sessionId !== 'string' || !d.sessionId) {
+      throw new HttpsError('invalid-argument', 'sessionId is required.');
     }
-    const dueDate = typeof d.dueDate === 'string' && DATE_ONLY.test(d.dueDate) ? d.dueDate : null;
-    const uid = await requireCourseScope(req, d.courseId);
-    audit.courseId = d.courseId;
+    const sessionSnap = await getFirestore()
+      .collection(COLLECTIONS.sessions)
+      .doc(d.sessionId)
+      .get();
+    if (!sessionSnap.exists) throw new HttpsError('not-found', 'No such session.');
+    const courseId = (sessionSnap.data() as SessionDoc).courseId;
+    const uid = await requireCourseScope(req, courseId);
+    audit.courseId = courseId;
     const res = await applyImportZoomRecording(
       uid,
-      { meetingUuid: d.meetingUuid, fileId: d.fileId, courseId: d.courseId, dueDate },
+      { meetingUuid: d.meetingUuid, fileId: d.fileId, sessionId: d.sessionId },
       zoomClient,
     );
-    audit.targets = { recordingId: res.recordingId, courseId: d.courseId };
+    audit.targets = { recordingId: res.recordingId, sessionId: d.sessionId };
     return res;
   },
   ZOOM_SECRETS,

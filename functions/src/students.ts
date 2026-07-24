@@ -4,17 +4,14 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
-  INSTITUTE_TIMEZONE,
   NEW_STUDENT_ACCESS,
   enrollmentId,
-  todayInZone,
   type CourseDoc,
   type EnrollmentDoc,
   type StudentDoc,
   type UserStatus,
 } from '@sabeel/shared';
 import { requireAdmin, requireCourseScope, requireStaff } from './guards';
-import { assignPublishedRecordingsToStudent } from './assignmentsFanout';
 
 export interface CreateStudentInput {
   displayName: string;
@@ -107,14 +104,14 @@ export async function createStudentAccount(callerUid: string, input: CreateStude
     createdBy: callerUid,
   };
 
-  // Student record and enrolment in one batch, so a class picked at creation
-  // time cannot end up half-applied — an account with no class is recoverable,
+  // Student record and enrolment in one batch, so a course picked at creation
+  // time cannot end up half-applied — an account with no course is recoverable,
   // an enrolment pointing at a student record that was never written is not.
   const batch = db.batch();
   batch.set(db.collection(COLLECTIONS.students).doc(user.uid), doc);
   if (input.courseId) {
     const cls = await db.collection(COLLECTIONS.courses).doc(input.courseId).get();
-    if (!cls.exists) throw new HttpsError('not-found', 'No such class.');
+    if (!cls.exists) throw new HttpsError('not-found', 'No such course.');
     const enrollment: EnrollmentDoc = {
       studentUid: user.uid,
       courseId: input.courseId,
@@ -130,19 +127,9 @@ export async function createStudentAccount(callerUid: string, input: CreateStude
   }
   await batch.commit();
 
-  // A student enrolled at creation time inherits the same late-enrollment
-  // default as one enrolled later: accountable for the class's not-yet-due
-  // published recordings. Runs after the commit so it never blocks the account.
-  if (input.courseId) {
-    await assignPublishedRecordingsToStudent(
-      db,
-      input.courseId,
-      user.uid,
-      todayInZone(INSTITUTE_TIMEZONE),
-      callerUid,
-    );
-  }
-
+  // No obligations at creation time: accountability is attendance-driven and
+  // starts from enrollment onward — a student enrolled now is marked at the next
+  // session, and nothing published earlier is retroactively assigned.
   return { uid: user.uid, email: input.email, courseId: input.courseId ?? null };
 }
 

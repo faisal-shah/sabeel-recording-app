@@ -12,37 +12,30 @@ import { DUE_SOON_DAYS } from './constants';
 // -------------------------------------------------------------- documents --
 
 /**
- * Where an obligation came from.
- *
- *  - `publish`: created for the whole roster when the recording was published.
- *    Its due date TRACKS the recording's — fixing a wrong date updates everyone.
- *  - `catchup`: a staff member assigned an earlier recording to one late student.
- *    Its due date is chosen by staff and is NOT overwritten when the recording's
- *    own due date changes.
- */
-export type AssignmentSource = 'publish' | 'catchup';
-
-/**
  * A required-listening obligation for one student and one recording.
  *
+ * There is exactly one reason an obligation exists: the student was absent or
+ * excused from the session and it has a published recording. So there is no
+ * `source` — the reconcile from the session's attendance is the only writer.
+ *
  * Document id is `${studentUid}_${recordingId}` — at most one obligation per
- * student per recording, which is what makes the publish fan-out idempotent.
- * Written ONLY by the server (the fan-out trigger and the callables); clients
- * read their own and never write.
+ * student per recording, which makes the reconcile idempotent. Written ONLY by
+ * the server; clients read their own and never write. `dueDate` is denormalized
+ * from the session so a student computes overdue with no extra read.
  */
 export interface AssignmentDoc {
   studentUid: string;
   recordingId: string;
+  sessionId: string;
   courseId: string;
   cohortId: string;
   /** Date-only `YYYY-MM-DD` in the institute timezone, or null ("required, but
    *  never overdue" — a no-due assignment is still required listening). */
   dueDate: string | null;
-  source: AssignmentSource;
   /**
-   * Accountability on/off without deleting history. Unpublish, archive, moving
-   * the recording to another class, and unenrolling the student all set this
-   * false; the row and its completion history remain for audit.
+   * Accountability on/off without deleting history. Unpublish, marking the
+   * student present, and unenrolling all set this false; the row and its
+   * completion history remain for audit.
    */
   active: boolean;
   assignedAt: number;

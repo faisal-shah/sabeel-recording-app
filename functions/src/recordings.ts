@@ -7,10 +7,10 @@ import {
   audioStoragePath,
   canTransition,
   publishBlockers,
-  type CourseDoc,
   type RecordingDoc,
   type RecordingSource,
   type RecordingStatus,
+  type SessionDoc,
 } from '@sabeel/shared';
 import { requireAdmin, requireCourseScope } from './guards';
 
@@ -21,37 +21,25 @@ export const MAX_AUDIO_BYTES = 300 * 1024 * 1024;
 // ---------------------------------------------------------------- create --
 
 export interface CreateRecordingInput {
-  courseId: string;
-  title: string;
-  recordedAt: number | null;
+  sessionId: string;
 }
 
 export function validateCreateRecording(data: unknown): CreateRecordingInput {
   const d = data as Partial<CreateRecordingInput> | null;
-  if (typeof d?.courseId !== 'string' || !d.courseId) {
-    throw new HttpsError('invalid-argument', 'courseId is required.');
+  if (typeof d?.sessionId !== 'string' || !d.sessionId) {
+    throw new HttpsError('invalid-argument', 'sessionId is required.');
   }
-  const title = typeof d.title === 'string' ? d.title.trim() : '';
-  if (!title) throw new HttpsError('invalid-argument', 'A title is required.');
-  if (title.length > 200) throw new HttpsError('invalid-argument', 'That title is too long.');
-  const recordedAt =
-    d.recordedAt === null || d.recordedAt === undefined
-      ? null
-      : typeof d.recordedAt === 'number' && Number.isFinite(d.recordedAt)
-        ? d.recordedAt
-        : (() => {
-            throw new HttpsError('invalid-argument', 'recordedAt must be epoch ms or null.');
-          })();
-  return { courseId: d.courseId, title, recordedAt };
+  return { sessionId: d.sessionId };
 }
 
 /**
- * Create the draft BEFORE any audio exists.
+ * Create the draft recording for a session, BEFORE any audio exists.
  *
- * This ordering is what makes the upload safe: class scope is checked here,
- * server-side, and the client is handed an id it may then write audio to.
- * Storage rules cannot read Firestore, so they can only check "is staff" — the
- * authorization that matters happens at this call and again at publish.
+ * This ordering is what makes the upload safe: course scope is checked here,
+ * server-side, and the client is handed an id it may then write audio to. The
+ * meeting metadata (title/date/due/notes) lives on the session; the recording is
+ * pure media. Refuses a session that already has a recording (0..1), and links
+ * both directions (recording.sessionId + session.recordingId).
  */
 export async function createRecordingDraft(
   callerUid: string,
@@ -60,18 +48,20 @@ export async function createRecordingDraft(
   origin: { source?: RecordingSource; zoomUuid?: string; zoomFileId?: string } = {},
 ) {
   const db = getFirestore();
-  const clsSnap = await db.collection(COLLECTIONS.courses).doc(input.courseId).get();
-  if (!clsSnap.exists) throw new HttpsError('not-found', 'No such class.');
+  const sessionRef = db.collection(COLLECTIONS.sessions).doc(input.sessionId);
+  const sessionSnap = await sessionRef.get();
+  if (!sessionSnap.exists) throw new HttpsError('not-found', 'No such session.');
+  const session = sessionSnap.data() as SessionDoc;
+  if (session.recordingId) {
+    throw new HttpsError('failed-precondition', 'This session already has a recording.');
+  }
 
   const doc: RecordingDoc = {
-    cohortId: (clsSnap.data() as CourseDoc).cohortId,
-    courseId: input.courseId,
-    title: input.title,
+    sessionId: input.sessionId,
+    courseId: session.courseId,
+    cohortId: session.cohortId,
     status: 'draft',
     source: origin.source ?? 'manual',
-    recordedAt: input.recordedAt,
-    dueDate: null,
-    notes: '',
     audioPath: null,
     durationSec: null,
     sizeBytes: null,
@@ -82,13 +72,19 @@ export async function createRecordingDraft(
     ...(origin.zoomFileId ? { zoomFileId: origin.zoomFileId } : {}),
   };
   const ref = await db.collection(COLLECTIONS.recordings).add(doc);
+  await sessionRef.update({ recordingId: ref.id, updatedAt: Date.now() });
   return { id: ref.id, audioPath: audioStoragePath(ref.id) };
 }
 
 export const createRecording = auditedCall('createRecording', async (req, audit) => {
   const input = validateCreateRecording(req.data);
-  const uid = await requireCourseScope(req, input.courseId);
-  audit.courseId = input.courseId;
+  const db = getFirestore();
+  const sessionSnap = await db.collection(COLLECTIONS.sessions).doc(input.sessionId).get();
+  if (!sessionSnap.exists) throw new HttpsError('not-found', 'No such session.');
+  const courseId = (sessionSnap.data() as SessionDoc).courseId;
+  const uid = await requireCourseScope(req, courseId);
+  audit.courseId = courseId;
+  audit.targets = { sessionId: input.sessionId };
   return createRecordingDraft(uid, input);
 });
 
@@ -159,75 +155,6 @@ export const finalizeRecordingUpload = auditedCall('finalizeRecordingUpload', as
   await requireCourseScope(req, courseId);
   audit.courseId = courseId;
   return finalizeRecording(input);
-});
-
-// ---------------------------------------------------------------- update --
-
-export interface UpdateRecordingInput {
-  recordingId: string;
-  title?: string;
-  notes?: string;
-  dueDate?: string | null;
-  recordedAt?: number | null;
-}
-
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
-
-export function validateUpdateRecording(data: unknown): UpdateRecordingInput {
-  const d = data as Partial<UpdateRecordingInput> | null;
-  if (typeof d?.recordingId !== 'string' || !d.recordingId) {
-    throw new HttpsError('invalid-argument', 'recordingId is required.');
-  }
-  const out: UpdateRecordingInput = { recordingId: d.recordingId };
-  if (d.title !== undefined) {
-    const title = typeof d.title === 'string' ? d.title.trim() : '';
-    if (!title) throw new HttpsError('invalid-argument', 'A title cannot be empty.');
-    out.title = title;
-  }
-  if (d.notes !== undefined) {
-    if (typeof d.notes !== 'string') {
-      throw new HttpsError('invalid-argument', 'notes must be text.');
-    }
-    out.notes = d.notes;
-  }
-  if (d.dueDate !== undefined) {
-    if (d.dueDate !== null && (typeof d.dueDate !== 'string' || !DATE_ONLY.test(d.dueDate))) {
-      // Date-only by design: due dates are a day, not an instant, so storing a
-      // timestamp would invite a timezone bug that only shows up near midnight.
-      throw new HttpsError('invalid-argument', 'dueDate must be YYYY-MM-DD or null.');
-    }
-    out.dueDate = d.dueDate;
-  }
-  if (d.recordedAt !== undefined) {
-    if (d.recordedAt !== null && typeof d.recordedAt !== 'number') {
-      throw new HttpsError('invalid-argument', 'recordedAt must be epoch ms or null.');
-    }
-    out.recordedAt = d.recordedAt;
-  }
-  if (Object.keys(out).length === 1) {
-    throw new HttpsError('invalid-argument', 'Nothing to change.');
-  }
-  return out;
-}
-
-export async function applyRecordingUpdate(input: UpdateRecordingInput) {
-  const db = getFirestore();
-  const ref = db.collection(COLLECTIONS.recordings).doc(input.recordingId);
-  if (!(await ref.get()).exists) throw new HttpsError('not-found', 'No such recording.');
-
-  const { recordingId: _id, ...fields } = input;
-  await ref.update({ ...fields, updatedAt: Date.now() });
-  return { recordingId: input.recordingId, ...fields };
-}
-
-export const updateRecording = auditedCall('updateRecording', async (req, audit) => {
-  const input = validateUpdateRecording(req.data);
-  const rec = await getFirestore().collection(COLLECTIONS.recordings).doc(input.recordingId).get();
-  if (!rec.exists) throw new HttpsError('not-found', 'No such recording.');
-  const courseId = (rec.data() as RecordingDoc).courseId;
-  await requireCourseScope(req, courseId);
-  audit.courseId = courseId;
-  return applyRecordingUpdate(input);
 });
 
 // ---------------------------------------------------------------- status --
@@ -403,8 +330,14 @@ export async function applyDeleteRecording(recordingId: string) {
     await getStorage().bucket().file(rec.audioPath).delete({ ignoreNotFound: true });
   }
 
-  // 3. The recording itself.
+  // 3. The recording itself, and clear the session's pointer so a new recording
+  //    can be added. The session may itself be mid-delete — a harmless no-op then.
   await ref.delete();
+  await db
+    .collection(COLLECTIONS.sessions)
+    .doc(rec.sessionId)
+    .update({ recordingId: null, updatedAt: Date.now() })
+    .catch(() => undefined);
   return { recordingId, courseId: rec.courseId };
 }
 

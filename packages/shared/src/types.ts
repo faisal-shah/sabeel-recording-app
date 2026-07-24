@@ -105,3 +105,65 @@ export interface EnrollmentDoc {
 export function enrollmentId(studentUid: string, courseId: string): string {
   return `${studentUid}_${courseId}`;
 }
+
+/**
+ * A student's attendance for one session.
+ *
+ * `present` exempts them from the recording (they were there). `absent` and
+ * `excused` both make the recording required listening — they missed the
+ * content either way — and differ only for attendance reporting.
+ */
+export type AttendanceStatus = 'present' | 'absent' | 'excused';
+
+/** The two statuses that make a student accountable for the session's recording. */
+export function isAccountableAttendance(s: AttendanceStatus): boolean {
+  return s === 'absent' || s === 'excused';
+}
+
+/**
+ * The uids from a session's attendance who must catch up (absent or excused) —
+ * the assignment target. Students not in the map (e.g. enrolled after attendance
+ * was taken) are intentionally excluded: accountability starts at enrollment.
+ */
+export function accountableUids(attendance: Record<string, AttendanceStatus>): string[] {
+  return Object.entries(attendance)
+    .filter(([, s]) => isAccountableAttendance(s))
+    .map(([uid]) => uid);
+}
+
+/**
+ * One dated meeting of a course.
+ *
+ * The organizing unit under a course: attendance lives here, and a recording
+ * (0..1) attaches to it. It exists whether or not it was recorded.
+ *
+ * `attendance` is the submitted roster SNAPSHOT (present/absent/excused per
+ * student). It is what makes obligations attendance-driven AND what implements
+ * "accountable from enrollment onward": a student who was not enrolled when
+ * attendance was taken is simply not in the map, so is never assigned this
+ * session's recording. `attendanceSubmittedAt` is the explicit submit — until it
+ * is set, nobody is assigned even if a recording is published. Staff-read only;
+ * students never read a session or its attendance.
+ */
+export interface SessionDoc {
+  courseId: string;
+  cohortId: string;
+  /** The meeting date, date-only `YYYY-MM-DD` in the institute timezone. */
+  date: string;
+  title: string;
+  /** Date-only `YYYY-MM-DD` due date for absentees, or null ("required, never
+   *  overdue"). Manual per session. */
+  dueDate: string | null;
+  /** Shared with everyone who can access the recording — not private staff notes. */
+  notes: string;
+  /** The session's recording, if one has been added yet. */
+  recordingId: string | null;
+  attendance: Record<string, AttendanceStatus>;
+  /** The explicit-submit marker. Null until attendance is submitted. */
+  attendanceSubmittedAt: number | null;
+  attendanceSubmittedBy?: string;
+  archived: boolean;
+  createdAt: number;
+  createdBy: string;
+  updatedAt: number;
+}

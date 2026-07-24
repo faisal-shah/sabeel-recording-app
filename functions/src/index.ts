@@ -21,17 +21,22 @@ export { createCohort, setCohortArchived } from './cohorts';
 export { createCourse, updateCourse, setCourseManagers } from './courses';
 export { createEnrollment, setEnrollmentActive } from './enrollments';
 export {
+  createSession,
+  updateSession,
+  submitAttendance,
+  archiveSession,
+  deleteSession,
+} from './sessions';
+export {
   createRecording,
   finalizeRecordingUpload,
-  updateRecording,
   setRecordingStatus,
   clearRecordingAudio,
   deleteRecording,
 } from './recordings';
 export { listZoomRecordings, importZoomRecording, retryZoomImport } from './zoomImport';
 export { getPlaybackUrl } from './playback';
-export { assignCatchup } from './assignments';
-export { onRecordingWritten } from './assignmentsTrigger';
+export { onRecordingWritten, onSessionWritten } from './assignmentsTrigger';
 export { overrideCompletion, clearCompletionOverride } from './overrides';
 
 /**

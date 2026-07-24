@@ -145,7 +145,7 @@ service cloud.firestore {
       // forces a caller's query to be constrained. Ordering keeps the
       // read-free arms first.
       //
-      // The staff arm resolves a class lookup PER ROW, so it is affordable only
+      // The staff arm resolves a course lookup PER ROW, so it is affordable only
       // for a query constrained to one courseId — which every staff recordings
       // list is. A student's arm costs no reads at all.
       allow get, list: if isAdmin()
@@ -155,8 +155,19 @@ service cloud.firestore {
         || (isStaff() && request.auth.uid in
             get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.managerUids);
 
-      // Every mutation goes through a callable that re-checks class scope and
+      // Every mutation goes through a callable that re-checks course scope and
       // the lifecycle state machine.
+      allow write: if false;
+    }
+
+    // ---- Sessions ----
+    // A dated meeting: attendance lives here. Staff-only — students never read a
+    // session or who attended (that is what makes attendance private). Managers
+    // are scoped to their own courses; the admin arm reads no documents.
+    match /sessions/{sessionId} {
+      allow get, list: if isAdmin()
+        || (isStaff() && request.auth.uid in
+            get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.managerUids);
       allow write: if false;
     }
 
