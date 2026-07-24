@@ -7,7 +7,7 @@ import { Transport } from '../components/Transport';
 import { usePlayback } from '../playback';
 import { useCompletion, setCompleted } from '../completion';
 import { useListenerError } from '../liveQuery';
-import type { ClassRow } from '../structure';
+import { useCohortName, type ClassRow } from '../structure';
 import type { RecordingRow } from '../recordings';
 import { getTheme, spacing } from '../theme';
 
@@ -42,11 +42,15 @@ export function PlayerScreen({
   // While the scrubber is being dragged it reports the previewed position; the
   // time readouts follow the thumb rather than the still-advancing playhead.
   const [scrubMs, setScrubMs] = useState<number | null>(null);
+  // Staff can reach this across cohorts, where a class name alone is ambiguous;
+  // students can't read cohorts and arrive from their own single context, so the
+  // lookup is disabled for them (returns '').
+  const cohortName = useCohortName(studentUid === null)(recording.cohortId);
 
   if (!allowed) {
     return (
       <ScrollView style={styles.canvas} contentContainerStyle={styles.content}>
-        <Hero recording={recording} className={cls.name} />
+        <Hero recording={recording} className={cls.name} cohortName={cohortName} />
         <Notice tone="info">
           This class has been archived and listening has been turned off. Your listening
           history is kept — ask your teacher if you need access again.
@@ -65,7 +69,7 @@ export function PlayerScreen({
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {state.error ? <Notice tone="error">{state.error}</Notice> : null}
 
-      <Hero recording={recording} className={cls.name} />
+      <Hero recording={recording} className={cls.name} cohortName={cohortName} />
 
       <Scrubber
         testID="player-scrubber"
@@ -162,10 +166,21 @@ export function PlayerScreen({
  * Stands where Spotify puts album art. A lecture has none, so the panel carries
  * the type instead — same visual anchor, nothing invented.
  */
-function Hero({ recording, className }: { recording: RecordingRow; className: string }) {
+function Hero({
+  recording,
+  className,
+  cohortName,
+}: {
+  recording: RecordingRow;
+  className: string;
+  cohortName: string;
+}) {
   return (
     <View style={styles.hero}>
-      <Text style={styles.heroClass}>{className.toUpperCase()}</Text>
+      <Text style={styles.heroClass}>
+        {className.toUpperCase()}
+        {cohortName ? ` · ${cohortName.toUpperCase()}` : ''}
+      </Text>
       <Text style={styles.heroTitle}>{recording.title}</Text>
       {recording.recordedAt ? (
         <Text style={styles.heroDate}>

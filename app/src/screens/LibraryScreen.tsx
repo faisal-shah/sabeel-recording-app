@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { isVisibleToStudents, type RecordingStatus } from '@sabeel/shared';
 import { Button, Card, Empty, Notice, Row, Screen, SectionTitle, StatusChip } from '../components/ui';
 import { useAllRecordings, useClassRecordings, type RecordingRow } from '../recordings';
-import { useAllClasses, useMyClasses, type ClassRow } from '../structure';
+import { useAllClasses, useCohortName, useMyClasses, type ClassRow } from '../structure';
 import { useListenerError } from '../liveQuery';
 import { getTheme, spacing } from '../theme';
 
@@ -30,6 +30,8 @@ export function LibraryScreen({
   const listenerError = useListenerError();
   const [status, setStatus] = useState<StatusFilter>('all');
   const myClasses = useMyClasses(isAdmin ? null : uid);
+  // A class name alone is ambiguous across cohorts; this library spans them.
+  const cohortNameOf = useCohortName();
 
   return (
     <Screen title="Recording library" subtitle={isAdmin ? 'All recordings' : 'Your classes'}>
@@ -48,7 +50,12 @@ export function LibraryScreen({
       </View>
 
       {isAdmin ? (
-        <AdminLibrary status={status} onPlay={onPlay} onOpenProgress={onOpenProgress} />
+        <AdminLibrary
+          status={status}
+          cohortNameOf={cohortNameOf}
+          onPlay={onPlay}
+          onOpenProgress={onOpenProgress}
+        />
       ) : myClasses.length === 0 ? (
         <Empty>You are not assigned to any classes.</Empty>
       ) : (
@@ -56,6 +63,7 @@ export function LibraryScreen({
           <ClassSection
             key={cls.id}
             cls={cls}
+            cohortName={cohortNameOf(cls.cohortId)}
             status={status}
             onPlay={onPlay}
             onOpenProgress={onOpenProgress}
@@ -68,10 +76,12 @@ export function LibraryScreen({
 
 function AdminLibrary({
   status,
+  cohortNameOf,
   onPlay,
   onOpenProgress,
 }: {
   status: StatusFilter;
+  cohortNameOf: (cohortId: string) => string;
   onPlay: (r: RecordingRow, c: ClassRow) => void;
   onOpenProgress: (r: RecordingRow, c: ClassRow) => void;
 }) {
@@ -103,6 +113,7 @@ function AdminLibrary({
               key={r.id}
               r={r}
               className={cls.name}
+              cohortName={cohortNameOf(cls.cohortId)}
               onPlay={() => onPlay(r, cls)}
               onOpenProgress={() => onOpenProgress(r, cls)}
             />
@@ -115,11 +126,13 @@ function AdminLibrary({
 
 function ClassSection({
   cls,
+  cohortName,
   status,
   onPlay,
   onOpenProgress,
 }: {
   cls: ClassRow;
+  cohortName: string;
   status: StatusFilter;
   onPlay: (r: RecordingRow, c: ClassRow) => void;
   onOpenProgress: (r: RecordingRow, c: ClassRow) => void;
@@ -128,7 +141,7 @@ function ClassSection({
   const filtered = status === 'all' ? recordings : recordings.filter((r) => r.status === status);
   return (
     <>
-      <SectionTitle>{cls.name}</SectionTitle>
+      <SectionTitle>{cohortName ? `${cls.name} · ${cohortName}` : cls.name}</SectionTitle>
       <Counts recordings={recordings} />
       {filtered.length === 0 ? (
         <Empty>No recordings with that status.</Empty>
@@ -160,20 +173,27 @@ function Counts({ recordings }: { recordings: RecordingRow[] }) {
 function RecordingLine({
   r,
   className,
+  cohortName,
   onPlay,
   onOpenProgress,
 }: {
   r: RecordingRow;
   className?: string;
+  cohortName?: string;
   onPlay: () => void;
   onOpenProgress: () => void;
 }) {
   return (
     <Card>
       <Text style={styles.title}>{r.title}</Text>
-      {/* Admin flat list shows the class; the manager view already groups by
-          class, so it passes no className. */}
-      {className ? <Text style={styles.className}>{className}</Text> : null}
+      {/* Admin flat list shows the class AND its cohort — a class name alone is
+          ambiguous across cohorts. The manager view groups by class, so it
+          passes no className. */}
+      {className ? (
+        <Text style={styles.className}>
+          {cohortName ? `${className} · ${cohortName}` : className}
+        </Text>
+      ) : null}
       <View style={styles.meta}>
         <StatusChip status={r.status} />
         <Text style={styles.sub}>

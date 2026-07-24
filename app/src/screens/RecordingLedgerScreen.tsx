@@ -15,7 +15,7 @@ import {
 } from '../ledger';
 import { exportCsv } from '../exportCsv';
 import { useListenerError } from '../liveQuery';
-import type { ClassRow } from '../structure';
+import { useCohortName, type ClassRow } from '../structure';
 import type { RecordingRow } from '../recordings';
 import { getTheme, spacing } from '../theme';
 
@@ -36,6 +36,8 @@ export function RecordingLedgerScreen({
 }) {
   const listenerError = useListenerError();
   const today = todayInZone(INSTITUTE_TIMEZONE);
+  // Reached from the cross-cohort library, where the class name alone is ambiguous.
+  const cohortName = useCohortName()(cls.cohortId);
   const { accountable, notRequired, rollup } = useRecordingLedger(recording, today);
   const [filter, setFilter] = useState<Filter>('notComplete');
   const [busy, setBusy] = useState<string | null>(null);
@@ -74,7 +76,10 @@ export function RecordingLedgerScreen({
   };
 
   return (
-    <Screen title={recording.title} subtitle={`${cls.name} · listening progress`}>
+    <Screen
+      title={recording.title}
+      subtitle={`${cohortName ? `${cls.name} · ${cohortName}` : cls.name} · listening progress`}
+    >
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
 

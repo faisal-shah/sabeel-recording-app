@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { collection, doc, getDoc, orderBy, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import {
@@ -23,6 +24,19 @@ export async function loadClass(id: string): Promise<ClassRow | null> {
 }
 export interface EnrollmentRow extends EnrollmentDoc {
   id: string;
+}
+
+/**
+ * Staff-only: a `cohortId -> name` resolver, for disambiguating a class name in
+ * cross-cohort views (the same class name recurs across cohorts). Cohorts are
+ * not student-readable, so this only works on staff screens.
+ */
+export function useCohortName(enabled = true): (cohortId: string) => string {
+  const cohorts = useCohorts(enabled);
+  return useMemo(() => {
+    const byId = new Map(cohorts.map((c) => [c.id, c.name]));
+    return (cohortId: string) => byId.get(cohortId) ?? '';
+  }, [cohorts]);
 }
 
 export function useCohorts(enabled: boolean): CohortRow[] {
