@@ -135,7 +135,8 @@ export async function applyRecordingFanout(
   _before: RecordingDoc | undefined,
   after: RecordingDoc | undefined,
 ): Promise<void> {
-  if (!after) {
+  if (!after || !after.sessionId) {
+    // Deleted, or a malformed recording with no session — nothing to reconcile.
     await deactivateAssignmentsForRecording(db, recordingId);
     return;
   }
