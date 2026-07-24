@@ -34,6 +34,19 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-07-24 — **Cohort shown with class name in cross-cohort STAFF views;
+  deferred for STUDENT views.** A class name alone is ambiguous when the same
+  name recurs across cohorts (two "Arabic 1"s). Fixed in the recording library,
+  the listening-progress ledger and the staff player via `useCohortName()`
+  (v0.1.7). **Student-facing screens ("Your listening", a student's recordings)
+  are deliberately left as-is:** the rules make `cohorts` staff-only
+  (`allow get, list: if isStaff()`), so students cannot read cohort names —
+  showing them there would need the cohort name **denormalised** onto the class
+  (or recording) docs students already read, written by a Cloud Function.
+  Deferred as a potential improvement: low impact (a student's classes are
+  usually one cohort); revisit if students end up enrolled across cohorts with
+  colliding class names.
+
 - 2026-07-22 — **Phase 5 locked in planning.** (1) Audit via a wrapper
   (`auditedCall`) — comprehensiveness by construction, not per-callable
   discipline. (2) Staff completion override is a SEPARATE server-only doc
