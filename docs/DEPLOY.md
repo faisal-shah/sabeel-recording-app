@@ -75,10 +75,16 @@ Always: **indexes → rules → functions → hosting.**
 
 ```bash
 firebase deploy --only firestore:indexes
-firebase deploy --only firestore:rules,storage:rules
-firebase deploy --only functions
+firebase deploy --only firestore:rules
+firebase deploy --only storage          # NOT storage:rules — the config has no named target
+firebase deploy --only functions        # add --force when functions were renamed/removed (prunes the stale ones)
 firebase deploy --only hosting
 ```
+
+`storage:rules` errors with "Could not find rules for the following storage
+targets: rules" — the `storage` block in `firebase.json` is a single unnamed
+config, so the target is just `storage`. And a deploy that must delete functions
+(e.g. after a rename) aborts in non-interactive mode unless you pass `--force`.
 
 Indexes before rules and functions, because a query that needs a missing index
 fails as a *listener error* — visible only as an empty screen and a console
