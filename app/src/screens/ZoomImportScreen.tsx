@@ -68,7 +68,7 @@ export function ZoomImportScreen({
   );
 
   return (
-    <Screen title="Import from Zoom" subtitle="Cloud recordings from the Sabeel Zoom account">
+    <Screen title="Import from Zoom" subtitle="Zoom recordings">
       <Card>
         <DateField label="From" value={from} onChange={setFrom} />
         <DateField label="To" value={to} onChange={setTo} />
