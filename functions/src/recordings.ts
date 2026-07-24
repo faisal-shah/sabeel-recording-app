@@ -11,7 +11,7 @@ import {
   type RecordingDoc,
   type RecordingStatus,
 } from '@sabeel/shared';
-import { requireClassScope } from './guards';
+import { requireAdmin, requireClassScope } from './guards';
 
 /** Max upload size, mirrored in storage.rules. A 2-hour 128 kbps M4A is ~115 MB;
  *  300 MB leaves room without letting a video file through by accident. */
@@ -342,4 +342,71 @@ export const clearRecordingAudio = auditedCall('clearRecordingAudio', async (req
   await requireClassScope(req, classId);
   audit.classId = classId;
   return clearAudio(d.recordingId);
+});
+
+// Everything that references a recording by id, so a permanent delete leaves no
+// orphans. All are keyed on a `recordingId` field (single-field equality → no
+// composite index needed).
+const RECORDING_DEPENDENTS = [
+  COLLECTIONS.assignments,
+  COLLECTIONS.completions,
+  COLLECTIONS.completionEvents,
+  COLLECTIONS.listeningProgress,
+  COLLECTIONS.completionOverrides,
+] as const;
+
+/**
+ * PERMANENTLY delete a recording — the one destructive path (everything else is
+ * archive/unpublish, which is reversible). Reclaiming storage is the only real
+ * reason to reach for it. Refuses a live (published) recording: unpublish or
+ * archive first, so a delete can never silently pull a recording out from under
+ * students mid-term. Cascades so no assignment/completion/progress/override doc
+ * is left pointing at a recording that no longer exists.
+ */
+export async function applyDeleteRecording(recordingId: string) {
+  const db = getFirestore();
+  const ref = db.collection(COLLECTIONS.recordings).doc(recordingId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'No such recording.');
+  const rec = snap.data() as RecordingDoc;
+  if (rec.status === 'published') {
+    throw new HttpsError(
+      'failed-precondition',
+      'Unpublish or archive a live recording before deleting it permanently.',
+    );
+  }
+
+  // 1. Dependent docs, chunked under the 500-writes/batch cap (a roster is far
+  //    smaller, but a recording old enough to delete could have accumulated a
+  //    doc per student across several collections).
+  const commits: Promise<unknown>[] = [];
+  for (const coll of RECORDING_DEPENDENTS) {
+    const q = await db.collection(coll).where('recordingId', '==', recordingId).get();
+    for (let i = 0; i < q.docs.length; i += 400) {
+      const batch = db.batch();
+      for (const doc of q.docs.slice(i, i + 400)) batch.delete(doc.ref);
+      commits.push(batch.commit());
+    }
+  }
+  await Promise.all(commits);
+
+  // 2. The audio object (draft recordings may have none).
+  if (rec.audioPath) {
+    await getStorage().bucket().file(rec.audioPath).delete({ ignoreNotFound: true });
+  }
+
+  // 3. The recording itself.
+  await ref.delete();
+  return { recordingId, classId: rec.classId };
+}
+
+export const deleteRecording = auditedCall('deleteRecording', async (req, audit) => {
+  requireAdmin(req); // permanent deletion is admin-only, always
+  const d = req.data as { recordingId?: unknown };
+  if (typeof d?.recordingId !== 'string' || !d.recordingId) {
+    throw new HttpsError('invalid-argument', 'recordingId is required.');
+  }
+  const res = await applyDeleteRecording(d.recordingId);
+  audit.classId = res.classId; // recordingId target is auto-picked from req.data
+  return { recordingId: res.recordingId };
 });

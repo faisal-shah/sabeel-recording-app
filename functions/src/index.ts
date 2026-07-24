@@ -26,6 +26,7 @@ export {
   updateRecording,
   setRecordingStatus,
   clearRecordingAudio,
+  deleteRecording,
 } from './recordings';
 export { getPlaybackUrl } from './playback';
 export { assignCatchup } from './assignments';

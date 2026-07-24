@@ -14,6 +14,7 @@ import { createClassRecord } from '../../src/classes';
 import { readFileSync } from 'node:fs';
 import {
   MAX_AUDIO_BYTES,
+  applyDeleteRecording,
   applyRecordingStatus,
   applyRecordingUpdate,
   clearAudio,
@@ -186,6 +187,81 @@ describe('clearAudio', () => {
     await expect(clearAudio(id)).rejects.toThrow(/draft/i);
     const [exists] = await getStorage().bucket().file(audioStoragePath(id)).exists();
     expect(exists).toBe(true);
+  });
+});
+
+describe('applyDeleteRecording', () => {
+  const DEPS = [
+    COLLECTIONS.assignments,
+    COLLECTIONS.completions,
+    COLLECTIONS.completionEvents,
+    COLLECTIONS.listeningProgress,
+    COLLECTIONS.completionOverrides,
+  ];
+  // One dependent doc in every collection that points at a recording, so the
+  // cascade is actually exercised rather than the empty happy path.
+  async function seedDeps(recordingId: string) {
+    const db = getFirestore();
+    const s = 'stu-1';
+    await Promise.all(
+      DEPS.map((c) =>
+        db.collection(c).doc(`${s}_${recordingId}`).set({ recordingId, studentUid: s, classId }),
+      ),
+    );
+  }
+  async function depCount(recordingId: string) {
+    const db = getFirestore();
+    const sizes = await Promise.all(
+      DEPS.map((c) => db.collection(c).where('recordingId', '==', recordingId).get().then((q) => q.size)),
+    );
+    return sizes.reduce((a, b) => a + b, 0);
+  }
+  const recExists = async (id: string) =>
+    (await getFirestore().collection(COLLECTIONS.recordings).doc(id).get()).exists;
+  const audioExists = async (id: string) =>
+    (await getStorage().bucket().file(audioStoragePath(id)).exists())[0];
+
+  it('cascades: removes the audio, the doc, and every dependent record', async () => {
+    const { id } = await createRecordingDraft(ADMIN, { classId, title: 'T', recordedAt: null });
+    await putAudio(id);
+    await finalizeRecording({ recordingId: id, durationSec: 5 });
+    await seedDeps(id);
+    expect(await depCount(id)).toBe(DEPS.length);
+
+    await applyDeleteRecording(id);
+
+    expect(await audioExists(id)).toBe(false);
+    expect(await recExists(id)).toBe(false);
+    expect(await depCount(id)).toBe(0);
+  });
+
+  it('REFUSES a published recording and removes nothing (unpublish/archive first)', async () => {
+    const { id } = await createRecordingDraft(ADMIN, { classId, title: 'T', recordedAt: null });
+    await putAudio(id);
+    await finalizeRecording({ recordingId: id, durationSec: 5 });
+    await applyRecordingStatus({ recordingId: id, status: 'published' });
+    await seedDeps(id);
+
+    await expect(applyDeleteRecording(id)).rejects.toThrow(/publish/i);
+    expect(await audioExists(id)).toBe(true);
+    expect(await recExists(id)).toBe(true);
+    expect(await depCount(id)).toBe(DEPS.length);
+  });
+
+  it('deletes an ARCHIVED recording — the space-reclaim path', async () => {
+    const { id } = await createRecordingDraft(ADMIN, { classId, title: 'T', recordedAt: null });
+    await putAudio(id);
+    await finalizeRecording({ recordingId: id, durationSec: 5 });
+    await applyRecordingStatus({ recordingId: id, status: 'published' });
+    await applyRecordingStatus({ recordingId: id, status: 'archived' });
+    await applyDeleteRecording(id);
+    expect(await recExists(id)).toBe(false);
+  });
+
+  it('deletes a draft that never had audio', async () => {
+    const { id } = await createRecordingDraft(ADMIN, { classId, title: 'T', recordedAt: null });
+    await applyDeleteRecording(id);
+    expect(await recExists(id)).toBe(false);
   });
 });
 

@@ -108,7 +108,7 @@ export default function App() {
               {() => <ClassDetail isAdmin={isAdmin} />}
             </Stack.Screen>
             <Stack.Screen name="Recordings" options={{ title: 'Recordings' }}>
-              {() => <Recordings />}
+              {() => <Recordings isAdmin={isAdmin} />}
             </Stack.Screen>
             <Stack.Screen name="RecordingLedger" options={{ title: 'Listening progress' }}>
               {() => <RecordingLedger />}
@@ -223,13 +223,14 @@ function Play({ studentUid }: { studentUid: string | null }) {
   return <PlayerScreen recording={recording} cls={cls} studentUid={studentUid} />;
 }
 
-function Recordings() {
+function Recordings({ isAdmin }: { isAdmin: boolean }) {
   const navigation = useNavigation<Nav>();
   const { cls } = useRoute<RouteProp<RootStackParamList, 'Recordings'>>().params;
   return (
     <RecordingsScreen
       classId={cls.id}
       className={cls.name}
+      isAdmin={isAdmin}
       onOpenLedger={(recording) => navigation.navigate('RecordingLedger', { recording, cls })}
       onPlay={(recording) => navigation.navigate('Player', { recording, cls })}
     />

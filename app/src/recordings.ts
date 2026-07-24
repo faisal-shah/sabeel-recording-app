@@ -107,6 +107,9 @@ export const setRecordingStatus = call<
 
 export const clearRecordingAudio = call<{ recordingId: string }, unknown>('clearRecordingAudio');
 
+/** Permanent, admin-only, cascading delete. Refused server-side while published. */
+export const deleteRecording = call<{ recordingId: string }, unknown>('deleteRecording');
+
 /**
  * Upload audio for a draft, reporting progress.
  *

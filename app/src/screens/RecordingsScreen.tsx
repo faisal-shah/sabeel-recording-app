@@ -24,6 +24,7 @@ import {
   assignCatchup,
   clearRecordingAudio,
   createRecording,
+  deleteRecording,
   finalizeRecordingUpload,
   setRecordingStatus,
   updateRecording,
@@ -49,11 +50,13 @@ const t = getTheme();
 export function RecordingsScreen({
   classId,
   className,
+  isAdmin,
   onOpenLedger,
   onPlay,
 }: {
   classId: string;
   className: string;
+  isAdmin: boolean;
   onOpenLedger: (recording: RecordingRow) => void;
   onPlay: (recording: RecordingRow) => void;
 }) {
@@ -163,6 +166,7 @@ export function RecordingsScreen({
             recording={r}
             busy={busy}
             onRun={run}
+            isAdmin={isAdmin}
             activeStudentUids={activeStudentUids}
             nameByUid={nameByUid}
             counts={byRecording.get(r.id)}
@@ -179,6 +183,7 @@ function RecordingCard({
   recording: r,
   busy,
   onRun,
+  isAdmin,
   activeStudentUids,
   nameByUid,
   counts,
@@ -188,6 +193,7 @@ function RecordingCard({
   recording: RecordingRow;
   busy: string | null;
   onRun: (key: string, fn: () => Promise<void>) => void;
+  isAdmin: boolean;
   activeStudentUids: string[];
   nameByUid: Map<string, string>;
   counts: { complete: number; total: number } | undefined;
@@ -195,6 +201,7 @@ function RecordingCard({
   onPlay: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [title, setTitle] = useState(r.title);
   const [notes, setNotes] = useState(r.notes);
   const [dueDate, setDueDate] = useState(r.dueDate ?? '');
@@ -322,6 +329,47 @@ function RecordingCard({
           onRun={onRun}
         />
       ) : null}
+
+      {/* Permanent delete — admin-only, and only once the recording is off the
+          students' side (never published). Reclaiming storage is the only real
+          reason to use it; everything else is archive/unpublish. Two taps. */}
+      {isAdmin && r.status !== 'published' ? (
+        <View style={styles.dangerZone}>
+          {confirmingDelete ? (
+            <>
+              <Notice tone="error">
+                This permanently removes the audio and every listening record for this recording —
+                it can&apos;t be undone. Archiving keeps everything; delete only to free up storage.
+              </Notice>
+              <Row>
+                <Button
+                  testID={`recording-delete-confirm-${r.title}`}
+                  label="Delete permanently"
+                  variant="danger"
+                  busy={busy === `del-${r.id}`}
+                  onPress={() =>
+                    onRun(`del-${r.id}`, () =>
+                      deleteRecording({ recordingId: r.id }).then(() => undefined),
+                    )
+                  }
+                />
+                <Button
+                  label="Cancel"
+                  variant="secondary"
+                  onPress={() => setConfirmingDelete(false)}
+                />
+              </Row>
+            </>
+          ) : (
+            <Button
+              testID={`recording-delete-${r.title}`}
+              label="Delete permanently"
+              variant="danger"
+              onPress={() => setConfirmingDelete(true)}
+            />
+          )}
+        </View>
+      ) : null}
     </Card>
   );
 }
@@ -423,6 +471,12 @@ const styles = StyleSheet.create({
     borderTopColor: t.border.subtle,
   },
   ledgerCount: { fontSize: 14, fontWeight: '600', color: t.text.secondary },
+  dangerZone: {
+    marginTop: spacing(4),
+    paddingTop: spacing(3),
+    borderTopWidth: 1,
+    borderTopColor: t.border.subtle,
+  },
   title: { fontSize: 16, fontWeight: '600', color: t.text.primary },
   meta: {
     flexDirection: 'row',
