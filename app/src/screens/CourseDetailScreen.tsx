@@ -39,12 +39,14 @@ export function CourseDetailScreen({
   cls,
   isAdmin,
   onOpenSessions,
+  onOpenAttendance,
   onOpenStudent,
   onOpenAudit,
 }: {
   cls: CourseRow;
   isAdmin: boolean;
   onOpenSessions: () => void;
+  onOpenAttendance: () => void;
   onOpenStudent: (studentUid: string, studentName: string) => void;
   onOpenAudit: () => void;
 }) {
@@ -95,6 +97,12 @@ export function CourseDetailScreen({
 
       <Card>
         <Button testID="nav-sessions" label="Sessions" onPress={onOpenSessions} />
+        <Button
+          testID="nav-attendance"
+          label="Attendance report"
+          variant="secondary"
+          onPress={onOpenAttendance}
+        />
         <View style={styles.meta}>
           <StatusChip status={cls.effectiveActive ? 'active' : 'inactive'} />
           {!cls.effectiveActive ? (

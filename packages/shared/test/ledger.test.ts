@@ -2,11 +2,61 @@ import { describe, it, expect } from 'vitest';
 import {
   accountableUids,
   attendanceGroups,
+  attendanceReport,
   effectiveCompletion,
   rollup,
   ledgerBucket,
   type AttendanceStatus,
 } from '../src';
+
+describe('attendanceReport', () => {
+  const mkSession = (
+    id: string,
+    attendance: Record<string, AttendanceStatus>,
+    submitted: boolean,
+  ) => ({ id, title: id, date: '2026-07-10', attendance, attendanceSubmittedAt: submitted ? 1 : null });
+
+  const report = () =>
+    attendanceReport({
+      sessions: [
+        mkSession('s1', { a: 'present', b: 'absent', c: 'excused' }, true),
+        mkSession('s2', { a: 'absent', b: 'present' }, true), // c not in snapshot (late)
+        mkSession('s3', { a: 'present', b: 'present', c: 'present' }, false), // not taken
+      ],
+      rosterUids: ['a', 'b', 'c'],
+      assignments: [
+        { studentUid: 'a', completed: false, dueDate: '2026-07-01' }, // overdue
+        { studentUid: 'b', completed: true, dueDate: '2026-07-01' }, // done
+        { studentUid: 'c', completed: false, dueDate: '2026-08-01' }, // pending, not overdue
+      ],
+      today: '2026-07-15',
+    });
+
+  it('per-session counts, and marks the un-taken session', () => {
+    const r = report();
+    expect(r.totalSessions).toBe(3);
+    expect(r.sessionsWithAttendance).toBe(2);
+    expect(r.sessions[0]).toMatchObject({ sessionId: 's1', submitted: true, present: 1, absent: 1, excused: 1 });
+    expect(r.sessions[2]).toMatchObject({ sessionId: 's3', submitted: false, present: 0, absent: 0, excused: 0 });
+  });
+
+  it('per-student tallies over SUBMITTED sessions only, with notMarked for late enrollees', () => {
+    const r = report();
+    const a = r.students.find((s) => s.studentUid === 'a')!;
+    expect(a).toMatchObject({ present: 1, absent: 1, excused: 0, notMarked: 0 });
+    const c = r.students.find((s) => s.studentUid === 'c')!;
+    // c was excused in s1 and absent from the s2 snapshot; s3 untaken doesn't count.
+    expect(c).toMatchObject({ present: 0, absent: 0, excused: 1, notMarked: 1 });
+  });
+
+  it('catch-up grouped from active assignments, overdue at the day boundary', () => {
+    const r = report();
+    const byUid = Object.fromEntries(r.students.map((s) => [s.studentUid, s]));
+    expect(byUid.a).toMatchObject({ assigned: 1, completed: 0, overdue: 1 });
+    expect(byUid.b).toMatchObject({ assigned: 1, completed: 1, overdue: 0 });
+    expect(byUid.c).toMatchObject({ assigned: 1, completed: 0, overdue: 0 });
+  });
+});
 
 describe('attendance split', () => {
   const roster: Record<string, AttendanceStatus> = {

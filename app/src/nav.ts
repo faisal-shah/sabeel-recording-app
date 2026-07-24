@@ -12,6 +12,7 @@ export type RootStackParamList = {
   Cohorts: undefined;
   Courses: { cohort: CohortRow };
   CourseDetail: { cls: CourseRow };
+  CourseAttendance: { cls: CourseRow };
   Sessions: { cls: CourseRow };
   SessionDetail: { session: SessionRow; cls: CourseRow };
   RecordingLedger: { recording: RecordingRow; session: SessionRow; cls: CourseRow };

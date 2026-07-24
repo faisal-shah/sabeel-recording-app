@@ -20,6 +20,7 @@ import { StudentsScreen } from './src/screens/StudentsScreen';
 import { CohortsScreen } from './src/screens/CohortsScreen';
 import { CoursesScreen } from './src/screens/CoursesScreen';
 import { CourseDetailScreen } from './src/screens/CourseDetailScreen';
+import { CourseAttendanceScreen } from './src/screens/CourseAttendanceScreen';
 import { SessionsScreen } from './src/screens/SessionsScreen';
 import { SessionDetailScreen } from './src/screens/SessionDetailScreen';
 import { RecordingLedgerScreen } from './src/screens/RecordingLedgerScreen';
@@ -109,6 +110,9 @@ export default function App() {
             </Stack.Screen>
             <Stack.Screen name="CourseDetail" options={{ title: 'Course' }}>
               {() => <CourseDetail isAdmin={isAdmin} />}
+            </Stack.Screen>
+            <Stack.Screen name="CourseAttendance" options={{ title: 'Attendance' }}>
+              {() => <CourseAttendance />}
             </Stack.Screen>
             <Stack.Screen name="Sessions" options={{ title: 'Sessions' }}>
               {() => <Sessions />}
@@ -209,12 +213,18 @@ function CourseDetail({ isAdmin }: { isAdmin: boolean }) {
       cls={cls}
       isAdmin={isAdmin}
       onOpenSessions={() => navigation.navigate('Sessions', { cls })}
+      onOpenAttendance={() => navigation.navigate('CourseAttendance', { cls })}
       onOpenStudent={(studentUid, studentName) =>
         navigation.navigate('StudentLedger', { studentUid, studentName, cls })
       }
       onOpenAudit={() => navigation.navigate('Audit', { courseId: cls.id, title: cls.name })}
     />
   );
+}
+
+function CourseAttendance() {
+  const { cls } = useRoute<RouteProp<RootStackParamList, 'CourseAttendance'>>().params;
+  return <CourseAttendanceScreen cls={cls} />;
 }
 
 function Sessions() {

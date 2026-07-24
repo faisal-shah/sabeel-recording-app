@@ -4,10 +4,12 @@ import { httpsCallable } from 'firebase/functions';
 import {
   COLLECTIONS,
   attendanceGroups,
+  attendanceReport,
   effectiveCompletion,
   listenedFraction,
   rollup,
   type AssignmentDoc,
+  type AttendanceReport,
   type AttendanceStatus,
   type AuditEntryDoc,
   type CompletionDoc,
@@ -18,6 +20,8 @@ import {
 import { db, functions } from './firebase';
 import { useLiveQuery } from './liveQuery';
 import { useStudents } from './students';
+import { useCourseSessions } from './sessions';
+import { useRoster } from './structure';
 import type { RecordingRow } from './recordings';
 import type { SessionRow } from './sessions';
 
@@ -210,11 +214,20 @@ export function useRecordingLedger(
 
 // ------------------------------------------------------------ class-level ---
 
+export interface CourseAssignmentItem {
+  studentUid: string;
+  recordingId: string;
+  completed: boolean;
+  dueDate: string | null;
+}
+
 export interface CourseLedger {
   /** rollup across every active assignment in the class. */
   rollup: LedgerRollup;
   /** per-recording { complete, total } for the recordings list. */
   byRecording: Map<string, { complete: number; total: number }>;
+  /** every active assignment reduced to its effective completion (for the report). */
+  items: CourseAssignmentItem[];
 }
 
 /**
@@ -254,11 +267,11 @@ export function useCourseLedger(courseId: string | null, today: string): CourseL
   );
 
   return useMemo(() => {
-    const items = assignments.map((a) => {
+    const items: CourseAssignmentItem[] = assignments.map((a) => {
       const key = `${a.studentUid}_${a.recordingId}`;
       const c = completions.get(key);
       const eff = effectiveCompletion(c === undefined ? undefined : { completed: c }, overrides.get(key));
-      return { recordingId: a.recordingId, completed: eff.completed, dueDate: a.dueDate };
+      return { studentUid: a.studentUid, recordingId: a.recordingId, completed: eff.completed, dueDate: a.dueDate };
     });
     const byRecording = new Map<string, { complete: number; total: number }>();
     for (const it of items) {
@@ -267,8 +280,38 @@ export function useCourseLedger(courseId: string | null, today: string): CourseL
       if (it.completed) cur.complete++;
       byRecording.set(it.recordingId, cur);
     }
-    return { rollup: rollup(items, today), byRecording };
+    return { rollup: rollup(items, today), byRecording, items };
   }, [assignments, completions, overrides, today]);
+}
+
+// --------------------------------------------------------- attendance report --
+
+/**
+ * A course's attendance report: sessions + roster + the active catch-up
+ * assignments, aggregated by the pure `attendanceReport`. Composes existing
+ * live reads (no new listener shapes), so the security rules already cover it.
+ */
+export function useCourseAttendance(courseId: string | null, today: string): AttendanceReport {
+  const sessions = useCourseSessions(courseId);
+  const roster = useRoster(courseId);
+  const { items } = useCourseLedger(courseId, today);
+
+  return useMemo(
+    () =>
+      attendanceReport({
+        sessions: sessions.map((s) => ({
+          id: s.id,
+          title: s.title,
+          date: s.date,
+          attendance: s.attendance,
+          attendanceSubmittedAt: s.attendanceSubmittedAt,
+        })),
+        rosterUids: roster.filter((e) => e.active).map((e) => e.studentUid),
+        assignments: items.map((i) => ({ studentUid: i.studentUid, completed: i.completed, dueDate: i.dueDate })),
+        today,
+      }),
+    [sessions, roster, items, today],
+  );
 }
 
 // -------------------------------------------------------------- student ledger --
