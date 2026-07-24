@@ -3,10 +3,12 @@ import { collection, orderBy, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import {
   COLLECTIONS,
+  attendanceGroups,
   effectiveCompletion,
   listenedFraction,
   rollup,
   type AssignmentDoc,
+  type AttendanceStatus,
   type AuditEntryDoc,
   type CompletionDoc,
   type CompletionOverrideDoc,
@@ -17,6 +19,7 @@ import { db, functions } from './firebase';
 import { useLiveQuery } from './liveQuery';
 import { useStudents } from './students';
 import type { RecordingRow } from './recordings';
+import type { SessionRow } from './sessions';
 
 // --------------------------------------------------------------- callables --
 
@@ -74,22 +77,34 @@ export interface LedgerRow {
   lastListened: number | null;
   completedAt: number | null;
   pending: boolean;
+  /** How the session recorded this student: 'absent'/'excused' for the accountable
+   *  set, 'present' for an attendee, null for someone outside the snapshot. */
+  attendance: AttendanceStatus | null;
 }
 
 export interface RecordingLedger {
-  /** Students accountable for this recording (an active assignment). */
+  /** Students accountable for this recording (absent or excused → an active assignment). */
   accountable: LedgerRow[];
-  /** Completed it without being assigned — evidence, not accountability. */
-  notRequired: LedgerRow[];
+  /** Present at the session — exempt, never overdue, but their listening is shown. */
+  attendees: LedgerRow[];
+  /** Listened without being accountable or a recorded attendee (e.g. a late
+   *  enrollee outside the snapshot) — evidence, not accountability. */
+  otherListeners: LedgerRow[];
   rollup: LedgerRollup;
 }
 
 /**
  * The recording ledger: the accountable roster joined with completion,
- * override, and listening progress. All reads are `recordingId ==`, so the
- * staff rules accept them class-scoped; the join and the counts are pure.
+ * override, and listening progress, split against the session's attendance into
+ * the accountable (absent+excused) and the attendees (present). All reads are
+ * `recordingId ==`, so the staff rules accept them class-scoped; the join and
+ * the counts are pure.
  */
-export function useRecordingLedger(recording: RecordingRow, today: string): RecordingLedger {
+export function useRecordingLedger(
+  recording: RecordingRow,
+  session: SessionRow,
+  today: string,
+): RecordingLedger {
   const rid = recording.id;
   const assignments = useLiveQuery<Map<string, AssignmentDoc>>(
     'ledgerAssignments',
@@ -132,7 +147,11 @@ export function useRecordingLedger(recording: RecordingRow, today: string): Reco
   const nameByUid = useMemo(() => new Map(students.map((s) => [s.uid, s.displayName])), [students]);
 
   return useMemo(() => {
-    const row = (studentUid: string, dueDate: string | null): LedgerRow => {
+    const row = (
+      studentUid: string,
+      dueDate: string | null,
+      attendance: AttendanceStatus | null,
+    ): LedgerRow => {
       const c = completions.get(studentUid);
       const o = overrides.get(studentUid);
       const eff = effectiveCompletion(c, o);
@@ -148,27 +167,45 @@ export function useRecordingLedger(recording: RecordingRow, today: string): Reco
         lastListened: p?.updatedAt ?? null,
         completedAt: c?.completedAt ?? null,
         pending: c?.pending ?? false,
+        attendance,
       };
     };
 
+    const status = session.attendance;
     const accountable = [...assignments.values()]
-      .map((a) => row(a.studentUid, a.dueDate))
-      .sort((x, y) => Number(x.completed) - Number(y.completed) || x.name.localeCompare(y.name));
+      .map((a) => row(a.studentUid, a.dueDate, status[a.studentUid] ?? 'absent'))
+      // Not-yet-complete first, then absent before excused, then by name.
+      .sort(
+        (x, y) =>
+          Number(x.completed) - Number(y.completed) ||
+          Number(x.attendance === 'excused') - Number(y.attendance === 'excused') ||
+          x.name.localeCompare(y.name),
+      );
 
-    const assignedUids = new Set(assignments.keys());
-    const notRequired = [...completions.entries()]
-      .filter(([uid, c]) => c.completed && !assignedUids.has(uid))
-      .map(([uid]) => row(uid, null));
+    const { present } = attendanceGroups(status);
+    // Attendees surface who has (and hasn't) listened, most listened first.
+    const attendees = present
+      .map((uid) => row(uid, null, 'present'))
+      .sort((x, y) => y.listenedPct - x.listenedPct || x.name.localeCompare(y.name));
+
+    // Anyone with real listening/completion who is neither accountable nor a
+    // recorded attendee — e.g. enrolled after the snapshot, or unenrolled.
+    const known = new Set<string>([...assignments.keys(), ...present]);
+    const otherUids = new Set<string>();
+    for (const [uid, c] of completions.entries()) if (c.completed && !known.has(uid)) otherUids.add(uid);
+    for (const uid of progress.keys()) if (!known.has(uid)) otherUids.add(uid);
+    const otherListeners = [...otherUids].map((uid) => row(uid, null, null));
 
     return {
       accountable,
-      notRequired,
+      attendees,
+      otherListeners,
       rollup: rollup(
         accountable.map((r) => ({ completed: r.completed, dueDate: r.dueDate })),
         today,
       ),
     };
-  }, [assignments, completions, overrides, progress, nameByUid, recording.durationSec, today]);
+  }, [assignments, completions, overrides, progress, nameByUid, recording.durationSec, session.attendance, today]);
 }
 
 // ------------------------------------------------------------ class-level ---

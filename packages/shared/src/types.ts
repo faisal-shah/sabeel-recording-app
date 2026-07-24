@@ -131,6 +131,20 @@ export function accountableUids(attendance: Record<string, AttendanceStatus>): s
     .map(([uid]) => uid);
 }
 
+/** A session's roster split by status. `absent ∪ excused` is the accountable set;
+ *  `present` are the attendees (may still listen, never overdue). */
+export interface AttendanceGroups {
+  present: string[];
+  absent: string[];
+  excused: string[];
+}
+
+export function attendanceGroups(attendance: Record<string, AttendanceStatus>): AttendanceGroups {
+  const g: AttendanceGroups = { present: [], absent: [], excused: [] };
+  for (const [uid, s] of Object.entries(attendance)) g[s].push(uid);
+  return g;
+}
+
 /**
  * One dated meeting of a course.
  *

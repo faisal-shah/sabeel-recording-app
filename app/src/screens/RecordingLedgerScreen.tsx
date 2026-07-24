@@ -30,10 +30,10 @@ type Filter = 'all' | 'notComplete' | 'overdue';
  */
 export function RecordingLedgerScreen({
   recording,
+  session,
   cls,
 }: {
   recording: RecordingRow;
-  // The session is passed for the Phase C attendance split (accountable vs present).
   session: SessionRow;
   cls: CourseRow;
 }) {
@@ -41,7 +41,11 @@ export function RecordingLedgerScreen({
   const today = todayInZone(INSTITUTE_TIMEZONE);
   // Reached from the cross-cohort library, where the course name alone is ambiguous.
   const cohortName = useCohortName()(cls.cohortId);
-  const { accountable, notRequired, rollup } = useRecordingLedger(recording, today);
+  const { accountable, attendees, otherListeners, rollup } = useRecordingLedger(
+    recording,
+    session,
+    today,
+  );
   const [filter, setFilter] = useState<Filter>('notComplete');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -65,9 +69,10 @@ export function RecordingLedgerScreen({
   };
 
   const exportRows = () => {
-    const header = ['Student', 'Status', 'Listened %', 'Last listened', 'Completed at', 'Due', 'Override reason'];
+    const header = ['Student', 'Attendance', 'Status', 'Listened %', 'Last listened', 'Completed at', 'Due', 'Override reason'];
     const body = rows.map((r) => [
       r.name,
+      r.attendance ?? '',
       statusLabel(r, today),
       `${Math.round(r.listenedPct * 100)}`,
       fmtDate(r.lastListened),
@@ -139,22 +144,52 @@ export function RecordingLedgerScreen({
         ))
       )}
 
-      {notRequired.length > 0 ? (
+      <SectionTitle>Attendees ({attendees.length})</SectionTitle>
+      {attendees.length === 0 ? (
+        <Empty>No one was marked present at this session.</Empty>
+      ) : (
         <>
-          <SectionTitle>Completed, not required</SectionTitle>
           <Notice tone="info">
-            These students completed the recording without being assigned it. It is kept as history
-            and does not count toward accountability.
+            Present at the session, so the recording is not required for them. Listening is shown for
+            reference — they are never overdue.
           </Notice>
-          {notRequired.map((r) => (
-            <View key={r.studentUid} style={styles.row}>
-              <Text style={styles.name}>{r.name}</Text>
-              <Text style={styles.sub}>completed {fmtDate(r.completedAt)}</Text>
-            </View>
+          {attendees.map((r) => (
+            <ListenerRow key={r.studentUid} row={r} />
+          ))}
+        </>
+      )}
+
+      {otherListeners.length > 0 ? (
+        <>
+          <SectionTitle>Also listened ({otherListeners.length})</SectionTitle>
+          <Notice tone="info">
+            Listened without being accountable or a recorded attendee — for example, enrolled after
+            attendance was taken. Kept as history; does not count toward accountability.
+          </Notice>
+          {otherListeners.map((r) => (
+            <ListenerRow key={r.studentUid} row={r} />
           ))}
         </>
       ) : null}
     </Screen>
+  );
+}
+
+/** A read-only listening row — attendees and other listeners, no accountability. */
+function ListenerRow({ row: r }: { row: LedgerRow }) {
+  return (
+    <View style={styles.row}>
+      <View style={styles.rowHead}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.name}>{r.name}</Text>
+          <Text style={styles.sub}>
+            {Math.round(r.listenedPct * 100)}% listened
+            {r.lastListened ? ` · last ${fmtDate(r.lastListened)}` : ' · not started'}
+          </Text>
+        </View>
+        {r.completed ? <Text style={[styles.status, styles.ok]}>Completed</Text> : null}
+      </View>
+    </View>
   );
 }
 
@@ -179,7 +214,10 @@ function LedgerRowCard({
     <View style={styles.row}>
       <View style={styles.rowHead}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.name}>{r.name}</Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.name}>{r.name}</Text>
+            {r.attendance === 'excused' ? <Text style={styles.excused}>Excused</Text> : null}
+          </View>
           <Text style={styles.sub}>
             {Math.round(r.listenedPct * 100)}% listened
             {r.lastListened ? ` · last ${fmtDate(r.lastListened)}` : ''}
@@ -313,7 +351,19 @@ const styles = StyleSheet.create({
     borderColor: t.border.subtle,
   },
   rowHead: { flexDirection: 'row', alignItems: 'flex-start' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), flexWrap: 'wrap' },
   name: { fontSize: 16, fontWeight: '600', color: t.text.primary },
+  excused: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: t.accent.goldText,
+    borderWidth: 1,
+    borderColor: t.border.strong,
+    borderRadius: 999,
+    paddingHorizontal: spacing(2),
+    paddingVertical: 1,
+    overflow: 'hidden',
+  },
   sub: { fontSize: 13, color: t.text.secondary, marginTop: spacing(1) },
   override: { fontSize: 13, color: t.text.accent, marginTop: spacing(1) },
   status: { fontSize: 13, fontWeight: '700' },

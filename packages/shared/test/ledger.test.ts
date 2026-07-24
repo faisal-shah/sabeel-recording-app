@@ -1,5 +1,39 @@
 import { describe, it, expect } from 'vitest';
-import { effectiveCompletion, rollup, ledgerBucket } from '../src';
+import {
+  accountableUids,
+  attendanceGroups,
+  effectiveCompletion,
+  rollup,
+  ledgerBucket,
+  type AttendanceStatus,
+} from '../src';
+
+describe('attendance split', () => {
+  const roster: Record<string, AttendanceStatus> = {
+    a: 'present',
+    b: 'absent',
+    c: 'excused',
+    d: 'present',
+    e: 'absent',
+  };
+
+  it('accountable = absent ∪ excused; present are exempt', () => {
+    expect(accountableUids(roster).sort()).toEqual(['b', 'c', 'e']);
+  });
+
+  it('groups the roster into present / absent / excused', () => {
+    expect(attendanceGroups(roster)).toEqual({
+      present: ['a', 'd'],
+      absent: ['b', 'e'],
+      excused: ['c'],
+    });
+  });
+
+  it('an empty roster yields empty groups and no accountable', () => {
+    expect(attendanceGroups({})).toEqual({ present: [], absent: [], excused: [] });
+    expect(accountableUids({})).toEqual([]);
+  });
+});
 
 describe('effectiveCompletion', () => {
   it('an override wins over the student attestation, and carries its reason', () => {
