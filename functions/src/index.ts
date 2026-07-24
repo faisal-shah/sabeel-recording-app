@@ -28,6 +28,7 @@ export {
   clearRecordingAudio,
   deleteRecording,
 } from './recordings';
+export { listZoomRecordings, importZoomRecording, retryZoomImport } from './zoomImport';
 export { getPlaybackUrl } from './playback';
 export { assignCatchup } from './assignments';
 export { onRecordingWritten } from './assignmentsTrigger';

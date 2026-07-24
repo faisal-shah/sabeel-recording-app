@@ -8,3 +8,4 @@ export * from './assignments';
 export * from './audit';
 export * from './ledger';
 export * from './csv';
+export * from './zoom';

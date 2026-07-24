@@ -18,7 +18,9 @@ export function HomeScreen({
 }: {
   name: string;
   role: Role;
-  onOpen: (route: 'Staff' | 'Students' | 'Cohorts' | 'MyClasses' | 'Library' | 'Tokens') => void;
+  onOpen: (
+    route: 'Staff' | 'Students' | 'Cohorts' | 'MyClasses' | 'Library' | 'ZoomImport' | 'Tokens',
+  ) => void;
   /** Admin-only global audit view (managers reach a scoped one from a class). */
   onOpenAudit: () => void;
 }) {
@@ -47,6 +49,14 @@ export function HomeScreen({
           label="Students"
           variant="secondary"
           onPress={() => onOpen('Students')}
+        />
+        {/* Staff (admin + manager) pull class audio from the central Zoom
+            account; the class is chosen at import time. */}
+        <Button
+          testID="nav-zoom-import"
+          label="Import from Zoom"
+          variant="secondary"
+          onPress={() => onOpen('ZoomImport')}
         />
       </Card>
 

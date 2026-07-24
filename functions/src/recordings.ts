@@ -9,6 +9,7 @@ import {
   publishBlockers,
   type ClassDoc,
   type RecordingDoc,
+  type RecordingSource,
   type RecordingStatus,
 } from '@sabeel/shared';
 import { requireAdmin, requireClassScope } from './guards';
@@ -52,7 +53,12 @@ export function validateCreateRecording(data: unknown): CreateRecordingInput {
  * Storage rules cannot read Firestore, so they can only check "is staff" — the
  * authorization that matters happens at this call and again at publish.
  */
-export async function createRecordingDraft(callerUid: string, input: CreateRecordingInput) {
+export async function createRecordingDraft(
+  callerUid: string,
+  input: CreateRecordingInput,
+  // Zoom import reuses this exact path but stamps its source + dedupe refs.
+  origin: { source?: RecordingSource; zoomUuid?: string; zoomFileId?: string } = {},
+) {
   const db = getFirestore();
   const clsSnap = await db.collection(COLLECTIONS.classes).doc(input.classId).get();
   if (!clsSnap.exists) throw new HttpsError('not-found', 'No such class.');
@@ -62,7 +68,7 @@ export async function createRecordingDraft(callerUid: string, input: CreateRecor
     classId: input.classId,
     title: input.title,
     status: 'draft',
-    source: 'manual',
+    source: origin.source ?? 'manual',
     recordedAt: input.recordedAt,
     dueDate: null,
     notes: '',
@@ -72,6 +78,8 @@ export async function createRecordingDraft(callerUid: string, input: CreateRecor
     createdAt: Date.now(),
     createdBy: callerUid,
     updatedAt: Date.now(),
+    ...(origin.zoomUuid ? { zoomUuid: origin.zoomUuid } : {}),
+    ...(origin.zoomFileId ? { zoomFileId: origin.zoomFileId } : {}),
   };
   const ref = await db.collection(COLLECTIONS.recordings).add(doc);
   return { id: ref.id, audioPath: audioStoragePath(ref.id) };

@@ -39,6 +39,14 @@ export interface RecordingDoc {
   sizeBytes: number | null;
   /** Why it needs attention. Present only while status is needsAttention. */
   attentionReason?: string;
+  /**
+   * Zoom source refs, present only when `source === 'zoom'`. `zoomUuid` (the Zoom
+   * meeting UUID) is the dedupe key — one Zoom recording maps to at most one app
+   * recording. `zoomFileId` identifies the audio-only file so a failed import can
+   * be retried without re-listing.
+   */
+  zoomUuid?: string;
+  zoomFileId?: string;
   createdAt: number;
   createdBy: string;
   updatedAt: number;

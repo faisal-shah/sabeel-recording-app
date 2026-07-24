@@ -1,7 +1,7 @@
 import { onCall, HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import { getFirestore } from 'firebase-admin/firestore';
 import { COLLECTIONS, type AuditEntryDoc, type Role } from '@sabeel/shared';
-import { SENTRY_DSN } from './reported';
+import { SENTRY_DSN, type Secret } from './reported';
 import { reportError } from './sentry';
 
 /**
@@ -46,8 +46,9 @@ export async function writeAudit(entry: AuditEntryDoc): Promise<void> {
 export function auditedCall<T>(
   action: string,
   handler: (req: CallableRequest, audit: AuditContext) => Promise<T>,
+  extraSecrets: Secret[] = [],
 ) {
-  return onCall({ secrets: [SENTRY_DSN] }, async (req) => {
+  return onCall({ secrets: [SENTRY_DSN, ...extraSecrets] }, async (req) => {
     const audit: AuditContext = { classId: null, targets: {} };
     let result: T;
     try {

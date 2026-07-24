@@ -24,6 +24,7 @@ import { RecordingsScreen } from './src/screens/RecordingsScreen';
 import { RecordingLedgerScreen } from './src/screens/RecordingLedgerScreen';
 import { StudentLedgerScreen } from './src/screens/StudentLedgerScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
+import { ZoomImportScreen } from './src/screens/ZoomImportScreen';
 import { AuditScreen } from './src/screens/AuditScreen';
 import { MyRecordingsScreen } from './src/screens/MyRecordingsScreen';
 import { StudentHomeScreen } from './src/screens/StudentHomeScreen';
@@ -118,6 +119,9 @@ export default function App() {
             </Stack.Screen>
             <Stack.Screen name="Library" options={{ title: 'Library' }}>
               {() => <Library uid={user.uid} isAdmin={isAdmin} />}
+            </Stack.Screen>
+            <Stack.Screen name="ZoomImport" options={{ title: 'Import from Zoom' }}>
+              {() => <ZoomImport uid={user.uid} isAdmin={isAdmin} />}
             </Stack.Screen>
             <Stack.Screen name="Audit" options={{ title: 'Audit' }}>
               {() => <Audit />}
@@ -244,6 +248,19 @@ function StudentLedger() {
   const { studentUid, studentName, cls } = useRoute<RouteProp<RootStackParamList, 'StudentLedger'>>().params;
   return <StudentLedgerScreen studentUid={studentUid} studentName={studentName} cls={cls} />;
 }
+function ZoomImport({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
+  const navigation = useNavigation<Nav>();
+  return (
+    <ZoomImportScreen
+      uid={uid}
+      isAdmin={isAdmin}
+      // After importing, land on the target class's Recordings — the new draft
+      // is there, ready to preview (Listen) and publish.
+      onImported={(cls) => navigation.navigate('Recordings', { cls })}
+    />
+  );
+}
+
 function Library({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
   const navigation = useNavigation<Nav>();
   return (

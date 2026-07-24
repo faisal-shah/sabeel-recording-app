@@ -36,6 +36,7 @@ import {
 import { useRoster } from '../structure';
 import { useStudents } from '../students';
 import { canPickAudio, pickAudioFile } from '../filePicker';
+import { retryZoomImport } from '../zoom';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -226,6 +227,22 @@ function RecordingCard({
           is the same as a broken one. */}
       {blockers.includes('audio') ? (
         <Notice tone="error">This recording has no audio. Upload one before publishing.</Notice>
+      ) : null}
+
+      {/* A failed Zoom import lands here in needs-attention; show why and offer a
+          one-tap retry that re-downloads from the same Zoom recording. */}
+      {r.status === 'needsAttention' && r.attentionReason ? (
+        <Notice tone="error">{r.attentionReason}</Notice>
+      ) : null}
+      {r.status === 'needsAttention' && r.source === 'zoom' ? (
+        <Button
+          testID={`recording-retry-zoom-${r.title}`}
+          label="Retry import"
+          busy={busy === `retry-${r.id}`}
+          onPress={() =>
+            onRun(`retry-${r.id}`, () => retryZoomImport({ recordingId: r.id }).then(() => undefined))
+          }
+        />
       ) : null}
 
       {editing ? (

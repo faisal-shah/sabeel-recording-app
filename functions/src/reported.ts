@@ -2,6 +2,9 @@ import { onCall, HttpsError, type CallableRequest } from 'firebase-functions/v2/
 import { defineSecret } from 'firebase-functions/params';
 import { reportError } from './sentry';
 
+/** A `defineSecret` handle — bound to a function so its value is in the env. */
+export type Secret = ReturnType<typeof defineSecret>;
+
 /**
  * The Sentry DSN, as a Secret Manager secret. Declared once here and attached to
  * every function that should report, so `process.env.SENTRY_DSN` is populated at
@@ -19,8 +22,11 @@ export const SENTRY_DSN = defineSecret('SENTRY_DSN');
  * propagates (see sentry.ts), and the whole thing is inert without the secret,
  * so the emulator and tests are unaffected.
  */
-export function reportedCall<T>(handler: (req: CallableRequest) => Promise<T>) {
-  return onCall({ secrets: [SENTRY_DSN] }, async (req) => {
+export function reportedCall<T>(
+  handler: (req: CallableRequest) => Promise<T>,
+  extraSecrets: Secret[] = [],
+) {
+  return onCall({ secrets: [SENTRY_DSN, ...extraSecrets] }, async (req) => {
     try {
       return await handler(req);
     } catch (e) {

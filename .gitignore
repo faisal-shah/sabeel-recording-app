@@ -44,3 +44,6 @@ shots/
 app/android/sentry.properties
 functions/.secret.local
 **/.secret.local
+
+# Plaintext Zoom creds a human dropped in — creds live in Secret Manager, never here.
+zoom-api-info.txt
