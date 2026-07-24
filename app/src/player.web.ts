@@ -5,10 +5,25 @@ import type { Player, PlayerEvents } from './playerTypes';
  *
  * A plain HTMLAudioElement: it streams over range requests, seeks without
  * re-downloading, and needs no dependency.
+ *
+ * As on native, there must be AT MOST ONE player alive at a time — if a screen
+ * remounts before its cleanup runs, two elements would play at once. A
+ * module-level handle enforces it: creating a player stops its predecessor.
  */
+let current: HTMLAudioElement | null = null;
+
+function stop(el: HTMLAudioElement) {
+  el.pause();
+  el.removeAttribute('src');
+  el.load();
+}
+
 export function createPlayer(events: PlayerEvents): Player {
+  if (current) stop(current);
+
   const el = new Audio();
   el.preload = 'metadata';
+  current = el;
   el.addEventListener('timeupdate', () => events.onProgress(el.currentTime * 1000));
   el.addEventListener('ended', () => events.onEnded());
   el.addEventListener('error', () =>
@@ -34,9 +49,8 @@ export function createPlayer(events: PlayerEvents): Player {
       el.playbackRate = rate;
     },
     unload: () => {
-      el.pause();
-      el.removeAttribute('src');
-      el.load();
+      stop(el);
+      if (current === el) current = null;
     },
   };
 }

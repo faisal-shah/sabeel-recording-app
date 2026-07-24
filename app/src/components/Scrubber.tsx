@@ -16,18 +16,27 @@ const t = getTheme();
  * stutters backwards under the touch. The seek is committed once, on release,
  * rather than continuously — seeking on every pixel would thrash the media
  * element and, on native, re-issue a range request per frame.
+ *
+ * The finger position is the grant point plus the gesture's accumulated `dx`,
+ * NOT the live `locationX`: once the finger leaves the element (which it does
+ * the moment you drag past the thin track), `locationX` reports garbage and the
+ * thumb jumps all over. `dx` is measured in screen space from the touch-down and
+ * stays reliable for the whole drag. `onScrub` reports the previewed position so
+ * the caller's time readout can follow the thumb instead of the live playhead.
  */
 export function Scrubber({
   positionMs,
   durationMs,
   disabled,
   onSeek,
+  onScrub,
   testID,
 }: {
   positionMs: number;
   durationMs: number;
   disabled?: boolean;
   onSeek: (ms: number) => void;
+  onScrub?: (ms: number | null) => void;
   testID?: string;
 }) {
   const [width, setWidth] = useState(0);
@@ -38,34 +47,41 @@ export function Scrubber({
   const widthRef = useRef(0);
   const durationRef = useRef(durationMs);
   const disabledRef = useRef(disabled);
+  const onScrubRef = useRef(onScrub);
+  const grantXRef = useRef(0);
   widthRef.current = width;
   durationRef.current = durationMs;
   disabledRef.current = disabled;
+  onScrubRef.current = onScrub;
 
-  const responder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => !disabledRef.current && widthRef.current > 0,
-        onMoveShouldSetPanResponder: () => !disabledRef.current && widthRef.current > 0,
-        onPanResponderGrant: (e) => {
-          setDragFraction(clamp(e.nativeEvent.locationX / widthRef.current));
-        },
-        onPanResponderMove: (e, gesture) => {
-          // locationX is unreliable once the finger leaves the element, so track
-          // from the start point plus the accumulated delta instead.
-          const startX = (e.nativeEvent.locationX ?? 0) - gesture.dx;
-          setDragFraction(clamp((startX + gesture.dx) / widthRef.current));
-        },
-        onPanResponderRelease: (e, gesture) => {
-          const startX = (e.nativeEvent.locationX ?? 0) - gesture.dx;
-          const f = clamp((startX + gesture.dx) / widthRef.current);
-          setDragFraction(null);
-          if (durationRef.current > 0) onSeek(Math.round(f * durationRef.current));
-        },
-        onPanResponderTerminate: () => setDragFraction(null),
-      }),
-    [onSeek],
-  );
+  const responder = useMemo(() => {
+    // Show the thumb at `fraction` and preview that position to the caller.
+    const drag = (fraction: number) => {
+      setDragFraction(fraction);
+      onScrubRef.current?.(durationRef.current > 0 ? Math.round(fraction * durationRef.current) : 0);
+    };
+    const end = () => {
+      setDragFraction(null);
+      onScrubRef.current?.(null);
+    };
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => !disabledRef.current && widthRef.current > 0,
+      onMoveShouldSetPanResponder: () => !disabledRef.current && widthRef.current > 0,
+      onPanResponderGrant: (e) => {
+        grantXRef.current = e.nativeEvent.locationX ?? 0;
+        drag(clamp(grantXRef.current / widthRef.current));
+      },
+      onPanResponderMove: (_e, gesture) => {
+        drag(clamp((grantXRef.current + gesture.dx) / widthRef.current));
+      },
+      onPanResponderRelease: (_e, gesture) => {
+        const f = clamp((grantXRef.current + gesture.dx) / widthRef.current);
+        end();
+        if (durationRef.current > 0) onSeek(Math.round(f * durationRef.current));
+      },
+      onPanResponderTerminate: end,
+    });
+  }, [onSeek]);
 
   const playedFraction =
     dragFraction ?? (durationMs > 0 ? clamp(positionMs / durationMs) : 0);

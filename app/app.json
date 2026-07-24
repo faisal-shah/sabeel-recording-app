@@ -3,7 +3,7 @@
     "name": "Class Recordings",
     "slug": "sabeel-class-recordings",
     "scheme": "sabeelclassrecordings",
-    "version": "0.1.4",
+    "version": "0.1.5",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "platforms": [

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { canPlayFromClass, listenedFraction } from '@sabeel/shared';
 import { Notice } from '../components/ui';
@@ -38,6 +39,9 @@ export function PlayerScreen({
     studentUid,
     recording.classId,
   );
+  // While the scrubber is being dragged it reports the previewed position; the
+  // time readouts follow the thumb rather than the still-advancing playhead.
+  const [scrubMs, setScrubMs] = useState<number | null>(null);
 
   if (!allowed) {
     return (
@@ -52,7 +56,8 @@ export function PlayerScreen({
   }
 
   const durationMs = (recording.durationSec ?? 0) * 1000;
-  const remainingMs = Math.max(0, durationMs - state.positionMs);
+  const shownPositionMs = scrubMs ?? state.positionMs;
+  const remainingMs = Math.max(0, durationMs - shownPositionMs);
   const listened = listenedFraction(state.listenedMs, recording.durationSec);
 
   return (
@@ -68,9 +73,10 @@ export function PlayerScreen({
         durationMs={durationMs}
         disabled={!state.ready}
         onSeek={seek}
+        onScrub={setScrubMs}
       />
       <View style={styles.times}>
-        <Text testID="player-elapsed" style={styles.time}>{fmt(state.positionMs)}</Text>
+        <Text testID="player-elapsed" style={styles.time}>{fmt(shownPositionMs)}</Text>
         {/* Remaining, not total: mid-lecture, "how much is left" is the question
             anyone actually has. */}
         <Text style={styles.time}>−{fmt(remainingMs)}</Text>
