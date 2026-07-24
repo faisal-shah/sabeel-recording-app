@@ -71,16 +71,11 @@ describe('canTransition', () => {
 });
 
 describe('publishBlockers', () => {
-  const ready = { title: 'Session 1', audioPath: 'recordings/r1/audio.m4a', status: 'draft' as const };
+  const ready = { audioPath: 'recordings/r1/audio.m4a', status: 'draft' as const };
 
   it('clears a complete draft', () => {
     expect(publishBlockers(ready)).toEqual([]);
     expect(canPublish(ready)).toBe(true);
-  });
-
-  it('blocks a missing or blank title', () => {
-    expect(publishBlockers({ ...ready, title: '' })).toContain('title');
-    expect(publishBlockers({ ...ready, title: '   ' })).toContain('title');
   });
 
   it('blocks publishing with no audio', () => {
@@ -98,8 +93,7 @@ describe('publishBlockers', () => {
   it('reports every blocker at once, not just the first', () => {
     // The UI names what is missing; stopping at the first would make fixing them
     // a guessing game one round-trip at a time.
-    expect(publishBlockers({ title: '', audioPath: null, status: 'unpublished' })).toEqual([
-      'title',
+    expect(publishBlockers({ audioPath: null, status: 'unpublished' })).toEqual([
       'audio',
       'status',
     ]);

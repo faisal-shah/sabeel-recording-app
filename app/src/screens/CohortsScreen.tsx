@@ -14,7 +14,7 @@ import {
 import {
   createCohort,
   setCohortArchived,
-  useAllClasses,
+  useAllCourses,
   useCohorts,
   type CohortRow,
 } from '../structure';
@@ -23,18 +23,18 @@ import { getTheme, spacing } from '../theme';
 const t = getTheme();
 
 /**
- * Admin-only: cohorts, and the archive switch that cascades to their classes.
+ * Admin-only: cohorts, and the archive switch that cascades to their courses.
  *
  * Archiving is presented as reversible because it is — the cascade never writes
- * a class's own `archived` flag, so reactivating restores each class to the
+ * a course's own `archived` flag, so reactivating restores each course to the
  * state it was already in.
  */
 export function CohortsScreen({ onOpen }: { onOpen: (cohort: CohortRow) => void }) {
   const cohorts = useCohorts(true);
-  // Classes across all cohorts, counted per cohort so each card shows its size
-  // without a tap. Admin-only screen, so the all-classes list is readable.
-  const classes = useAllClasses(true);
-  const classCounts = classes.reduce<Record<string, number>>((acc, c) => {
+  // Courses across all cohorts, counted per cohort so each card shows its size
+  // without a tap. Admin-only screen, so the all-courses list is readable.
+  const courses = useAllCourses(true);
+  const courseCounts = courses.reduce<Record<string, number>>((acc, c) => {
     acc[c.cohortId] = (acc[c.cohortId] ?? 0) + 1;
     return acc;
   }, {});
@@ -58,7 +58,7 @@ export function CohortsScreen({ onOpen }: { onOpen: (cohort: CohortRow) => void 
   };
 
   return (
-    <Screen subtitle="Semesters, and the classes inside them">
+    <Screen subtitle="Semesters, and the courses inside them">
       {error ? <Notice tone="error">{error}</Notice> : null}
 
       <SectionTitle>Add a cohort</SectionTitle>
@@ -100,7 +100,7 @@ export function CohortsScreen({ onOpen }: { onOpen: (cohort: CohortRow) => void 
               <Text style={styles.name}>{c.name}</Text>
               <View style={styles.meta}>
                 <StatusChip status={c.archived ? 'archived' : 'active'} />
-                <Text style={styles.count}>{classLabel(classCounts[c.id] ?? 0)}</Text>
+                <Text style={styles.count}>{courseLabel(courseCounts[c.id] ?? 0)}</Text>
                 <Text style={styles.hint}>Tap to open</Text>
               </View>
             </Pressable>
@@ -125,8 +125,8 @@ export function CohortsScreen({ onOpen }: { onOpen: (cohort: CohortRow) => void 
   );
 }
 
-function classLabel(n: number): string {
-  return n === 1 ? '1 class' : `${n} classes`;
+function courseLabel(n: number): string {
+  return n === 1 ? '1 course' : `${n} courses`;
 }
 
 const styles = StyleSheet.create({

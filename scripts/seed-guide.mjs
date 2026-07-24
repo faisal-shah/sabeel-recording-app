@@ -25,93 +25,109 @@ for (const name of NAMES){
 // Fatima gets a password so she can be shown signing in for the STUDENT screenshots.
 await auth.updateUser(students[0].uid,{ password:'HikamStudent1', emailVerified:true });
 
-// ---- cohort + classes ----
+// ---- cohort + courses ----
 const cohortId='guide-cohort';
 await db.collection('cohorts').doc(cohortId).set({ name:'Autumn 2026', archived:false, createdAt:now-45*day, createdBy:'seed' });
-const classes={
+const courses={
   hikam:{ id:'guide-hikam', name:'Hikam Foundations' },
   arabic:{ id:'guide-arabic', name:'Arabic I' },
 };
-for (const c of Object.values(classes))
-  await db.collection('classes').doc(c.id).set({ cohortId, name:c.name, archived:false, effectiveActive:true, archivedAccess:false, managerUids:[], createdAt:now-45*day, createdBy:'seed' });
+for (const c of Object.values(courses))
+  await db.collection('courses').doc(c.id).set({ cohortId, name:c.name, archived:false, effectiveActive:true, archivedAccess:false, managerUids:[], createdAt:now-45*day, createdBy:'seed' });
 // enroll all 8 in Hikam; first 4 also in Arabic
-for (const s of students) await db.collection('enrollments').doc(`${s.uid}_${classes.hikam.id}`).set({ studentUid:s.uid, classId:classes.hikam.id, cohortId, active:true, enrolledAt:now-40*day, enrolledBy:'seed' });
-for (const s of students.slice(0,4)) await db.collection('enrollments').doc(`${s.uid}_${classes.arabic.id}`).set({ studentUid:s.uid, classId:classes.arabic.id, cohortId, active:true, enrolledAt:now-40*day, enrolledBy:'seed' });
+for (const s of students) await db.collection('enrollments').doc(`${s.uid}_${courses.hikam.id}`).set({ studentUid:s.uid, courseId:courses.hikam.id, cohortId, active:true, enrolledAt:now-40*day, enrolledBy:'seed' });
+for (const s of students.slice(0,4)) await db.collection('enrollments').doc(`${s.uid}_${courses.arabic.id}`).set({ studentUid:s.uid, courseId:courses.arabic.id, cohortId, active:true, enrolledAt:now-40*day, enrolledBy:'seed' });
 
-// ---- recordings (Hikam): a mix of statuses + due dates ----
+// ---- sessions + their recordings: attendance-driven ----
 const audio=readFileSync('e2e-shots/test-lecture.m4a');
-async function rec(id, title, {status='published', dueOffset=null, recordedDaysAgo=7, attention=null}={}){
-  const path=`recordings/${id}/audio.m4a`;
-  if (status!=='draft'){ await admin.storage().bucket().file(path).save(audio,{ contentType:'audio/mp4' }); }
-  const dueDate = dueOffset===null ? null : iso(now+dueOffset*day);
-  await db.collection('recordings').doc(id).set({
-    cohortId, classId:classes.hikam.id, title, status, source:'manual',
-    recordedAt: now-recordedDaysAgo*day, dueDate, notes: title.includes('Patience')?'Focus on the section about gratitude in hardship — we will discuss it next week.':'',
-    audioPath: status==='draft'?null:path, durationSec: status==='draft'?null:720, sizeBytes: status==='draft'?null:audio.length,
-    createdAt: now-recordedDaysAgo*day, createdBy:'seed', updatedAt: now-recordedDaysAgo*day,
-    ...(status==='published'?{publishedAt:now-recordedDaysAgo*day}:{}),
+const uids=students.map(s=>s.uid);
+// Attendance snapshot: first `present` students present, the rest absent; any in
+// `excused` are excused (still accountable). Absent + excused get the recording.
+const attend=(present, {excused=[], absent=[]}={})=>Object.fromEntries(uids.map((u,i)=>{
+  if (excused.includes(u)) return [u,'excused'];
+  if (absent.includes(u)) return [u,'absent'];
+  return [u, i<present?'present':'absent'];
+}));
+
+async function mkSession(courseId, sid, rid, title, { status='published', dueOffset=null, daysAgo=7, notes='', attendance=null, attention=null }={}){
+  const date=iso(now-daysAgo*day);
+  const dueDate=dueOffset===null?null:iso(now+dueOffset*day);
+  const hasAudio = status!=='draft';
+  const path=`recordings/${rid}/audio.m4a`;
+  if (hasAudio) await admin.storage().bucket().file(path).save(audio,{contentType:'audio/mp4'});
+  const submitted = attendance ? now-daysAgo*day : null;
+  await db.collection('sessions').doc(sid).set({
+    courseId, cohortId, date, title, dueDate, notes,
+    recordingId: rid, attendance: attendance??{}, attendanceSubmittedAt: submitted,
+    archived:false, createdAt:now-daysAgo*day, createdBy:'seed', updatedAt:now-daysAgo*day,
+  });
+  await db.collection('recordings').doc(rid).set({
+    sessionId:sid, courseId, cohortId, title, notes, date, status, source:'manual',
+    audioPath:hasAudio?path:null, durationSec:hasAudio?720:null, sizeBytes:hasAudio?audio.length:null,
+    createdAt:now-daysAgo*day, createdBy:'seed', updatedAt:now-daysAgo*day,
+    ...(status==='published'?{publishedAt:now-daysAgo*day}:{}),
     ...(attention?{attentionReason:attention}:{}),
   });
-  return id;
-}
-const R={};
-R.s1=await rec('g-s1','Session 1 — Introduction to the Hikam', {dueOffset:-14, recordedDaysAgo:21});
-R.s2=await rec('g-s2','Session 2 — Knowledge and Certainty', {dueOffset:-6, recordedDaysAgo:14});
-R.s3=await rec('g-s3','Session 3 — Patience in Hardship', {dueOffset:3, recordedDaysAgo:5});
-R.s4=await rec('g-s4','Session 4 — Sincerity of Intention', {dueOffset:null, recordedDaysAgo:2});
-R.s5=await rec('g-s5','Session 5 — Reliance and Trust', {status:'draft', recordedDaysAgo:0});
-R.s6=await rec('g-s6','Session 6 — (import needs review)', {status:'needsAttention', recordedDaysAgo:1, attention:'Audio file looks truncated — re-upload before publishing.'});
-// Arabic I: two published
-async function recIn(cls, id, title, dueOffset){ const path=`recordings/${id}/audio.m4a`; await admin.storage().bucket().file(path).save(audio,{contentType:'audio/mp4'}); await db.collection('recordings').doc(id).set({ cohortId, classId:cls, title, status:'published', source:'manual', recordedAt:now-7*day, dueDate: dueOffset===null?null:iso(now+dueOffset*day), notes:'', audioPath:path, durationSec:720, sizeBytes:audio.length, createdAt:now-7*day, createdBy:'seed', updatedAt:now-7*day, publishedAt:now-7*day }); }
-await recIn(classes.arabic.id,'g-a1','Lesson 1 — The Arabic Alphabet', -2);
-await recIn(classes.arabic.id,'g-a2','Lesson 2 — Short Vowels', 5);
-
-// ---- assignments (publish fan-out, done directly) for published Hikam sessions ----
-const publishedHikam=[['g-s1',-14],['g-s2',-6],['g-s3',3],['g-s4',null]];
-for (const s of students){
-  for (const [rid,due] of publishedHikam){
-    await db.collection('assignments').doc(`${s.uid}_${rid}`).set({ studentUid:s.uid, recordingId:rid, classId:classes.hikam.id, cohortId, dueDate: due===null?null:iso(now+due*day), source:'publish', active:true, assignedAt:now-10*day, assignedBy:'system' });
+  // Fan out obligations to absent+excused (only once published AND attendance taken).
+  if (status==='published' && attendance){
+    for (const [uid,st] of Object.entries(attendance)){
+      if (st==='absent'||st==='excused'){
+        await db.collection('assignments').doc(`${uid}_${rid}`).set({ studentUid:uid, recordingId:rid, sessionId:sid, courseId, cohortId, dueDate, active:true, assignedAt:submitted, assignedBy:'system' });
+      }
+    }
   }
+  return rid;
 }
+const H=courses.hikam.id;
+// Hikam: attendance taken, most present, a few absent/excused (assigned). Overdue ones.
+await mkSession(H,'g-s1','g-s1r','Session 1 — Introduction to the Hikam', {dueOffset:-14, daysAgo:21, attendance:attend(6, {excused:[uids[7]]})});
+// Fatima (uids[0], the demo student) missed sessions 2 and 3, so she has real
+// required listening on the student screenshots: s2 overdue, s3 due-soon (60%).
+await mkSession(H,'g-s2','g-s2r','Session 2 — Knowledge and Certainty', {dueOffset:-6, daysAgo:14, attendance:attend(4, {absent:[uids[0]]})});
+await mkSession(H,'g-s3','g-s3r','Session 3 — Patience in Hardship', {dueOffset:3, daysAgo:5, notes:'Focus on the section about gratitude in hardship — we will discuss it next week.', attendance:attend(5, {absent:[uids[0]]})});
+await mkSession(H,'g-s4','g-s4r','Session 4 — Sincerity of Intention', {dueOffset:null, daysAgo:2, attendance:attend(6)});
+// Session 5: recording published but attendance NOT taken yet — nobody assigned.
+await mkSession(H,'g-s5','g-s5r','Session 5 — Reliance and Trust', {status:'published', daysAgo:1, attendance:null});
+// Session 6: a Zoom import that needs review.
+await mkSession(H,'g-s6','g-s6r','Session 6 — (import needs review)', {status:'needsAttention', daysAgo:1, attention:'Audio file looks truncated — re-upload before publishing.'});
+// Session 7: attendance taken TODAY, recording not added yet.
+await db.collection('sessions').doc('g-s7').set({ courseId:H, cohortId, date:iso(now), title:'Session 7 — Today (recording pending)', dueDate:iso(now+7*day), notes:'', recordingId:null, attendance:attend(5), attendanceSubmittedAt:now, archived:false, createdAt:now, createdBy:'seed', updatedAt:now });
+// Arabic I: two published sessions.
+await mkSession(courses.arabic.id,'g-a1','g-a1r','Lesson 1 — The Arabic Alphabet', {dueOffset:-2, daysAgo:9, attendance:attend(3)});
+await mkSession(courses.arabic.id,'g-a2','g-a2r','Lesson 2 — Short Vowels', {dueOffset:5, daysAgo:4, attendance:attend(2)});
 
-// ---- completions / progress / overrides: a realistic mix ----
-async function complete(uid, rid, cls, listenedFrac=1){
-  await db.collection('completions').doc(`${uid}_${rid}`).set({ studentUid:uid, recordingId:rid, classId:cls, completed:true, completedAt:now-2*day, updatedAt:now-2*day });
-  await db.collection('listeningProgress').doc(`${uid}_${rid}`).set({ studentUid:uid, recordingId:rid, classId:cls, positionMs:720000*listenedFrac, listenedMs:720000*listenedFrac, updatedAt:now-2*day });
+// ---- completions / progress: a realistic mix over the accountable (absent) set ----
+async function complete(uid, rid, listenedFrac=1){
+  await db.collection('completions').doc(`${uid}_${rid}`).set({ studentUid:uid, recordingId:rid, courseId:H, completed:true, completedAt:now-2*day, updatedAt:now-2*day });
+  await db.collection('listeningProgress').doc(`${uid}_${rid}`).set({ studentUid:uid, recordingId:rid, courseId:H, positionMs:720000*listenedFrac, listenedMs:720000*listenedFrac, updatedAt:now-2*day });
 }
-async function progressOnly(uid, rid, cls, frac){
-  await db.collection('listeningProgress').doc(`${uid}_${rid}`).set({ studentUid:uid, recordingId:rid, classId:cls, positionMs:720000*frac, listenedMs:720000*frac, updatedAt:now-3*day });
+async function progressOnly(uid, rid, frac){
+  await db.collection('listeningProgress').doc(`${uid}_${rid}`).set({ studentUid:uid, recordingId:rid, courseId:H, positionMs:720000*frac, listenedMs:720000*frac, updatedAt:now-3*day });
 }
-// Most students completed s1 & s2 (the overdue ones); a few didn't (=> overdue rows).
-for (let i=0;i<students.length;i++){
-  const s=students[i];
-  // s1: everyone except the last 2 completed
-  if (i<6) await complete(s.uid,'g-s1',classes.hikam.id);
-  else await progressOnly(s.uid,'g-s1',classes.hikam.id,0.3);
-  // s2: about half completed
-  if (i%2===0) await complete(s.uid,'g-s2',classes.hikam.id); else await progressOnly(s.uid,'g-s2',classes.hikam.id,0.5);
-  // s3 (due soon): Fatima part-listened, a couple completed
-  if (i===0) await progressOnly(s.uid,'g-s3',classes.hikam.id,0.4);
-  else if (i<3) await complete(s.uid,'g-s3',classes.hikam.id);
-}
-// Fatima completed s4 (no-due) — shows a Completed item on her home.
-await complete(students[0].uid,'g-s4',classes.hikam.id);
-// One staff override with a reason (Ibrahim on s2 — attended live).
-await db.collection('completionOverrides').doc(`${students[7].uid}_g-s2`).set({ studentUid:students[7].uid, recordingId:'g-s2', classId:classes.hikam.id, completed:true, reason:'Attended the class live; confirmed with the teacher.', overriddenBy:'seed-admin', at:now-1*day });
+// s1 (recording g-s1r): absentees are 6 and 7 (7 excused). One caught up, one part-way.
+await complete(uids[6],'g-s1r');
+await progressOnly(uids[7],'g-s1r',0.4);
+// s2 (g-s2r): absentees are 4..7. Two completed, one part-way, one nothing (overdue).
+await complete(uids[4],'g-s2r'); await complete(uids[5],'g-s2r');
+await progressOnly(uids[6],'g-s2r',0.5);
+// s3 (g-s3r): absentees 5,6,7. One completed; plus an ATTENDEE who listened anyway
+// (present student 0) — shows in the ledger's attendee section, never overdue.
+await complete(uids[5],'g-s3r');
+await progressOnly(uids[0],'g-s3r',0.6);
+// One staff override with a reason (student 6 on s2r).
+await db.collection('completionOverrides').doc(`${uids[6]}_g-s2r`).set({ studentUid:uids[6], recordingId:'g-s2r', courseId:H, completed:true, reason:'Attended part of the class in person; caught up on the rest.', overriddenBy:'seed-admin', at:now-1*day });
 
 // ---- audit log: realistic recent history ----
-const A=(action,detail,extra={})=>({ at:now-(Math.random()*3*day), actorUid:'seed-admin', actorRole:'admin', action, classId:classes.hikam.id, targets:extra, ...(detail?{detail}:{}) });
+const A=(action,detail,extra={})=>({ at:now-(Math.random()*3*day), actorUid:'seed-admin', actorRole:'admin', action, courseId:H, targets:extra, ...(detail?{detail}:{}) });
 const auditEntries=[
-  A('overrideCompletion',{completed:true, reason:'Attended the class live; confirmed with the teacher.'},{recordingId:'g-s2', studentUid:students[7].uid}),
-  A('setRecordingStatus',{status:'published'},{recordingId:'g-s4'}),
-  A('createRecording',null,{recordingId:'g-s4'}),
-  A('updateRecording',null,{recordingId:'g-s3'}),
-  A('assignCatchup',{dueDate:iso(now+7*day)},{recordingId:'g-s1', studentUid:students[6].uid}),
-  A('createStudent',null,{uid:students[7].uid}),
-  A('createEnrollment',null,{studentUid:students[7].uid}),
+  A('overrideCompletion',{completed:true, reason:'Attended part of the class in person.'},{recordingId:'g-s2r', studentUid:uids[6]}),
+  A('submitAttendance',null,{sessionId:'g-s4'}),
+  A('setRecordingStatus',{status:'published'},{recordingId:'g-s4r'}),
+  A('createSession',null,{sessionId:'g-s4'}),
+  A('createStudent',null,{uid:uids[7]}),
+  A('createEnrollment',null,{studentUid:uids[7]}),
 ];
 for (const e of auditEntries) await db.collection('auditLog').add(e);
-// a couple of class-less (admin-only) entries
-await db.collection('auditLog').add({ at:now-2*day, actorUid:'seed-admin', actorRole:'admin', action:'createCohort', classId:null, targets:{cohortId} });
+await db.collection('auditLog').add({ at:now-2*day, actorUid:'seed-admin', actorRole:'admin', action:'createCohort', courseId:null, targets:{cohortId} });
 
-console.log(JSON.stringify({ studentEmail:students[0].email, studentPw:'HikamStudent1', hikamClassId:classes.hikam.id, managerUidNeeded:true }, null, 0));
+console.log(JSON.stringify({ studentEmail:students[0].email, studentPw:'HikamStudent1', hikamCourseId:courses.hikam.id, managerUidNeeded:true }, null, 0));

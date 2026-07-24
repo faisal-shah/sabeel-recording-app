@@ -4,7 +4,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
   deriveEffectiveActive,
-  type ClassDoc,
+  type CourseDoc,
   type CohortDoc,
 } from '@sabeel/shared';
 import { requireAdmin } from './guards';
@@ -30,7 +30,7 @@ export async function createCohortRecord(callerUid: string, name: string) {
 }
 
 // Cohort-level actions are not class-scoped: their audit entries carry no
-// classId and are admin-only to read.
+// courseId and are admin-only to read.
 export const createCohort = auditedCall('createCohort', async (req) => {
   const uid = requireAdmin(req);
   return createCohortRecord(uid, validateCohortName(req.data));
@@ -65,22 +65,22 @@ export async function applyCohortArchived(input: { cohortId: string; archived: b
   const cohortRef = db.collection(COLLECTIONS.cohorts).doc(input.cohortId);
   if (!(await cohortRef.get()).exists) throw new HttpsError('not-found', 'No such cohort.');
 
-  const classes = await db
-    .collection(COLLECTIONS.classes)
+  const courses = await db
+    .collection(COLLECTIONS.courses)
     .where('cohortId', '==', input.cohortId)
     .get();
 
   const batch = db.batch();
   batch.update(cohortRef, { archived: input.archived });
-  for (const cls of classes.docs) {
-    const data = cls.data() as ClassDoc;
+  for (const cls of courses.docs) {
+    const data = cls.data() as CourseDoc;
     batch.update(cls.ref, {
       effectiveActive: deriveEffectiveActive(input.archived, data.archived),
     });
   }
   await batch.commit();
 
-  return { cohortId: input.cohortId, archived: input.archived, classesUpdated: classes.size };
+  return { cohortId: input.cohortId, archived: input.archived, coursesUpdated: courses.size };
 }
 
 export const setCohortArchived = auditedCall('setCohortArchived', async (req) => {

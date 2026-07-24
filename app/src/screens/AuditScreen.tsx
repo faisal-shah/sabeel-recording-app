@@ -7,12 +7,12 @@ import { getTheme, spacing } from '../theme';
 const t = getTheme();
 
 /**
- * Audit history, newest first. A manager passes their classId (scoped); an admin
+ * Audit history, newest first. A manager passes their courseId (scoped); an admin
  * passes null for the global view.
  */
-export function AuditScreen({ classId, title }: { classId: string | null; title: string }) {
+export function AuditScreen({ courseId, title }: { courseId: string | null; title: string }) {
   const listenerError = useListenerError();
-  const entries = useAudit(classId);
+  const entries = useAudit(courseId);
 
   return (
     <Screen title="Audit" subtitle={title}>
@@ -50,9 +50,9 @@ function AuditCard({ entry: e }: { entry: AuditRow }) {
 const ACTION_LABELS: Record<string, string> = {
   createCohort: 'Created cohort',
   setCohortArchived: 'Archived/unarchived cohort',
-  createClass: 'Created class',
-  updateClass: 'Updated class',
-  setClassManagers: 'Set class managers',
+  createCourse: 'Created course',
+  updateCourse: 'Updated course',
+  setCourseManagers: 'Set course managers',
   createStudent: 'Created student',
   setStudentAccess: 'Changed student access',
   createEnrollment: 'Enrolled student',

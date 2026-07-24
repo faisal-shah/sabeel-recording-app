@@ -7,17 +7,18 @@ import {
   EMULATOR_PROJECT_ID,
   assignmentId,
   type AssignmentDoc,
+  type AttendanceStatus,
   type RecordingDoc,
+  type SessionDoc,
   type StudentDoc,
 } from '@sabeel/shared';
 import { createCohortRecord } from '../../src/cohorts';
-import { createClassRecord } from '../../src/classes';
+import { createCourseRecord } from '../../src/courses';
+import { createEnrollmentRecord } from '../../src/enrollments';
 import {
-  applyEnrollmentActive,
-  createEnrollmentRecord,
-} from '../../src/enrollments';
-import { applyCatchup } from '../../src/assignments';
-import { applyRecordingFanout } from '../../src/assignmentsFanout';
+  reconcileSessionAssignments,
+  deactivateStudentAssignmentsInCourse,
+} from '../../src/assignmentsFanout';
 
 beforeAll(() => {
   if (getApps().length === 0) initializeApp({ projectId: EMULATOR_PROJECT_ID });
@@ -30,8 +31,9 @@ async function clearAll() {
   for (const c of [
     COLLECTIONS.students,
     COLLECTIONS.cohorts,
-    COLLECTIONS.classes,
+    COLLECTIONS.courses,
     COLLECTIONS.enrollments,
+    COLLECTIONS.sessions,
     COLLECTIONS.recordings,
     COLLECTIONS.assignments,
   ]) {
@@ -54,21 +56,46 @@ async function seedStudent(uid: string) {
   await db().collection(COLLECTIONS.students).doc(uid).set(doc);
 }
 
-/** A recording written straight to Firestore — the fan-out only reads its
- *  classId/cohortId/dueDate/status, so this bypasses the upload/finalize flow. */
-async function seedRecording(
+/** A session written straight to Firestore (attendance snapshot + submit flag). */
+async function seedSession(
   id: string,
-  fields: { classId: string; cohortId: string; dueDate: string | null; status: RecordingDoc['status'] },
-): Promise<RecordingDoc> {
-  const doc: RecordingDoc = {
-    cohortId: fields.cohortId,
-    classId: fields.classId,
+  fields: {
+    dueDate?: string | null;
+    attendance: Record<string, AttendanceStatus>;
+    submitted: boolean;
+    recordingId?: string | null;
+  },
+): Promise<SessionDoc> {
+  const doc: SessionDoc = {
+    courseId,
+    cohortId,
+    date: '2026-07-06',
     title: id,
-    status: fields.status,
-    source: 'manual',
-    recordedAt: 1,
-    dueDate: fields.dueDate,
+    dueDate: fields.dueDate ?? null,
     notes: '',
+    recordingId: fields.recordingId ?? null,
+    attendance: fields.attendance,
+    attendanceSubmittedAt: fields.submitted ? 1 : null,
+    archived: false,
+    createdAt: 1,
+    createdBy: ADMIN,
+    updatedAt: 1,
+  };
+  await db().collection(COLLECTIONS.sessions).doc(id).set(doc);
+  return doc;
+}
+
+/** A recording written straight to Firestore — reconcile only reads its status. */
+async function seedRecording(id: string, sessionId: string, status: RecordingDoc['status']) {
+  const doc: RecordingDoc = {
+    sessionId,
+    courseId,
+    cohortId,
+    title: id,
+    notes: '',
+    date: '2026-07-06',
+    status,
+    source: 'manual',
     audioPath: `recordings/${id}/audio.m4a`,
     durationSec: 60,
     sizeBytes: 1,
@@ -77,6 +104,7 @@ async function seedRecording(
     updatedAt: 1,
   };
   await db().collection(COLLECTIONS.recordings).doc(id).set(doc);
+  await db().collection(COLLECTIONS.sessions).doc(sessionId).update({ recordingId: id });
   return doc;
 }
 
@@ -85,7 +113,7 @@ const getAssignment = async (uid: string, recId: string) =>
     | AssignmentDoc
     | undefined;
 
-const countActiveForRecording = async (recId: string) =>
+const countActive = async (recId: string) =>
   (
     await db()
       .collection(COLLECTIONS.assignments)
@@ -94,120 +122,133 @@ const countActiveForRecording = async (recId: string) =>
       .get()
   ).size;
 
+/** Reconcile a session by id, reading the current session + recording docs. */
+async function reconcile(sessionId: string) {
+  const session = (await db().collection(COLLECTIONS.sessions).doc(sessionId).get()).data() as
+    | SessionDoc
+    | undefined;
+  const rec = session?.recordingId
+    ? ((await db().collection(COLLECTIONS.recordings).doc(session.recordingId).get()).data() as
+        | RecordingDoc
+        | undefined)
+    : undefined;
+  await reconcileSessionAssignments(db(), sessionId, session, rec);
+}
+
 let cohortId: string;
-let classId: string;
+let courseId: string;
 
 beforeEach(async () => {
   await clearAll();
   ({ id: cohortId } = await createCohortRecord(ADMIN, 'Autumn 2026'));
-  ({ id: classId } = await createClassRecord(ADMIN, { cohortId, name: 'Hikam' }));
-  for (const s of ['s1', 's2']) {
+  ({ id: courseId } = await createCourseRecord(ADMIN, { cohortId, name: 'Hikam' }));
+  for (const s of ['s1', 's2', 's3']) {
     await seedStudent(s);
-    await createEnrollmentRecord(ADMIN, { studentUid: s, classId });
+    await createEnrollmentRecord(ADMIN, { studentUid: s, courseId });
   }
 });
 
-describe('publish fan-out', () => {
-  it('creates one active assignment per enrolled student, and is idempotent', async () => {
-    const draft = await seedRecording('r1', { classId, cohortId, dueDate: '2026-08-01', status: 'draft' });
-    const published: RecordingDoc = { ...draft, status: 'published' };
-    await db().collection(COLLECTIONS.recordings).doc('r1').set(published);
+describe('reconcileSessionAssignments', () => {
+  it('assigns absent AND excused, exempts present', async () => {
+    await seedSession('sess', {
+      dueDate: '2026-08-01',
+      attendance: { s1: 'absent', s2: 'present', s3: 'excused' },
+      submitted: true,
+    });
+    await seedRecording('r1', 'sess', 'published');
+    await reconcile('sess');
 
-    await applyRecordingFanout(db(), 'r1', draft, published);
-    expect(await countActiveForRecording('r1')).toBe(2);
-    const a = await getAssignment('s1', 'r1');
-    expect(a).toMatchObject({ source: 'publish', active: true, dueDate: '2026-08-01', classId });
+    expect(await getAssignment('s1', 'r1')).toMatchObject({ active: true, dueDate: '2026-08-01' });
+    expect(await getAssignment('s3', 'r1')).toMatchObject({ active: true }); // excused still catches up
+    expect(await getAssignment('s2', 'r1')).toBeUndefined(); // present is exempt
+    expect(await countActive('r1')).toBe(2);
+  });
 
-    // Re-publish: no duplicates, still exactly two.
-    await applyRecordingFanout(db(), 'r1', draft, published);
-    expect(await countActiveForRecording('r1')).toBe(2);
+  it('assigns nobody until BOTH published and attendance submitted', async () => {
+    // Published recording, attendance not yet submitted.
+    await seedSession('sess', { attendance: { s1: 'absent' }, submitted: false });
+    await seedRecording('r1', 'sess', 'published');
+    await reconcile('sess');
+    expect(await countActive('r1')).toBe(0);
+
+    // Submit attendance → now assigned.
+    await db().collection(COLLECTIONS.sessions).doc('sess').update({ attendanceSubmittedAt: 1 });
+    await reconcile('sess');
+    expect(await getAssignment('s1', 'r1')).toMatchObject({ active: true });
+
+    // A draft recording assigns nobody even with attendance submitted.
+    await seedSession('sess2', { attendance: { s2: 'absent' }, submitted: true });
+    await seedRecording('r2', 'sess2', 'draft');
+    await reconcile('sess2');
+    expect(await countActive('r2')).toBe(0);
+  });
+
+  it('re-submitting attendance flips present<->absent and keeps history', async () => {
+    await seedSession('sess', { attendance: { s1: 'absent', s2: 'absent' }, submitted: true });
+    await seedRecording('r1', 'sess', 'published');
+    await reconcile('sess');
+    expect(await countActive('r1')).toBe(2);
+
+    // s2 was actually present after all.
+    await db()
+      .collection(COLLECTIONS.sessions)
+      .doc('sess')
+      .update({ attendance: { s1: 'absent', s2: 'present' } });
+    await reconcile('sess');
+    expect(await getAssignment('s1', 'r1')).toMatchObject({ active: true });
+    expect((await getAssignment('s2', 'r1'))?.active).toBe(false); // deactivated, row kept
+    expect(await countActive('r1')).toBe(1);
+  });
+
+  it('a student not in the attendance snapshot is never assigned (enrollment-onward)', async () => {
+    // s3 is enrolled but was NOT marked (e.g. enrolled after this session).
+    await seedSession('sess', {
+      attendance: { s1: 'absent', s2: 'absent' },
+      submitted: true,
+    });
+    await seedRecording('r1', 'sess', 'published');
+    await reconcile('sess');
+    expect(await getAssignment('s3', 'r1')).toBeUndefined();
+    expect(await countActive('r1')).toBe(2);
   });
 
   it('unpublishing deactivates the obligations but keeps the rows', async () => {
-    const published = await seedRecording('r1', { classId, cohortId, dueDate: null, status: 'published' });
-    await applyRecordingFanout(db(), 'r1', { ...published, status: 'draft' }, published);
-    expect(await countActiveForRecording('r1')).toBe(2);
+    await seedSession('sess', { attendance: { s1: 'absent', s2: 'absent' }, submitted: true });
+    await seedRecording('r1', 'sess', 'published');
+    await reconcile('sess');
+    expect(await countActive('r1')).toBe(2);
 
-    const unpub: RecordingDoc = { ...published, status: 'unpublished' };
-    await applyRecordingFanout(db(), 'r1', published, unpub);
-    expect(await countActiveForRecording('r1')).toBe(0);
-    expect(await getAssignment('s1', 'r1')).toMatchObject({ active: false }); // row kept
-  });
-
-  it('a due-date edit moves publish assignments but not a catch-up', async () => {
-    const published = await seedRecording('r1', { classId, cohortId, dueDate: '2026-08-01', status: 'published' });
-    await applyRecordingFanout(db(), 'r1', { ...published, status: 'draft' }, published);
-
-    // s2 additionally gets a catch-up with its OWN due date.
-    await applyCatchup(ADMIN, { studentUid: 's2', recordingId: 'r1', dueDate: '2026-09-15' }, classId);
-    expect(await getAssignment('s2', 'r1')).toMatchObject({ source: 'catchup', dueDate: '2026-09-15' });
-
-    const edited: RecordingDoc = { ...published, dueDate: '2026-08-10' };
-    await applyRecordingFanout(db(), 'r1', published, edited);
-
-    expect((await getAssignment('s1', 'r1'))?.dueDate).toBe('2026-08-10'); // publish follows
-    expect((await getAssignment('s2', 'r1'))?.dueDate).toBe('2026-09-15'); // catch-up protected
-  });
-
-  it('moving to another class reassigns to the new roster', async () => {
-    const { id: otherClass } = await createClassRecord(ADMIN, { cohortId, name: 'Arabic' });
-    await seedStudent('s3');
-    await createEnrollmentRecord(ADMIN, { studentUid: 's3', classId: otherClass });
-
-    const published = await seedRecording('r1', { classId, cohortId, dueDate: null, status: 'published' });
-    await applyRecordingFanout(db(), 'r1', { ...published, status: 'draft' }, published);
-    expect(await getAssignment('s1', 'r1')).toMatchObject({ active: true });
-
-    const moved: RecordingDoc = { ...published, classId: otherClass };
-    await db().collection(COLLECTIONS.recordings).doc('r1').set(moved);
-    await applyRecordingFanout(db(), 'r1', published, moved);
-
-    expect((await getAssignment('s1', 'r1'))?.active).toBe(false); // old roster off
-    expect(await getAssignment('s3', 'r1')).toMatchObject({ active: true, classId: otherClass });
-  });
-});
-
-describe('late enrollment', () => {
-  it('assigns only not-yet-due published recordings', async () => {
-    await seedRecording('past', { classId, cohortId, dueDate: '2020-01-01', status: 'published' });
-    await seedRecording('future', { classId, cohortId, dueDate: '2999-01-01', status: 'published' });
-    await seedRecording('nodue', { classId, cohortId, dueDate: null, status: 'published' });
-    await seedRecording('draft', { classId, cohortId, dueDate: '2999-01-01', status: 'draft' });
-
-    await seedStudent('late');
-    await createEnrollmentRecord(ADMIN, { studentUid: 'late', classId });
-
-    expect(await getAssignment('late', 'past')).toBeUndefined(); // due passed → catch-up only
-    expect(await getAssignment('late', 'future')).toMatchObject({ active: true });
-    expect(await getAssignment('late', 'nodue')).toMatchObject({ active: true });
-    expect(await getAssignment('late', 'draft')).toBeUndefined(); // not published
-  });
-
-  it('unenrolling deactivates the obligations, re-enrolling restores them', async () => {
-    // s1 is enrolled from beforeEach but had no published recordings then; a
-    // re-enroll (active:true) re-applies the late-enrollment default and picks
-    // this one up.
-    await seedRecording('r1', { classId, cohortId, dueDate: '2999-01-01', status: 'published' });
-    await applyEnrollmentActive({ studentUid: 's1', classId, active: true });
-    expect(await getAssignment('s1', 'r1')).toMatchObject({ active: true });
-
-    await applyEnrollmentActive({ studentUid: 's1', classId, active: false });
+    await db().collection(COLLECTIONS.recordings).doc('r1').update({ status: 'unpublished' });
+    await reconcile('sess');
+    expect(await countActive('r1')).toBe(0);
     expect((await getAssignment('s1', 'r1'))?.active).toBe(false);
   });
+
+  it('a due-date edit re-flows to the assignments', async () => {
+    await seedSession('sess', {
+      dueDate: '2026-08-01',
+      attendance: { s1: 'absent' },
+      submitted: true,
+    });
+    await seedRecording('r1', 'sess', 'published');
+    await reconcile('sess');
+    expect((await getAssignment('s1', 'r1'))?.dueDate).toBe('2026-08-01');
+
+    await db().collection(COLLECTIONS.sessions).doc('sess').update({ dueDate: '2026-08-10' });
+    await reconcile('sess');
+    expect((await getAssignment('s1', 'r1'))?.dueDate).toBe('2026-08-10');
+  });
 });
 
-describe('catch-up', () => {
-  it('assigns an earlier recording to an enrolled student as catchup', async () => {
-    await seedRecording('old', { classId, cohortId, dueDate: '2020-01-01', status: 'published' });
-    await applyCatchup(ADMIN, { studentUid: 's1', recordingId: 'old', dueDate: null }, classId);
-    expect(await getAssignment('s1', 'old')).toMatchObject({ source: 'catchup', active: true, dueDate: null });
-  });
+describe('unenrolment', () => {
+  it('deactivates a student obligations in the course, keeping history', async () => {
+    await seedSession('sess', { attendance: { s1: 'absent', s2: 'absent' }, submitted: true });
+    await seedRecording('r1', 'sess', 'published');
+    await reconcile('sess');
+    expect(await countActive('r1')).toBe(2);
 
-  it('refuses a student who is not in the class', async () => {
-    await seedRecording('old', { classId, cohortId, dueDate: null, status: 'published' });
-    await seedStudent('outsider');
-    await expect(
-      applyCatchup(ADMIN, { studentUid: 'outsider', recordingId: 'old', dueDate: null }, classId),
-    ).rejects.toThrow();
+    await deactivateStudentAssignmentsInCourse(db(), courseId, 's1');
+    expect((await getAssignment('s1', 'r1'))?.active).toBe(false);
+    expect((await getAssignment('s2', 'r1'))?.active).toBe(true);
   });
 });

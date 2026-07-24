@@ -8,28 +8,26 @@ import {
   EMULATOR_STORAGE_BUCKET,
   audioStoragePath,
   type RecordingDoc,
+  type SessionDoc,
 } from '@sabeel/shared';
 import { createCohortRecord } from '../../src/cohorts';
-import { createClassRecord } from '../../src/classes';
+import { createCourseRecord } from '../../src/courses';
+import { createSessionRecord } from '../../src/sessions';
 import { readFileSync } from 'node:fs';
 import {
   MAX_AUDIO_BYTES,
   applyDeleteRecording,
   applyRecordingStatus,
-  applyRecordingUpdate,
   clearAudio,
   createRecordingDraft,
   finalizeRecording,
   validateCreateRecording,
   validateFinalize,
   validateSetStatus,
-  validateUpdateRecording,
 } from '../../src/recordings';
 
 beforeAll(() => {
   if (getApps().length === 0) {
-    // Same constant the app and the functions use — a hardcoded name here is
-    // how the client/server bucket mismatch stayed invisible to this suite.
     initializeApp({ projectId: EMULATOR_PROJECT_ID, storageBucket: EMULATOR_STORAGE_BUCKET });
   }
 });
@@ -38,25 +36,43 @@ const ADMIN = 'admin-uid';
 
 async function clearAll() {
   const db = getFirestore();
-  for (const c of [COLLECTIONS.cohorts, COLLECTIONS.classes, COLLECTIONS.recordings]) {
+  for (const c of [COLLECTIONS.cohorts, COLLECTIONS.courses, COLLECTIONS.sessions, COLLECTIONS.recordings]) {
     const snap = await db.collection(c).get();
     await Promise.all(snap.docs.map((d) => d.ref.delete()));
   }
   await getStorage().bucket().deleteFiles({ prefix: 'recordings/' }).catch(() => undefined);
 }
 
-let classId = '';
+let courseId = '';
 beforeEach(async () => {
   await clearAll();
   const { id: cohortId } = await createCohortRecord(ADMIN, 'C');
-  ({ id: classId } = await createClassRecord(ADMIN, { cohortId, name: 'K' }));
+  ({ id: courseId } = await createCourseRecord(ADMIN, { cohortId, name: 'K' }));
 });
 
 const rec = async (id: string) =>
   (await getFirestore().collection(COLLECTIONS.recordings).doc(id).get()).data() as RecordingDoc;
+const session = async (id: string) =>
+  (await getFirestore().collection(COLLECTIONS.sessions).doc(id).get()).data() as SessionDoc;
 
-/** Put bytes at the canonical path, bypassing rules — the client normally does
- *  this with the Storage SDK after createRecording hands out the id. */
+async function newSession(): Promise<string> {
+  const { id } = await createSessionRecord(ADMIN, {
+    courseId,
+    date: '2026-07-06',
+    title: 'Session 1',
+    dueDate: null,
+    notes: '',
+  });
+  return id;
+}
+
+/** A draft recording under a fresh session. Returns both ids. */
+async function newDraft(): Promise<{ id: string; sessionId: string }> {
+  const sessionId = await newSession();
+  const { id } = await createRecordingDraft(ADMIN, { sessionId });
+  return { id, sessionId };
+}
+
 async function putAudio(recordingId: string, bytes = 2048) {
   await getStorage()
     .bucket()
@@ -64,32 +80,42 @@ async function putAudio(recordingId: string, bytes = 2048) {
     .save(Buffer.alloc(bytes), { contentType: 'audio/mp4' });
 }
 
+async function ready(): Promise<string> {
+  const { id } = await newDraft();
+  await putAudio(id);
+  await finalizeRecording({ recordingId: id, durationSec: 60 });
+  return id;
+}
+
 describe('createRecordingDraft', () => {
-  it('creates a draft with NO audio and inherits the cohort', async () => {
-    const { id, audioPath } = await createRecordingDraft(ADMIN, {
-      classId,
-      title: 'Session 1',
-      recordedAt: 1700000000000,
-    });
+  it('creates a draft with NO audio, inherits course/cohort, and links the session', async () => {
+    const sessionId = await newSession();
+    const { id, audioPath } = await createRecordingDraft(ADMIN, { sessionId });
     const d = await rec(id);
-    expect(d).toMatchObject({ classId, title: 'Session 1', status: 'draft', source: 'manual' });
-    // audioPath stays null until the upload is CONFIRMED — otherwise a failed
-    // upload leaves a draft that looks publishable.
-    expect(d.audioPath).toBeNull();
+    expect(d).toMatchObject({ sessionId, courseId, status: 'draft', source: 'manual' });
+    // Student-facing display copy is denormalized from the session.
+    expect(d).toMatchObject({ title: 'Session 1', date: '2026-07-06', notes: '' });
+    expect(d.audioPath).toBeNull(); // stays null until the upload is CONFIRMED
     expect(d.cohortId).toBeTruthy();
     expect(audioPath).toBe(audioStoragePath(id));
+    // The session points back at its recording (0..1).
+    expect((await session(sessionId)).recordingId).toBe(id);
   });
 
-  it('rejects an unknown class', async () => {
-    await expect(
-      createRecordingDraft(ADMIN, { classId: 'nope', title: 'x', recordedAt: null }),
-    ).rejects.toThrow();
+  it('rejects an unknown session', async () => {
+    await expect(createRecordingDraft(ADMIN, { sessionId: 'nope' })).rejects.toThrow();
+  });
+
+  it('refuses a session that already has a recording', async () => {
+    const sessionId = await newSession();
+    await createRecordingDraft(ADMIN, { sessionId });
+    await expect(createRecordingDraft(ADMIN, { sessionId })).rejects.toThrow(/already/i);
   });
 });
 
 describe('finalizeRecording', () => {
   it('reads size from Storage rather than trusting the client', async () => {
-    const { id } = await createRecordingDraft(ADMIN, { classId, title: 'T', recordedAt: null });
+    const { id } = await newDraft();
     await putAudio(id, 4096);
     const res = await finalizeRecording({ recordingId: id, durationSec: 720 });
     expect(res.sizeBytes).toBe(4096);
@@ -99,15 +125,13 @@ describe('finalizeRecording', () => {
   });
 
   it('refuses when no audio actually landed', async () => {
-    // The upload can fail after the draft exists; without this check the draft
-    // would be publishable with nothing behind it.
-    const { id } = await createRecordingDraft(ADMIN, { classId, title: 'T', recordedAt: null });
+    const { id } = await newDraft();
     await expect(finalizeRecording({ recordingId: id, durationSec: 1 })).rejects.toThrow(/No audio/);
     expect((await rec(id)).audioPath).toBeNull();
   });
 
   it('accepts a null duration', async () => {
-    const { id } = await createRecordingDraft(ADMIN, { classId, title: 'T', recordedAt: null });
+    const { id } = await newDraft();
     await putAudio(id);
     await finalizeRecording({ recordingId: id, durationSec: null });
     expect((await rec(id)).durationSec).toBeNull();
@@ -115,13 +139,6 @@ describe('finalizeRecording', () => {
 });
 
 describe('publishing', () => {
-  const ready = async () => {
-    const { id } = await createRecordingDraft(ADMIN, { classId, title: 'T', recordedAt: null });
-    await putAudio(id);
-    await finalizeRecording({ recordingId: id, durationSec: 60 });
-    return id;
-  };
-
   it('publishes a complete draft and stamps publishedAt', async () => {
     const id = await ready();
     await applyRecordingStatus({ recordingId: id, status: 'published' });
@@ -131,10 +148,10 @@ describe('publishing', () => {
   });
 
   it('REFUSES to publish a draft with no audio', async () => {
-    const { id } = await createRecordingDraft(ADMIN, { classId, title: 'T', recordedAt: null });
-    await expect(
-      applyRecordingStatus({ recordingId: id, status: 'published' }),
-    ).rejects.toThrow(/audio/);
+    const { id } = await newDraft();
+    await expect(applyRecordingStatus({ recordingId: id, status: 'published' })).rejects.toThrow(
+      /audio/,
+    );
     expect((await rec(id)).status).toBe('draft');
   });
 
@@ -142,10 +159,9 @@ describe('publishing', () => {
     const id = await ready();
     await applyRecordingStatus({ recordingId: id, status: 'published' });
     await applyRecordingStatus({ recordingId: id, status: 'unpublished' });
-    // unpublished must go back through draft, so the metadata gate reapplies.
-    await expect(
-      applyRecordingStatus({ recordingId: id, status: 'published' }),
-    ).rejects.toThrow(/cannot become/);
+    await expect(applyRecordingStatus({ recordingId: id, status: 'published' })).rejects.toThrow(
+      /cannot become/,
+    );
     await applyRecordingStatus({ recordingId: id, status: 'draft' });
     await applyRecordingStatus({ recordingId: id, status: 'published' });
     expect((await rec(id)).status).toBe('published');
@@ -163,10 +179,7 @@ describe('publishing', () => {
 
 describe('clearAudio', () => {
   it('deletes the object so a replacement can be uploaded', async () => {
-    const { id } = await createRecordingDraft(ADMIN, { classId, title: 'T', recordedAt: null });
-    await putAudio(id);
-    await finalizeRecording({ recordingId: id, durationSec: 5 });
-
+    const id = await ready();
     await clearAudio(id);
     const [exists] = await getStorage().bucket().file(audioStoragePath(id)).exists();
     expect(exists).toBe(false);
@@ -176,14 +189,8 @@ describe('clearAudio', () => {
   });
 
   it('REFUSES while the recording is live', async () => {
-    // The Storage object is write-once, so this callable is the only way to
-    // replace audio — which is exactly why it must not work on a published
-    // recording students are already listening to.
-    const { id } = await createRecordingDraft(ADMIN, { classId, title: 'T', recordedAt: null });
-    await putAudio(id);
-    await finalizeRecording({ recordingId: id, durationSec: 5 });
+    const id = await ready();
     await applyRecordingStatus({ recordingId: id, status: 'published' });
-
     await expect(clearAudio(id)).rejects.toThrow(/draft/i);
     const [exists] = await getStorage().bucket().file(audioStoragePath(id)).exists();
     expect(exists).toBe(true);
@@ -198,14 +205,12 @@ describe('applyDeleteRecording', () => {
     COLLECTIONS.listeningProgress,
     COLLECTIONS.completionOverrides,
   ];
-  // One dependent doc in every collection that points at a recording, so the
-  // cascade is actually exercised rather than the empty happy path.
   async function seedDeps(recordingId: string) {
     const db = getFirestore();
     const s = 'stu-1';
     await Promise.all(
       DEPS.map((c) =>
-        db.collection(c).doc(`${s}_${recordingId}`).set({ recordingId, studentUid: s, classId }),
+        db.collection(c).doc(`${s}_${recordingId}`).set({ recordingId, studentUid: s, courseId }),
       ),
     );
   }
@@ -221,8 +226,9 @@ describe('applyDeleteRecording', () => {
   const audioExists = async (id: string) =>
     (await getStorage().bucket().file(audioStoragePath(id)).exists())[0];
 
-  it('cascades: removes the audio, the doc, and every dependent record', async () => {
-    const { id } = await createRecordingDraft(ADMIN, { classId, title: 'T', recordedAt: null });
+  it('cascades: audio, doc, every dependent record, AND clears the session pointer', async () => {
+    const sessionId = await newSession();
+    const { id } = await createRecordingDraft(ADMIN, { sessionId });
     await putAudio(id);
     await finalizeRecording({ recordingId: id, durationSec: 5 });
     await seedDeps(id);
@@ -233,15 +239,13 @@ describe('applyDeleteRecording', () => {
     expect(await audioExists(id)).toBe(false);
     expect(await recExists(id)).toBe(false);
     expect(await depCount(id)).toBe(0);
+    expect((await session(sessionId)).recordingId).toBeNull(); // session freed for a new recording
   });
 
   it('REFUSES a published recording and removes nothing (unpublish/archive first)', async () => {
-    const { id } = await createRecordingDraft(ADMIN, { classId, title: 'T', recordedAt: null });
-    await putAudio(id);
-    await finalizeRecording({ recordingId: id, durationSec: 5 });
+    const id = await ready();
     await applyRecordingStatus({ recordingId: id, status: 'published' });
     await seedDeps(id);
-
     await expect(applyDeleteRecording(id)).rejects.toThrow(/publish/i);
     expect(await audioExists(id)).toBe(true);
     expect(await recExists(id)).toBe(true);
@@ -249,9 +253,7 @@ describe('applyDeleteRecording', () => {
   });
 
   it('deletes an ARCHIVED recording — the space-reclaim path', async () => {
-    const { id } = await createRecordingDraft(ADMIN, { classId, title: 'T', recordedAt: null });
-    await putAudio(id);
-    await finalizeRecording({ recordingId: id, durationSec: 5 });
+    const id = await ready();
     await applyRecordingStatus({ recordingId: id, status: 'published' });
     await applyRecordingStatus({ recordingId: id, status: 'archived' });
     await applyDeleteRecording(id);
@@ -259,40 +261,14 @@ describe('applyDeleteRecording', () => {
   });
 
   it('deletes a draft that never had audio', async () => {
-    const { id } = await createRecordingDraft(ADMIN, { classId, title: 'T', recordedAt: null });
+    const { id } = await newDraft();
     await applyDeleteRecording(id);
     expect(await recExists(id)).toBe(false);
   });
 });
 
-describe('applyRecordingUpdate', () => {
-  it('updates metadata and touches updatedAt', async () => {
-    const { id } = await createRecordingDraft(ADMIN, { classId, title: 'T', recordedAt: null });
-    const before = (await rec(id)).updatedAt;
-    await new Promise((r) => setTimeout(r, 5));
-    await applyRecordingUpdate({ recordingId: id, title: 'Better', dueDate: '2026-08-01' });
-    const d = await rec(id);
-    expect(d.title).toBe('Better');
-    expect(d.dueDate).toBe('2026-08-01');
-    expect(d.updatedAt).toBeGreaterThan(before);
-  });
-
-  it('allows clearing the due date', async () => {
-    // Null is a real value here: required listening with no deadline, which the
-    // brief says never becomes overdue.
-    const { id } = await createRecordingDraft(ADMIN, { classId, title: 'T', recordedAt: null });
-    await applyRecordingUpdate({ recordingId: id, dueDate: '2026-08-01' });
-    await applyRecordingUpdate({ recordingId: id, dueDate: null });
-    expect((await rec(id)).dueDate).toBeNull();
-  });
-});
-
 describe('the size limit is stated in two places and must not drift', () => {
   it('matches the number enforced in storage.rules', () => {
-    // The limit has to exist in the rule, because the upload goes straight to
-    // Storage — a callable would only see it after the bytes were paid for. It
-    // also has to exist in the callable, which re-checks what actually landed.
-    // Two copies, so this asserts they agree.
     const rules = readFileSync(new URL('../../../storage.rules', import.meta.url), 'utf8');
     const m = rules.match(/request\.resource\.size\s*<\s*(\d+)\s*\*\s*1024\s*\*\s*1024/);
     expect(m, 'no size limit found in storage.rules').toBeTruthy();
@@ -301,30 +277,11 @@ describe('the size limit is stated in two places and must not drift', () => {
 });
 
 describe('validators', () => {
-  it('require a class and a title on create', () => {
-    for (const bad of [null, {}, { classId: 'c' }, { title: 'T' }, { classId: 'c', title: '  ' }]) {
+  it('require a session on create', () => {
+    for (const bad of [null, {}, { sessionId: '' }]) {
       expect(() => validateCreateRecording(bad)).toThrow();
     }
-    expect(validateCreateRecording({ classId: 'c', title: ' T ', recordedAt: null })).toEqual({
-      classId: 'c',
-      title: 'T',
-      recordedAt: null,
-    });
-  });
-
-  it('reject a due date that is not date-only', () => {
-    // A timestamp here would invite a timezone bug that only appears near
-    // midnight; due dates are a day, not an instant.
-    for (const bad of ['2026-8-1', '2026-08-01T00:00:00Z', 'tomorrow', 1234]) {
-      expect(() => validateUpdateRecording({ recordingId: 'r', dueDate: bad })).toThrow();
-    }
-    expect(validateUpdateRecording({ recordingId: 'r', dueDate: '2026-08-01' }).dueDate).toBe(
-      '2026-08-01',
-    );
-  });
-
-  it('reject an empty update', () => {
-    expect(() => validateUpdateRecording({ recordingId: 'r' })).toThrow(/Nothing to change/);
+    expect(validateCreateRecording({ sessionId: 's1' })).toEqual({ sessionId: 's1' });
   });
 
   it('reject an unknown status', () => {

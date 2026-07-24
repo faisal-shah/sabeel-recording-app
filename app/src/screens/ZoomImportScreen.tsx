@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ZoomImportRow } from '@sabeel/shared';
-import { Button, Card, Empty, Field, Notice, Row, Screen } from '../components/ui';
+import { Button, Card, Empty, Field, Notice, Screen } from '../components/ui';
 import { DateField } from '../components/DateField';
 import { listZoomRecordings, importZoomRecording } from '../zoom';
-import { useAllClasses, useCohorts, useMyClasses, type ClassRow } from '../structure';
+import type { SessionRow } from '../sessions';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -19,21 +19,21 @@ function defaultFrom(): string {
 type StatusFilter = 'available' | 'imported' | 'all';
 
 /**
- * The Zoom import picker (staff). Lists the central account's audio-only
- * recordings for a date range; each available one imports into a class the
- * caller picks inline (admin: any class, manager: their own). Pull, not push —
- * this is the only entry to Zoom import, and the class is chosen here.
+ * The Zoom import picker, scoped to ONE session.
+ *
+ * Lists the central account's audio-only recordings for a date range; importing
+ * one downloads it as this session's draft recording (the session already owns
+ * the title/date/due). A session holds a single recording, so after a successful
+ * import we return to it.
  */
 export function ZoomImportScreen({
-  isAdmin,
-  uid,
+  session,
+  cls,
   onImported,
-  onOpenImported,
 }: {
-  isAdmin: boolean;
-  uid: string;
-  onImported: (cls: ClassRow) => void;
-  onOpenImported: (recordingId: string, classId: string) => void;
+  session: SessionRow;
+  cls: { id: string; name: string };
+  onImported: () => void;
 }) {
   const [from, setFrom] = useState(defaultFrom());
   const [to, setTo] = useState(ymd(new Date()));
@@ -43,8 +43,6 @@ export function ZoomImportScreen({
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('available');
   const [hideShort, setHideShort] = useState(true);
-  // Loaded once here (not per row): the classes this caller may import into.
-  const options = useClassOptions(isAdmin, uid);
 
   const load = async () => {
     setLoading(true);
@@ -57,7 +55,6 @@ export function ZoomImportScreen({
       setLoading(false);
     }
   };
-  // Load once on open; changing the dates then requires "Load recordings".
   useEffect(() => {
     void load();
   }, []);
@@ -70,7 +67,7 @@ export function ZoomImportScreen({
   );
 
   return (
-    <Screen title="Import from Zoom" subtitle="Zoom recordings">
+    <Screen title="Import from Zoom" subtitle={`${session.title} · ${cls.name}`}>
       <Card>
         <DateField label="From" value={from} onChange={setFrom} />
         <DateField label="To" value={to} onChange={setTo} />
@@ -105,72 +102,38 @@ export function ZoomImportScreen({
         <Empty>No recordings match. Widen the date range or the filters, then Load.</Empty>
       ) : (
         filtered.map((r) => (
-          <ZoomRow
-            key={r.meetingUuid}
-            row={r}
-            options={options}
-            onImported={onImported}
-            onOpenImported={onOpenImported}
-          />
+          <ZoomRow key={r.meetingUuid} row={r} sessionId={session.id} onImported={onImported} />
         ))
       )}
     </Screen>
   );
 }
 
-/** The classes this staff member may import into, labelled by cohort. */
-function useClassOptions(isAdmin: boolean, uid: string): { cls: ClassRow; cohortName: string }[] {
-  const cohorts = useCohorts(true);
-  const adminClasses = useAllClasses(isAdmin);
-  const myClasses = useMyClasses(isAdmin ? null : uid);
-  const classes = isAdmin ? adminClasses : myClasses;
-  const cohortName = (id: string) => cohorts.find((c) => c.id === id)?.name ?? '';
-  return useMemo(
-    () =>
-      classes
-        .filter((c) => !c.archived)
-        .map((c) => ({ cls: c, cohortName: cohortName(c.cohortId) }))
-        .sort((a, b) => a.cohortName.localeCompare(b.cohortName) || a.cls.name.localeCompare(b.cls.name)),
-    [classes, cohorts],
-  );
-}
-
 function ZoomRow({
   row,
-  options,
+  sessionId,
   onImported,
-  onOpenImported,
 }: {
   row: ZoomImportRow;
-  options: { cls: ClassRow; cohortName: string }[];
-  onImported: (cls: ClassRow) => void;
-  onOpenImported: (recordingId: string, classId: string) => void;
+  sessionId: string;
+  onImported: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [classId, setClassId] = useState<string | null>(null);
-  const [dueDate, setDueDate] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const doImport = async () => {
-    const chosen = options.find((o) => o.cls.id === classId);
-    if (!chosen) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await importZoomRecording({
-        meetingUuid: row.meetingUuid,
-        fileId: row.fileId,
-        classId: chosen.cls.id,
-        dueDate: dueDate.trim() ? dueDate.trim() : null,
-      });
-      onImported(chosen.cls);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const doImport = () =>
+    void (async () => {
+      setBusy(true);
+      setError(null);
+      try {
+        await importZoomRecording({ meetingUuid: row.meetingUuid, fileId: row.fileId, sessionId });
+        onImported();
+      } catch (e) {
+        setError((e as Error).message);
+      } finally {
+        setBusy(false);
+      }
+    })();
 
   return (
     <Card>
@@ -179,73 +142,16 @@ function ZoomRow({
         {row.startTime.slice(0, 10)} · {Math.round(row.durationSec / 60)} min ·{' '}
         {(row.sizeBytes / 1048576).toFixed(1)} MB
       </Text>
-
       {row.alreadyImported ? (
-        <Pressable
-          testID={`zoom-open-imported-${row.topic.trim() || row.meetingUuid}`}
-          onPress={() =>
-            row.alreadyImported &&
-            row.importedClassId &&
-            onOpenImported(row.alreadyImported, row.importedClassId)
-          }
-          style={styles.importedRow}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={styles.imported}>
-              ✓ Imported{row.importedClassName ? ` into ${row.importedClassName}` : ''}
-            </Text>
-            {row.importedCohortName ? (
-              <Text style={styles.importedCohort}>{row.importedCohortName} · tap to listen</Text>
-            ) : (
-              <Text style={styles.importedCohort}>Tap to listen</Text>
-            )}
-          </View>
-          <Text style={styles.chevron}>›</Text>
-        </Pressable>
-      ) : expanded ? (
-        <View style={styles.picker}>
-          <Text style={styles.pickerLabel}>Import into which class?</Text>
-          {options.length === 0 ? (
-            <Empty>You have no classes to import into.</Empty>
-          ) : (
-            options.map((o) => {
-              const on = classId === o.cls.id;
-              return (
-                <Pressable
-                  key={o.cls.id}
-                  testID={`zoom-class-${o.cls.name}`}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: on }}
-                  onPress={() => setClassId(on ? null : o.cls.id)}
-                  style={styles.pickRow}
-                >
-                  <View style={[styles.tick, on ? styles.tickOn : null]} />
-                  <View style={styles.pickTextWrap}>
-                    <Text style={styles.pickText}>{o.cls.name}</Text>
-                    <Text style={styles.pickCohort}>{o.cohortName}</Text>
-                  </View>
-                </Pressable>
-              );
-            })
-          )}
-          <DateField label="Due date (optional)" value={dueDate} onChange={setDueDate} />
-          <Row>
-            <Button
-              testID={`zoom-import-${row.topic.trim() || row.meetingUuid}`}
-              label="Import"
-              busy={busy}
-              disabled={!classId}
-              onPress={() => void doImport()}
-            />
-            <Button label="Cancel" variant="secondary" onPress={() => setExpanded(false)} />
-          </Row>
-        </View>
+        <Text style={styles.imported}>
+          ✓ Already imported{row.importedCourseName ? ` into ${row.importedCourseName}` : ''}
+        </Text>
       ) : (
         <Button
-          testID={`zoom-open-${row.topic.trim() || row.meetingUuid}`}
-          label="Import"
-          variant="secondary"
-          onPress={() => setExpanded(true)}
+          testID={`zoom-import-${row.topic.trim() || row.meetingUuid}`}
+          label="Import into this session"
+          busy={busy}
+          onPress={doImport}
         />
       )}
       {error ? <Notice tone="error">{error}</Notice> : null}
@@ -255,40 +161,11 @@ function ZoomRow({
 
 const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginTop: spacing(2), marginBottom: spacing(2) },
-  chip: {
-    paddingVertical: spacing(1),
-    paddingHorizontal: spacing(3),
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: t.border.strong,
-  },
+  chip: { paddingVertical: spacing(1), paddingHorizontal: spacing(3), borderRadius: 999, borderWidth: 1, borderColor: t.border.strong },
   chipOn: { backgroundColor: t.accent.base, borderColor: t.accent.base },
   chipText: { fontSize: 12, fontWeight: '600', color: t.text.secondary },
   chipTextOn: { color: t.accent.onAccent },
   title: { fontSize: 16, fontWeight: '600', color: t.text.primary },
-  sub: { fontSize: 13, color: t.text.secondary, marginTop: 2 },
-  importedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(3),
-    marginTop: spacing(3),
-  },
-  imported: { fontSize: 14, color: t.feedback.success, fontWeight: '600' },
-  importedCohort: { fontSize: 13, color: t.text.secondary, marginTop: 1 },
-  chevron: { fontSize: 24, color: t.text.secondary, fontWeight: '600' },
-  picker: { marginTop: spacing(3) },
-  pickerLabel: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(1) },
-  pickRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), paddingVertical: spacing(2) },
-  pickTextWrap: { flex: 1 },
-  pickText: { fontSize: 15, color: t.text.primary },
-  pickCohort: { fontSize: 13, color: t.text.secondary, marginTop: 1 },
-  tick: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: t.border.strong,
-    backgroundColor: t.bg.raised,
-  },
-  tickOn: { backgroundColor: t.accent.base, borderColor: t.accent.base },
+  sub: { fontSize: 13, color: t.text.secondary, marginTop: 2, marginBottom: spacing(2) },
+  imported: { fontSize: 14, color: t.feedback.success, fontWeight: '600', marginTop: spacing(2) },
 });

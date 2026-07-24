@@ -27,7 +27,7 @@ describe('constants', () => {
   });
 
   it('gives a signed URL more life than the longest recording', () => {
-    // Class recordings run about two hours; a URL must never die mid-playback.
+    // Course recordings run about two hours; a URL must never die mid-playback.
     const longestSessionMs = 4 * 60 * 60 * 1000;
     expect(SIGNED_URL_TTL_MS).toBeGreaterThan(longestSessionMs);
   });

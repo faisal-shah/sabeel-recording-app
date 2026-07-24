@@ -45,12 +45,12 @@ beforeEach(async () => {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
     const cls = (id: string, managerUids: string[]) =>
-      setDoc(doc(db, COLLECTIONS.classes, id), { cohortId: 'c1', managerUids });
-    const assignment = (studentUid: string, recordingId: string, classId: string) =>
+      setDoc(doc(db, COLLECTIONS.courses, id), { cohortId: 'c1', managerUids });
+    const assignment = (studentUid: string, recordingId: string, courseId: string) =>
       setDoc(doc(db, COLLECTIONS.assignments, assignmentId(studentUid, recordingId)), {
         studentUid,
         recordingId,
-        classId,
+        courseId,
         cohortId: 'c1',
         dueDate: null,
         source: 'publish',
@@ -62,7 +62,7 @@ beforeEach(async () => {
       setDoc(doc(db, COLLECTIONS.completions, completionId(studentUid, recordingId)), {
         studentUid,
         recordingId,
-        classId: CLASS_MINE,
+        courseId: CLASS_MINE,
         completed: true,
         completedAt: 1,
         updatedAt: 1,
@@ -118,7 +118,7 @@ describe('assignments: reads', () => {
       getDocs(
         query(
           collection(mgrMine().firestore(), COLLECTIONS.assignments),
-          where('classId', '==', CLASS_MINE),
+          where('courseId', '==', CLASS_MINE),
         ),
       ),
     );
@@ -137,7 +137,7 @@ describe('assignments: writes are server-only', () => {
       setDoc(doc(student().firestore(), COLLECTIONS.assignments, assignmentId(STUDENT, 'new')), {
         studentUid: STUDENT,
         recordingId: 'new',
-        classId: CLASS_MINE,
+        courseId: CLASS_MINE,
         cohortId: 'c1',
         dueDate: null,
         source: 'publish',
@@ -177,7 +177,7 @@ describe('completions: self-only client writes', () => {
       setDoc(doc(student().firestore(), COLLECTIONS.completions, completionId(STUDENT, 'rNew')), {
         studentUid: STUDENT,
         recordingId: 'rNew',
-        classId: CLASS_MINE,
+        courseId: CLASS_MINE,
         completed: true,
         completedAt: 2,
         updatedAt: 2,
@@ -190,7 +190,7 @@ describe('completions: self-only client writes', () => {
       setDoc(doc(outsider().firestore(), COLLECTIONS.completions, completionId(STUDENT, 'rNew')), {
         studentUid: STUDENT,
         recordingId: 'rNew',
-        classId: CLASS_MINE,
+        courseId: CLASS_MINE,
         completed: true,
         completedAt: 2,
         updatedAt: 2,
@@ -213,7 +213,7 @@ describe('completionEvents: append-only', () => {
   const event = (actor: string, studentUid: string) => ({
     studentUid,
     recordingId: REC,
-    classId: CLASS_MINE,
+    courseId: CLASS_MINE,
     action: 'complete',
     actor,
     at: 5,

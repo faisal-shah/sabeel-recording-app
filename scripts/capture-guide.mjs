@@ -1,7 +1,11 @@
 /**
  * Capture user-manual screenshots from the WEB app — every screen at phone
- * (390) and desktop (1280) width. Against the emulator with the guide dataset.
- * Home is a RELOAD (goto), not goBack — the nav stack is not browser history.
+ * (390) and desktop (1280) width. Against the emulator with the guide dataset
+ * (scripts/seed-guide.mjs). Home is a RELOAD (goto), not goBack — the nav stack
+ * is not browser history.
+ *
+ * Model: Cohort → Course → Session → Recording. Recordings and attendance live
+ * on a session; obligations are attendance-driven (absent∪excused catch up).
  */
 import { chromium } from 'playwright';
 
@@ -29,6 +33,15 @@ async function pair(p, name, { viewportOnly = false } = {}) {
   await p.screenshot({ path: `${DIR}/${name}-desktop.png`, fullPage: !viewportOnly });
   await p.setViewportSize(PHONE); await p.waitForTimeout(300);
   console.log('  ✓', name);
+}
+
+// Admin: Cohorts → Autumn 2026 → Hikam Foundations, from home.
+async function openHikam(p) {
+  await home(p);
+  await tap(p, 'nav-cohorts'); await p.waitForTimeout(2000);
+  await tap(p, 'cohort-open-Autumn 2026'); await p.waitForTimeout(2000);
+  await tap(p, 'course-open-Hikam Foundations');
+  await p.getByTestId('nav-sessions').waitFor({ timeout: 15000 });
 }
 
 console.log('Student');
@@ -70,27 +83,43 @@ await home(adm);
 await tap(adm, 'nav-cohorts'); await adm.waitForTimeout(3000);
 await pair(adm, '13-cohorts');
 await tap(adm, 'cohort-open-Autumn 2026'); await adm.waitForTimeout(3000);
-await pair(adm, '14-classes');
-await tap(adm, 'class-open-Hikam Foundations');
-await adm.getByTestId('nav-recordings').waitFor({ timeout: 15000 });
-await pair(adm, '15-class-detail');
-await tap(adm, 'nav-recordings'); await adm.waitForTimeout(3000);
-await pair(adm, '16-recordings');
-await tap(adm, 'recording-ledger-Session 1 — Introduction to the Hikam');
+await pair(adm, '14-courses');
+await tap(adm, 'course-open-Hikam Foundations');
+await adm.getByTestId('nav-sessions').waitFor({ timeout: 15000 });
+await pair(adm, '15-course-detail');
+
+await tap(adm, 'nav-sessions'); await adm.waitForTimeout(2500);
+await pair(adm, '16-sessions');
+
+// Session 3 — attendance taken (roster shown) + a published recording.
+await tap(adm, 'session-open-Session 3 — Patience in Hardship');
+await adm.getByTestId('recording-ledger').waitFor({ timeout: 15000 });
+await adm.waitForTimeout(800);
+await pair(adm, '17-session-detail');
+
+// Its ledger — the accountable/attendees split.
+await tap(adm, 'recording-ledger');
 await adm.getByTestId('ledger-filter-all').waitFor({ timeout: 15000 });
 await tap(adm, 'ledger-filter-all'); await adm.waitForTimeout(800);
-await pair(adm, '17-recording-ledger');
+await pair(adm, '18-recording-ledger');
+
+// Override form on the first not-complete accountable student.
 await tap(adm, 'ledger-filter-notComplete'); await adm.waitForTimeout(600);
 const ovBtn = adm.locator('[data-testid^="override-open-"]').first();
-if (await ovBtn.count()) { await ovBtn.click(); await adm.waitForTimeout(700); await pair(adm, '18-override-form'); }
+if (await ovBtn.count()) { await ovBtn.click(); await adm.waitForTimeout(700); await pair(adm, '19-override-form'); }
+
+// Attendance report (toggle: by session / by student).
+await openHikam(adm);
+await tap(adm, 'nav-attendance'); await adm.waitForTimeout(2000);
+await pair(adm, '20-attendance-report');
 
 await home(adm);
 await tap(adm, 'nav-library'); await adm.waitForTimeout(3000);
-await pair(adm, '19-library');
+await pair(adm, '21-library');
 
 await home(adm);
 await tap(adm, 'nav-audit-global'); await adm.waitForTimeout(1500);
-await pair(adm, '20-audit');
+await pair(adm, '22-audit');
 await adm.context().close();
 
 await browser.close();

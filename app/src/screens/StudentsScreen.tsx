@@ -17,7 +17,7 @@ import {
   setStudentAccess,
   useStudents,
 } from '../students';
-import { useAllClasses, useCohorts, useMyClasses } from '../structure';
+import { useAllCourses, useCohorts, useMyCourses } from '../structure';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -30,15 +30,15 @@ const t = getTheme();
  * from an emailed link; completing that link is what proves they control the
  * address, so there is no separate verification step.
  *
- * Enrolment into a class is added in 1b, once classes exist.
+ * Enrolment into a course is added in 1b, once courses exist.
  */
 export function StudentsScreen({ isAdmin, uid }: { isAdmin: boolean; uid: string }) {
   const canManageAccess = isAdmin;
   const students = useStudents(true);
-  const classOptions = useClassOptions(isAdmin, uid);
+  const courseOptions = useCourseOptions(isAdmin, uid);
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
-  const [classId, setClassId] = useState<string | null>(null);
+  const [courseId, setCourseId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyUid, setBusyUid] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,14 +52,14 @@ export function StudentsScreen({ isAdmin, uid }: { isAdmin: boolean; uid: string
       const res = await createStudent({
         displayName: displayName.trim(),
         email: email.trim(),
-        // The key is OMITTED when no class is chosen, never set to undefined:
+        // The key is OMITTED when no course is chosen, never set to undefined:
         // the callable SDK serializes an explicitly-undefined property as null,
-        // so `classId: undefined` reaches the server as `classId: null`.
-        ...(classId ? { classId } : {}),
+        // so `courseId: undefined` reaches the server as `courseId: null`.
+        ...(courseId ? { courseId } : {}),
       });
       setDisplayName('');
       setEmail('');
-      setClassId(null);
+      setCourseId(null);
       setInfo(
         res.emailSent
           ? 'Account created. They have been emailed a link to set their password.'
@@ -92,28 +92,28 @@ export function StudentsScreen({ isAdmin, uid }: { isAdmin: boolean; uid: string
           keyboardType="email-address"
           placeholder="student@example.com"
         />
-        {classOptions.length > 0 ? (
+        {courseOptions.length > 0 ? (
           <View style={styles.picker}>
             {/* A tappable list, not a dropdown — React Native has no dropdown
                 primitive, and this matches the approve-as-manager/-admin shape
                 already used elsewhere. */}
-            <Text style={styles.pickerLabel}>Enrol in a class (optional)</Text>
-            {classOptions.map((c) => {
-              const on = classId === c.id;
+            <Text style={styles.pickerLabel}>Enrol in a course (optional)</Text>
+            {courseOptions.map((c) => {
+              const on = courseId === c.id;
               return (
                 <Pressable
                   key={c.id}
-                  testID={`student-class-${c.name}`}
+                  testID={`student-course-${c.name}`}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: on }}
                   accessibilityLabel={`Enrol in ${c.name} in ${c.cohortName}`}
-                  onPress={() => setClassId(on ? null : c.id)}
+                  onPress={() => setCourseId(on ? null : c.id)}
                   style={styles.pickRow}
                 >
                   <View style={[styles.tick, on ? styles.tickOn : null]} />
                   <View style={styles.pickTextWrap}>
                     <Text style={styles.pickText}>{c.name}</Text>
-                    {/* Cohort shown so two classes that share a name (same course
+                    {/* Cohort shown so two courses that share a name (same course
                         in different semesters) are told apart. */}
                     <Text style={styles.pickSub}>{c.cohortName}</Text>
                   </View>
@@ -196,28 +196,28 @@ export function StudentsScreen({ isAdmin, uid }: { isAdmin: boolean; uid: string
   );
 }
 
-interface ClassOption {
+interface CourseOption {
   id: string;
   name: string;
   cohortName: string;
 }
 
 /**
- * The classes this staff member may enrol into.
+ * The courses this staff member may enrol into.
  *
- * An admin sees EVERY class in EVERY cohort (not just the latest — a class in an
- * older semester was invisible before, and two classes that share a name across
+ * An admin sees EVERY course in EVERY cohort (not just the latest — a course in an
+ * older semester was invisible before, and two courses that share a name across
  * semesters looked like one). A manager sees only their own — which is also all
  * the security rules would let them read. Each option carries its cohort name so
- * same-named classes are distinguishable. Both roles may read cohorts.
+ * same-named courses are distinguishable. Both roles may read cohorts.
  */
-function useClassOptions(isAdmin: boolean, uid: string): ClassOption[] {
+function useCourseOptions(isAdmin: boolean, uid: string): CourseOption[] {
   const cohorts = useCohorts(true);
-  const adminClasses = useAllClasses(isAdmin);
-  const myClasses = useMyClasses(isAdmin ? null : uid);
-  const classes = isAdmin ? adminClasses : myClasses;
+  const adminCourses = useAllCourses(isAdmin);
+  const myCourses = useMyCourses(isAdmin ? null : uid);
+  const courses = isAdmin ? adminCourses : myCourses;
   const cohortName = (id: string) => cohorts.find((c) => c.id === id)?.name ?? '';
-  return classes
+  return courses
     .map((c) => ({ id: c.id, name: c.name, cohortName: cohortName(c.cohortId) }))
     .sort(
       (a, b) => a.cohortName.localeCompare(b.cohortName) || a.name.localeCompare(b.name),

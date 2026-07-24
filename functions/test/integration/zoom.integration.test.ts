@@ -10,7 +10,8 @@ import {
   type RecordingDoc,
 } from '@sabeel/shared';
 import { createCohortRecord } from '../../src/cohorts';
-import { createClassRecord } from '../../src/classes';
+import { createCourseRecord } from '../../src/courses';
+import { createSessionRecord } from '../../src/sessions';
 import { MAX_AUDIO_BYTES } from '../../src/recordings';
 import { applyImportZoomRecording, applyRetryZoomImport } from '../../src/zoomImport';
 import type { ZoomAudioRecording, ZoomClient } from '../../src/zoom';
@@ -25,18 +26,26 @@ const ADMIN = 'admin-uid';
 
 async function clearAll() {
   const db = getFirestore();
-  for (const c of [COLLECTIONS.cohorts, COLLECTIONS.classes, COLLECTIONS.recordings]) {
+  for (const c of [COLLECTIONS.cohorts, COLLECTIONS.courses, COLLECTIONS.recordings]) {
     const snap = await db.collection(c).get();
     await Promise.all(snap.docs.map((d) => d.ref.delete()));
   }
   await getStorage().bucket().deleteFiles({ prefix: 'recordings/' }).catch(() => undefined);
 }
 
-let classId = '';
+let courseId = '';
+let sessionId = '';
 beforeEach(async () => {
   await clearAll();
   const { id: cohortId } = await createCohortRecord(ADMIN, 'C');
-  ({ id: classId } = await createClassRecord(ADMIN, { cohortId, name: 'K' }));
+  ({ id: courseId } = await createCourseRecord(ADMIN, { cohortId, name: 'K' }));
+  ({ id: sessionId } = await createSessionRecord(ADMIN, {
+    courseId,
+    date: '2026-05-07',
+    title: 'Session One',
+    dueDate: null,
+    notes: '',
+  }));
 });
 
 const REC: ZoomAudioRecording = {
@@ -78,44 +87,34 @@ describe('applyImportZoomRecording', () => {
   it('creates a ready draft: source zoom, dedupe key, metadata, audio finalized', async () => {
     const res = await applyImportZoomRecording(
       ADMIN,
-      { meetingUuid: 'uuid-1', fileId: 'file-1', classId, dueDate: null },
+      { meetingUuid: 'uuid-1', fileId: 'file-1', sessionId },
       fakeClient(REC),
     );
     expect(res.alreadyExisted).toBe(false);
     const d = await rec(res.recordingId);
     expect(d).toMatchObject({
-      classId,
+      sessionId,
+      courseId,
       source: 'zoom',
       status: 'draft',
       zoomUuid: 'uuid-1',
       zoomFileId: 'file-1',
-      title: 'Zoom Session One',
       durationSec: 300,
     });
-    expect(d.recordedAt).toBe(Date.parse('2026-05-07T18:00:00Z'));
     expect(d.audioPath).toBe(audioStoragePath(res.recordingId));
     expect(d.sizeBytes).toBe(4096); // read from Storage, not trusted from Zoom
     expect(await audioExists(res.recordingId)).toBe(true);
   });
 
-  it('applies a due date when given', async () => {
-    const res = await applyImportZoomRecording(
-      ADMIN,
-      { meetingUuid: 'uuid-1', fileId: 'file-1', classId, dueDate: '2026-08-01' },
-      fakeClient(REC),
-    );
-    expect((await rec(res.recordingId)).dueDate).toBe('2026-08-01');
-  });
-
   it('is idempotent on the meeting UUID — a second import links, not duplicates', async () => {
     const first = await applyImportZoomRecording(
       ADMIN,
-      { meetingUuid: 'uuid-1', fileId: 'file-1', classId, dueDate: null },
+      { meetingUuid: 'uuid-1', fileId: 'file-1', sessionId },
       fakeClient(REC),
     );
     const again = await applyImportZoomRecording(
       ADMIN,
-      { meetingUuid: 'uuid-1', fileId: 'file-1', classId, dueDate: null },
+      { meetingUuid: 'uuid-1', fileId: 'file-1', sessionId },
       fakeClient(REC),
     );
     expect(again).toEqual({ recordingId: first.recordingId, alreadyExisted: true });
@@ -126,7 +125,7 @@ describe('applyImportZoomRecording', () => {
     await expect(
       applyImportZoomRecording(
         ADMIN,
-        { meetingUuid: 'uuid-1', fileId: 'file-1', classId, dueDate: null },
+        { meetingUuid: 'uuid-1', fileId: 'file-1', sessionId },
         fakeClient({ ...REC, sizeBytes: MAX_AUDIO_BYTES + 1 }),
       ),
     ).rejects.toThrow(/larger than/i);
@@ -137,7 +136,7 @@ describe('applyImportZoomRecording', () => {
     await expect(
       applyImportZoomRecording(
         ADMIN,
-        { meetingUuid: 'uuid-1', fileId: 'file-1', classId, dueDate: null },
+        { meetingUuid: 'uuid-1', fileId: 'file-1', sessionId },
         fakeClient(REC, { fail: true }),
       ),
     ).rejects.toThrow(/import failed/i);
@@ -159,7 +158,7 @@ describe('applyRetryZoomImport', () => {
     // First, a failed import.
     await applyImportZoomRecording(
       ADMIN,
-      { meetingUuid: 'uuid-1', fileId: 'file-1', classId, dueDate: null },
+      { meetingUuid: 'uuid-1', fileId: 'file-1', sessionId },
       fakeClient(REC, { fail: true }),
     ).catch(() => undefined);
     const failed = (
@@ -178,7 +177,7 @@ describe('applyRetryZoomImport', () => {
 
   it('refuses to retry a non-Zoom recording', async () => {
     const ref = await getFirestore().collection(COLLECTIONS.recordings).add({
-      classId,
+      courseId,
       source: 'manual',
       status: 'needsAttention',
     } as Partial<RecordingDoc> as RecordingDoc);

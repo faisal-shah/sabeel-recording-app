@@ -59,7 +59,7 @@ export interface PlaybackState {
  * happened since the last tick when someone closes the tab, and that lost
  * minute is the one a student would argue about.
  */
-export function usePlayback(recordingId: string, studentUid: string | null, classId: string) {
+export function usePlayback(recordingId: string, studentUid: string | null, courseId: string) {
   const [state, setState] = useState<PlaybackState>({
     ready: false,
     playing: false,
@@ -99,13 +99,13 @@ export function usePlayback(recordingId: string, studentUid: string | null, clas
       // backwards.
       const existing = (await getDoc(ref)).data() as ListeningProgressDoc | undefined;
       const merged = existing ? mergeProgress(mine, existing) : mine;
-      await setDoc(ref, { studentUid, recordingId, classId, ...merged });
+      await setDoc(ref, { studentUid, recordingId, courseId, ...merged });
       listened.current = merged.listenedMs;
     } catch {
       // A failed write must not break playback. The next tick retries.
       dirty.current = true;
     }
-  }, [studentUid, recordingId, classId]);
+  }, [studentUid, recordingId, courseId]);
 
   useEffect(() => {
     let cancelled = false;

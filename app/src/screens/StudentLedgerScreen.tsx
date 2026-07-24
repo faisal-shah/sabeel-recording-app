@@ -3,16 +3,16 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { INSTITUTE_TIMEZONE, isOverdue, todayInZone } from '@sabeel/shared';
 import { Button, Empty, Notice, Screen } from '../components/ui';
 import { useStudentLedger, type StudentLedgerItem } from '../ledger';
-import { useClassRecordings } from '../recordings';
+import { useCourseRecordings } from '../recordings';
 import { exportCsv } from '../exportCsv';
 import { useListenerError } from '../liveQuery';
-import type { ClassRow } from '../structure';
+import type { CourseRow } from '../structure';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
 type Filter = 'all' | 'notComplete' | 'overdue';
 
-/** One student's required listening in one class. */
+/** One student's required listening in one course. */
 export function StudentLedgerScreen({
   studentUid,
   studentName,
@@ -20,12 +20,12 @@ export function StudentLedgerScreen({
 }: {
   studentUid: string;
   studentName: string;
-  cls: ClassRow;
+  cls: CourseRow;
 }) {
   const listenerError = useListenerError();
   const today = todayInZone(INSTITUTE_TIMEZONE);
   const items = useStudentLedger(studentUid, cls.id);
-  const recordings = useClassRecordings(cls.id);
+  const recordings = useCourseRecordings(cls.id);
   const titleById = useMemo(() => new Map(recordings.map((r) => [r.id, r.title])), [recordings]);
   const [filter, setFilter] = useState<Filter>('all');
 

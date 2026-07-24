@@ -3,14 +3,15 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
   audioStoragePath,
-  type ClassDoc,
+  type CourseDoc,
   type CohortDoc,
   type RecordingDoc,
+  type SessionDoc,
   type ZoomImportRow,
 } from '@sabeel/shared';
 import { auditedCall } from './audited';
 import { reportedCall } from './reported';
-import { requireClassScope, requireStaff } from './guards';
+import { requireCourseScope, requireStaff } from './guards';
 import { MAX_AUDIO_BYTES, createRecordingDraft, finalizeRecording } from './recordings';
 import { ZOOM_SECRETS, zoomClient, type ZoomClient } from './zoom';
 
@@ -28,7 +29,6 @@ async function downloadIntoRecording(
   recordingId: string,
   downloadUrl: string,
   durationSec: number,
-  dueDate: string | null,
   client: ZoomClient,
 ): Promise<void> {
   const ref = getFirestore().collection(COLLECTIONS.recordings).doc(recordingId);
@@ -39,7 +39,6 @@ async function downloadIntoRecording(
       status: 'draft',
       attentionReason: FieldValue.delete(),
       updatedAt: Date.now(),
-      ...(dueDate ? { dueDate } : {}),
     });
   } catch (e) {
     const reason = `Zoom import failed: ${(e as Error).message}`.slice(0, 300);
@@ -48,10 +47,10 @@ async function downloadIntoRecording(
   }
 }
 
-/** Import one Zoom recording into a class as a draft. Idempotent on the meeting UUID. */
+/** Import one Zoom recording into a session as its draft. Idempotent on the meeting UUID. */
 export async function applyImportZoomRecording(
   callerUid: string,
-  input: { meetingUuid: string; fileId: string; classId: string; dueDate: string | null },
+  input: { meetingUuid: string; fileId: string; sessionId: string },
   client: ZoomClient,
 ): Promise<{ recordingId: string; alreadyExisted: boolean }> {
   const db = getFirestore();
@@ -70,16 +69,15 @@ export async function applyImportZoomRecording(
     throw new HttpsError('failed-precondition', `That recording's audio is larger than the ${mb} MB limit.`);
   }
 
-  const title = (rec.topic.trim() || 'Zoom recording').slice(0, 200);
-  const parsed = Date.parse(rec.startTime);
-  const recordedAt = Number.isFinite(parsed) ? parsed : null;
+  // The session owns title/date/due; the recording is pure media. createRecordingDraft
+  // refuses a session that already has a recording.
   const { id } = await createRecordingDraft(
     callerUid,
-    { classId: input.classId, title, recordedAt },
+    { sessionId: input.sessionId },
     { source: 'zoom', zoomUuid: input.meetingUuid, zoomFileId: rec.fileId },
   );
 
-  await downloadIntoRecording(id, downloadUrl, rec.durationSec, input.dueDate, client);
+  await downloadIntoRecording(id, downloadUrl, rec.durationSec, client);
   return { recordingId: id, alreadyExisted: false };
 }
 
@@ -95,7 +93,7 @@ export async function applyRetryZoomImport(
     throw new HttpsError('failed-precondition', 'That recording is not a Zoom import.');
   }
   const { rec: fresh, downloadUrl } = await client.freshAudioFile(rec.zoomUuid, rec.zoomFileId);
-  await downloadIntoRecording(recordingId, downloadUrl, fresh.durationSec, null, client);
+  await downloadIntoRecording(recordingId, downloadUrl, fresh.durationSec, client);
   return { recordingId };
 }
 
@@ -116,25 +114,25 @@ export const listZoomRecordings = reportedCall(async (req) => {
     .collection(COLLECTIONS.recordings)
     .where('source', '==', 'zoom')
     .get();
-  const byUuid = new Map<string, { recordingId: string; classId: string; cohortId: string }>();
+  const byUuid = new Map<string, { recordingId: string; courseId: string; cohortId: string }>();
   for (const doc of imported.docs) {
     const data = doc.data() as RecordingDoc;
     if (data.zoomUuid) {
-      byUuid.set(data.zoomUuid, { recordingId: doc.id, classId: data.classId, cohortId: data.cohortId });
+      byUuid.set(data.zoomUuid, { recordingId: doc.id, courseId: data.courseId, cohortId: data.cohortId });
     }
   }
 
   // Resolve the class + cohort names for the recordings actually referenced, so
   // an already-imported row can name its class and be tapped through to it.
   const db = getFirestore();
-  const classNames = new Map<string, string>();
+  const courseNames = new Map<string, string>();
   const cohortNames = new Map<string, string>();
-  const classIds = new Set([...byUuid.values()].map((v) => v.classId));
+  const courseIds = new Set([...byUuid.values()].map((v) => v.courseId));
   const cohortIds = new Set([...byUuid.values()].map((v) => v.cohortId));
   await Promise.all([
-    ...[...classIds].map(async (id) => {
-      const s = await db.collection(COLLECTIONS.classes).doc(id).get();
-      if (s.exists) classNames.set(id, (s.data() as ClassDoc).name);
+    ...[...courseIds].map(async (id) => {
+      const s = await db.collection(COLLECTIONS.courses).doc(id).get();
+      if (s.exists) courseNames.set(id, (s.data() as CourseDoc).name);
     }),
     ...[...cohortIds].map(async (id) => {
       const s = await db.collection(COLLECTIONS.cohorts).doc(id).get();
@@ -147,8 +145,8 @@ export const listZoomRecordings = reportedCall(async (req) => {
     return {
       ...r,
       alreadyImported: imp?.recordingId ?? null,
-      importedClassId: imp?.classId ?? null,
-      importedClassName: imp ? (classNames.get(imp.classId) ?? null) : null,
+      importedCourseId: imp?.courseId ?? null,
+      importedCourseName: imp ? (courseNames.get(imp.courseId) ?? null) : null,
       importedCohortName: imp ? (cohortNames.get(imp.cohortId) ?? null) : null,
     };
   });
@@ -158,30 +156,30 @@ export const listZoomRecordings = reportedCall(async (req) => {
 export const importZoomRecording = auditedCall(
   'importZoomRecording',
   async (req, audit) => {
-    const d = req.data as {
-      meetingUuid?: unknown;
-      fileId?: unknown;
-      classId?: unknown;
-      dueDate?: unknown;
-    };
+    const d = req.data as { meetingUuid?: unknown; fileId?: unknown; sessionId?: unknown };
     if (typeof d?.meetingUuid !== 'string' || !d.meetingUuid) {
       throw new HttpsError('invalid-argument', 'meetingUuid is required.');
     }
     if (typeof d?.fileId !== 'string' || !d.fileId) {
       throw new HttpsError('invalid-argument', 'fileId is required.');
     }
-    if (typeof d?.classId !== 'string' || !d.classId) {
-      throw new HttpsError('invalid-argument', 'classId is required.');
+    if (typeof d?.sessionId !== 'string' || !d.sessionId) {
+      throw new HttpsError('invalid-argument', 'sessionId is required.');
     }
-    const dueDate = typeof d.dueDate === 'string' && DATE_ONLY.test(d.dueDate) ? d.dueDate : null;
-    const uid = await requireClassScope(req, d.classId);
-    audit.classId = d.classId;
+    const sessionSnap = await getFirestore()
+      .collection(COLLECTIONS.sessions)
+      .doc(d.sessionId)
+      .get();
+    if (!sessionSnap.exists) throw new HttpsError('not-found', 'No such session.');
+    const courseId = (sessionSnap.data() as SessionDoc).courseId;
+    const uid = await requireCourseScope(req, courseId);
+    audit.courseId = courseId;
     const res = await applyImportZoomRecording(
       uid,
-      { meetingUuid: d.meetingUuid, fileId: d.fileId, classId: d.classId, dueDate },
+      { meetingUuid: d.meetingUuid, fileId: d.fileId, sessionId: d.sessionId },
       zoomClient,
     );
-    audit.targets = { recordingId: res.recordingId, classId: d.classId };
+    audit.targets = { recordingId: res.recordingId, sessionId: d.sessionId };
     return res;
   },
   ZOOM_SECRETS,
@@ -196,9 +194,9 @@ export const retryZoomImport = auditedCall(
     }
     const snap = await getFirestore().collection(COLLECTIONS.recordings).doc(d.recordingId).get();
     if (!snap.exists) throw new HttpsError('not-found', 'No such recording.');
-    const classId = (snap.data() as RecordingDoc).classId;
-    await requireClassScope(req, classId);
-    audit.classId = classId;
+    const courseId = (snap.data() as RecordingDoc).courseId;
+    await requireCourseScope(req, courseId);
+    audit.courseId = courseId;
     return applyRetryZoomImport(d.recordingId, zoomClient);
   },
   ZOOM_SECRETS,

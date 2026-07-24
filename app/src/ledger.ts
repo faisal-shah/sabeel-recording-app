@@ -3,10 +3,14 @@ import { collection, orderBy, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import {
   COLLECTIONS,
+  attendanceGroups,
+  attendanceReport,
   effectiveCompletion,
   listenedFraction,
   rollup,
   type AssignmentDoc,
+  type AttendanceReport,
+  type AttendanceStatus,
   type AuditEntryDoc,
   type CompletionDoc,
   type CompletionOverrideDoc,
@@ -16,7 +20,10 @@ import {
 import { db, functions } from './firebase';
 import { useLiveQuery } from './liveQuery';
 import { useStudents } from './students';
+import { useCourseSessions } from './sessions';
+import { useRoster } from './structure';
 import type { RecordingRow } from './recordings';
+import type { SessionRow } from './sessions';
 
 // --------------------------------------------------------------- callables --
 
@@ -43,7 +50,7 @@ export const clearCompletionOverride = call<{
 function useMapByStudent<T, V>(
   label: string,
   coll: string,
-  field: 'recordingId' | 'classId',
+  field: 'recordingId' | 'courseId',
   value: string | null,
   pick: (data: T, pending: boolean) => V,
   keyOf: (data: T) => string,
@@ -74,22 +81,34 @@ export interface LedgerRow {
   lastListened: number | null;
   completedAt: number | null;
   pending: boolean;
+  /** How the session recorded this student: 'absent'/'excused' for the accountable
+   *  set, 'present' for an attendee, null for someone outside the snapshot. */
+  attendance: AttendanceStatus | null;
 }
 
 export interface RecordingLedger {
-  /** Students accountable for this recording (an active assignment). */
+  /** Students accountable for this recording (absent or excused → an active assignment). */
   accountable: LedgerRow[];
-  /** Completed it without being assigned — evidence, not accountability. */
-  notRequired: LedgerRow[];
+  /** Present at the session — exempt, never overdue, but their listening is shown. */
+  attendees: LedgerRow[];
+  /** Listened without being accountable or a recorded attendee (e.g. a late
+   *  enrollee outside the snapshot) — evidence, not accountability. */
+  otherListeners: LedgerRow[];
   rollup: LedgerRollup;
 }
 
 /**
  * The recording ledger: the accountable roster joined with completion,
- * override, and listening progress. All reads are `recordingId ==`, so the
- * staff rules accept them class-scoped; the join and the counts are pure.
+ * override, and listening progress, split against the session's attendance into
+ * the accountable (absent+excused) and the attendees (present). All reads are
+ * `recordingId ==`, so the staff rules accept them class-scoped; the join and
+ * the counts are pure.
  */
-export function useRecordingLedger(recording: RecordingRow, today: string): RecordingLedger {
+export function useRecordingLedger(
+  recording: RecordingRow,
+  session: SessionRow,
+  today: string,
+): RecordingLedger {
   const rid = recording.id;
   const assignments = useLiveQuery<Map<string, AssignmentDoc>>(
     'ledgerAssignments',
@@ -132,7 +151,11 @@ export function useRecordingLedger(recording: RecordingRow, today: string): Reco
   const nameByUid = useMemo(() => new Map(students.map((s) => [s.uid, s.displayName])), [students]);
 
   return useMemo(() => {
-    const row = (studentUid: string, dueDate: string | null): LedgerRow => {
+    const row = (
+      studentUid: string,
+      dueDate: string | null,
+      attendance: AttendanceStatus | null,
+    ): LedgerRow => {
       const c = completions.get(studentUid);
       const o = overrides.get(studentUid);
       const eff = effectiveCompletion(c, o);
@@ -148,80 +171,107 @@ export function useRecordingLedger(recording: RecordingRow, today: string): Reco
         lastListened: p?.updatedAt ?? null,
         completedAt: c?.completedAt ?? null,
         pending: c?.pending ?? false,
+        attendance,
       };
     };
 
+    const status = session.attendance;
     const accountable = [...assignments.values()]
-      .map((a) => row(a.studentUid, a.dueDate))
-      .sort((x, y) => Number(x.completed) - Number(y.completed) || x.name.localeCompare(y.name));
+      .map((a) => row(a.studentUid, a.dueDate, status[a.studentUid] ?? 'absent'))
+      // Not-yet-complete first, then absent before excused, then by name.
+      .sort(
+        (x, y) =>
+          Number(x.completed) - Number(y.completed) ||
+          Number(x.attendance === 'excused') - Number(y.attendance === 'excused') ||
+          x.name.localeCompare(y.name),
+      );
 
-    const assignedUids = new Set(assignments.keys());
-    const notRequired = [...completions.entries()]
-      .filter(([uid, c]) => c.completed && !assignedUids.has(uid))
-      .map(([uid]) => row(uid, null));
+    const { present } = attendanceGroups(status);
+    // Attendees surface who has (and hasn't) listened, most listened first.
+    const attendees = present
+      .map((uid) => row(uid, null, 'present'))
+      .sort((x, y) => y.listenedPct - x.listenedPct || x.name.localeCompare(y.name));
+
+    // Anyone with real listening/completion who is neither accountable nor a
+    // recorded attendee — e.g. enrolled after the snapshot, or unenrolled.
+    const known = new Set<string>([...assignments.keys(), ...present]);
+    const otherUids = new Set<string>();
+    for (const [uid, c] of completions.entries()) if (c.completed && !known.has(uid)) otherUids.add(uid);
+    for (const uid of progress.keys()) if (!known.has(uid)) otherUids.add(uid);
+    const otherListeners = [...otherUids].map((uid) => row(uid, null, null));
 
     return {
       accountable,
-      notRequired,
+      attendees,
+      otherListeners,
       rollup: rollup(
         accountable.map((r) => ({ completed: r.completed, dueDate: r.dueDate })),
         today,
       ),
     };
-  }, [assignments, completions, overrides, progress, nameByUid, recording.durationSec, today]);
+  }, [assignments, completions, overrides, progress, nameByUid, recording.durationSec, session.attendance, today]);
 }
 
 // ------------------------------------------------------------ class-level ---
 
-export interface ClassLedger {
+export interface CourseAssignmentItem {
+  studentUid: string;
+  recordingId: string;
+  completed: boolean;
+  dueDate: string | null;
+}
+
+export interface CourseLedger {
   /** rollup across every active assignment in the class. */
   rollup: LedgerRollup;
   /** per-recording { complete, total } for the recordings list. */
   byRecording: Map<string, { complete: number; total: number }>;
+  /** every active assignment reduced to its effective completion (for the report). */
+  items: CourseAssignmentItem[];
 }
 
 /**
- * Class-level counts: every active assignment in the class, its effective
- * completion, rolled up whole-class and per-recording. `classId ==` reads.
+ * Course-level counts: every active assignment in the class, its effective
+ * completion, rolled up whole-class and per-recording. `courseId ==` reads.
  */
-export function useClassLedger(classId: string | null, today: string): ClassLedger {
+export function useCourseLedger(courseId: string | null, today: string): CourseLedger {
   const assignments = useLiveQuery<AssignmentDoc[]>(
-    'classLedgerAssignments',
+    'courseLedgerAssignments',
     () =>
-      classId
+      courseId
         ? query(
             collection(db, COLLECTIONS.assignments),
-            where('classId', '==', classId),
+            where('courseId', '==', courseId),
             where('active', '==', true),
           )
         : null,
     (snap) => snap.docs.map((d) => d.data() as AssignmentDoc),
     [],
-    [classId],
+    [courseId],
   );
   const completions = useMapByStudent<CompletionDoc, boolean>(
-    'classLedgerCompletions',
+    'courseLedgerCompletions',
     COLLECTIONS.completions,
-    'classId',
-    classId,
+    'courseId',
+    courseId,
     (d) => d.completed,
     (d) => `${d.studentUid}_${d.recordingId}`,
   );
   const overrides = useMapByStudent<CompletionOverrideDoc, CompletionOverrideDoc>(
-    'classLedgerOverrides',
+    'courseLedgerOverrides',
     COLLECTIONS.completionOverrides,
-    'classId',
-    classId,
+    'courseId',
+    courseId,
     (d) => d,
     (d) => `${d.studentUid}_${d.recordingId}`,
   );
 
   return useMemo(() => {
-    const items = assignments.map((a) => {
+    const items: CourseAssignmentItem[] = assignments.map((a) => {
       const key = `${a.studentUid}_${a.recordingId}`;
       const c = completions.get(key);
       const eff = effectiveCompletion(c === undefined ? undefined : { completed: c }, overrides.get(key));
-      return { recordingId: a.recordingId, completed: eff.completed, dueDate: a.dueDate };
+      return { studentUid: a.studentUid, recordingId: a.recordingId, completed: eff.completed, dueDate: a.dueDate };
     });
     const byRecording = new Map<string, { complete: number; total: number }>();
     for (const it of items) {
@@ -230,8 +280,38 @@ export function useClassLedger(classId: string | null, today: string): ClassLedg
       if (it.completed) cur.complete++;
       byRecording.set(it.recordingId, cur);
     }
-    return { rollup: rollup(items, today), byRecording };
+    return { rollup: rollup(items, today), byRecording, items };
   }, [assignments, completions, overrides, today]);
+}
+
+// --------------------------------------------------------- attendance report --
+
+/**
+ * A course's attendance report: sessions + roster + the active catch-up
+ * assignments, aggregated by the pure `attendanceReport`. Composes existing
+ * live reads (no new listener shapes), so the security rules already cover it.
+ */
+export function useCourseAttendance(courseId: string | null, today: string): AttendanceReport {
+  const sessions = useCourseSessions(courseId);
+  const roster = useRoster(courseId);
+  const { items } = useCourseLedger(courseId, today);
+
+  return useMemo(
+    () =>
+      attendanceReport({
+        sessions: sessions.map((s) => ({
+          id: s.id,
+          title: s.title,
+          date: s.date,
+          attendance: s.attendance,
+          attendanceSubmittedAt: s.attendanceSubmittedAt,
+        })),
+        rosterUids: roster.filter((e) => e.active).map((e) => e.studentUid),
+        assignments: items.map((i) => ({ studentUid: i.studentUid, completed: i.completed, dueDate: i.dueDate })),
+        today,
+      }),
+    [sessions, roster, items, today],
+  );
 }
 
 // -------------------------------------------------------------- student ledger --
@@ -246,10 +326,10 @@ export interface StudentLedgerItem {
 
 /**
  * One student's obligations in one class. Reads are `studentUid == uid &&
- * classId == X` — two equalities, class-scoped, so the staff rules accept them.
- * The screen supplies recording titles from `useClassRecordings`.
+ * courseId == X` — two equalities, class-scoped, so the staff rules accept them.
+ * The screen supplies recording titles from `useCourseRecordings`.
  */
-export function useStudentLedger(studentUid: string | null, classId: string): StudentLedgerItem[] {
+export function useStudentLedger(studentUid: string | null, courseId: string): StudentLedgerItem[] {
   const assignments = useLiveQuery<AssignmentDoc[]>(
     'studentLedgerAssignments',
     () =>
@@ -257,25 +337,25 @@ export function useStudentLedger(studentUid: string | null, classId: string): St
         ? query(
             collection(db, COLLECTIONS.assignments),
             where('studentUid', '==', studentUid),
-            where('classId', '==', classId),
+            where('courseId', '==', courseId),
           )
         : null,
     (snap) => snap.docs.map((d) => d.data() as AssignmentDoc).filter((a) => a.active),
     [],
-    [studentUid, classId],
+    [studentUid, courseId],
   );
-  const completions = useStudentClassMap<CompletionDoc, boolean>(
+  const completions = useStudentCourseMap<CompletionDoc, boolean>(
     'studentLedgerCompletions',
     COLLECTIONS.completions,
     studentUid,
-    classId,
+    courseId,
     (d) => d.completed,
   );
-  const overrides = useStudentClassMap<CompletionOverrideDoc, CompletionOverrideDoc>(
+  const overrides = useStudentCourseMap<CompletionOverrideDoc, CompletionOverrideDoc>(
     'studentLedgerOverrides',
     COLLECTIONS.completionOverrides,
     studentUid,
-    classId,
+    courseId,
     (d) => d,
   );
 
@@ -296,11 +376,11 @@ export function useStudentLedger(studentUid: string | null, classId: string): St
   );
 }
 
-function useStudentClassMap<T extends { recordingId: string }, V>(
+function useStudentCourseMap<T extends { recordingId: string }, V>(
   label: string,
   coll: string,
   studentUid: string | null,
-  classId: string,
+  courseId: string,
   pick: (data: T) => V,
 ) {
   return useLiveQuery<Map<string, V>>(
@@ -310,12 +390,12 @@ function useStudentClassMap<T extends { recordingId: string }, V>(
         ? query(
             collection(db, coll),
             where('studentUid', '==', studentUid),
-            where('classId', '==', classId),
+            where('courseId', '==', courseId),
           )
         : null,
     (snap) => new Map(snap.docs.map((d) => [(d.data() as T).recordingId, pick(d.data() as T)])),
     new Map(),
-    [studentUid, classId],
+    [studentUid, courseId],
   );
 }
 
@@ -326,22 +406,22 @@ export interface AuditRow extends AuditEntryDoc {
 }
 
 /**
- * The audit log, newest first. A manager passes their classId (scoped read); an
+ * The audit log, newest first. A manager passes their courseId (scoped read); an
  * admin passes null for the unconstrained global view.
  */
-export function useAudit(classId: string | null): AuditRow[] {
+export function useAudit(courseId: string | null): AuditRow[] {
   return useLiveQuery<AuditRow[]>(
     'audit',
     () =>
-      classId === null
+      courseId === null
         ? query(collection(db, COLLECTIONS.auditLog), orderBy('at', 'desc'))
         : query(
             collection(db, COLLECTIONS.auditLog),
-            where('classId', '==', classId),
+            where('courseId', '==', courseId),
             orderBy('at', 'desc'),
           ),
     (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as AuditEntryDoc) })),
     [],
-    [classId],
+    [courseId],
   );
 }

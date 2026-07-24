@@ -18,10 +18,8 @@ export function HomeScreen({
 }: {
   name: string;
   role: Role;
-  onOpen: (
-    route: 'Staff' | 'Students' | 'Cohorts' | 'MyClasses' | 'Library' | 'ZoomImport' | 'Tokens',
-  ) => void;
-  /** Admin-only global audit view (managers reach a scoped one from a class). */
+  onOpen: (route: 'Staff' | 'Students' | 'Cohorts' | 'MyCourses' | 'Library' | 'Tokens') => void;
+  /** Admin-only global audit view (managers reach a scoped one from a course). */
   onOpenAudit: () => void;
 }) {
   // Staff only — a student's landing is StudentHomeScreen (their task list).
@@ -33,7 +31,7 @@ export function HomeScreen({
       <Card>
         {isAdmin ? (
           <>
-            <Button testID="nav-cohorts" label="Cohorts & classes" onPress={() => onOpen('Cohorts')} />
+            <Button testID="nav-cohorts" label="Cohorts & courses" onPress={() => onOpen('Cohorts')} />
             <Button
               testID="nav-staff"
               label="Staff"
@@ -42,7 +40,7 @@ export function HomeScreen({
             />
           </>
         ) : (
-          <Button testID="nav-myclasses" label="My classes" onPress={() => onOpen('MyClasses')} />
+          <Button testID="nav-myclasses" label="My courses" onPress={() => onOpen('MyCourses')} />
         )}
         <Button
           testID="nav-students"
@@ -50,14 +48,8 @@ export function HomeScreen({
           variant="secondary"
           onPress={() => onOpen('Students')}
         />
-        {/* Staff (admin + manager) pull class audio from the central Zoom
-            account; the class is chosen at import time. */}
-        <Button
-          testID="nav-zoom-import"
-          label="Import from Zoom"
-          variant="secondary"
-          onPress={() => onOpen('ZoomImport')}
-        />
+        {/* Zoom import is reached per-session now (from a session's recording
+            section) — a Zoom recording is imported INTO a specific session. */}
       </Card>
 
       <SectionTitle>Reports</SectionTitle>

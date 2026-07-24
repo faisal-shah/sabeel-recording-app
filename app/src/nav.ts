@@ -1,5 +1,6 @@
 import type { RecordingRow } from './recordings';
-import type { ClassRow, CohortRow } from './structure';
+import type { SessionRow } from './sessions';
+import type { CourseRow, CohortRow } from './structure';
 
 /** Routes reachable once signed in and active. Gate screens are not routes —
  *  they replace the whole navigator, so a gated account cannot be deep-linked
@@ -9,16 +10,20 @@ export type RootStackParamList = {
   Staff: undefined;
   Students: undefined;
   Cohorts: undefined;
-  Classes: { cohort: CohortRow };
-  ClassDetail: { cls: ClassRow };
-  Recordings: { cls: ClassRow };
-  RecordingLedger: { recording: RecordingRow; cls: ClassRow };
-  StudentLedger: { studentUid: string; studentName: string; cls: ClassRow };
+  Courses: { cohort: CohortRow };
+  CourseDetail: { cls: CourseRow };
+  CourseAttendance: { cls: CourseRow };
+  Sessions: { cls: CourseRow };
+  SessionDetail: { session: SessionRow; cls: CourseRow };
+  RecordingLedger: { recording: RecordingRow; session: SessionRow; cls: CourseRow };
+  StudentLedger: { studentUid: string; studentName: string; cls: CourseRow };
   Library: undefined;
-  ZoomImport: undefined;
-  Audit: { classId: string | null; title: string };
+  ZoomImport: { session: SessionRow; cls: CourseRow };
+  Audit: { courseId: string | null; title: string };
   MyRecordings: undefined;
-  Player: { recording: RecordingRow; cls: ClassRow };
-  MyClasses: undefined;
+  /** dueDate is passed by the caller: the session's for staff, the student's own
+   *  assignment for students, or null when browsing something not assigned. */
+  Player: { recording: RecordingRow; cls: CourseRow; dueDate?: string | null };
+  MyCourses: undefined;
   Tokens: undefined;
 };

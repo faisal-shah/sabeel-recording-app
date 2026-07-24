@@ -1,22 +1,21 @@
 import './setup';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { getFirestore } from 'firebase-admin/firestore';
-import { COLLECTIONS, type RecordingDoc } from '@sabeel/shared';
-import { applyRecordingFanout } from './assignmentsFanout';
+import { COLLECTIONS, type RecordingDoc, type SessionDoc } from '@sabeel/shared';
+import { applyRecordingFanout, applySessionFanout } from './assignmentsFanout';
 import { reportError } from './sentry';
 import { SENTRY_DSN } from './reported';
 
 /**
- * Fan out required-listening obligations as a recording moves through its
- * lifecycle. Reacts to the recording's OWN document so every path that changes
- * it — the publish callable, a class move, a due-date edit, unpublish/archive,
- * even a raw admin edit — is covered in one place (planning decision #2).
+ * Obligations are attendance-driven, and the two facts that decide them live on
+ * two documents: the recording (is it published?) and the session (attendance +
+ * due date). So two triggers converge on the same `reconcileSessionAssignments`.
  *
- * The decision logic lives in `applyRecordingFanout` so it can be tested
- * directly against the emulator; this wrapper is only the trigger binding. It is
- * idempotent (deterministic ids + set/merge) and writes ONLY `assignments`,
- * never `recordings`, so it cannot trigger itself.
+ * The decision logic lives in `assignmentsFanout` so it can be tested directly
+ * against the emulator; these are only the bindings. Both are idempotent and
+ * write ONLY `assignments`, so neither can trigger itself.
  */
+
 export const onRecordingWritten = onDocumentWritten(
   { document: `${COLLECTIONS.recordings}/{recordingId}`, secrets: [SENTRY_DSN] },
   async (event) => {
@@ -28,9 +27,24 @@ export const onRecordingWritten = onDocumentWritten(
         event.data?.after.data() as RecordingDoc | undefined,
       );
     } catch (e) {
-      // A background trigger has no caller to surface a failure to — an
-      // unreported throw here would silently leave obligations un-fanned-out.
       await reportError(e, { source: 'onRecordingWritten' });
+      throw e;
+    }
+  },
+);
+
+export const onSessionWritten = onDocumentWritten(
+  { document: `${COLLECTIONS.sessions}/{sessionId}`, secrets: [SENTRY_DSN] },
+  async (event) => {
+    try {
+      await applySessionFanout(
+        getFirestore(),
+        event.params.sessionId,
+        event.data?.before.data() as SessionDoc | undefined,
+        event.data?.after.data() as SessionDoc | undefined,
+      );
+    } catch (e) {
+      await reportError(e, { source: 'onSessionWritten' });
       throw e;
     }
   },

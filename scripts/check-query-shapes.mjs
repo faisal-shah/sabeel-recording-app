@@ -48,25 +48,25 @@ const shapes = [
         .orderBy('displayName', 'asc'),
   ],
   [
-    'classes — within a cohort',
-    () => db.collection('classes').where('cohortId', '==', ID).orderBy('createdAt', 'asc'),
+    'courses — within a cohort',
+    () => db.collection('courses').where('cohortId', '==', ID).orderBy('createdAt', 'asc'),
   ],
   [
-    "classes — a manager's own",
-    () => db.collection('classes').where('managerUids', 'array-contains', ID),
+    "courses — a manager's own",
+    () => db.collection('courses').where('managerUids', 'array-contains', ID),
   ],
   [
     'recordings — staff library for a class',
-    () => db.collection('recordings').where('classId', '==', ID).orderBy('createdAt', 'desc'),
+    () => db.collection('recordings').where('courseId', '==', ID).orderBy('createdAt', 'desc'),
   ],
   [
     'recordings — published, for a student',
     () =>
-      db.collection('recordings').where('classId', '==', ID).where('status', '==', 'published'),
+      db.collection('recordings').where('courseId', '==', ID).where('status', '==', 'published'),
   ],
-  ['enrollments — a class roster', () => db.collection('enrollments').where('classId', '==', ID)],
+  ['enrollments — a class roster', () => db.collection('enrollments').where('courseId', '==', ID)],
   [
-    "enrollments — a student's classes",
+    "enrollments — a student's courses",
     () => db.collection('enrollments').where('studentUid', '==', ID),
   ],
   [
@@ -79,8 +79,8 @@ const shapes = [
         .limit(1),
   ],
   [
-    'classes — cascade over a cohort (server)',
-    () => db.collection('classes').where('cohortId', '==', ID),
+    'courses — cascade over a cohort (server)',
+    () => db.collection('courses').where('cohortId', '==', ID),
   ],
   // ---- Phase 4: assignments, completions ----
   [
@@ -89,7 +89,7 @@ const shapes = [
   ],
   [
     'assignments — a class roster (staff/move)',
-    () => db.collection('assignments').where('classId', '==', ID).where('active', '==', true),
+    () => db.collection('assignments').where('courseId', '==', ID).where('active', '==', true),
   ],
   [
     "assignments — a recording's rows (deactivate fan-out)",
@@ -101,11 +101,11 @@ const shapes = [
   ],
   [
     "assignments — a student's rows in a class (unenrol)",
-    () => db.collection('assignments').where('studentUid', '==', ID).where('classId', '==', ID),
+    () => db.collection('assignments').where('studentUid', '==', ID).where('courseId', '==', ID),
   ],
   [
     'enrollments — active roster (fan-out)',
-    () => db.collection('enrollments').where('classId', '==', ID).where('active', '==', true),
+    () => db.collection('enrollments').where('courseId', '==', ID).where('active', '==', true),
   ],
   [
     "completions — a student's own (home join)",
@@ -114,19 +114,19 @@ const shapes = [
   // ---- Phase 5: staff ledger reads ----
   [
     'completions — a class ledger (staff)',
-    () => db.collection('completions').where('classId', '==', ID),
+    () => db.collection('completions').where('courseId', '==', ID),
   ],
   [
     'listeningProgress — a class ledger (staff)',
-    () => db.collection('listeningProgress').where('classId', '==', ID),
+    () => db.collection('listeningProgress').where('courseId', '==', ID),
   ],
   [
     'completionEvents — a class ledger (staff)',
-    () => db.collection('completionEvents').where('classId', '==', ID),
+    () => db.collection('completionEvents').where('courseId', '==', ID),
   ],
   [
     'completionOverrides — a class ledger (staff)',
-    () => db.collection('completionOverrides').where('classId', '==', ID),
+    () => db.collection('completionOverrides').where('courseId', '==', ID),
   ],
   [
     "completionOverrides — a student's own",
@@ -134,11 +134,11 @@ const shapes = [
   ],
   [
     "assignments — a student's rows in a class (student ledger, manager)",
-    () => db.collection('assignments').where('studentUid', '==', ID).where('classId', '==', ID),
+    () => db.collection('assignments').where('studentUid', '==', ID).where('courseId', '==', ID),
   ],
   [
     'auditLog — a class, newest first (manager audit view)',
-    () => db.collection('auditLog').where('classId', '==', ID).orderBy('at', 'desc'),
+    () => db.collection('auditLog').where('courseId', '==', ID).orderBy('at', 'desc'),
   ],
   [
     'auditLog — global, newest first (admin audit view)',

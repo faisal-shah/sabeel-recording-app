@@ -16,23 +16,30 @@ export type RecordingStatus =
 /** Where the audio came from. Zoom import arrives in Phase 6. */
 export type RecordingSource = 'manual' | 'zoom';
 
+/**
+ * The audio artifact of a session — media, lifecycle, and the student-facing
+ * display copy of its session.
+ *
+ * The `SessionDoc` is the source of truth for the meeting metadata (and owns the
+ * private attendance map). But students CANNOT read sessions — that is what keeps
+ * attendance private — so the display fields a student needs to see what they are
+ * listening to (`title`, `notes`, `date`) are denormalized here, on the
+ * published recording they are allowed to read. `dueDate` is likewise
+ * denormalized onto the student's own assignment. Staff edit the session; the
+ * create/update-session paths keep these copies in sync. `courseId`/`cohortId`
+ * are denormalized too, for queries and the assignment fan-out.
+ */
 export interface RecordingDoc {
+  sessionId: string;
+  courseId: string;
   cohortId: string;
-  classId: string;
+  /** Denormalized from the session (source of truth) so students can display it. */
   title: string;
+  notes: string;
+  /** The session's meeting date, `YYYY-MM-DD`. Denormalized for student display. */
+  date: string;
   status: RecordingStatus;
   source: RecordingSource;
-  /** When the class was recorded. From Zoom when available; staff-set otherwise. */
-  recordedAt: number | null;
-  /**
-   * Date-only (`YYYY-MM-DD`) in the institute timezone, or null.
-   *
-   * Null means "required, but never overdue" — the brief is explicit that a
-   * no-due assignment is still required listening. It does not mean optional.
-   */
-  dueDate: string | null;
-  /** Shared with everyone who can access the recording — NOT private staff notes. */
-  notes: string;
   /** Set by finalizeRecordingUpload once audio is actually in Storage. */
   audioPath: string | null;
   durationSec: number | null;
@@ -83,24 +90,20 @@ export function allowedTransitions(from: RecordingStatus): readonly RecordingSta
   return TRANSITIONS[from] ?? [];
 }
 
-export type PublishBlocker = 'title' | 'audio' | 'status';
+export type PublishBlocker = 'audio' | 'status';
 
 /**
  * What still stands between a recording and being published.
  *
- * Returns the reasons rather than a boolean so the UI can say which field is
- * missing instead of leaving a disabled button unexplained. Cohort and class are
- * not checked: a recording cannot be created without them.
- *
- * Due date and notes are deliberately absent — the brief marks both optional.
+ * Returns the reasons rather than a boolean so the UI can say which is missing
+ * instead of leaving a disabled button unexplained. The title now lives on the
+ * session (which always has one), so only audio + a legal transition are checked.
  */
 export function publishBlockers(recording: {
-  title: string;
   audioPath: string | null;
   status: RecordingStatus;
 }): PublishBlocker[] {
   const blockers: PublishBlocker[] = [];
-  if (!recording.title.trim()) blockers.push('title');
   // Publishing without audio would put a row in every student's list that plays
   // nothing — the one failure a student cannot work around.
   if (!recording.audioPath) blockers.push('audio');
@@ -109,7 +112,6 @@ export function publishBlockers(recording: {
 }
 
 export function canPublish(recording: {
-  title: string;
   audioPath: string | null;
   status: RecordingStatus;
 }): boolean {
@@ -143,7 +145,7 @@ export function audioStoragePath(recordingId: string): string {
 export interface ListeningProgressDoc {
   studentUid: string;
   recordingId: string;
-  classId: string;
+  courseId: string;
   /** Where to resume from. */
   positionMs: number;
   /** Total time actually listened, which is NOT the same as position — seeking

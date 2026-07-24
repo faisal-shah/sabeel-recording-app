@@ -40,7 +40,7 @@ describe('completion override', () => {
     expect(ov).toMatchObject({
       studentUid: S,
       recordingId: R,
-      classId: CLASS,
+      courseId: CLASS,
       completed: true,
       reason: 'attended live',
       overriddenBy: 'mgr1',

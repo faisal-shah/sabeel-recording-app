@@ -12,7 +12,7 @@ export interface ZoomImportRow {
   /** Existing recording id if already imported, else null. */
   alreadyImported: string | null;
   /** When already imported: the class it went into — for display and tap-through. */
-  importedClassId: string | null;
-  importedClassName: string | null;
+  importedCourseId: string | null;
+  importedCourseName: string | null;
   importedCohortName: string | null;
 }

@@ -185,7 +185,7 @@ describe('collections not yet opened', () => {
     // (the student-written ones reject an admin because admin is not the owner).
     for (const name of [
       COLLECTIONS.cohorts,
-      COLLECTIONS.classes,
+      COLLECTIONS.courses,
       COLLECTIONS.enrollments,
       COLLECTIONS.recordings,
       COLLECTIONS.assignments,

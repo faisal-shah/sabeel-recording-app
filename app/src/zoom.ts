@@ -10,9 +10,9 @@ export const listZoomRecordings = call<{ from: string; to: string }, ZoomImportR
   'listZoomRecordings',
 );
 
-/** Import one Zoom recording into a class as a draft. Idempotent on meetingUuid. */
+/** Import one Zoom recording into a session as its draft. Idempotent on meetingUuid. */
 export const importZoomRecording = call<
-  { meetingUuid: string; fileId: string; classId: string; dueDate?: string | null },
+  { meetingUuid: string; fileId: string; sessionId: string },
   { recordingId: string; alreadyExisted: boolean }
 >('importZoomRecording');
 
