@@ -112,7 +112,11 @@ export function RecordingLedgerScreen({
 
       {rows.length === 0 ? (
         <Empty>
-          {filter === 'all' ? 'No one is accountable for this recording yet.' : 'Nobody here — nice.'}
+          {filter === 'all'
+            ? 'No one is accountable for this recording yet.'
+            : filter === 'overdue'
+              ? 'No one is overdue — nice.'
+              : 'Everyone accountable has completed this — nice.'}
         </Empty>
       ) : (
         rows.map((r) => (

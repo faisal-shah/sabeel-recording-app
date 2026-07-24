@@ -51,6 +51,13 @@ export function ClassDetailScreen({
   const roster = useRoster(cls.id);
   const students = useStudents(true);
   const staff = useDecidedStaff(isAdmin);
+  // Only non-admin active staff can be *assigned* a class — an admin already has
+  // every class, so offering to "make them a manager" is a no-op that reads as
+  // broken (the confusion a solo admin hits: they can't usefully pick themself).
+  const assignableManagers = useMemo(
+    () => staff.filter((s) => s.status === 'active' && s.role !== 'admin'),
+    [staff],
+  );
   const today = todayInZone(INSTITUTE_TIMEZONE);
   const ledger = useClassLedger(cls.id, today);
   const [name, setName] = useState(cls.name);
@@ -157,12 +164,21 @@ export function ClassDetailScreen({
 
           <SectionTitle>Managers ({cls.managerUids.length})</SectionTitle>
           <Card>
-            {staff.filter((s) => s.status === 'active').length === 0 ? (
-              <Empty>No active staff to assign.</Empty>
+            {/* Managers are scoped-DOWN staff — access to just this class.
+                Admins already have every class, so listing them here (or the
+                admin themselves) only invites a pointless, confusing self-toggle;
+                exclude them. */}
+            <Text style={styles.managerLede}>
+              Managers get access to just this class. You — and other admins —
+              already have access to every class.
+            </Text>
+            {assignableManagers.length === 0 ? (
+              <Empty>
+                No managers to assign yet. Staff who sign in with Google appear here once you
+                approve them as a manager, then you can give them this class.
+              </Empty>
             ) : (
-              staff
-                .filter((s) => s.status === 'active')
-                .map((s) => {
+              assignableManagers.map((s) => {
                   const on = cls.managerUids.includes(s.uid);
                   return (
                     <Pressable
@@ -275,6 +291,7 @@ export function ClassDetailScreen({
 const styles = StyleSheet.create({
   name: { fontSize: 15, fontWeight: '600', color: t.text.primary },
   hint: { fontSize: 13, color: t.text.secondary },
+  managerLede: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(2), lineHeight: 19 },
   ledgerLine: { fontSize: 15, color: t.text.secondary, marginBottom: spacing(3) },
   ledgerNum: { fontSize: 18, fontWeight: '700', color: t.text.primary },
   overdueNum: { color: t.feedback.danger },
