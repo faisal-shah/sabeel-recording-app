@@ -214,13 +214,35 @@ currently debug-signed) and **its** SHA-1 registered.
 
 ## Before Phase 6 (Zoom)
 
+Design decisions (locked 2026-07-24): **one central Zoom user** hosts the class
+recordings (not multiple hosts); **manual class mapping** (staff pick the target
+class at import time — no auto-map by topic).
+
 - [ ] **Create a Zoom Server-to-Server OAuth app** (internal/private, no
-      Marketplace publication) with cloud-recording read scopes. Supply account
-      id, client id, client secret — via `firebase functions:secrets:set`, never
-      pasted into chat or a file.
-- [ ] **Confirm audio-only M4A files exist** on the account's cloud recordings.
-      If they do not, prefer switching the Zoom account to audio-only recording
-      going forward over building server-side ffmpeg extraction.
+      Marketplace publication). Supply account id, client id, client secret — via
+      `firebase functions:secrets:set ZOOM_ACCOUNT_ID` / `ZOOM_CLIENT_ID` /
+      `ZOOM_CLIENT_SECRET`, never pasted into chat or a file.
+- [ ] **Grant exactly these granular scopes** (`:admin`, NOT `:master` — this is
+      a single-account S2S app; `:master` is only for master/sub-account ISVs):
+      - `cloud_recording:read:list_user_recordings:admin` — list the central
+        user's cloud recordings (the import picker; response already carries each
+        file's download_url, type, duration, start time).
+      - `cloud_recording:read:list_recording_files:admin` — read one meeting's
+        recording files (per-recording import + retry via
+        `GET /meetings/{meetingId}/recordings`).
+      - `user:read:user:admin` — *recommended*, resolve/validate the central user
+        by email at runtime instead of hardcoding an id.
+      (Not needed unless we later add more hosts:
+      `cloud_recording:read:list_account_recordings:admin`. No write scopes — we
+      never modify anything in Zoom. Source: developers.zoom.us granular scopes.)
+- [ ] **Enable audio-only recording** on that user (Settings → Recording →
+      "Record an audio-only file" ON) so recordings produce an **M4A**
+      (`recording_type: audio_only`). If existing recordings are video-only with
+      no M4A, switch to audio-only going forward rather than building server-side
+      ffmpeg extraction.
+- [ ] **One real cloud recording with an M4A** on the account — needed only for
+      the final "one real import" check; the whole job is built + emulator-tested
+      against a fake Zoom first.
 
 ## Before Phase 9 (release)
 
