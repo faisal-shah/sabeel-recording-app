@@ -1,4 +1,4 @@
-import { collection, orderBy, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, orderBy, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { ref, uploadBytesResumable } from 'firebase/storage';
 import {
@@ -13,6 +13,12 @@ import { useLiveQuery } from './liveQuery';
 
 export interface RecordingRow extends RecordingDoc {
   id: string;
+}
+
+/** Load one recording by id (for opening it directly, e.g. from the Zoom picker). */
+export async function loadRecording(id: string): Promise<RecordingRow | null> {
+  const snap = await getDoc(doc(db, COLLECTIONS.recordings, id));
+  return snap.exists() ? { id: snap.id, ...(snap.data() as RecordingDoc) } : null;
 }
 
 /**

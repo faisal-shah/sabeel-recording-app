@@ -28,10 +28,12 @@ export function ZoomImportScreen({
   isAdmin,
   uid,
   onImported,
+  onOpenImported,
 }: {
   isAdmin: boolean;
   uid: string;
   onImported: (cls: ClassRow) => void;
+  onOpenImported: (recordingId: string, classId: string) => void;
 }) {
   const [from, setFrom] = useState(defaultFrom());
   const [to, setTo] = useState(ymd(new Date()));
@@ -103,7 +105,13 @@ export function ZoomImportScreen({
         <Empty>No recordings match. Widen the date range or the filters, then Load.</Empty>
       ) : (
         filtered.map((r) => (
-          <ZoomRow key={r.meetingUuid} row={r} options={options} onImported={onImported} />
+          <ZoomRow
+            key={r.meetingUuid}
+            row={r}
+            options={options}
+            onImported={onImported}
+            onOpenImported={onOpenImported}
+          />
         ))
       )}
     </Screen>
@@ -131,10 +139,12 @@ function ZoomRow({
   row,
   options,
   onImported,
+  onOpenImported,
 }: {
   row: ZoomImportRow;
   options: { cls: ClassRow; cohortName: string }[];
   onImported: (cls: ClassRow) => void;
+  onOpenImported: (recordingId: string, classId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [classId, setClassId] = useState<string | null>(null);
@@ -171,7 +181,27 @@ function ZoomRow({
       </Text>
 
       {row.alreadyImported ? (
-        <Text style={styles.imported}>✓ Already imported</Text>
+        <Pressable
+          testID={`zoom-open-imported-${row.topic.trim() || row.meetingUuid}`}
+          onPress={() =>
+            row.alreadyImported &&
+            row.importedClassId &&
+            onOpenImported(row.alreadyImported, row.importedClassId)
+          }
+          style={styles.importedRow}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.imported}>
+              ✓ Imported{row.importedClassName ? ` into ${row.importedClassName}` : ''}
+            </Text>
+            {row.importedCohortName ? (
+              <Text style={styles.importedCohort}>{row.importedCohortName} · tap to listen</Text>
+            ) : (
+              <Text style={styles.importedCohort}>Tap to listen</Text>
+            )}
+          </View>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
       ) : expanded ? (
         <View style={styles.picker}>
           <Text style={styles.pickerLabel}>Import into which class?</Text>
@@ -237,7 +267,15 @@ const styles = StyleSheet.create({
   chipTextOn: { color: t.accent.onAccent },
   title: { fontSize: 16, fontWeight: '600', color: t.text.primary },
   sub: { fontSize: 13, color: t.text.secondary, marginTop: 2 },
-  imported: { fontSize: 14, color: t.feedback.success, fontWeight: '600', marginTop: spacing(2) },
+  importedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(3),
+    marginTop: spacing(3),
+  },
+  imported: { fontSize: 14, color: t.feedback.success, fontWeight: '600' },
+  importedCohort: { fontSize: 13, color: t.text.secondary, marginTop: 1 },
+  chevron: { fontSize: 24, color: t.text.secondary, fontWeight: '600' },
   picker: { marginTop: spacing(3) },
   pickerLabel: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(1) },
   pickRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), paddingVertical: spacing(2) },

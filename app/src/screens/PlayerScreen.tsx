@@ -69,7 +69,7 @@ export function PlayerScreen({
 
       <Scrubber
         testID="player-scrubber"
-        positionMs={state.positionMs}
+        positionMs={shownPositionMs}
         durationMs={durationMs}
         disabled={!state.ready}
         onSeek={seek}

@@ -3,6 +3,8 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
   audioStoragePath,
+  type ClassDoc,
+  type CohortDoc,
   type RecordingDoc,
   type ZoomImportRow,
 } from '@sabeel/shared';
@@ -114,12 +116,42 @@ export const listZoomRecordings = reportedCall(async (req) => {
     .collection(COLLECTIONS.recordings)
     .where('source', '==', 'zoom')
     .get();
-  const byUuid = new Map<string, string>();
+  const byUuid = new Map<string, { recordingId: string; classId: string; cohortId: string }>();
   for (const doc of imported.docs) {
-    const z = (doc.data() as RecordingDoc).zoomUuid;
-    if (z) byUuid.set(z, doc.id);
+    const data = doc.data() as RecordingDoc;
+    if (data.zoomUuid) {
+      byUuid.set(data.zoomUuid, { recordingId: doc.id, classId: data.classId, cohortId: data.cohortId });
+    }
   }
-  const rows: ZoomImportRow[] = recs.map((r) => ({ ...r, alreadyImported: byUuid.get(r.meetingUuid) ?? null }));
+
+  // Resolve the class + cohort names for the recordings actually referenced, so
+  // an already-imported row can name its class and be tapped through to it.
+  const db = getFirestore();
+  const classNames = new Map<string, string>();
+  const cohortNames = new Map<string, string>();
+  const classIds = new Set([...byUuid.values()].map((v) => v.classId));
+  const cohortIds = new Set([...byUuid.values()].map((v) => v.cohortId));
+  await Promise.all([
+    ...[...classIds].map(async (id) => {
+      const s = await db.collection(COLLECTIONS.classes).doc(id).get();
+      if (s.exists) classNames.set(id, (s.data() as ClassDoc).name);
+    }),
+    ...[...cohortIds].map(async (id) => {
+      const s = await db.collection(COLLECTIONS.cohorts).doc(id).get();
+      if (s.exists) cohortNames.set(id, (s.data() as CohortDoc).name);
+    }),
+  ]);
+
+  const rows: ZoomImportRow[] = recs.map((r) => {
+    const imp = byUuid.get(r.meetingUuid);
+    return {
+      ...r,
+      alreadyImported: imp?.recordingId ?? null,
+      importedClassId: imp?.classId ?? null,
+      importedClassName: imp ? (classNames.get(imp.classId) ?? null) : null,
+      importedCohortName: imp ? (cohortNames.get(imp.cohortId) ?? null) : null,
+    };
+  });
   return rows;
 }, ZOOM_SECRETS);
 

@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { PanResponder, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import Slider from '@react-native-community/slider';
+import { StyleSheet, View } from 'react-native';
 import { getTheme } from '../theme';
 
 const t = getTheme();
@@ -7,22 +7,17 @@ const t = getTheme();
 /**
  * Drag-to-seek bar.
  *
- * Built by hand because React Native has no slider primitive, and because a
- * two-hour lecture is unusable without one — skip buttons alone mean forty taps
- * to reach the middle.
+ * A NATIVE slider (@react-native-community/slider), not a hand-rolled
+ * PanResponder. The custom version fought the gesture system on device — a real
+ * finger-drag (which always has a vertical component) had its touch stolen and
+ * the thumb froze while the finger kept moving. A native slider consumes touch
+ * at the platform level, so it tracks the finger correctly and needs no gesture
+ * negotiation with the surrounding ScrollView.
  *
- * While dragging, the bar shows the FINGER's position and stops following the
- * player: otherwise incoming progress events fight the gesture and the thumb
- * stutters backwards under the touch. The seek is committed once, on release,
- * rather than continuously — seeking on every pixel would thrash the media
- * element and, on native, re-issue a range request per frame.
- *
- * The finger position is the grant point plus the gesture's accumulated `dx`,
- * NOT the live `locationX`: once the finger leaves the element (which it does
- * the moment you drag past the thin track), `locationX` reports garbage and the
- * thumb jumps all over. `dx` is measured in screen space from the touch-down and
- * stays reliable for the whole drag. `onScrub` reports the previewed position so
- * the caller's time readout can follow the thumb instead of the live playhead.
+ * `value` is the shown position (the caller previews the drag target via
+ * `onScrub`, so it already reflects the finger). `onValueChange` previews as the
+ * thumb moves; the seek is committed once, on `onSlidingComplete`, so we don't
+ * thrash the media element with a seek per pixel.
  */
 export function Scrubber({
   positionMs,
@@ -39,99 +34,32 @@ export function Scrubber({
   onScrub?: (ms: number | null) => void;
   testID?: string;
 }) {
-  const [width, setWidth] = useState(0);
-  const [dragFraction, setDragFraction] = useState<number | null>(null);
-
-  // Refs, because the PanResponder is built once and would otherwise close over
-  // the first render's values forever.
-  const widthRef = useRef(0);
-  const durationRef = useRef(durationMs);
-  const disabledRef = useRef(disabled);
-  const onScrubRef = useRef(onScrub);
-  const grantXRef = useRef(0);
-  widthRef.current = width;
-  durationRef.current = durationMs;
-  disabledRef.current = disabled;
-  onScrubRef.current = onScrub;
-
-  const responder = useMemo(() => {
-    // Show the thumb at `fraction` and preview that position to the caller.
-    const drag = (fraction: number) => {
-      setDragFraction(fraction);
-      onScrubRef.current?.(durationRef.current > 0 ? Math.round(fraction * durationRef.current) : 0);
-    };
-    const end = () => {
-      setDragFraction(null);
-      onScrubRef.current?.(null);
-    };
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => !disabledRef.current && widthRef.current > 0,
-      onMoveShouldSetPanResponder: () => !disabledRef.current && widthRef.current > 0,
-      onPanResponderGrant: (e) => {
-        grantXRef.current = e.nativeEvent.locationX ?? 0;
-        drag(clamp(grantXRef.current / widthRef.current));
-      },
-      onPanResponderMove: (_e, gesture) => {
-        drag(clamp((grantXRef.current + gesture.dx) / widthRef.current));
-      },
-      onPanResponderRelease: (_e, gesture) => {
-        const f = clamp((grantXRef.current + gesture.dx) / widthRef.current);
-        end();
-        if (durationRef.current > 0) onSeek(Math.round(f * durationRef.current));
-      },
-      onPanResponderTerminate: end,
-    });
-  }, [onSeek]);
-
-  const playedFraction =
-    dragFraction ?? (durationMs > 0 ? clamp(positionMs / durationMs) : 0);
-
-  const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
-
   return (
-    <View
-      testID={testID}
-      accessibilityRole="adjustable"
-      accessibilityLabel="Playback position"
-      accessibilityValue={{ min: 0, max: Math.round(durationMs / 1000), now: Math.round(positionMs / 1000) }}
-      onLayout={onLayout}
-      // Generous vertical padding: the visible track is thin, but the touch
-      // target has to be finger-sized.
-      style={styles.hit}
-      {...responder.panHandlers}
-    >
-      <View style={styles.track}>
-        <View style={[styles.played, { width: `${playedFraction * 100}%` }]} />
-      </View>
-      <View
-        style={[
-          styles.thumb,
-          dragFraction !== null ? styles.thumbActive : null,
-          { left: `${playedFraction * 100}%` },
-          disabled ? styles.thumbDisabled : null,
-        ]}
+    <View style={styles.wrap}>
+      <Slider
+        testID={testID}
+        style={styles.slider}
+        minimumValue={0}
+        // Guard against 0 before the duration is known — a [0,0] range is invalid.
+        maximumValue={durationMs > 0 ? durationMs : 1}
+        value={positionMs}
+        disabled={disabled}
+        minimumTrackTintColor={t.accent.base}
+        maximumTrackTintColor={t.bg.inset}
+        thumbTintColor={disabled ? t.border.strong : t.accent.base}
+        onValueChange={(v) => onScrub?.(Math.round(v))}
+        onSlidingComplete={(v) => {
+          onScrub?.(null);
+          if (durationMs > 0) onSeek(Math.round(v));
+        }}
       />
     </View>
   );
 }
 
-const clamp = (n: number) => Math.max(0, Math.min(1, Number.isFinite(n) ? n : 0));
-
-const THUMB = 16;
-
 const styles = StyleSheet.create({
-  hit: { paddingVertical: 14, justifyContent: 'center' },
-  track: { height: 6, borderRadius: 3, backgroundColor: t.bg.inset, overflow: 'hidden' },
-  played: { height: 6, backgroundColor: t.accent.base },
-  thumb: {
-    position: 'absolute',
-    width: THUMB,
-    height: THUMB,
-    borderRadius: THUMB / 2,
-    backgroundColor: t.accent.base,
-    marginLeft: -THUMB / 2,
-  },
-  // Grows under the finger so the thumb is not hidden by it.
-  thumbActive: { transform: [{ scale: 1.4 }] },
-  thumbDisabled: { backgroundColor: t.border.strong },
+  // Match the old bar's vertical footprint so the layout below it is unchanged;
+  // the native thumb needs the height to render without clipping.
+  wrap: { justifyContent: 'center', height: 44, marginHorizontal: -8 },
+  slider: { width: '100%', height: 44 },
 });

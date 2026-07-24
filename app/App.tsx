@@ -31,6 +31,8 @@ import { StudentHomeScreen } from './src/screens/StudentHomeScreen';
 import { PlayerScreen } from './src/screens/PlayerScreen';
 import { MyClassesScreen } from './src/screens/MyClassesScreen';
 import { TokensScreen } from './src/screens/TokensScreen';
+import { loadRecording } from './src/recordings';
+import { loadClass } from './src/structure';
 import type { RootStackParamList } from './src/nav';
 import { getTheme } from './src/theme';
 
@@ -257,6 +259,16 @@ function ZoomImport({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
       // After importing, land on the target class's Recordings — the new draft
       // is there, ready to preview (Listen) and publish.
       onImported={(cls) => navigation.navigate('Recordings', { cls })}
+      // Tapping an already-imported row opens that recording's player directly.
+      onOpenImported={(recordingId, classId) => {
+        void (async () => {
+          const [recording, cls] = await Promise.all([
+            loadRecording(recordingId),
+            loadClass(classId),
+          ]);
+          if (recording && cls) navigation.navigate('Player', { recording, cls });
+        })();
+      }}
     />
   );
 }

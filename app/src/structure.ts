@@ -1,4 +1,4 @@
-import { collection, orderBy, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, orderBy, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import {
   COLLECTIONS,
@@ -14,6 +14,12 @@ export interface CohortRow extends CohortDoc {
 }
 export interface ClassRow extends ClassDoc {
   id: string;
+}
+
+/** Load one class by id (for opening a recording's class directly). */
+export async function loadClass(id: string): Promise<ClassRow | null> {
+  const snap = await getDoc(doc(db, COLLECTIONS.classes, id));
+  return snap.exists() ? { id: snap.id, ...(snap.data() as ClassDoc) } : null;
 }
 export interface EnrollmentRow extends EnrollmentDoc {
   id: string;

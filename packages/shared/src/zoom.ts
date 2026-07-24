@@ -11,4 +11,8 @@ export interface ZoomImportRow {
   sizeBytes: number;
   /** Existing recording id if already imported, else null. */
   alreadyImported: string | null;
+  /** When already imported: the class it went into — for display and tap-through. */
+  importedClassId: string | null;
+  importedClassName: string | null;
+  importedCohortName: string | null;
 }

@@ -77,6 +77,11 @@ export function usePlayback(recordingId: string, studentUid: string | null, clas
   const lastTick = useRef<number | null>(null);
   const lastWrite = useRef(0);
   const dirty = useRef(false);
+  // After a seek, the player keeps emitting the OLD position for a beat until it
+  // actually gets there. Hold the displayed position at the target and ignore
+  // those stale ticks, so the thumb doesn't snap backwards right after you drop
+  // it. Cleared once the player reports a position near the target.
+  const seekTarget = useRef<number | null>(null);
 
   const persist = useCallback(async () => {
     if (!studentUid || !dirty.current) return;
@@ -106,6 +111,12 @@ export function usePlayback(recordingId: string, studentUid: string | null, clas
     let cancelled = false;
     const p = createPlayer({
       onProgress: (ms) => {
+        // Ignore stale ticks from before an in-flight seek has landed; once the
+        // player reports a position near the target, resume normal tracking.
+        if (seekTarget.current !== null) {
+          if (Math.abs(ms - seekTarget.current) > 1500) return;
+          seekTarget.current = null;
+        }
         // Count only forward movement at roughly real-time speed as "listened".
         // A seek forward must not manufacture listening that never happened.
         const now = Date.now();
@@ -179,6 +190,7 @@ export function usePlayback(recordingId: string, studentUid: string | null, clas
     seek: (ms: number) => {
       player.current?.seek(ms);
       position.current = ms;
+      seekTarget.current = ms;
       lastTick.current = Date.now();
       dirty.current = true;
       setState((s) => ({ ...s, positionMs: ms }));
