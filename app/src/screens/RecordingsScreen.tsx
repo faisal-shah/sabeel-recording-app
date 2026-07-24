@@ -7,7 +7,7 @@ import {
   todayInZone,
   type RecordingStatus,
 } from '@sabeel/shared';
-import { useClassLedger } from '../ledger';
+import { useCourseLedger } from '../ledger';
 import {
   Button,
   Card,
@@ -29,7 +29,7 @@ import {
   setRecordingStatus,
   updateRecording,
   uploadRecordingAudio,
-  useClassRecordings,
+  useCourseRecordings,
   useRecordingAssignments,
   type RecordingRow,
 } from '../recordings';
@@ -42,30 +42,30 @@ import { getTheme, spacing } from '../theme';
 const t = getTheme();
 
 /**
- * Staff: the recordings in one class.
+ * Staff: the recordings in one course.
  *
- * Upload is two steps by design — a callable creates the draft (checking class
+ * Upload is two steps by design — a callable creates the draft (checking course
  * scope server-side) and hands back an id, and only then does the audio go
  * straight to Storage. Nothing is publishable until the upload is confirmed.
  */
 export function RecordingsScreen({
-  classId,
-  className,
+  courseId,
+  courseName,
   isAdmin,
   onOpenLedger,
   onPlay,
 }: {
-  classId: string;
-  className: string;
+  courseId: string;
+  courseName: string;
   isAdmin: boolean;
   onOpenLedger: (recording: RecordingRow) => void;
   onPlay: (recording: RecordingRow) => void;
 }) {
-  const recordings = useClassRecordings(classId);
+  const recordings = useCourseRecordings(courseId);
   const today = todayInZone(INSTITUTE_TIMEZONE);
-  const { byRecording } = useClassLedger(classId, today);
-  // For catch-up assignment: the class roster and student names, loaded once.
-  const roster = useRoster(classId);
+  const { byRecording } = useCourseLedger(courseId, today);
+  // For catch-up assignment: the course roster and student names, loaded once.
+  const roster = useRoster(courseId);
   const students = useStudents(true);
   const nameByUid = useMemo(() => {
     const m = new Map<string, string>();
@@ -100,7 +100,7 @@ export function RecordingsScreen({
       if (!picked) return; // user changed their mind
       setInfo(null);
       const { id } = await createRecording({
-        classId,
+        courseId,
         title: title.trim(),
         recordedAt: Date.now(),
       });
@@ -116,7 +116,7 @@ export function RecordingsScreen({
     });
 
   return (
-    <Screen subtitle={className}>
+    <Screen subtitle={courseName}>
       {error ? <Notice tone="error">{error}</Notice> : null}
       {info ? <Notice tone="success">{info}</Notice> : null}
 
@@ -152,14 +152,14 @@ export function RecordingsScreen({
           onPress={addRecording}
         />
         <Text style={styles.hint}>
-          Audio only, up to 300 MB. A two-hour class is normally well under 30 MB.
+          Audio only, up to 300 MB. A two-hour course is normally well under 30 MB.
         </Text>
       </Card>
       )}
 
       <SectionTitle>Recordings ({recordings.length})</SectionTitle>
       {recordings.length === 0 ? (
-        <Empty>No recordings in this class yet.</Empty>
+        <Empty>No recordings in this course yet.</Empty>
       ) : (
         recordings.map((r) => (
           <RecordingCard

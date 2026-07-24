@@ -3,14 +3,14 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
   audioStoragePath,
-  type ClassDoc,
+  type CourseDoc,
   type CohortDoc,
   type RecordingDoc,
   type ZoomImportRow,
 } from '@sabeel/shared';
 import { auditedCall } from './audited';
 import { reportedCall } from './reported';
-import { requireClassScope, requireStaff } from './guards';
+import { requireCourseScope, requireStaff } from './guards';
 import { MAX_AUDIO_BYTES, createRecordingDraft, finalizeRecording } from './recordings';
 import { ZOOM_SECRETS, zoomClient, type ZoomClient } from './zoom';
 
@@ -51,7 +51,7 @@ async function downloadIntoRecording(
 /** Import one Zoom recording into a class as a draft. Idempotent on the meeting UUID. */
 export async function applyImportZoomRecording(
   callerUid: string,
-  input: { meetingUuid: string; fileId: string; classId: string; dueDate: string | null },
+  input: { meetingUuid: string; fileId: string; courseId: string; dueDate: string | null },
   client: ZoomClient,
 ): Promise<{ recordingId: string; alreadyExisted: boolean }> {
   const db = getFirestore();
@@ -75,7 +75,7 @@ export async function applyImportZoomRecording(
   const recordedAt = Number.isFinite(parsed) ? parsed : null;
   const { id } = await createRecordingDraft(
     callerUid,
-    { classId: input.classId, title, recordedAt },
+    { courseId: input.courseId, title, recordedAt },
     { source: 'zoom', zoomUuid: input.meetingUuid, zoomFileId: rec.fileId },
   );
 
@@ -116,25 +116,25 @@ export const listZoomRecordings = reportedCall(async (req) => {
     .collection(COLLECTIONS.recordings)
     .where('source', '==', 'zoom')
     .get();
-  const byUuid = new Map<string, { recordingId: string; classId: string; cohortId: string }>();
+  const byUuid = new Map<string, { recordingId: string; courseId: string; cohortId: string }>();
   for (const doc of imported.docs) {
     const data = doc.data() as RecordingDoc;
     if (data.zoomUuid) {
-      byUuid.set(data.zoomUuid, { recordingId: doc.id, classId: data.classId, cohortId: data.cohortId });
+      byUuid.set(data.zoomUuid, { recordingId: doc.id, courseId: data.courseId, cohortId: data.cohortId });
     }
   }
 
   // Resolve the class + cohort names for the recordings actually referenced, so
   // an already-imported row can name its class and be tapped through to it.
   const db = getFirestore();
-  const classNames = new Map<string, string>();
+  const courseNames = new Map<string, string>();
   const cohortNames = new Map<string, string>();
-  const classIds = new Set([...byUuid.values()].map((v) => v.classId));
+  const courseIds = new Set([...byUuid.values()].map((v) => v.courseId));
   const cohortIds = new Set([...byUuid.values()].map((v) => v.cohortId));
   await Promise.all([
-    ...[...classIds].map(async (id) => {
-      const s = await db.collection(COLLECTIONS.classes).doc(id).get();
-      if (s.exists) classNames.set(id, (s.data() as ClassDoc).name);
+    ...[...courseIds].map(async (id) => {
+      const s = await db.collection(COLLECTIONS.courses).doc(id).get();
+      if (s.exists) courseNames.set(id, (s.data() as CourseDoc).name);
     }),
     ...[...cohortIds].map(async (id) => {
       const s = await db.collection(COLLECTIONS.cohorts).doc(id).get();
@@ -147,8 +147,8 @@ export const listZoomRecordings = reportedCall(async (req) => {
     return {
       ...r,
       alreadyImported: imp?.recordingId ?? null,
-      importedClassId: imp?.classId ?? null,
-      importedClassName: imp ? (classNames.get(imp.classId) ?? null) : null,
+      importedCourseId: imp?.courseId ?? null,
+      importedCourseName: imp ? (courseNames.get(imp.courseId) ?? null) : null,
       importedCohortName: imp ? (cohortNames.get(imp.cohortId) ?? null) : null,
     };
   });
@@ -161,7 +161,7 @@ export const importZoomRecording = auditedCall(
     const d = req.data as {
       meetingUuid?: unknown;
       fileId?: unknown;
-      classId?: unknown;
+      courseId?: unknown;
       dueDate?: unknown;
     };
     if (typeof d?.meetingUuid !== 'string' || !d.meetingUuid) {
@@ -170,18 +170,18 @@ export const importZoomRecording = auditedCall(
     if (typeof d?.fileId !== 'string' || !d.fileId) {
       throw new HttpsError('invalid-argument', 'fileId is required.');
     }
-    if (typeof d?.classId !== 'string' || !d.classId) {
-      throw new HttpsError('invalid-argument', 'classId is required.');
+    if (typeof d?.courseId !== 'string' || !d.courseId) {
+      throw new HttpsError('invalid-argument', 'courseId is required.');
     }
     const dueDate = typeof d.dueDate === 'string' && DATE_ONLY.test(d.dueDate) ? d.dueDate : null;
-    const uid = await requireClassScope(req, d.classId);
-    audit.classId = d.classId;
+    const uid = await requireCourseScope(req, d.courseId);
+    audit.courseId = d.courseId;
     const res = await applyImportZoomRecording(
       uid,
-      { meetingUuid: d.meetingUuid, fileId: d.fileId, classId: d.classId, dueDate },
+      { meetingUuid: d.meetingUuid, fileId: d.fileId, courseId: d.courseId, dueDate },
       zoomClient,
     );
-    audit.targets = { recordingId: res.recordingId, classId: d.classId };
+    audit.targets = { recordingId: res.recordingId, courseId: d.courseId };
     return res;
   },
   ZOOM_SECRETS,
@@ -196,9 +196,9 @@ export const retryZoomImport = auditedCall(
     }
     const snap = await getFirestore().collection(COLLECTIONS.recordings).doc(d.recordingId).get();
     if (!snap.exists) throw new HttpsError('not-found', 'No such recording.');
-    const classId = (snap.data() as RecordingDoc).classId;
-    await requireClassScope(req, classId);
-    audit.classId = classId;
+    const courseId = (snap.data() as RecordingDoc).courseId;
+    await requireCourseScope(req, courseId);
+    audit.courseId = courseId;
     return applyRetryZoomImport(d.recordingId, zoomClient);
   },
   ZOOM_SECRETS,

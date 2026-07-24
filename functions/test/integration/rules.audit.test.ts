@@ -40,18 +40,18 @@ beforeEach(async () => {
   await testEnv.clearFirestore();
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
-    const entry = (id: string, classId: string | null) =>
+    const entry = (id: string, courseId: string | null) =>
       setDoc(doc(db, COLLECTIONS.auditLog, id), {
         at: 1,
         actorUid: ADMIN,
         actorRole: 'admin',
         action: 'setRecordingStatus',
-        classId,
+        courseId,
         targets: {},
       });
     await Promise.all([
-      setDoc(doc(db, COLLECTIONS.classes, CLASS_MINE), { cohortId: 'c1', managerUids: [MINE] }),
-      setDoc(doc(db, COLLECTIONS.classes, CLASS_THEIRS), { cohortId: 'c1', managerUids: [THEIRS] }),
+      setDoc(doc(db, COLLECTIONS.courses, CLASS_MINE), { cohortId: 'c1', managerUids: [MINE] }),
+      setDoc(doc(db, COLLECTIONS.courses, CLASS_THEIRS), { cohortId: 'c1', managerUids: [THEIRS] }),
       entry('mine', CLASS_MINE),
       entry('theirs', CLASS_THEIRS),
       entry('global', null), // a class-less entry (cohort/staff change)
@@ -75,7 +75,7 @@ describe('auditLog reads', () => {
       getDocs(
         query(
           collection(mgrMine().firestore(), COLLECTIONS.auditLog),
-          where('classId', '==', CLASS_MINE),
+          where('courseId', '==', CLASS_MINE),
         ),
       ),
     );
@@ -91,7 +91,7 @@ describe('auditLog reads', () => {
     await assertFails(getDoc(doc(mgrMine().firestore(), COLLECTIONS.auditLog, 'global')));
   });
 
-  it('a manager cannot list unconstrained (would expose other classes + global)', async () => {
+  it('a manager cannot list unconstrained (would expose other courses + global)', async () => {
     await assertFails(getDocs(collection(mgrMine().firestore(), COLLECTIONS.auditLog)));
   });
 
@@ -109,7 +109,7 @@ describe('auditLog is append-only from the server', () => {
           actorUid: 'x',
           actorRole: 'admin',
           action: 'forged',
-          classId: null,
+          courseId: null,
           targets: {},
         }),
       );

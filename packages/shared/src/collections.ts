@@ -7,21 +7,20 @@
 export const COLLECTIONS = {
   /** Staff identity, role, approval state. */
   staffUsers: 'staffUsers',
-  /** Class-level Manager assignments. Cohort assignment grants nothing. */
-  managerClassScopes: 'managerClassScopes',
   /** Student identity, active/disabled state, profile. */
   students: 'students',
   /** Cohort/semester records and archive state. */
   cohorts: 'cohorts',
-  /** Classes inside cohorts, archive state, archived-access setting. */
-  classes: 'classes',
-  /** Student membership in classes over time. */
+  /** Courses (the subject, e.g. Hikam Foundations) inside cohorts; archive
+   *  state, archived-access setting, class-scoped managers. */
+  courses: 'courses',
+  /** Student membership in courses over time. */
   enrollments: 'enrollments',
-  /** Zoom source configuration and manual upload source metadata. */
-  recordingSources: 'recordingSources',
-  /** Recording asset, metadata, status, source, notes. */
+  /** One dated meeting of a course: attendance + optional recording. */
+  sessions: 'sessions',
+  /** Recording asset, media + lifecycle, linked to a session. */
   recordings: 'recordings',
-  /** Required-listening obligations. */
+  /** Required-listening obligations (absentees of a session's recording). */
   assignments: 'assignments',
   /** Playback progress, listened percent, last listened, sync metadata. */
   listeningProgress: 'listeningProgress',

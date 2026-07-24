@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { isVisibleToStudents, type RecordingStatus } from '@sabeel/shared';
 import { Button, Card, Empty, Notice, Row, Screen, SectionTitle, StatusChip } from '../components/ui';
-import { useAllRecordings, useClassRecordings, type RecordingRow } from '../recordings';
-import { useAllClasses, useCohortName, useMyClasses, type ClassRow } from '../structure';
+import { useAllRecordings, useCourseRecordings, type RecordingRow } from '../recordings';
+import { useAllCourses, useCohortName, useMyCourses, type CourseRow } from '../structure';
 import { useListenerError } from '../liveQuery';
 import { getTheme, spacing } from '../theme';
 
@@ -13,7 +13,7 @@ const STATUSES: StatusFilter[] = ['all', 'published', 'draft', 'archived', 'unpu
 
 /**
  * The cross-cohort recording library with status counts (deferred from Phase 3).
- * Admin sees a flat list of everything; a manager sees a section per class they
+ * Admin sees a flat list of everything; a manager sees a section per course they
  * run (the rules forbid an unconstrained recordings list to a manager).
  */
 export function LibraryScreen({
@@ -24,17 +24,17 @@ export function LibraryScreen({
 }: {
   uid: string;
   isAdmin: boolean;
-  onPlay: (recording: RecordingRow, cls: ClassRow) => void;
-  onOpenProgress: (recording: RecordingRow, cls: ClassRow) => void;
+  onPlay: (recording: RecordingRow, cls: CourseRow) => void;
+  onOpenProgress: (recording: RecordingRow, cls: CourseRow) => void;
 }) {
   const listenerError = useListenerError();
   const [status, setStatus] = useState<StatusFilter>('all');
-  const myClasses = useMyClasses(isAdmin ? null : uid);
-  // A class name alone is ambiguous across cohorts; this library spans them.
+  const myCoursees = useMyCourses(isAdmin ? null : uid);
+  // A course name alone is ambiguous across cohorts; this library spans them.
   const cohortNameOf = useCohortName();
 
   return (
-    <Screen title="Recording library" subtitle={isAdmin ? 'All recordings' : 'Your classes'}>
+    <Screen title="Recording library" subtitle={isAdmin ? 'All recordings' : 'Your courses'}>
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       <View style={styles.chips}>
         {STATUSES.map((s) => (
@@ -56,11 +56,11 @@ export function LibraryScreen({
           onPlay={onPlay}
           onOpenProgress={onOpenProgress}
         />
-      ) : myClasses.length === 0 ? (
-        <Empty>You are not assigned to any classes.</Empty>
+      ) : myCoursees.length === 0 ? (
+        <Empty>You are not assigned to any courses.</Empty>
       ) : (
-        myClasses.map((cls) => (
-          <ClassSection
+        myCoursees.map((cls) => (
+          <CourseSection
             key={cls.id}
             cls={cls}
             cohortName={cohortNameOf(cls.cohortId)}
@@ -82,24 +82,24 @@ function AdminLibrary({
 }: {
   status: StatusFilter;
   cohortNameOf: (cohortId: string) => string;
-  onPlay: (r: RecordingRow, c: ClassRow) => void;
-  onOpenProgress: (r: RecordingRow, c: ClassRow) => void;
+  onPlay: (r: RecordingRow, c: CourseRow) => void;
+  onOpenProgress: (r: RecordingRow, c: CourseRow) => void;
 }) {
   const all = useAllRecordings(true);
-  // Real class rows so the flat list can show which class each recording is in,
-  // and the ledger it opens shows the class NAME — not the raw id (which is what
-  // a placeholder `{ name: classId }` row leaked into the ledger subtitle).
-  const classes = useAllClasses(true);
-  const classById = useMemo(() => new Map(classes.map((c) => [c.id, c])), [classes]);
+  // Real course rows so the flat list can show which course each recording is in,
+  // and the ledger it opens shows the course NAME — not the raw id (which is what
+  // a placeholder `{ name: courseId }` row leaked into the ledger subtitle).
+  const courses = useAllCourses(true);
+  const courseById = useMemo(() => new Map(courses.map((c) => [c.id, c])), [courses]);
   const filtered = useMemo(
     () => (status === 'all' ? all : all.filter((r) => r.status === status)),
     [all, status],
   );
-  const clsFor = (r: RecordingRow): ClassRow =>
-    classById.get(r.classId) ??
-    // Fallback for a recording whose class was deleted: still openable, and the
-    // id at least tells you which class is missing.
-    ({ id: r.classId, name: r.classId, cohortId: r.cohortId } as ClassRow);
+  const clsFor = (r: RecordingRow): CourseRow =>
+    courseById.get(r.courseId) ??
+    // Fallback for a recording whose course was deleted: still openable, and the
+    // id at least tells you which course is missing.
+    ({ id: r.courseId, name: r.courseId, cohortId: r.cohortId } as CourseRow);
   return (
     <>
       <Counts recordings={all} />
@@ -112,7 +112,7 @@ function AdminLibrary({
             <RecordingLine
               key={r.id}
               r={r}
-              className={cls.name}
+              courseName={cls.name}
               cohortName={cohortNameOf(cls.cohortId)}
               onPlay={() => onPlay(r, cls)}
               onOpenProgress={() => onOpenProgress(r, cls)}
@@ -124,20 +124,20 @@ function AdminLibrary({
   );
 }
 
-function ClassSection({
+function CourseSection({
   cls,
   cohortName,
   status,
   onPlay,
   onOpenProgress,
 }: {
-  cls: ClassRow;
+  cls: CourseRow;
   cohortName: string;
   status: StatusFilter;
-  onPlay: (r: RecordingRow, c: ClassRow) => void;
-  onOpenProgress: (r: RecordingRow, c: ClassRow) => void;
+  onPlay: (r: RecordingRow, c: CourseRow) => void;
+  onOpenProgress: (r: RecordingRow, c: CourseRow) => void;
 }) {
-  const recordings = useClassRecordings(cls.id);
+  const recordings = useCourseRecordings(cls.id);
   const filtered = status === 'all' ? recordings : recordings.filter((r) => r.status === status);
   return (
     <>
@@ -172,13 +172,13 @@ function Counts({ recordings }: { recordings: RecordingRow[] }) {
 
 function RecordingLine({
   r,
-  className,
+  courseName,
   cohortName,
   onPlay,
   onOpenProgress,
 }: {
   r: RecordingRow;
-  className?: string;
+  courseName?: string;
   cohortName?: string;
   onPlay: () => void;
   onOpenProgress: () => void;
@@ -186,12 +186,12 @@ function RecordingLine({
   return (
     <Card>
       <Text style={styles.title}>{r.title}</Text>
-      {/* Admin flat list shows the class AND its cohort — a class name alone is
-          ambiguous across cohorts. The manager view groups by class, so it
-          passes no className. */}
-      {className ? (
-        <Text style={styles.className}>
-          {cohortName ? `${className} · ${cohortName}` : className}
+      {/* Admin flat list shows the course AND its cohort — a course name alone is
+          ambiguous across cohorts. The manager view groups by course, so it
+          passes no courseName. */}
+      {courseName ? (
+        <Text style={styles.courseName}>
+          {cohortName ? `${courseName} · ${cohortName}` : courseName}
         </Text>
       ) : null}
       <View style={styles.meta}>
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
   chipTextOn: { color: t.accent.onAccent },
   counts: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(2) },
   title: { fontSize: 16, fontWeight: '600', color: t.text.primary },
-  className: { fontSize: 13, color: t.text.secondary, marginTop: 2 },
+  courseName: { fontSize: 13, color: t.text.secondary, marginTop: 2 },
   meta: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginTop: spacing(2) },
   sub: { fontSize: 13, color: t.text.secondary },
 });

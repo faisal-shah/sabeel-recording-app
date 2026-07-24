@@ -12,7 +12,7 @@ export const listZoomRecordings = call<{ from: string; to: string }, ZoomImportR
 
 /** Import one Zoom recording into a class as a draft. Idempotent on meetingUuid. */
 export const importZoomRecording = call<
-  { meetingUuid: string; fileId: string; classId: string; dueDate?: string | null },
+  { meetingUuid: string; fileId: string; courseId: string; dueDate?: string | null },
   { recordingId: string; alreadyExisted: boolean }
 >('importZoomRecording');
 

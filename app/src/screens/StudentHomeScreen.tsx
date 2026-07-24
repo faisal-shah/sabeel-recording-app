@@ -7,7 +7,7 @@ import {
   bucketRank,
   dueBucket,
   todayInZone,
-  type ClassDoc,
+  type CourseDoc,
   type DueBucket,
   type RecordingDoc,
 } from '@sabeel/shared';
@@ -17,7 +17,7 @@ import { signOut } from '../session';
 import { useListenerError } from '../liveQuery';
 import { useMyAssignments, useMyCompletions } from '../completion';
 import { drainCompletionOutbox } from '../completionOutbox';
-import type { ClassRow } from '../structure';
+import type { CourseRow } from '../structure';
 import type { RecordingRow } from '../recordings';
 import { getTheme, spacing } from '../theme';
 
@@ -28,7 +28,7 @@ const t = getTheme();
  *
  * Shows only REQUIRED listening — recordings with an active assignment — grouped
  * Overdue → Due soon → Upcoming → No due date → Completed. Accessible-but-not-
- * required recordings live in the class archive ("Browse all recordings"),
+ * required recordings live in the course archive ("Browse all recordings"),
  * never here. The obligation's OWN due date is authoritative (a catch-up may
  * differ from the recording's), so bucketing reads the assignment, not the
  * recording.
@@ -39,7 +39,7 @@ export function StudentHomeScreen({
   onBrowse,
 }: {
   uid: string;
-  onOpen: (recording: RecordingRow, cls: ClassRow) => void;
+  onOpen: (recording: RecordingRow, cls: CourseRow) => void;
   onBrowse: () => void;
 }) {
   const listenerError = useListenerError();
@@ -122,7 +122,7 @@ export function StudentHomeScreen({
 interface TaskRow {
   key: string;
   recording: RecordingRow;
-  cls: ClassRow;
+  cls: CourseRow;
   dueDate: string | null;
   bucket: DueBucket;
   pending: boolean;
@@ -140,7 +140,7 @@ function TaskCard({ row, onOpen }: { row: TaskRow; onOpen: () => void }) {
     >
       <View style={styles.cardMain}>
         <Text style={[styles.title, done ? styles.titleDone : null]}>{row.recording.title}</Text>
-        <Text style={styles.class}>{row.cls.name}</Text>
+        <Text style={styles.course}>{row.cls.name}</Text>
       </View>
       <View style={styles.cardMeta}>
         {row.pending ? <Text style={styles.pending}>Pending sync</Text> : null}
@@ -157,17 +157,17 @@ function TaskCard({ row, onOpen }: { row: TaskRow; onOpen: () => void }) {
 }
 
 /**
- * Resolve each assignment's recording and class for display and navigation.
+ * Resolve each assignment's recording and course for display and navigation.
  *
- * A plain get per id (not a live subscription): titles and class names change
+ * A plain get per id (not a live subscription): titles and course names change
  * rarely, and the accountability state that DOES change — assignment and
  * completion — is already live. Deduplicated and cached across renders.
  */
 function useResolvedRecordings(
   recordingIds: string[],
-): Map<string, { recording: RecordingRow; cls: ClassRow }> {
+): Map<string, { recording: RecordingRow; cls: CourseRow }> {
   const [resolved, setResolved] = useState<
-    Map<string, { recording: RecordingRow; cls: ClassRow }>
+    Map<string, { recording: RecordingRow; cls: CourseRow }>
   >(new Map());
   const key = useMemo(() => [...new Set(recordingIds)].sort().join(','), [recordingIds]);
 
@@ -175,20 +175,20 @@ function useResolvedRecordings(
     let cancelled = false;
     const ids = key ? key.split(',') : [];
     void (async () => {
-      const classCache = new Map<string, ClassRow | null>();
-      const out = new Map<string, { recording: RecordingRow; cls: ClassRow }>();
+      const courseCache = new Map<string, CourseRow | null>();
+      const out = new Map<string, { recording: RecordingRow; cls: CourseRow }>();
       for (const id of ids) {
         const recSnap = await getDoc(doc(db, COLLECTIONS.recordings, id));
         if (!recSnap.exists()) continue;
         const recording = { id: recSnap.id, ...(recSnap.data() as RecordingDoc) };
-        if (!classCache.has(recording.classId)) {
-          const cSnap = await getDoc(doc(db, COLLECTIONS.classes, recording.classId));
-          classCache.set(
-            recording.classId,
-            cSnap.exists() ? { id: cSnap.id, ...(cSnap.data() as ClassDoc) } : null,
+        if (!courseCache.has(recording.courseId)) {
+          const cSnap = await getDoc(doc(db, COLLECTIONS.courses, recording.courseId));
+          courseCache.set(
+            recording.courseId,
+            cSnap.exists() ? { id: cSnap.id, ...(cSnap.data() as CourseDoc) } : null,
           );
         }
-        const cls = classCache.get(recording.classId);
+        const cls = courseCache.get(recording.courseId);
         if (cls) out.set(id, { recording, cls });
       }
       if (!cancelled) setResolved(out);
@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
   cardMain: { flex: 1, paddingRight: spacing(3) },
   title: { fontSize: 16, fontWeight: '600', color: t.text.primary },
   titleDone: { color: t.text.secondary },
-  class: { fontSize: 13, color: t.text.secondary, marginTop: spacing(1) },
+  course: { fontSize: 13, color: t.text.secondary, marginTop: spacing(1) },
   cardMeta: { alignItems: 'flex-end' },
   due: { fontSize: 13, color: t.text.secondary, fontVariant: ['tabular-nums'] },
   overdue: { color: t.feedback.danger, fontWeight: '600' },

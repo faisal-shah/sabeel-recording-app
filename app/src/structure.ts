@@ -3,7 +3,7 @@ import { collection, doc, getDoc, orderBy, query, where } from 'firebase/firesto
 import { httpsCallable } from 'firebase/functions';
 import {
   COLLECTIONS,
-  type ClassDoc,
+  type CourseDoc,
   type CohortDoc,
   type EnrollmentDoc,
 } from '@sabeel/shared';
@@ -13,14 +13,14 @@ import { useLiveQuery } from './liveQuery';
 export interface CohortRow extends CohortDoc {
   id: string;
 }
-export interface ClassRow extends ClassDoc {
+export interface CourseRow extends CourseDoc {
   id: string;
 }
 
 /** Load one class by id (for opening a recording's class directly). */
-export async function loadClass(id: string): Promise<ClassRow | null> {
-  const snap = await getDoc(doc(db, COLLECTIONS.classes, id));
-  return snap.exists() ? { id: snap.id, ...(snap.data() as ClassDoc) } : null;
+export async function loadCourse(id: string): Promise<CourseRow | null> {
+  const snap = await getDoc(doc(db, COLLECTIONS.courses, id));
+  return snap.exists() ? { id: snap.id, ...(snap.data() as CourseDoc) } : null;
 }
 export interface EnrollmentRow extends EnrollmentDoc {
   id: string;
@@ -53,18 +53,18 @@ export function useCohorts(enabled: boolean): CohortRow[] {
 }
 
 /** Every class in a cohort. Admin-only: the rule has no scoped arm for this shape. */
-export function useClassesInCohort(cohortId: string | null): ClassRow[] {
-  return useLiveQuery<ClassRow[]>(
-    'classesInCohort',
+export function useCoursesInCohort(cohortId: string | null): CourseRow[] {
+  return useLiveQuery<CourseRow[]>(
+    'coursesInCohort',
     () =>
       cohortId
         ? query(
-            collection(db, COLLECTIONS.classes),
+            collection(db, COLLECTIONS.courses),
             where('cohortId', '==', cohortId),
             orderBy('createdAt', 'asc'),
           )
         : null,
-    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as ClassDoc) })),
+    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CourseDoc) })),
     [],
     [cohortId],
   );
@@ -73,40 +73,40 @@ export function useClassesInCohort(cohortId: string | null): ClassRow[] {
 /**
  * Every class in every cohort, oldest first — ADMIN ONLY.
  *
- * The rules' admin arm lists the whole `classes` collection without a per-row
- * read (a manager must go cohort by cohort). Used where the admin needs classes
+ * The rules' admin arm lists the whole `courses` collection without a per-row
+ * read (a manager must go cohort by cohort). Used where the admin needs courses
  * across cohorts at once: the cohort class-counts and the student-enrolment
  * picker. Single-field `createdAt` order needs no composite index.
  */
-export function useAllClasses(enabled: boolean): ClassRow[] {
-  return useLiveQuery<ClassRow[]>(
-    'allClasses',
+export function useAllCourses(enabled: boolean): CourseRow[] {
+  return useLiveQuery<CourseRow[]>(
+    'allCoursees',
     () =>
       enabled
-        ? query(collection(db, COLLECTIONS.classes), orderBy('createdAt', 'asc'))
+        ? query(collection(db, COLLECTIONS.courses), orderBy('createdAt', 'asc'))
         : null,
-    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as ClassDoc) })),
+    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CourseDoc) })),
     [],
     [enabled],
   );
 }
 
 /**
- * The classes a manager is scoped to.
+ * The courses a manager is scoped to.
  *
  * The `array-contains` constraint is not a convenience — the security rule's
  * manager arm reads `resource.data.managerUids`, so Firestore rejects this
  * query without it. Dropping the constraint does not widen the results; it
  * fails the query outright.
  */
-export function useMyClasses(uid: string | null): ClassRow[] {
-  return useLiveQuery<ClassRow[]>(
-    'myClasses',
+export function useMyCourses(uid: string | null): CourseRow[] {
+  return useLiveQuery<CourseRow[]>(
+    'myCoursees',
     () =>
       uid
-        ? query(collection(db, COLLECTIONS.classes), where('managerUids', 'array-contains', uid))
+        ? query(collection(db, COLLECTIONS.courses), where('managerUids', 'array-contains', uid))
         : null,
-    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as ClassDoc) })),
+    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CourseDoc) })),
     [],
     [uid],
   );
@@ -115,20 +115,20 @@ export function useMyClasses(uid: string | null): ClassRow[] {
 /**
  * A class roster.
  *
- * Constrained to one classId, which is also what makes the rule affordable:
+ * Constrained to one courseId, which is also what makes the rule affordable:
  * its staff arm resolves a class lookup per row, and only a single-class query
  * lets that resolve one cached path.
  */
-export function useRoster(classId: string | null): EnrollmentRow[] {
+export function useRoster(courseId: string | null): EnrollmentRow[] {
   return useLiveQuery<EnrollmentRow[]>(
     'roster',
     () =>
-      classId
-        ? query(collection(db, COLLECTIONS.enrollments), where('classId', '==', classId))
+      courseId
+        ? query(collection(db, COLLECTIONS.enrollments), where('courseId', '==', courseId))
         : null,
     (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as EnrollmentDoc) })),
     [],
-    [classId],
+    [courseId],
   );
 }
 
@@ -154,10 +154,10 @@ const call = <T,>(name: string) => (input: T) => httpsCallable(functions, name)(
 
 export const createCohort = call<{ name: string }>('createCohort');
 export const setCohortArchived = call<{ cohortId: string; archived: boolean }>('setCohortArchived');
-export const createClass = call<{ cohortId: string; name: string }>('createClass');
-export const updateClass =
-  call<{ classId: string; name?: string; archived?: boolean; archivedAccess?: boolean }>('updateClass');
-export const setClassManagers = call<{ classId: string; managerUids: string[] }>('setClassManagers');
-export const createEnrollment = call<{ studentUid: string; classId: string }>('createEnrollment');
+export const createCourse = call<{ cohortId: string; name: string }>('createCourse');
+export const updateCourse =
+  call<{ courseId: string; name?: string; archived?: boolean; archivedAccess?: boolean }>('updateCourse');
+export const setCourseManagers = call<{ courseId: string; managerUids: string[] }>('setCourseManagers');
+export const createEnrollment = call<{ studentUid: string; courseId: string }>('createEnrollment');
 export const setEnrollmentActive =
-  call<{ studentUid: string; classId: string; active: boolean }>('setEnrollmentActive');
+  call<{ studentUid: string; courseId: string; active: boolean }>('setEnrollmentActive');

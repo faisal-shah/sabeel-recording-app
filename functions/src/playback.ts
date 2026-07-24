@@ -3,10 +3,10 @@ import { reportedCall } from './reported';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
-  canPlayFromClass,
+  canPlayFromCourse,
   enrollmentId,
   isStaffRole,
-  type ClassDoc,
+  type CourseDoc,
   type EnrollmentDoc,
   type RecordingDoc,
   type TokenClaims,
@@ -29,7 +29,7 @@ export type PlaybackDenial =
 export function playbackDenial(input: {
   claims: TokenClaims;
   recording: Pick<RecordingDoc, 'status' | 'audioPath'>;
-  cls: Pick<ClassDoc, 'effectiveActive' | 'archivedAccess' | 'managerUids'>;
+  cls: Pick<CourseDoc, 'effectiveActive' | 'archivedAccess' | 'managerUids'>;
   uid: string;
   enrollmentActive: boolean;
 }): PlaybackDenial | null {
@@ -50,7 +50,7 @@ export function playbackDenial(input: {
   // The archived-access rule from Phase 1 finally does some work: an archived
   // class is still VISIBLE to a student, but playback is off unless staff
   // deliberately kept it on.
-  if (!canPlayFromClass(cls)) return 'class-listening-off';
+  if (!canPlayFromCourse(cls)) return 'class-listening-off';
   return null;
 }
 
@@ -87,10 +87,10 @@ export const getPlaybackUrl = reportedCall(async (req) => {
     const recording = recSnap.data() as RecordingDoc;
 
     const [clsSnap, enrSnap] = await Promise.all([
-      db.collection(COLLECTIONS.classes).doc(recording.classId).get(),
+      db.collection(COLLECTIONS.courses).doc(recording.courseId).get(),
       db
         .collection(COLLECTIONS.enrollments)
-        .doc(enrollmentId(req.auth.uid, recording.classId))
+        .doc(enrollmentId(req.auth.uid, recording.courseId))
         .get(),
     ]);
     if (!clsSnap.exists) throw new HttpsError('not-found', 'No such class.');
@@ -98,7 +98,7 @@ export const getPlaybackUrl = reportedCall(async (req) => {
     const denial = playbackDenial({
       claims,
       recording,
-      cls: clsSnap.data() as ClassDoc,
+      cls: clsSnap.data() as CourseDoc,
       uid: req.auth.uid,
       enrollmentActive: enrSnap.exists && (enrSnap.data() as EnrollmentDoc).active,
     });

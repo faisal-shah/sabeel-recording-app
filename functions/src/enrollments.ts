@@ -6,53 +6,53 @@ import {
   INSTITUTE_TIMEZONE,
   enrollmentId,
   todayInZone,
-  type ClassDoc,
+  type CourseDoc,
   type EnrollmentDoc,
   type StudentDoc,
 } from '@sabeel/shared';
-import { requireClassScope } from './guards';
+import { requireCourseScope } from './guards';
 import {
   assignPublishedRecordingsToStudent,
-  deactivateStudentAssignmentsInClass,
+  deactivateStudentAssignmentsInCourse,
 } from './assignmentsFanout';
 
 export interface EnrollmentInput {
   studentUid: string;
-  classId: string;
+  courseId: string;
 }
 
 export function validateEnrollment(data: unknown): EnrollmentInput {
-  const d = data as { studentUid?: unknown; classId?: unknown } | null;
+  const d = data as { studentUid?: unknown; courseId?: unknown } | null;
   if (typeof d?.studentUid !== 'string' || !d.studentUid) {
     throw new HttpsError('invalid-argument', 'studentUid is required.');
   }
-  if (typeof d.classId !== 'string' || !d.classId) {
-    throw new HttpsError('invalid-argument', 'classId is required.');
+  if (typeof d.courseId !== 'string' || !d.courseId) {
+    throw new HttpsError('invalid-argument', 'courseId is required.');
   }
-  return { studentUid: d.studentUid, classId: d.classId };
+  return { studentUid: d.studentUid, courseId: d.courseId };
 }
 
 /**
  * Enrol a student into a class, or reactivate a previous enrolment.
  *
- * The document id is `${studentUid}_${classId}`, so re-enrolling is a `set`
+ * The document id is `${studentUid}_${courseId}`, so re-enrolling is a `set`
  * with merge over the SAME document rather than a second row — which is what
  * keeps the listening history attached to one enrolment record over time.
  */
 export async function createEnrollmentRecord(callerUid: string, input: EnrollmentInput) {
   const db = getFirestore();
 
-  const [classSnap, studentSnap] = await Promise.all([
-    db.collection(COLLECTIONS.classes).doc(input.classId).get(),
+  const [courseSnap, studentSnap] = await Promise.all([
+    db.collection(COLLECTIONS.courses).doc(input.courseId).get(),
     db.collection(COLLECTIONS.students).doc(input.studentUid).get(),
   ]);
-  if (!classSnap.exists) throw new HttpsError('not-found', 'No such class.');
+  if (!courseSnap.exists) throw new HttpsError('not-found', 'No such class.');
   if (!studentSnap.exists) throw new HttpsError('not-found', 'No such student.');
   if ((studentSnap.data() as StudentDoc).status === 'disabled') {
     throw new HttpsError('failed-precondition', 'That student account is disabled.');
   }
 
-  const id = enrollmentId(input.studentUid, input.classId);
+  const id = enrollmentId(input.studentUid, input.courseId);
   const ref = db.collection(COLLECTIONS.enrollments).doc(id);
   const existing = await ref.get();
 
@@ -62,8 +62,8 @@ export async function createEnrollmentRecord(callerUid: string, input: Enrollmen
 
   const doc: EnrollmentDoc = {
     studentUid: input.studentUid,
-    classId: input.classId,
-    cohortId: (classSnap.data() as ClassDoc).cohortId,
+    courseId: input.courseId,
+    cohortId: (courseSnap.data() as CourseDoc).cohortId,
     active: true,
     // Preserve the original enrolment date across a re-enrolment.
     enrolledAt: existing.exists
@@ -78,7 +78,7 @@ export async function createEnrollmentRecord(callerUid: string, input: Enrollmen
   // whose due date has NOT passed. Earlier ones are catch-up, done explicitly.
   await assignPublishedRecordingsToStudent(
     db,
-    input.classId,
+    input.courseId,
     input.studentUid,
     todayInZone(INSTITUTE_TIMEZONE),
     callerUid,
@@ -88,8 +88,8 @@ export async function createEnrollmentRecord(callerUid: string, input: Enrollmen
 
 export const createEnrollment = auditedCall('createEnrollment', async (req, audit) => {
   const input = validateEnrollment(req.data);
-  const uid = await requireClassScope(req, input.classId);
-  audit.classId = input.classId;
+  const uid = await requireCourseScope(req, input.courseId);
+  audit.courseId = input.courseId;
   return createEnrollmentRecord(uid, input);
 });
 
@@ -116,7 +116,7 @@ export async function applyEnrollmentActive(input: SetEnrollmentActiveInput) {
   const db = getFirestore();
   const ref = db
     .collection(COLLECTIONS.enrollments)
-    .doc(enrollmentId(input.studentUid, input.classId));
+    .doc(enrollmentId(input.studentUid, input.courseId));
   if (!(await ref.get()).exists) throw new HttpsError('not-found', 'No such enrolment.');
 
   const update: Record<string, unknown> = { active: input.active };
@@ -129,20 +129,20 @@ export async function applyEnrollmentActive(input: SetEnrollmentActiveInput) {
   if (input.active) {
     await assignPublishedRecordingsToStudent(
       db,
-      input.classId,
+      input.courseId,
       input.studentUid,
       todayInZone(INSTITUTE_TIMEZONE),
       'system',
     );
   } else {
-    await deactivateStudentAssignmentsInClass(db, input.classId, input.studentUid);
+    await deactivateStudentAssignmentsInCourse(db, input.courseId, input.studentUid);
   }
-  return { studentUid: input.studentUid, classId: input.classId, active: input.active };
+  return { studentUid: input.studentUid, courseId: input.courseId, active: input.active };
 }
 
 export const setEnrollmentActive = auditedCall('setEnrollmentActive', async (req, audit) => {
   const input = validateSetEnrollmentActive(req.data);
-  await requireClassScope(req, input.classId);
-  audit.classId = input.classId;
+  await requireCourseScope(req, input.courseId);
+  audit.courseId = input.courseId;
   return applyEnrollmentActive(input);
 });

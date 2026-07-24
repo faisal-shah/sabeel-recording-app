@@ -19,7 +19,7 @@ import {
 import { COLLECTIONS, EMULATOR_PROJECT_ID, enrollmentId } from '@sabeel/shared';
 
 /**
- * Rules for cohorts, classes and enrollments.
+ * Rules for cohorts, courses and enrollments.
  *
  * The two failure modes this phase introduces are "a manager sees another
  * manager's class" and "a student sees another student's enrolment", so both are
@@ -69,7 +69,7 @@ beforeEach(async () => {
       createdBy: ADMIN,
     });
     const cls = (id: string, managerUids: string[]) =>
-      setDoc(doc(db, COLLECTIONS.classes, id), {
+      setDoc(doc(db, COLLECTIONS.courses, id), {
         cohortId: COHORT,
         name: id,
         archived: false,
@@ -79,10 +79,10 @@ beforeEach(async () => {
         createdAt: 1,
         createdBy: ADMIN,
       });
-    const enrol = (studentUid: string, classId: string) =>
-      setDoc(doc(db, COLLECTIONS.enrollments, enrollmentId(studentUid, classId)), {
+    const enrol = (studentUid: string, courseId: string) =>
+      setDoc(doc(db, COLLECTIONS.enrollments, enrollmentId(studentUid, courseId)), {
         studentUid,
-        classId,
+        courseId,
         cohortId: COHORT,
         active: true,
         enrolledAt: 1,
@@ -116,19 +116,19 @@ describe('cohorts', () => {
   });
 });
 
-describe('classes', () => {
+describe('courses', () => {
   it('let an admin list everything, unconstrained', async () => {
-    await assertSucceeds(getDocs(collection(admin(), COLLECTIONS.classes)));
+    await assertSucceeds(getDocs(collection(admin(), COLLECTIONS.courses)));
   });
 
   it('let a manager list ONLY with the array-contains constraint', async () => {
     // The unconstrained list must fail. This is the whole reason the rule reads
     // resource.data rather than merely documenting the expected query shape.
-    await assertFails(getDocs(collection(mine(), COLLECTIONS.classes)));
+    await assertFails(getDocs(collection(mine(), COLLECTIONS.courses)));
     await assertSucceeds(
       getDocs(
         query(
-          collection(mine(), COLLECTIONS.classes),
+          collection(mine(), COLLECTIONS.courses),
           where('managerUids', 'array-contains', MINE),
         ),
       ),
@@ -136,9 +136,9 @@ describe('classes', () => {
   });
 
   it('do not let a manager read a class they do not run', async () => {
-    await assertSucceeds(getDoc(doc(mine(), COLLECTIONS.classes, CLASS_MINE)));
-    await assertFails(getDoc(doc(mine(), COLLECTIONS.classes, CLASS_THEIRS)));
-    await assertFails(getDoc(doc(theirs(), COLLECTIONS.classes, CLASS_MINE)));
+    await assertSucceeds(getDoc(doc(mine(), COLLECTIONS.courses, CLASS_MINE)));
+    await assertFails(getDoc(doc(mine(), COLLECTIONS.courses, CLASS_THEIRS)));
+    await assertFails(getDoc(doc(theirs(), COLLECTIONS.courses, CLASS_MINE)));
   });
 
   it('do not let a manager query their way into someone else\'s class', async () => {
@@ -146,7 +146,7 @@ describe('classes', () => {
     await assertFails(
       getDocs(
         query(
-          collection(mine(), COLLECTIONS.classes),
+          collection(mine(), COLLECTIONS.courses),
           where('managerUids', 'array-contains', THEIRS),
         ),
       ),
@@ -154,18 +154,18 @@ describe('classes', () => {
   });
 
   it('let an enrolled student read their class, but not another', async () => {
-    await assertSucceeds(getDoc(doc(studentA(), COLLECTIONS.classes, CLASS_MINE)));
-    await assertFails(getDoc(doc(studentA(), COLLECTIONS.classes, CLASS_THEIRS)));
+    await assertSucceeds(getDoc(doc(studentA(), COLLECTIONS.courses, CLASS_MINE)));
+    await assertFails(getDoc(doc(studentA(), COLLECTIONS.courses, CLASS_THEIRS)));
   });
 
-  it('never let a student LIST classes', async () => {
-    await assertFails(getDocs(collection(studentA(), COLLECTIONS.classes)));
+  it('never let a student LIST courses', async () => {
+    await assertFails(getDocs(collection(studentA(), COLLECTIONS.courses)));
   });
 
   it('are write-denied to everyone', async () => {
-    await assertFails(updateDoc(doc(admin(), COLLECTIONS.classes, CLASS_MINE), { name: 'x' }));
+    await assertFails(updateDoc(doc(admin(), COLLECTIONS.courses, CLASS_MINE), { name: 'x' }));
     await assertFails(
-      updateDoc(doc(mine(), COLLECTIONS.classes, CLASS_MINE), { managerUids: [MINE, THEIRS] }),
+      updateDoc(doc(mine(), COLLECTIONS.courses, CLASS_MINE), { managerUids: [MINE, THEIRS] }),
     );
   });
 });
@@ -204,7 +204,7 @@ describe('enrollments', () => {
   it('let a scoped manager read their class roster', async () => {
     await assertSucceeds(
       getDocs(
-        query(collection(mine(), COLLECTIONS.enrollments), where('classId', '==', CLASS_MINE)),
+        query(collection(mine(), COLLECTIONS.enrollments), where('courseId', '==', CLASS_MINE)),
       ),
     );
   });
@@ -212,7 +212,7 @@ describe('enrollments', () => {
   it('do not let a manager read another class\'s roster', async () => {
     await assertFails(
       getDocs(
-        query(collection(mine(), COLLECTIONS.enrollments), where('classId', '==', CLASS_THEIRS)),
+        query(collection(mine(), COLLECTIONS.enrollments), where('courseId', '==', CLASS_THEIRS)),
       ),
     );
     await assertFails(
@@ -235,9 +235,9 @@ describe('query cost: the arm-ordering property', () => {
    *
    * Firestore caps document-access calls per query. The staff arm resolves a
    * class get() from each row's data, so it is only affordable when every row
-   * shares one classId — which a roster query guarantees and a student's
+   * shares one courseId — which a roster query guarantees and a student's
    * cross-class query does not. If the zero-read student arm were not first,
-   * the second test here would fail once a student is in enough classes.
+   * the second test here would fail once a student is in enough courses.
    *
    * Both are sized past the limit deliberately: at three rows they pass either
    * way, which is exactly how this ships broken.
@@ -253,19 +253,19 @@ describe('query cost: the arm-ordering property', () => {
         writes.push(
           setDoc(doc(db, COLLECTIONS.enrollments, enrollmentId(uid, CLASS_MINE)), {
             studentUid: uid,
-            classId: CLASS_MINE,
+            courseId: CLASS_MINE,
             cohortId: COHORT,
             active: true,
             enrolledAt: 1,
             enrolledBy: ADMIN,
           }),
         );
-        // …and put student A into many classes, each a DIFFERENT class id.
-        const otherClass = `extra${i}`;
+        // …and put student A into many courses, each a DIFFERENT class id.
+        const otherCourse = `extra${i}`;
         writes.push(
-          setDoc(doc(db, COLLECTIONS.classes, otherClass), {
+          setDoc(doc(db, COLLECTIONS.courses, otherCourse), {
             cohortId: COHORT,
-            name: otherClass,
+            name: otherCourse,
             archived: false,
             effectiveActive: true,
             archivedAccess: false,
@@ -275,9 +275,9 @@ describe('query cost: the arm-ordering property', () => {
           }),
         );
         writes.push(
-          setDoc(doc(db, COLLECTIONS.enrollments, enrollmentId(STU_A, otherClass)), {
+          setDoc(doc(db, COLLECTIONS.enrollments, enrollmentId(STU_A, otherCourse)), {
             studentUid: STU_A,
-            classId: otherClass,
+            courseId: otherCourse,
             cohortId: COHORT,
             active: true,
             enrolledAt: 1,
@@ -292,14 +292,14 @@ describe('query cost: the arm-ordering property', () => {
   it(`a manager reads a ${BIG}-student roster in one query`, async () => {
     const snap = await assertSucceeds(
       getDocs(
-        query(collection(mine(), COLLECTIONS.enrollments), where('classId', '==', CLASS_MINE)),
+        query(collection(mine(), COLLECTIONS.enrollments), where('courseId', '==', CLASS_MINE)),
       ),
     );
     expect(snap.size).toBeGreaterThanOrEqual(BIG);
   });
 
-  it(`a student reads their own ${BIG}+ enrollments spanning many classes`, async () => {
-    // Every row here has a different classId. This only works because the
+  it(`a student reads their own ${BIG}+ enrollments spanning many courses`, async () => {
+    // Every row here has a different courseId. This only works because the
     // student arm is satisfied with zero document reads.
     const snap = await assertSucceeds(
       getDocs(

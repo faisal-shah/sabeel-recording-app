@@ -64,7 +64,7 @@ export const onUserCreate = functionsV1
           actorUid: user.uid,
           actorRole: 'system',
           action: 'authReject',
-          classId: null,
+          courseId: null,
           targets: { uid: user.uid },
           detail: { reason: decision.reason, email: decision.email },
         });
@@ -98,7 +98,7 @@ export const onUserCreate = functionsV1
         actorUid: user.uid,
         actorRole: 'system',
         action: 'authProvision',
-        classId: null,
+        courseId: null,
         targets: { uid: user.uid },
         detail: { email: profile.email, status: 'pending' },
       });

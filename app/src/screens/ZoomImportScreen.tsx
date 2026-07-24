@@ -4,7 +4,7 @@ import type { ZoomImportRow } from '@sabeel/shared';
 import { Button, Card, Empty, Field, Notice, Row, Screen } from '../components/ui';
 import { DateField } from '../components/DateField';
 import { listZoomRecordings, importZoomRecording } from '../zoom';
-import { useAllClasses, useCohorts, useMyClasses, type ClassRow } from '../structure';
+import { useAllCourses, useCohorts, useMyCourses, type CourseRow } from '../structure';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -20,9 +20,9 @@ type StatusFilter = 'available' | 'imported' | 'all';
 
 /**
  * The Zoom import picker (staff). Lists the central account's audio-only
- * recordings for a date range; each available one imports into a class the
- * caller picks inline (admin: any class, manager: their own). Pull, not push —
- * this is the only entry to Zoom import, and the class is chosen here.
+ * recordings for a date range; each available one imports into a course the
+ * caller picks inline (admin: any course, manager: their own). Pull, not push —
+ * this is the only entry to Zoom import, and the course is chosen here.
  */
 export function ZoomImportScreen({
   isAdmin,
@@ -32,8 +32,8 @@ export function ZoomImportScreen({
 }: {
   isAdmin: boolean;
   uid: string;
-  onImported: (cls: ClassRow) => void;
-  onOpenImported: (recordingId: string, classId: string) => void;
+  onImported: (cls: CourseRow) => void;
+  onOpenImported: (recordingId: string, courseId: string) => void;
 }) {
   const [from, setFrom] = useState(defaultFrom());
   const [to, setTo] = useState(ymd(new Date()));
@@ -43,8 +43,8 @@ export function ZoomImportScreen({
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('available');
   const [hideShort, setHideShort] = useState(true);
-  // Loaded once here (not per row): the classes this caller may import into.
-  const options = useClassOptions(isAdmin, uid);
+  // Loaded once here (not per row): the courses this caller may import into.
+  const options = useCourseOptions(isAdmin, uid);
 
   const load = async () => {
     setLoading(true);
@@ -118,20 +118,20 @@ export function ZoomImportScreen({
   );
 }
 
-/** The classes this staff member may import into, labelled by cohort. */
-function useClassOptions(isAdmin: boolean, uid: string): { cls: ClassRow; cohortName: string }[] {
+/** The courses this staff member may import into, labelled by cohort. */
+function useCourseOptions(isAdmin: boolean, uid: string): { cls: CourseRow; cohortName: string }[] {
   const cohorts = useCohorts(true);
-  const adminClasses = useAllClasses(isAdmin);
-  const myClasses = useMyClasses(isAdmin ? null : uid);
-  const classes = isAdmin ? adminClasses : myClasses;
+  const adminCoursees = useAllCourses(isAdmin);
+  const myCoursees = useMyCourses(isAdmin ? null : uid);
+  const courses = isAdmin ? adminCoursees : myCoursees;
   const cohortName = (id: string) => cohorts.find((c) => c.id === id)?.name ?? '';
   return useMemo(
     () =>
-      classes
+      courses
         .filter((c) => !c.archived)
         .map((c) => ({ cls: c, cohortName: cohortName(c.cohortId) }))
         .sort((a, b) => a.cohortName.localeCompare(b.cohortName) || a.cls.name.localeCompare(b.cls.name)),
-    [classes, cohorts],
+    [courses, cohorts],
   );
 }
 
@@ -142,18 +142,18 @@ function ZoomRow({
   onOpenImported,
 }: {
   row: ZoomImportRow;
-  options: { cls: ClassRow; cohortName: string }[];
-  onImported: (cls: ClassRow) => void;
-  onOpenImported: (recordingId: string, classId: string) => void;
+  options: { cls: CourseRow; cohortName: string }[];
+  onImported: (cls: CourseRow) => void;
+  onOpenImported: (recordingId: string, courseId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [classId, setClassId] = useState<string | null>(null);
+  const [courseId, setCourseId] = useState<string | null>(null);
   const [dueDate, setDueDate] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const doImport = async () => {
-    const chosen = options.find((o) => o.cls.id === classId);
+    const chosen = options.find((o) => o.cls.id === courseId);
     if (!chosen) return;
     setBusy(true);
     setError(null);
@@ -161,7 +161,7 @@ function ZoomRow({
       await importZoomRecording({
         meetingUuid: row.meetingUuid,
         fileId: row.fileId,
-        classId: chosen.cls.id,
+        courseId: chosen.cls.id,
         dueDate: dueDate.trim() ? dueDate.trim() : null,
       });
       onImported(chosen.cls);
@@ -185,14 +185,14 @@ function ZoomRow({
           testID={`zoom-open-imported-${row.topic.trim() || row.meetingUuid}`}
           onPress={() =>
             row.alreadyImported &&
-            row.importedClassId &&
-            onOpenImported(row.alreadyImported, row.importedClassId)
+            row.importedCourseId &&
+            onOpenImported(row.alreadyImported, row.importedCourseId)
           }
           style={styles.importedRow}
         >
           <View style={{ flex: 1 }}>
             <Text style={styles.imported}>
-              ✓ Imported{row.importedClassName ? ` into ${row.importedClassName}` : ''}
+              ✓ Imported{row.importedCourseName ? ` into ${row.importedCourseName}` : ''}
             </Text>
             {row.importedCohortName ? (
               <Text style={styles.importedCohort}>{row.importedCohortName} · tap to listen</Text>
@@ -204,19 +204,19 @@ function ZoomRow({
         </Pressable>
       ) : expanded ? (
         <View style={styles.picker}>
-          <Text style={styles.pickerLabel}>Import into which class?</Text>
+          <Text style={styles.pickerLabel}>Import into which course?</Text>
           {options.length === 0 ? (
-            <Empty>You have no classes to import into.</Empty>
+            <Empty>You have no courses to import into.</Empty>
           ) : (
             options.map((o) => {
-              const on = classId === o.cls.id;
+              const on = courseId === o.cls.id;
               return (
                 <Pressable
                   key={o.cls.id}
-                  testID={`zoom-class-${o.cls.name}`}
+                  testID={`zoom-course-${o.cls.name}`}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: on }}
-                  onPress={() => setClassId(on ? null : o.cls.id)}
+                  onPress={() => setCourseId(on ? null : o.cls.id)}
                   style={styles.pickRow}
                 >
                   <View style={[styles.tick, on ? styles.tickOn : null]} />
@@ -234,7 +234,7 @@ function ZoomRow({
               testID={`zoom-import-${row.topic.trim() || row.meetingUuid}`}
               label="Import"
               busy={busy}
-              disabled={!classId}
+              disabled={!courseId}
               onPress={() => void doImport()}
             />
             <Button label="Cancel" variant="secondary" onPress={() => setExpanded(false)} />

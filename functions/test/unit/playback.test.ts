@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { TokenClaims } from '@sabeel/shared';
 import { playbackDenial } from '../../src/playback';
 
-const activeClass = { effectiveActive: true, archivedAccess: false, managerUids: ['mgr'] };
+const activeCourse = { effectiveActive: true, archivedAccess: false, managerUids: ['mgr'] };
 const archivedClosed = { effectiveActive: false, archivedAccess: false, managerUids: ['mgr'] };
 const archivedOpen = { effectiveActive: false, archivedAccess: true, managerUids: ['mgr'] };
 const published = { status: 'published' as const, audioPath: 'recordings/r/audio.m4a' };
@@ -11,7 +11,7 @@ const ask = (over: Partial<Parameters<typeof playbackDenial>[0]>) =>
   playbackDenial({
     claims: { role: 'student', status: 'active' } as TokenClaims,
     recording: published,
-    cls: activeClass,
+    cls: activeCourse,
     uid: 'stu',
     enrollmentActive: true,
     ...over,

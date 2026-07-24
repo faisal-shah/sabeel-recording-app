@@ -6,7 +6,7 @@ import { reportError } from './sentry';
 
 /**
  * Mutable context the handler enriches so the audit entry is meaningful:
- *  - `classId`: set it to the class this action belongs to, so a manager can
+ *  - `courseId`: set it to the class this action belongs to, so a manager can
  *    read the entry. The handler already has it (it loaded the class/recording
  *    to check scope). Left null → the entry is admin-only.
  *  - `detail`: semantic extra (an override reason, a status change).
@@ -14,12 +14,12 @@ import { reportError } from './sentry';
  *    derives ids from the request data.
  */
 export interface AuditContext {
-  classId: string | null;
+  courseId: string | null;
   targets: Record<string, string>;
   detail?: Record<string, unknown>;
 }
 
-const ID_KEYS = ['recordingId', 'studentUid', 'cohortId', 'classId', 'uid'] as const;
+const ID_KEYS = ['recordingId', 'studentUid', 'cohortId', 'courseId', 'uid'] as const;
 
 function deriveTargets(data: unknown): Record<string, string> {
   const out: Record<string, string> = {};
@@ -49,7 +49,7 @@ export function auditedCall<T>(
   extraSecrets: Secret[] = [],
 ) {
   return onCall({ secrets: [SENTRY_DSN, ...extraSecrets] }, async (req) => {
-    const audit: AuditContext = { classId: null, targets: {} };
+    const audit: AuditContext = { courseId: null, targets: {} };
     let result: T;
     try {
       result = await handler(req, audit);
@@ -65,7 +65,7 @@ export function auditedCall<T>(
         actorUid: req.auth?.uid ?? 'unknown',
         actorRole: token.role ?? 'system',
         action,
-        classId: audit.classId,
+        courseId: audit.courseId,
         targets: Object.keys(audit.targets).length ? audit.targets : deriveTargets(req.data),
         ...(audit.detail ? { detail: audit.detail } : {}),
       });

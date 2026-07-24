@@ -24,24 +24,24 @@ export async function loadRecording(id: string): Promise<RecordingRow | null> {
 /**
  * Recordings for one class.
  *
- * Constrained to a single classId, which is also what makes the security rule
+ * Constrained to a single courseId, which is also what makes the security rule
  * affordable: its staff arm resolves a class lookup per row, and only a
  * single-class query lets that resolve one cached path.
  */
-export function useClassRecordings(classId: string | null): RecordingRow[] {
+export function useCourseRecordings(courseId: string | null): RecordingRow[] {
   return useLiveQuery<RecordingRow[]>(
-    'classRecordings',
+    'courseRecordings',
     () =>
-      classId
+      courseId
         ? query(
             collection(db, COLLECTIONS.recordings),
-            where('classId', '==', classId),
+            where('courseId', '==', courseId),
             orderBy('createdAt', 'desc'),
           )
         : null,
     (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as RecordingDoc) })),
     [],
-    [classId],
+    [courseId],
   );
 }
 
@@ -64,7 +64,7 @@ const call = <I, O>(name: string) => (input: I) =>
   httpsCallable<I, O>(functions, name)(input).then((r) => r.data);
 
 export const createRecording = call<
-  { classId: string; title: string; recordedAt: number | null },
+  { courseId: string; title: string; recordedAt: number | null },
   { id: string; audioPath: string }
 >('createRecording');
 

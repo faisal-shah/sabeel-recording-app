@@ -117,14 +117,14 @@ export function useCompletion(uid: string | null, recordingId: string): Completi
 export async function setCompleted(
   studentUid: string,
   recordingId: string,
-  classId: string,
+  courseId: string,
   completed: boolean,
 ): Promise<void> {
   const now = Date.now();
   const state: CompletionDoc = {
     studentUid,
     recordingId,
-    classId,
+    courseId,
     completed,
     completedAt: completed ? now : null,
     updatedAt: now,
@@ -132,7 +132,7 @@ export async function setCompleted(
   const event: CompletionEventDoc = {
     studentUid,
     recordingId,
-    classId,
+    courseId,
     action: completed ? 'complete' : 'uncomplete',
     actor: 'student',
     at: now,

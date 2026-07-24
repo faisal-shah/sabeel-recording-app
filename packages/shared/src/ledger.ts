@@ -16,7 +16,7 @@ import { dueBucket, isOverdue, type DueBucket } from './assignments';
 export interface CompletionOverrideDoc {
   studentUid: string;
   recordingId: string;
-  classId: string;
+  courseId: string;
   completed: boolean;
   /** Required — the brief allows an override only WITH a recorded reason. */
   reason: string;

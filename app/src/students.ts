@@ -38,7 +38,7 @@ export function useStudents(enabled: boolean): StudentRow[] {
 export async function createStudent(input: {
   displayName: string;
   email: string;
-  classId?: string;
+  courseId?: string;
 }): Promise<{ uid: string; emailSent: boolean }> {
   const res = await httpsCallable<typeof input, { uid: string; email: string }>(
     functions,

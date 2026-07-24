@@ -9,7 +9,7 @@ import {
   type EnrollmentDoc,
   type RecordingDoc,
 } from '@sabeel/shared';
-import { requireClassScope } from './guards';
+import { requireCourseScope } from './guards';
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -47,15 +47,15 @@ export function validateAssignCatchup(data: unknown): CatchupInput {
  * own due date is later edited (the fan-out only rewrites `publish` rows).
  *
  * The student must be an ACTIVE member of the recording's class — catch-up is a
- * membership-scoped action, and assigning across classes would break the "if a
+ * membership-scoped action, and assigning across courses would break the "if a
  * student should not be accountable, do not enrol them" model.
  */
-export async function applyCatchup(callerUid: string, input: CatchupInput, classId: string) {
+export async function applyCatchup(callerUid: string, input: CatchupInput, courseId: string) {
   const db = getFirestore();
 
   const enrolSnap = await db
     .collection(COLLECTIONS.enrollments)
-    .doc(enrollmentId(input.studentUid, classId))
+    .doc(enrollmentId(input.studentUid, courseId))
     .get();
   const enrol = enrolSnap.data() as EnrollmentDoc | undefined;
   if (!enrol || !enrol.active) {
@@ -65,7 +65,7 @@ export async function applyCatchup(callerUid: string, input: CatchupInput, class
   const doc: AssignmentDoc = {
     studentUid: input.studentUid,
     recordingId: input.recordingId,
-    classId,
+    courseId,
     cohortId: enrol.cohortId,
     dueDate: input.dueDate,
     source: 'catchup',
@@ -93,8 +93,8 @@ export const assignCatchup = auditedCall('assignCatchup', async (req, audit) => 
   if (rec.status !== 'published') {
     throw new HttpsError('failed-precondition', 'That recording is not published.');
   }
-  const uid = await requireClassScope(req, rec.classId);
-  audit.classId = rec.classId;
+  const uid = await requireCourseScope(req, rec.courseId);
+  audit.courseId = rec.courseId;
   audit.detail = { dueDate: input.dueDate };
-  return applyCatchup(uid, input, rec.classId);
+  return applyCatchup(uid, input, rec.courseId);
 });

@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { canPlayFromClass, listenedFraction } from '@sabeel/shared';
+import { canPlayFromCourse, listenedFraction } from '@sabeel/shared';
 import { Notice } from '../components/ui';
 import { Scrubber } from '../components/Scrubber';
 import { Transport } from '../components/Transport';
 import { usePlayback } from '../playback';
 import { useCompletion, setCompleted } from '../completion';
 import { useListenerError } from '../liveQuery';
-import { useCohortName, type ClassRow } from '../structure';
+import { useCohortName, type CourseRow } from '../structure';
 import type { RecordingRow } from '../recordings';
 import { getTheme, spacing } from '../theme';
 
@@ -29,20 +29,20 @@ export function PlayerScreen({
   studentUid,
 }: {
   recording: RecordingRow;
-  cls: ClassRow;
+  cls: CourseRow;
   studentUid: string | null;
 }) {
   const listenerError = useListenerError();
-  const allowed = canPlayFromClass(cls);
+  const allowed = canPlayFromCourse(cls);
   const { state, play, pause, seek, setRate } = usePlayback(
     recording.id,
     studentUid,
-    recording.classId,
+    recording.courseId,
   );
   // While the scrubber is being dragged it reports the previewed position; the
   // time readouts follow the thumb rather than the still-advancing playhead.
   const [scrubMs, setScrubMs] = useState<number | null>(null);
-  // Staff can reach this across cohorts, where a class name alone is ambiguous;
+  // Staff can reach this across cohorts, where a course name alone is ambiguous;
   // students can't read cohorts and arrive from their own single context, so the
   // lookup is disabled for them (returns '').
   const cohortName = useCohortName(studentUid === null)(recording.cohortId);
@@ -50,9 +50,9 @@ export function PlayerScreen({
   if (!allowed) {
     return (
       <ScrollView style={styles.canvas} contentContainerStyle={styles.content}>
-        <Hero recording={recording} className={cls.name} cohortName={cohortName} />
+        <Hero recording={recording} courseName={cls.name} cohortName={cohortName} />
         <Notice tone="info">
-          This class has been archived and listening has been turned off. Your listening
+          This course has been archived and listening has been turned off. Your listening
           history is kept — ask your teacher if you need access again.
         </Notice>
       </ScrollView>
@@ -69,7 +69,7 @@ export function PlayerScreen({
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {state.error ? <Notice tone="error">{state.error}</Notice> : null}
 
-      <Hero recording={recording} className={cls.name} cohortName={cohortName} />
+      <Hero recording={recording} courseName={cls.name} cohortName={cohortName} />
 
       <Scrubber
         testID="player-scrubber"
@@ -135,7 +135,7 @@ export function PlayerScreen({
           <CompletionControl
             studentUid={studentUid}
             recordingId={recording.id}
-            classId={recording.classId}
+            courseId={recording.courseId}
             everPlayed={state.listenedMs > 0 || state.positionMs > 0}
           />
         </>
@@ -168,17 +168,17 @@ export function PlayerScreen({
  */
 function Hero({
   recording,
-  className,
+  courseName,
   cohortName,
 }: {
   recording: RecordingRow;
-  className: string;
+  courseName: string;
   cohortName: string;
 }) {
   return (
     <View style={styles.hero}>
-      <Text style={styles.heroClass}>
-        {className.toUpperCase()}
+      <Text style={styles.heroCourse}>
+        {courseName.toUpperCase()}
         {cohortName ? ` · ${cohortName.toUpperCase()}` : ''}
       </Text>
       <Text style={styles.heroTitle}>{recording.title}</Text>
@@ -203,12 +203,12 @@ function Hero({
 function CompletionControl({
   studentUid,
   recordingId,
-  classId,
+  courseId,
   everPlayed,
 }: {
   studentUid: string;
   recordingId: string;
-  classId: string;
+  courseId: string;
   everPlayed: boolean;
 }) {
   const { completed, pending } = useCompletion(studentUid, recordingId);
@@ -222,7 +222,7 @@ function CompletionControl({
           testID="mark-incomplete"
           accessibilityRole="button"
           accessibilityLabel="Mark not complete"
-          onPress={() => void setCompleted(studentUid, recordingId, classId, false)}
+          onPress={() => void setCompleted(studentUid, recordingId, courseId, false)}
         >
           <Text style={styles.unmark}>Unmark</Text>
         </Pressable>
@@ -238,7 +238,7 @@ function CompletionControl({
         accessibilityLabel="Mark complete"
         accessibilityState={{ disabled: !everPlayed }}
         disabled={!everPlayed}
-        onPress={() => void setCompleted(studentUid, recordingId, classId, true)}
+        onPress={() => void setCompleted(studentUid, recordingId, courseId, true)}
         style={({ pressed }) => [
           styles.completeButton,
           pressed ? styles.completePressed : null,
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
     minHeight: 200,
     justifyContent: 'center',
   },
-  heroClass: {
+  heroCourse: {
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 1.2,

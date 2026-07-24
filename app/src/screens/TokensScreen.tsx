@@ -48,7 +48,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export function TokensScreen() {
   return (
     <ScrollView style={styles.canvas} contentContainerStyle={styles.content}>
-      <Text style={styles.h1}>Class Recordings</Text>
+      <Text style={styles.h1}>Course Recordings</Text>
       <Text style={styles.lede}>
         Design tokens — Sabeel Institute, Option 1 palette. Single light theme.
       </Text>

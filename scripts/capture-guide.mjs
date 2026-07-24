@@ -70,7 +70,7 @@ await home(adm);
 await tap(adm, 'nav-cohorts'); await adm.waitForTimeout(3000);
 await pair(adm, '13-cohorts');
 await tap(adm, 'cohort-open-Autumn 2026'); await adm.waitForTimeout(3000);
-await pair(adm, '14-classes');
+await pair(adm, '14-courses');
 await tap(adm, 'class-open-Hikam Foundations');
 await adm.getByTestId('nav-recordings').waitFor({ timeout: 15000 });
 await pair(adm, '15-class-detail');

@@ -18,7 +18,7 @@ export type RecordingSource = 'manual' | 'zoom';
 
 export interface RecordingDoc {
   cohortId: string;
-  classId: string;
+  courseId: string;
   title: string;
   status: RecordingStatus;
   source: RecordingSource;
@@ -143,7 +143,7 @@ export function audioStoragePath(recordingId: string): string {
 export interface ListeningProgressDoc {
   studentUid: string;
   recordingId: string;
-  classId: string;
+  courseId: string;
   /** Where to resume from. */
   positionMs: number;
   /** Total time actually listened, which is NOT the same as position — seeking

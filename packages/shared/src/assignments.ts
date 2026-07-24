@@ -33,7 +33,7 @@ export type AssignmentSource = 'publish' | 'catchup';
 export interface AssignmentDoc {
   studentUid: string;
   recordingId: string;
-  classId: string;
+  courseId: string;
   cohortId: string;
   /** Date-only `YYYY-MM-DD` in the institute timezone, or null ("required, but
    *  never overdue" — a no-due assignment is still required listening). */
@@ -64,7 +64,7 @@ export function assignmentId(studentUid: string, recordingId: string): string {
 export interface CompletionDoc {
   studentUid: string;
   recordingId: string;
-  classId: string;
+  courseId: string;
   completed: boolean;
   /** When it was last marked complete; null once unmarked. */
   completedAt: number | null;
@@ -84,7 +84,7 @@ export function completionId(studentUid: string, recordingId: string): string {
 export interface CompletionEventDoc {
   studentUid: string;
   recordingId: string;
-  classId: string;
+  courseId: string;
   action: 'complete' | 'uncomplete';
   actor: 'student';
   at: number;

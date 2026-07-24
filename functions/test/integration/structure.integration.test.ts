@@ -6,7 +6,7 @@ import {
   COLLECTIONS,
   EMULATOR_PROJECT_ID,
   enrollmentId,
-  type ClassDoc,
+  type CourseDoc,
   type EnrollmentDoc,
 } from '@sabeel/shared';
 import {
@@ -16,13 +16,13 @@ import {
   validateSetCohortArchived,
 } from '../../src/cohorts';
 import {
-  applyClassManagers,
-  applyClassUpdate,
-  createClassRecord,
-  validateCreateClass,
-  validateSetClassManagers,
-  validateUpdateClass,
-} from '../../src/classes';
+  applyCourseManagers,
+  applyCourseUpdate,
+  createCourseRecord,
+  validateCreateCourse,
+  validateSetCourseManagers,
+  validateUpdateCourse,
+} from '../../src/courses';
 import {
   applyEnrollmentActive,
   createEnrollmentRecord,
@@ -44,7 +44,7 @@ async function clearAll() {
     COLLECTIONS.staffUsers,
     COLLECTIONS.students,
     COLLECTIONS.cohorts,
-    COLLECTIONS.classes,
+    COLLECTIONS.courses,
     COLLECTIONS.enrollments,
   ]) {
     const snap = await db.collection(c).get();
@@ -72,7 +72,7 @@ beforeEach(async () => {
 });
 
 const classDoc = async (id: string) =>
-  (await getFirestore().collection(COLLECTIONS.classes).doc(id).get()).data() as ClassDoc;
+  (await getFirestore().collection(COLLECTIONS.courses).doc(id).get()).data() as CourseDoc;
 
 describe('cohort archive cascade', () => {
   it('deactivates every class, and restores each to its OWN state', async () => {
@@ -80,9 +80,9 @@ describe('cohort archive cascade', () => {
     // the real callable: reactivating a cohort must NOT switch every class back
     // on, only those that were not archived in their own right.
     const { id: cohortId } = await createCohortRecord(ADMIN, 'Autumn 2026');
-    const { id: openId } = await createClassRecord(ADMIN, { cohortId, name: 'Open' });
-    const { id: shutId } = await createClassRecord(ADMIN, { cohortId, name: 'Shut' });
-    await applyClassUpdate({ classId: shutId, archived: true });
+    const { id: openId } = await createCourseRecord(ADMIN, { cohortId, name: 'Open' });
+    const { id: shutId } = await createCourseRecord(ADMIN, { cohortId, name: 'Shut' });
+    await applyCourseUpdate({ courseId: shutId, archived: true });
 
     expect((await classDoc(openId)).effectiveActive).toBe(true);
     expect((await classDoc(shutId)).effectiveActive).toBe(false);
@@ -100,7 +100,7 @@ describe('cohort archive cascade', () => {
 
   it('never writes the class\'s own archived flag', async () => {
     const { id: cohortId } = await createCohortRecord(ADMIN, 'C');
-    const { id } = await createClassRecord(ADMIN, { cohortId, name: 'K' });
+    const { id } = await createCourseRecord(ADMIN, { cohortId, name: 'K' });
     await applyCohortArchived({ cohortId, archived: true });
     // If the cascade wrote `archived: true` here, the restore above could never
     // distinguish "archived because its cohort was" from "archived on purpose".
@@ -110,17 +110,17 @@ describe('cohort archive cascade', () => {
   it('seeds a class created inside an archived cohort as inactive', async () => {
     const { id: cohortId } = await createCohortRecord(ADMIN, 'Old');
     await applyCohortArchived({ cohortId, archived: true });
-    const { id } = await createClassRecord(ADMIN, { cohortId, name: 'Late' });
+    const { id } = await createCourseRecord(ADMIN, { cohortId, name: 'Late' });
     expect((await classDoc(id)).effectiveActive).toBe(false);
   });
 
   it('keeps a class inactive when it is archived inside an archived cohort', async () => {
     const { id: cohortId } = await createCohortRecord(ADMIN, 'X');
-    const { id } = await createClassRecord(ADMIN, { cohortId, name: 'Y' });
+    const { id } = await createCourseRecord(ADMIN, { cohortId, name: 'Y' });
     await applyCohortArchived({ cohortId, archived: true });
     // Unarchiving the CLASS alone must not resurrect it — the cohort is the
     // other half of the derivation.
-    await applyClassUpdate({ classId: id, archived: false });
+    await applyCourseUpdate({ courseId: id, archived: false });
     expect((await classDoc(id)).effectiveActive).toBe(false);
   });
 
@@ -129,11 +129,11 @@ describe('cohort archive cascade', () => {
   });
 });
 
-describe('setClassManagers', () => {
+describe('setCourseManagers', () => {
   it('assigns an active staff member', async () => {
     const { id: cohortId } = await createCohortRecord(ADMIN, 'C');
-    const { id } = await createClassRecord(ADMIN, { cohortId, name: 'K' });
-    await applyClassManagers({ classId: id, managerUids: [MGR] });
+    const { id } = await createCourseRecord(ADMIN, { cohortId, name: 'K' });
+    await applyCourseManagers({ courseId: id, managerUids: [MGR] });
     expect((await classDoc(id)).managerUids).toEqual([MGR]);
   });
 
@@ -141,19 +141,19 @@ describe('setClassManagers', () => {
     // managerUids is read directly by the security rules, so writing an
     // invented or disabled uid into it is granting access, not mislabelling.
     const { id: cohortId } = await createCohortRecord(ADMIN, 'C');
-    const { id } = await createClassRecord(ADMIN, { cohortId, name: 'K' });
+    const { id } = await createCourseRecord(ADMIN, { cohortId, name: 'K' });
     await expect(
-      applyClassManagers({ classId: id, managerUids: ['ghost'] }),
+      applyCourseManagers({ courseId: id, managerUids: ['ghost'] }),
     ).rejects.toThrow(/not an active staff member/);
 
     await seedStaff('sleeper', 'manager', 'pending');
     await expect(
-      applyClassManagers({ classId: id, managerUids: ['sleeper'] }),
+      applyCourseManagers({ courseId: id, managerUids: ['sleeper'] }),
     ).rejects.toThrow(/not an active staff member/);
 
     await seedStaff('gone', 'manager', 'disabled');
     await expect(
-      applyClassManagers({ classId: id, managerUids: ['gone'] }),
+      applyCourseManagers({ courseId: id, managerUids: ['gone'] }),
     ).rejects.toThrow(/not an active staff member/);
 
     expect((await classDoc(id)).managerUids).toEqual([]);
@@ -161,7 +161,7 @@ describe('setClassManagers', () => {
 
   it('de-duplicates', () => {
     expect(
-      validateSetClassManagers({ classId: 'c', managerUids: ['a', 'a', 'b'] }).managerUids,
+      validateSetCourseManagers({ courseId: 'c', managerUids: ['a', 'a', 'b'] }).managerUids,
     ).toEqual(['a', 'b']);
   });
 });
@@ -169,32 +169,32 @@ describe('setClassManagers', () => {
 describe('enrollments', () => {
   const setup = async () => {
     const { id: cohortId } = await createCohortRecord(ADMIN, 'C');
-    const { id: classId } = await createClassRecord(ADMIN, { cohortId, name: 'K' });
+    const { id: courseId } = await createCourseRecord(ADMIN, { cohortId, name: 'K' });
     const student = await createStudentAccount(ADMIN, {
       displayName: 'Sara',
       email: 'sara@example.com',
     });
-    return { cohortId, classId, studentUid: student.uid };
+    return { cohortId, courseId, studentUid: student.uid };
   };
 
   it('creates an active enrolment with the composite id', async () => {
-    const { classId, studentUid, cohortId } = await setup();
-    await createEnrollmentRecord(ADMIN, { studentUid, classId });
+    const { courseId, studentUid, cohortId } = await setup();
+    await createEnrollmentRecord(ADMIN, { studentUid, courseId });
     const snap = await getFirestore()
       .collection(COLLECTIONS.enrollments)
-      .doc(enrollmentId(studentUid, classId))
+      .doc(enrollmentId(studentUid, courseId))
       .get();
-    expect(snap.data()).toMatchObject({ studentUid, classId, cohortId, active: true });
+    expect(snap.data()).toMatchObject({ studentUid, courseId, cohortId, active: true });
   });
 
   it('unenrolling KEEPS the row, so history survives', async () => {
-    const { classId, studentUid } = await setup();
-    await createEnrollmentRecord(ADMIN, { studentUid, classId });
-    await applyEnrollmentActive({ studentUid, classId, active: false });
+    const { courseId, studentUid } = await setup();
+    await createEnrollmentRecord(ADMIN, { studentUid, courseId });
+    await applyEnrollmentActive({ studentUid, courseId, active: false });
 
     const snap = await getFirestore()
       .collection(COLLECTIONS.enrollments)
-      .doc(enrollmentId(studentUid, classId))
+      .doc(enrollmentId(studentUid, courseId))
       .get();
     expect(snap.exists).toBe(true);
     expect(snap.data()?.active).toBe(false);
@@ -202,10 +202,10 @@ describe('enrollments', () => {
   });
 
   it('re-enrolling reuses the same row and preserves the original date', async () => {
-    const { classId, studentUid } = await setup();
-    const first = await createEnrollmentRecord(ADMIN, { studentUid, classId });
-    await applyEnrollmentActive({ studentUid, classId, active: false });
-    await createEnrollmentRecord(MGR, { studentUid, classId });
+    const { courseId, studentUid } = await setup();
+    const first = await createEnrollmentRecord(ADMIN, { studentUid, courseId });
+    await applyEnrollmentActive({ studentUid, courseId, active: false });
+    await createEnrollmentRecord(MGR, { studentUid, courseId });
 
     const all = await getFirestore()
       .collection(COLLECTIONS.enrollments)
@@ -218,28 +218,28 @@ describe('enrollments', () => {
   });
 
   it('refuses a duplicate active enrolment', async () => {
-    const { classId, studentUid } = await setup();
-    await createEnrollmentRecord(ADMIN, { studentUid, classId });
-    await expect(createEnrollmentRecord(ADMIN, { studentUid, classId })).rejects.toThrow(/already/i);
+    const { courseId, studentUid } = await setup();
+    await createEnrollmentRecord(ADMIN, { studentUid, courseId });
+    await expect(createEnrollmentRecord(ADMIN, { studentUid, courseId })).rejects.toThrow(/already/i);
   });
 
   it('refuses to enrol a disabled student', async () => {
-    const { classId, studentUid } = await setup();
+    const { courseId, studentUid } = await setup();
     await getFirestore()
       .collection(COLLECTIONS.students)
       .doc(studentUid)
       .update({ status: 'disabled' });
-    await expect(createEnrollmentRecord(ADMIN, { studentUid, classId })).rejects.toThrow(/disabled/i);
+    await expect(createEnrollmentRecord(ADMIN, { studentUid, courseId })).rejects.toThrow(/disabled/i);
   });
 
   it('rejects an unknown class or student', async () => {
-    const { classId, studentUid } = await setup();
-    await expect(createEnrollmentRecord(ADMIN, { studentUid, classId: 'nope' })).rejects.toThrow();
-    await expect(createEnrollmentRecord(ADMIN, { studentUid: 'nope', classId })).rejects.toThrow();
+    const { courseId, studentUid } = await setup();
+    await expect(createEnrollmentRecord(ADMIN, { studentUid, courseId: 'nope' })).rejects.toThrow();
+    await expect(createEnrollmentRecord(ADMIN, { studentUid: 'nope', courseId })).rejects.toThrow();
   });
 
   it('validates input', () => {
-    for (const bad of [null, {}, { studentUid: 's' }, { classId: 'c' }, { studentUid: '', classId: 'c' }]) {
+    for (const bad of [null, {}, { studentUid: 's' }, { courseId: 'c' }, { studentUid: '', courseId: 'c' }]) {
       expect(() => validateEnrollment(bad)).toThrow();
     }
   });
@@ -248,25 +248,25 @@ describe('enrollments', () => {
 describe('createStudent with a class', () => {
   it('writes the student and the enrolment together', async () => {
     const { id: cohortId } = await createCohortRecord(ADMIN, 'C');
-    const { id: classId } = await createClassRecord(ADMIN, { cohortId, name: 'K' });
+    const { id: courseId } = await createCourseRecord(ADMIN, { cohortId, name: 'K' });
     const res = await createStudentAccount(ADMIN, {
       displayName: 'Bilal',
       email: 'bilal@example.com',
-      classId,
+      courseId,
     });
 
     const db = getFirestore();
     expect((await db.collection(COLLECTIONS.students).doc(res.uid).get()).exists).toBe(true);
     const enr = await db
       .collection(COLLECTIONS.enrollments)
-      .doc(enrollmentId(res.uid, classId))
+      .doc(enrollmentId(res.uid, courseId))
       .get();
-    expect(enr.data()).toMatchObject({ classId, cohortId, active: true });
+    expect(enr.data()).toMatchObject({ courseId, cohortId, active: true });
   });
 
   it('rejects an unknown class', async () => {
     await expect(
-      createStudentAccount(ADMIN, { displayName: 'X', email: 'x@example.com', classId: 'nope' }),
+      createStudentAccount(ADMIN, { displayName: 'X', email: 'x@example.com', courseId: 'nope' }),
     ).rejects.toThrow();
   });
 });
@@ -280,24 +280,24 @@ describe('validators', () => {
   });
 
   it('class updates reject an empty change set', () => {
-    expect(() => validateUpdateClass({ classId: 'c' })).toThrow(/Nothing to change/);
-    expect(validateUpdateClass({ classId: 'c', archived: true })).toEqual({
-      classId: 'c',
+    expect(() => validateUpdateCourse({ courseId: 'c' })).toThrow(/Nothing to change/);
+    expect(validateUpdateCourse({ courseId: 'c', archived: true })).toEqual({
+      courseId: 'c',
       archived: true,
     });
   });
 
   it('class updates reject a blank rename', () => {
     // An empty name would leave a class with no label anywhere in the UI.
-    expect(() => validateUpdateClass({ classId: 'c', name: '   ' })).toThrow();
-    expect(validateUpdateClass({ classId: 'c', name: '  K  ' }).name).toBe('K');
+    expect(() => validateUpdateCourse({ courseId: 'c', name: '   ' })).toThrow();
+    expect(validateUpdateCourse({ courseId: 'c', name: '  K  ' }).name).toBe('K');
   });
 
-  it('createClass requires a cohort and a name', () => {
+  it('createCourse requires a cohort and a name', () => {
     for (const bad of [null, {}, { cohortId: 'c' }, { name: 'K' }, { cohortId: 'c', name: ' ' }]) {
-      expect(() => validateCreateClass(bad)).toThrow();
+      expect(() => validateCreateCourse(bad)).toThrow();
     }
-    expect(validateCreateClass({ cohortId: 'c', name: ' K ' })).toEqual({
+    expect(validateCreateCourse({ cohortId: 'c', name: ' K ' })).toEqual({
       cohortId: 'c',
       name: 'K',
     });
@@ -317,14 +317,14 @@ describe('validators', () => {
 
   it('enrollment activation requires an explicit boolean', () => {
     for (const bad of [
-      { studentUid: 's', classId: 'c' },
-      { studentUid: 's', classId: 'c', active: 'yes' },
+      { studentUid: 's', courseId: 'c' },
+      { studentUid: 's', courseId: 'c', active: 'yes' },
     ]) {
       expect(() => validateSetEnrollmentActive(bad)).toThrow();
     }
-    expect(validateSetEnrollmentActive({ studentUid: 's', classId: 'c', active: false })).toEqual({
+    expect(validateSetEnrollmentActive({ studentUid: 's', courseId: 'c', active: false })).toEqual({
       studentUid: 's',
-      classId: 'c',
+      courseId: 'c',
       active: false,
     });
   });

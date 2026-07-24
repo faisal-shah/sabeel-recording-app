@@ -225,8 +225,8 @@ for (const name of ['Hikam Foundations', 'Arabic I']) {
   await tap(admin, 'class-create');
   await admin.getByTestId(`class-open-${name}`).waitFor({ timeout: 20000 });
 }
-check('a cohort and two classes are created', true);
-await shot(admin, '04-classes');
+check('a cohort and two courses are created', true);
+await shot(admin, '04-courses');
 
 // Scope ONE class to the manager.
 await tap(admin, 'class-open-Hikam Foundations');
@@ -241,7 +241,7 @@ await mgr.waitForTimeout(1500);
 // screen cannot make this pass spuriously.
 const mgrSees = await mgr.locator('body').innerText();
 // These two are UI checks, NOT security checks, and the distinction matters.
-// useMyClasses() filters with array-contains in the QUERY, so this list would
+// useMyCourses() filters with array-contains in the QUERY, so this list would
 // look correct even if the rule let any staff member read any class — verified
 // by widening the rule and watching these still pass.
 //
@@ -251,8 +251,8 @@ const mgrSees = await mgr.locator('body').innerText();
 // another class" that only proves the query works makes the suite look stronger
 // than it is.
 check('the manager\'s class list shows the class they are scoped to', mgrSees.includes('Hikam Foundations'));
-check('the manager\'s class list omits classes they are not scoped to', !mgrSees.includes('Arabic I'));
-await shot(mgr, '06-my-classes');
+check('the manager\'s class list omits courses they are not scoped to', !mgrSees.includes('Arabic I'));
+await shot(mgr, '06-my-courses');
 
 // --------------------------------------------------------------- enrolment --
 console.log('\nEnrolment');
@@ -578,9 +578,9 @@ await shot(admin, '18-audit');
 
 // ---------------------------------------------------------- archive cascade --
 console.log('\nArchive cascade');
-const classState = async () =>
+const courseState = async () =>
   Object.fromEntries(
-    (await readCollection('classes')).map((d) => [
+    (await readCollection('courses')).map((d) => [
       d.fields.name.stringValue,
       {
         eff: d.fields.effectiveActive.booleanValue ?? false,
@@ -595,7 +595,7 @@ await tap(admin, 'cohort-open-Autumn 2026');
 await tap(admin, 'class-open-Hikam Foundations');
 await tap(admin, 'class-archive');
 await admin.waitForTimeout(2500);
-let s = await classState();
+let s = await courseState();
 check(
   'archiving one class leaves the other alone',
   s['Hikam Foundations'].eff === false && s['Arabic I'].eff === true,
@@ -606,7 +606,7 @@ await goHome(admin);
 await tap(admin, 'nav-cohorts');
 await tap(admin, 'cohort-archive-Autumn 2026');
 await admin.waitForTimeout(3000);
-s = await classState();
+s = await courseState();
 check(
   'archiving the cohort deactivates every class',
   s['Hikam Foundations'].eff === false && s['Arabic I'].eff === false,
@@ -621,7 +621,7 @@ await shot(admin, '10-cohort-archived');
 
 await tap(admin, 'cohort-archive-Autumn 2026');
 await admin.waitForTimeout(3000);
-s = await classState();
+s = await courseState();
 check(
   'reactivating restores each class to its OWN state',
   s['Arabic I'].eff === true && s['Hikam Foundations'].eff === false,
@@ -637,7 +637,7 @@ const audit = await readCollection('auditLog');
 const actions = new Set(audit.map((e) => e.fields.action?.stringValue));
 check(
   'the audit log captured the staff mutations that happened',
-  ['createCohort', 'createClass', 'createStudent', 'setRecordingStatus'].every((a) =>
+  ['createCohort', 'createCourse', 'createStudent', 'setRecordingStatus'].every((a) =>
     actions.has(a),
   ),
   [...actions].sort().join(', '),
@@ -648,16 +648,16 @@ const publish = audit.find(
     e.fields.detail?.mapValue?.fields?.status?.stringValue === 'published',
 );
 check(
-  'a class-scoped entry (publish) carries its classId + actor + detail',
+  'a class-scoped entry (publish) carries its courseId + actor + detail',
   !!publish &&
-    !!publish.fields.classId?.stringValue &&
+    !!publish.fields.courseId?.stringValue &&
     !!publish.fields.actorUid?.stringValue &&
     publish.fields.actorRole?.stringValue === 'admin',
 );
 const cohortEntry = audit.find((e) => e.fields.action?.stringValue === 'createCohort');
 check(
-  'a cohort-level entry is class-less (null classId → admin-only)',
-  !!cohortEntry && cohortEntry.fields.classId?.nullValue !== undefined,
+  'a cohort-level entry is class-less (null courseId → admin-only)',
+  !!cohortEntry && cohortEntry.fields.courseId?.nullValue !== undefined,
 );
 
 // ------------------------------------------------------------------ result --

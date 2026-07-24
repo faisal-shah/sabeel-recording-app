@@ -4,18 +4,18 @@ import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
   deriveEffectiveActive,
-  type ClassDoc,
+  type CourseDoc,
   type CohortDoc,
   type StaffUserDoc,
 } from '@sabeel/shared';
 import { requireAdmin } from './guards';
 
-export interface CreateClassInput {
+export interface CreateCourseInput {
   cohortId: string;
   name: string;
 }
 
-export function validateCreateClass(data: unknown): CreateClassInput {
+export function validateCreateCourse(data: unknown): CreateCourseInput {
   const d = data as { cohortId?: unknown; name?: unknown } | null;
   if (typeof d?.cohortId !== 'string' || !d.cohortId) {
     throw new HttpsError('invalid-argument', 'cohortId is required.');
@@ -26,13 +26,13 @@ export function validateCreateClass(data: unknown): CreateClassInput {
   return { cohortId: d.cohortId, name };
 }
 
-export async function createClassRecord(callerUid: string, input: CreateClassInput) {
+export async function createCourseRecord(callerUid: string, input: CreateCourseInput) {
   const db = getFirestore();
   const cohortSnap = await db.collection(COLLECTIONS.cohorts).doc(input.cohortId).get();
   if (!cohortSnap.exists) throw new HttpsError('not-found', 'No such cohort.');
   const cohort = cohortSnap.data() as CohortDoc;
 
-  const doc: ClassDoc = {
+  const doc: CourseDoc = {
     cohortId: input.cohortId,
     name: input.name,
     archived: false,
@@ -45,30 +45,30 @@ export async function createClassRecord(callerUid: string, input: CreateClassInp
     createdAt: Date.now(),
     createdBy: callerUid,
   };
-  const ref = await db.collection(COLLECTIONS.classes).add(doc);
+  const ref = await db.collection(COLLECTIONS.courses).add(doc);
   return { id: ref.id };
 }
 
-export const createClass = auditedCall('createClass', async (req, audit) => {
+export const createCourse = auditedCall('createCourse', async (req, audit) => {
   const uid = requireAdmin(req);
-  const res = await createClassRecord(uid, validateCreateClass(req.data));
-  audit.classId = res.id;
+  const res = await createCourseRecord(uid, validateCreateCourse(req.data));
+  audit.courseId = res.id;
   return res;
 });
 
-export interface UpdateClassInput {
-  classId: string;
+export interface UpdateCourseInput {
+  courseId: string;
   name?: string;
   archived?: boolean;
   archivedAccess?: boolean;
 }
 
-export function validateUpdateClass(data: unknown): UpdateClassInput {
-  const d = data as UpdateClassInput | null;
-  if (typeof d?.classId !== 'string' || !d.classId) {
-    throw new HttpsError('invalid-argument', 'classId is required.');
+export function validateUpdateCourse(data: unknown): UpdateCourseInput {
+  const d = data as UpdateCourseInput | null;
+  if (typeof d?.courseId !== 'string' || !d.courseId) {
+    throw new HttpsError('invalid-argument', 'courseId is required.');
   }
-  const out: UpdateClassInput = { classId: d.classId };
+  const out: UpdateCourseInput = { courseId: d.courseId };
   if (d.name !== undefined) {
     const name = typeof d.name === 'string' ? d.name.trim() : '';
     if (!name) throw new HttpsError('invalid-argument', 'A class name cannot be empty.');
@@ -92,12 +92,12 @@ export function validateUpdateClass(data: unknown): UpdateClassInput {
   return out;
 }
 
-export async function applyClassUpdate(input: UpdateClassInput) {
+export async function applyCourseUpdate(input: UpdateCourseInput) {
   const db = getFirestore();
-  const ref = db.collection(COLLECTIONS.classes).doc(input.classId);
+  const ref = db.collection(COLLECTIONS.courses).doc(input.courseId);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'No such class.');
-  const current = snap.data() as ClassDoc;
+  const current = snap.data() as CourseDoc;
 
   const update: Record<string, unknown> = {};
   if (input.name !== undefined) update.name = input.name;
@@ -113,32 +113,32 @@ export async function applyClassUpdate(input: UpdateClassInput) {
   }
 
   await ref.update(update);
-  return { classId: input.classId, ...update };
+  return { courseId: input.courseId, ...update };
 }
 
-export const updateClass = auditedCall('updateClass', async (req, audit) => {
+export const updateCourse = auditedCall('updateCourse', async (req, audit) => {
   requireAdmin(req);
-  const input = validateUpdateClass(req.data);
-  audit.classId = input.classId;
-  return applyClassUpdate(input);
+  const input = validateUpdateCourse(req.data);
+  audit.courseId = input.courseId;
+  return applyCourseUpdate(input);
 });
 
-export interface SetClassManagersInput {
-  classId: string;
+export interface SetCourseManagersInput {
+  courseId: string;
   managerUids: string[];
 }
 
-export function validateSetClassManagers(data: unknown): SetClassManagersInput {
-  const d = data as { classId?: unknown; managerUids?: unknown } | null;
-  if (typeof d?.classId !== 'string' || !d.classId) {
-    throw new HttpsError('invalid-argument', 'classId is required.');
+export function validateSetCourseManagers(data: unknown): SetCourseManagersInput {
+  const d = data as { courseId?: unknown; managerUids?: unknown } | null;
+  if (typeof d?.courseId !== 'string' || !d.courseId) {
+    throw new HttpsError('invalid-argument', 'courseId is required.');
   }
   if (!Array.isArray(d.managerUids) || d.managerUids.some((u) => typeof u !== 'string' || !u)) {
     throw new HttpsError('invalid-argument', 'managerUids must be an array of uids.');
   }
   // De-duplicate: a repeated uid would not grant anything twice, but it makes
   // the array a poor answer to "who manages this class?".
-  return { classId: d.classId, managerUids: [...new Set(d.managerUids as string[])] };
+  return { courseId: d.courseId, managerUids: [...new Set(d.managerUids as string[])] };
 }
 
 /**
@@ -149,9 +149,9 @@ export function validateSetClassManagers(data: unknown): SetClassManagersInput {
  * into it *is* granting access. Validating here is the only place that can be
  * caught, since clients cannot write the collection at all.
  */
-export async function applyClassManagers(input: SetClassManagersInput) {
+export async function applyCourseManagers(input: SetCourseManagersInput) {
   const db = getFirestore();
-  const ref = db.collection(COLLECTIONS.classes).doc(input.classId);
+  const ref = db.collection(COLLECTIONS.courses).doc(input.courseId);
   if (!(await ref.get()).exists) throw new HttpsError('not-found', 'No such class.');
 
   const checks = await Promise.all(
@@ -168,12 +168,12 @@ export async function applyClassManagers(input: SetClassManagersInput) {
   });
 
   await ref.update({ managerUids: input.managerUids });
-  return { classId: input.classId, managerUids: input.managerUids };
+  return { courseId: input.courseId, managerUids: input.managerUids };
 }
 
-export const setClassManagers = auditedCall('setClassManagers', async (req, audit) => {
+export const setCourseManagers = auditedCall('setCourseManagers', async (req, audit) => {
   requireAdmin(req);
-  const input = validateSetClassManagers(req.data);
-  audit.classId = input.classId;
-  return applyClassManagers(input);
+  const input = validateSetCourseManagers(req.data);
+  audit.courseId = input.courseId;
+  return applyCourseManagers(input);
 });

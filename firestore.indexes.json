@@ -17,7 +17,7 @@
       ]
     },
     {
-      "collectionGroup": "classes",
+      "collectionGroup": "courses",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "cohortId", "order": "ASCENDING" },
@@ -28,7 +28,7 @@
       "collectionGroup": "recordings",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "classId", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
@@ -36,7 +36,7 @@
       "collectionGroup": "auditLog",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "classId", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
         { "fieldPath": "at", "order": "DESCENDING" }
       ]
     }

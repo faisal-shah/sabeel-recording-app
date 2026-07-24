@@ -38,7 +38,7 @@ const CLASS_MINE = 'classMine';
 const CLASS_THEIRS = 'classTheirs';
 const REC = 'rec1';
 
-// Every ledger-read collection shares the same shape: a `classId` and a
+// Every ledger-read collection shares the same shape: a `courseId` and a
 // `studentUid`. Seed one of each in "my" class and one in "theirs".
 const LEDGER_COLLECTIONS = [
   COLLECTIONS.completions,
@@ -51,20 +51,20 @@ beforeEach(async () => {
   await testEnv.clearFirestore();
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
-    await setDoc(doc(db, COLLECTIONS.classes, CLASS_MINE), { cohortId: 'c1', managerUids: [MINE] });
-    await setDoc(doc(db, COLLECTIONS.classes, CLASS_THEIRS), { cohortId: 'c1', managerUids: [THEIRS] });
+    await setDoc(doc(db, COLLECTIONS.courses, CLASS_MINE), { cohortId: 'c1', managerUids: [MINE] });
+    await setDoc(doc(db, COLLECTIONS.courses, CLASS_THEIRS), { cohortId: 'c1', managerUids: [THEIRS] });
     for (const name of LEDGER_COLLECTIONS) {
       await setDoc(doc(db, name, `${STUDENT}_${REC}`), {
         studentUid: STUDENT,
         recordingId: REC,
-        classId: CLASS_MINE,
+        courseId: CLASS_MINE,
         completed: true,
         actor: 'student',
       });
       await setDoc(doc(db, name, `${OUTSIDER}_${REC}`), {
         studentUid: OUTSIDER,
         recordingId: REC,
-        classId: CLASS_THEIRS,
+        courseId: CLASS_THEIRS,
         completed: true,
         actor: 'student',
       });
@@ -84,7 +84,7 @@ describe('Phase 5 staff ledger reads', () => {
     describe(name, () => {
       it('a manager lists their own class, scoped', async () => {
         await assertSucceeds(
-          getDocs(query(collection(mgrMine().firestore(), name), where('classId', '==', CLASS_MINE))),
+          getDocs(query(collection(mgrMine().firestore(), name), where('courseId', '==', CLASS_MINE))),
         );
       });
 
@@ -98,7 +98,7 @@ describe('Phase 5 staff ledger reads', () => {
 
       it('a manager cannot list another class', async () => {
         await assertFails(
-          getDocs(query(collection(mgrMine().firestore(), name), where('classId', '==', CLASS_THEIRS))),
+          getDocs(query(collection(mgrMine().firestore(), name), where('courseId', '==', CLASS_THEIRS))),
         );
       });
     });
@@ -124,7 +124,7 @@ describe('completionOverrides', () => {
         setDoc(doc(c.firestore(), COLLECTIONS.completionOverrides, `${STUDENT}_${REC}`), {
           studentUid: STUDENT,
           recordingId: REC,
-          classId: CLASS_MINE,
+          courseId: CLASS_MINE,
           completed: true,
           reason: 'forged',
           overriddenBy: 'x',

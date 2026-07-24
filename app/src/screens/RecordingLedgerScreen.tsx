@@ -15,7 +15,7 @@ import {
 } from '../ledger';
 import { exportCsv } from '../exportCsv';
 import { useListenerError } from '../liveQuery';
-import { useCohortName, type ClassRow } from '../structure';
+import { useCohortName, type CourseRow } from '../structure';
 import type { RecordingRow } from '../recordings';
 import { getTheme, spacing } from '../theme';
 
@@ -32,11 +32,11 @@ export function RecordingLedgerScreen({
   cls,
 }: {
   recording: RecordingRow;
-  cls: ClassRow;
+  cls: CourseRow;
 }) {
   const listenerError = useListenerError();
   const today = todayInZone(INSTITUTE_TIMEZONE);
-  // Reached from the cross-cohort library, where the class name alone is ambiguous.
+  // Reached from the cross-cohort library, where the course name alone is ambiguous.
   const cohortName = useCohortName()(cls.cohortId);
   const { accountable, notRequired, rollup } = useRecordingLedger(recording, today);
   const [filter, setFilter] = useState<Filter>('notComplete');
@@ -196,7 +196,7 @@ function LedgerRowCard({
             label="Reason (required, recorded in the audit log)"
             value={reason}
             onChangeText={setReason}
-            placeholder="e.g. attended the class live"
+            placeholder="e.g. attended in person"
           />
           <View style={styles.overrideButtons}>
             <Button

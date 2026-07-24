@@ -10,13 +10,13 @@ import {
   SectionTitle,
   StatusChip,
 } from '../components/ui';
-import { createClass, useClassesInCohort, type ClassRow } from '../structure';
+import { createCourse, useCoursesInCohort, type CourseRow } from '../structure';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
 
-/** Admin-only: the classes inside one cohort. */
-export function ClassesScreen({
+/** Admin-only: the courses inside one cohort. */
+export function CoursesScreen({
   cohortId,
   cohortName,
   cohortArchived,
@@ -25,9 +25,9 @@ export function ClassesScreen({
   cohortId: string;
   cohortName: string;
   cohortArchived: boolean;
-  onOpen: (cls: ClassRow) => void;
+  onOpen: (cls: CourseRow) => void;
 }) {
-  const classes = useClassesInCohort(cohortId);
+  const courses = useCoursesInCohort(cohortId);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,15 +37,15 @@ export function ClassesScreen({
       {error ? <Notice tone="error">{error}</Notice> : null}
       {cohortArchived ? (
         <Notice tone="info">
-          This cohort is archived, so every class in it is inactive regardless of its own
-          setting. Reactivating the cohort restores each class to the state it was in.
+          This cohort is archived, so every course in it is inactive regardless of its own
+          setting. Reactivating the cohort restores each course to the state it was in.
         </Notice>
       ) : null}
 
-      <SectionTitle>Add a class</SectionTitle>
+      <SectionTitle>Add a course</SectionTitle>
       <Card>
         <Field
-          testID="class-name"
+          testID="course-name"
           label="Name"
           value={name}
           onChangeText={setName}
@@ -53,8 +53,8 @@ export function ClassesScreen({
           placeholder="Hikam Foundations"
         />
         <Button
-          testID="class-create"
-          label="Create class"
+          testID="course-create"
+          label="Create course"
           busy={busy}
           disabled={!name.trim()}
           onPress={() =>
@@ -62,7 +62,7 @@ export function ClassesScreen({
               setBusy(true);
               setError(null);
               try {
-                await createClass({ cohortId, name: name.trim() });
+                await createCourse({ cohortId, name: name.trim() });
                 setName('');
               } catch (e) {
                 setError((e as Error).message);
@@ -74,21 +74,21 @@ export function ClassesScreen({
         />
       </Card>
 
-      <SectionTitle>Classes ({classes.length})</SectionTitle>
-      {classes.length === 0 ? (
-        <Empty>No classes in this cohort yet.</Empty>
+      <SectionTitle>Coursees ({courses.length})</SectionTitle>
+      {courses.length === 0 ? (
+        <Empty>No courses in this cohort yet.</Empty>
       ) : (
-        classes.map((c) => <ClassCard key={c.id} cls={c} onOpen={onOpen} />)
+        courses.map((c) => <CourseCard key={c.id} cls={c} onOpen={onOpen} />)
       )}
     </Screen>
   );
 }
 
-export function ClassCard({ cls, onOpen }: { cls: ClassRow; onOpen: (c: ClassRow) => void }) {
+export function CourseCard({ cls, onOpen }: { cls: CourseRow; onOpen: (c: CourseRow) => void }) {
   return (
     <Card>
       <Pressable
-        testID={`class-open-${cls.name}`}
+        testID={`course-open-${cls.name}`}
         accessibilityRole="button"
         accessibilityLabel={`Open ${cls.name}`}
         onPress={() => onOpen(cls)}

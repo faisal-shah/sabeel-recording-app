@@ -12,37 +12,37 @@ import {
   StatusChip,
 } from '../components/ui';
 import { INSTITUTE_TIMEZONE, todayInZone } from '@sabeel/shared';
-import { useClassLedger } from '../ledger';
+import { useCourseLedger } from '../ledger';
 import { useDecidedStaff } from '../staff';
 import { useStudents } from '../students';
 import {
   createEnrollment,
-  setClassManagers,
+  setCourseManagers,
   setEnrollmentActive,
-  updateClass,
+  updateCourse,
   useRoster,
-  type ClassRow,
+  type CourseRow,
 } from '../structure';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
 
 /**
- * One class: its settings (admin), its managers (admin), and its roster
+ * One course: its settings (admin), its managers (admin), and its roster
  * (admin or a manager scoped to it).
  *
- * The roster query is constrained to this one classId — required by the
- * enrollments rule, whose staff arm resolves a class lookup per row and is only
- * affordable when every row shares one class.
+ * The roster query is constrained to this one courseId — required by the
+ * enrollments rule, whose staff arm resolves a course lookup per row and is only
+ * affordable when every row shares one course.
  */
-export function ClassDetailScreen({
+export function CourseDetailScreen({
   cls,
   isAdmin,
   onOpenRecordings,
   onOpenStudent,
   onOpenAudit,
 }: {
-  cls: ClassRow;
+  cls: CourseRow;
   isAdmin: boolean;
   onOpenRecordings: () => void;
   onOpenStudent: (studentUid: string, studentName: string) => void;
@@ -51,15 +51,15 @@ export function ClassDetailScreen({
   const roster = useRoster(cls.id);
   const students = useStudents(true);
   const staff = useDecidedStaff(isAdmin);
-  // Only non-admin active staff can be *assigned* a class — an admin already has
-  // every class, so offering to "make them a manager" is a no-op that reads as
+  // Only non-admin active staff can be *assigned* a course — an admin already has
+  // every course, so offering to "make them a manager" is a no-op that reads as
   // broken (the confusion a solo admin hits: they can't usefully pick themself).
   const assignableManagers = useMemo(
     () => staff.filter((s) => s.status === 'active' && s.role !== 'admin'),
     [staff],
   );
   const today = todayInZone(INSTITUTE_TIMEZONE);
-  const ledger = useClassLedger(cls.id, today);
+  const ledger = useCourseLedger(cls.id, today);
   const [name, setName] = useState(cls.name);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -107,7 +107,7 @@ export function ClassDetailScreen({
         </View>
       </Card>
 
-      {/* Class-level accountability at a glance. Zeroes out when archived (no
+      {/* Course-level accountability at a glance. Zeroes out when archived (no
           active assignments), while the recordings' history stays. */}
       <Card>
         <Text style={styles.ledgerLine}>
@@ -125,27 +125,27 @@ export function ClassDetailScreen({
         <>
           <SectionTitle>Settings</SectionTitle>
           <Card>
-            <Field testID="class-rename" label="Name" value={name} onChangeText={setName} autoCapitalize="words" />
+            <Field testID="course-rename" label="Name" value={name} onChangeText={setName} autoCapitalize="words" />
             <Button
               label="Rename"
               disabled={!name.trim() || name.trim() === cls.name}
               busy={busy === 'rename'}
-              onPress={() => void run('rename', () => updateClass({ classId: cls.id, name: name.trim() }))}
+              onPress={() => void run('rename', () => updateCourse({ courseId: cls.id, name: name.trim() }))}
             />
             <Row>
               <Button
-                testID="class-archive"
-                label={cls.archived ? 'Reactivate class' : 'Archive class'}
+                testID="course-archive"
+                label={cls.archived ? 'Reactivate course' : 'Archive course'}
                 variant="secondary"
                 busy={busy === 'archive'}
                 onPress={() =>
                   void run('archive', () =>
-                    updateClass({ classId: cls.id, archived: !cls.archived }),
+                    updateCourse({ courseId: cls.id, archived: !cls.archived }),
                   )
                 }
               />
               <Button
-                testID="class-archived-access"
+                testID="course-archived-access"
                 label={
                   cls.archivedAccess
                     ? 'Archived listening: on'
@@ -155,7 +155,7 @@ export function ClassDetailScreen({
                 busy={busy === 'access'}
                 onPress={() =>
                   void run('access', () =>
-                    updateClass({ classId: cls.id, archivedAccess: !cls.archivedAccess }),
+                    updateCourse({ courseId: cls.id, archivedAccess: !cls.archivedAccess }),
                   )
                 }
               />
@@ -164,18 +164,18 @@ export function ClassDetailScreen({
 
           <SectionTitle>Managers ({cls.managerUids.length})</SectionTitle>
           <Card>
-            {/* Managers are scoped-DOWN staff — access to just this class.
-                Admins already have every class, so listing them here (or the
+            {/* Managers are scoped-DOWN staff — access to just this course.
+                Admins already have every course, so listing them here (or the
                 admin themselves) only invites a pointless, confusing self-toggle;
                 exclude them. */}
             <Text style={styles.managerLede}>
-              Managers get access to just this class. You — and other admins —
-              already have access to every class.
+              Managers get access to just this course. You — and other admins —
+              already have access to every course.
             </Text>
             {assignableManagers.length === 0 ? (
               <Empty>
                 No managers to assign yet. Staff who sign in with Google appear here once you
-                approve them as a manager, then you can give them this class.
+                approve them as a manager, then you can give them this course.
               </Empty>
             ) : (
               assignableManagers.map((s) => {
@@ -183,14 +183,14 @@ export function ClassDetailScreen({
                   return (
                     <Pressable
                       key={s.uid}
-                      testID={`class-manager-${s.email}`}
+                      testID={`course-manager-${s.email}`}
                       accessibilityRole="checkbox"
                       accessibilityState={{ checked: on }}
                       accessibilityLabel={`${on ? 'Remove' : 'Assign'} ${s.displayName}`}
                       onPress={() =>
                         void run(`mgr-${s.uid}`, () =>
-                          setClassManagers({
-                            classId: cls.id,
+                          setCourseManagers({
+                            courseId: cls.id,
                             managerUids: on
                               ? cls.managerUids.filter((u) => u !== s.uid)
                               : [...cls.managerUids, s.uid],
@@ -214,7 +214,7 @@ export function ClassDetailScreen({
 
       <SectionTitle>Roster ({enrolled.length})</SectionTitle>
       {enrolled.length === 0 ? (
-        <Empty>Nobody is enrolled in this class yet.</Empty>
+        <Empty>Nobody is enrolled in this course yet.</Empty>
       ) : (
         roster
           .filter((r) => r.active)
@@ -232,14 +232,14 @@ export function ClassDetailScreen({
                   />
                   <Button
                     testID={`roster-remove-${s?.email ?? r.studentUid}`}
-                    label="Remove from class"
+                    label="Remove from course"
                     variant="secondary"
                     busy={busy === `rm-${r.id}`}
                     onPress={() =>
                       void run(`rm-${r.id}`, () =>
                         setEnrollmentActive({
                           studentUid: r.studentUid,
-                          classId: cls.id,
+                          courseId: cls.id,
                           active: false,
                         }),
                       )
@@ -257,7 +257,7 @@ export function ClassDetailScreen({
           <Empty>
             {students.filter((s) => s.status === 'active').length === 0
               ? 'No student accounts yet. Create one from the Students screen first.'
-              : 'Every active student is already in this class.'}
+              : 'Every active student is already in this course.'}
           </Empty>
         ) : (
           notEnrolled.map((s) => (
@@ -268,7 +268,7 @@ export function ClassDetailScreen({
               accessibilityLabel={`Enrol ${s.displayName}`}
               onPress={() =>
                 void run(`add-${s.uid}`, () =>
-                  createEnrollment({ studentUid: s.uid, classId: cls.id }),
+                  createEnrollment({ studentUid: s.uid, courseId: cls.id }),
                 )
               }
               style={styles.pickRow}

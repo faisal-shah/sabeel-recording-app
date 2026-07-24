@@ -43,7 +43,7 @@ export const clearCompletionOverride = call<{
 function useMapByStudent<T, V>(
   label: string,
   coll: string,
-  field: 'recordingId' | 'classId',
+  field: 'recordingId' | 'courseId',
   value: string | null,
   pick: (data: T, pending: boolean) => V,
   keyOf: (data: T) => string,
@@ -173,7 +173,7 @@ export function useRecordingLedger(recording: RecordingRow, today: string): Reco
 
 // ------------------------------------------------------------ class-level ---
 
-export interface ClassLedger {
+export interface CourseLedger {
   /** rollup across every active assignment in the class. */
   rollup: LedgerRollup;
   /** per-recording { complete, total } for the recordings list. */
@@ -181,37 +181,37 @@ export interface ClassLedger {
 }
 
 /**
- * Class-level counts: every active assignment in the class, its effective
- * completion, rolled up whole-class and per-recording. `classId ==` reads.
+ * Course-level counts: every active assignment in the class, its effective
+ * completion, rolled up whole-class and per-recording. `courseId ==` reads.
  */
-export function useClassLedger(classId: string | null, today: string): ClassLedger {
+export function useCourseLedger(courseId: string | null, today: string): CourseLedger {
   const assignments = useLiveQuery<AssignmentDoc[]>(
-    'classLedgerAssignments',
+    'courseLedgerAssignments',
     () =>
-      classId
+      courseId
         ? query(
             collection(db, COLLECTIONS.assignments),
-            where('classId', '==', classId),
+            where('courseId', '==', courseId),
             where('active', '==', true),
           )
         : null,
     (snap) => snap.docs.map((d) => d.data() as AssignmentDoc),
     [],
-    [classId],
+    [courseId],
   );
   const completions = useMapByStudent<CompletionDoc, boolean>(
-    'classLedgerCompletions',
+    'courseLedgerCompletions',
     COLLECTIONS.completions,
-    'classId',
-    classId,
+    'courseId',
+    courseId,
     (d) => d.completed,
     (d) => `${d.studentUid}_${d.recordingId}`,
   );
   const overrides = useMapByStudent<CompletionOverrideDoc, CompletionOverrideDoc>(
-    'classLedgerOverrides',
+    'courseLedgerOverrides',
     COLLECTIONS.completionOverrides,
-    'classId',
-    classId,
+    'courseId',
+    courseId,
     (d) => d,
     (d) => `${d.studentUid}_${d.recordingId}`,
   );
@@ -246,10 +246,10 @@ export interface StudentLedgerItem {
 
 /**
  * One student's obligations in one class. Reads are `studentUid == uid &&
- * classId == X` — two equalities, class-scoped, so the staff rules accept them.
- * The screen supplies recording titles from `useClassRecordings`.
+ * courseId == X` — two equalities, class-scoped, so the staff rules accept them.
+ * The screen supplies recording titles from `useCourseRecordings`.
  */
-export function useStudentLedger(studentUid: string | null, classId: string): StudentLedgerItem[] {
+export function useStudentLedger(studentUid: string | null, courseId: string): StudentLedgerItem[] {
   const assignments = useLiveQuery<AssignmentDoc[]>(
     'studentLedgerAssignments',
     () =>
@@ -257,25 +257,25 @@ export function useStudentLedger(studentUid: string | null, classId: string): St
         ? query(
             collection(db, COLLECTIONS.assignments),
             where('studentUid', '==', studentUid),
-            where('classId', '==', classId),
+            where('courseId', '==', courseId),
           )
         : null,
     (snap) => snap.docs.map((d) => d.data() as AssignmentDoc).filter((a) => a.active),
     [],
-    [studentUid, classId],
+    [studentUid, courseId],
   );
-  const completions = useStudentClassMap<CompletionDoc, boolean>(
+  const completions = useStudentCourseMap<CompletionDoc, boolean>(
     'studentLedgerCompletions',
     COLLECTIONS.completions,
     studentUid,
-    classId,
+    courseId,
     (d) => d.completed,
   );
-  const overrides = useStudentClassMap<CompletionOverrideDoc, CompletionOverrideDoc>(
+  const overrides = useStudentCourseMap<CompletionOverrideDoc, CompletionOverrideDoc>(
     'studentLedgerOverrides',
     COLLECTIONS.completionOverrides,
     studentUid,
-    classId,
+    courseId,
     (d) => d,
   );
 
@@ -296,11 +296,11 @@ export function useStudentLedger(studentUid: string | null, classId: string): St
   );
 }
 
-function useStudentClassMap<T extends { recordingId: string }, V>(
+function useStudentCourseMap<T extends { recordingId: string }, V>(
   label: string,
   coll: string,
   studentUid: string | null,
-  classId: string,
+  courseId: string,
   pick: (data: T) => V,
 ) {
   return useLiveQuery<Map<string, V>>(
@@ -310,12 +310,12 @@ function useStudentClassMap<T extends { recordingId: string }, V>(
         ? query(
             collection(db, coll),
             where('studentUid', '==', studentUid),
-            where('classId', '==', classId),
+            where('courseId', '==', courseId),
           )
         : null,
     (snap) => new Map(snap.docs.map((d) => [(d.data() as T).recordingId, pick(d.data() as T)])),
     new Map(),
-    [studentUid, classId],
+    [studentUid, courseId],
   );
 }
 
@@ -326,22 +326,22 @@ export interface AuditRow extends AuditEntryDoc {
 }
 
 /**
- * The audit log, newest first. A manager passes their classId (scoped read); an
+ * The audit log, newest first. A manager passes their courseId (scoped read); an
  * admin passes null for the unconstrained global view.
  */
-export function useAudit(classId: string | null): AuditRow[] {
+export function useAudit(courseId: string | null): AuditRow[] {
   return useLiveQuery<AuditRow[]>(
     'audit',
     () =>
-      classId === null
+      courseId === null
         ? query(collection(db, COLLECTIONS.auditLog), orderBy('at', 'desc'))
         : query(
             collection(db, COLLECTIONS.auditLog),
-            where('classId', '==', classId),
+            where('courseId', '==', courseId),
             orderBy('at', 'desc'),
           ),
     (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as AuditEntryDoc) })),
     [],
-    [classId],
+    [courseId],
   );
 }

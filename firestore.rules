@@ -43,10 +43,10 @@ service cloud.firestore {
     // assigned to that class. The per-row get() means a query using this must be
     // constrained to a single class — the same affordability rule as /assignments
     // and /enrollments. Introduced for the Phase 5 ledger reads.
-    function staffManagesClass(classId) {
+    function staffManagesCourse(courseId) {
       return isAdmin()
         || (isStaff() && request.auth.uid in
-            get(/databases/$(database)/documents/classes/$(classId)).data.managerUids);
+            get(/databases/$(database)/documents/courses/$(courseId)).data.managerUids);
     }
 
     // ---- Staff ----
@@ -70,7 +70,7 @@ service cloud.firestore {
     // Deliberately no self-write: a student renaming themselves would alter the
     // accountability record staff rely on.
     //
-    // The directory is readable by ALL staff, not only a manager's own classes
+    // The directory is readable by ALL staff, not only a manager's own courses
     // (Faisal, 2026-07-21). That is what makes "enrol an existing student into
     // my class" possible at all. Scoping it would also need a per-row class
     // lookup — the same document-access-limit problem documented on
@@ -91,8 +91,8 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // ---- Classes ----
-    match /classes/{classId} {
+    // ---- Coursees ----
+    match /courses/{courseId} {
       // The admin arm reads no documents, so an admin lists every class freely.
       // The manager arm depends on resource.data, and THAT is what forces a
       // manager's query to carry where('managerUids','array-contains',uid) —
@@ -102,22 +102,22 @@ service cloud.firestore {
         || (isStaff() && request.auth.uid in resource.data.managerUids);
 
       // A student reads a class only through their own enrollment. The exists()
-      // path is built from the PATH SEGMENT classId plus their own uid, never
+      // path is built from the PATH SEGMENT courseId plus their own uid, never
       // from document data, so it costs one call on a get. Students never LIST
-      // classes — they list their enrollments and then get each class.
+      // courses — they list their enrollments and then get each class.
       allow get: if isStudent()
-        && exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + classId));
+        && exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + courseId));
 
       allow write: if false;
     }
 
     // ---- Enrollments ----
-    // Document id is `${studentUid}_${classId}`.
+    // Document id is `${studentUid}_${courseId}`.
     match /enrollments/{enrollmentId} {
       // The staff arm resolves a class get() FROM EACH ROW'S DATA. Firestore caps
       // document-access calls per query, so that arm is only affordable when
       // every row resolves the same path — which a roster query
-      // (where classId == X) guarantees, and nothing else does.
+      // (where courseId == X) guarantees, and nothing else does.
       //
       // What keeps a student's cross-class query cheap is the `isStaff() &&`
       // guard, not the order of the arms: `&&` short-circuits, so a student
@@ -133,27 +133,27 @@ service cloud.firestore {
       allow get, list: if (isStudent() && resource.data.studentUid == request.auth.uid)
         || isAdmin()
         || (isStaff() && request.auth.uid in
-            get(/databases/$(database)/documents/classes/$(resource.data.classId)).data.managerUids);
+            get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.managerUids);
 
       allow write: if false;
     }
 
     // ---- Recordings ----
     match /recordings/{recordingId} {
-      // Same discipline as /classes and /enrollments: the admin arm reads no
+      // Same discipline as /courses and /enrollments: the admin arm reads no
       // documents, and the other arms depend on resource.data, which is what
       // forces a caller's query to be constrained. Ordering keeps the
       // read-free arms first.
       //
       // The staff arm resolves a class lookup PER ROW, so it is affordable only
-      // for a query constrained to one classId — which every staff recordings
+      // for a query constrained to one courseId — which every staff recordings
       // list is. A student's arm costs no reads at all.
       allow get, list: if isAdmin()
         || (isStudent()
             && resource.data.status == 'published'
-            && exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + resource.data.classId)))
+            && exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + resource.data.courseId)))
         || (isStaff() && request.auth.uid in
-            get(/databases/$(database)/documents/classes/$(resource.data.classId)).data.managerUids);
+            get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.managerUids);
 
       // Every mutation goes through a callable that re-checks class scope and
       // the lifecycle state machine.
@@ -184,12 +184,12 @@ service cloud.firestore {
       // which the caller already knows.
       allow get: if (isStudent()
           && (resource == null || resource.data.studentUid == request.auth.uid))
-        || (resource != null && staffManagesClass(resource.data.classId));
+        || (resource != null && staffManagesCourse(resource.data.courseId));
       // A list always evaluates against real documents, so no guard is needed —
       // and adding one would widen it. Staff read it for the ledger's
       // listened-% / last-listened columns, class-scoped.
       allow list: if (isStudent() && resource.data.studentUid == request.auth.uid)
-        || staffManagesClass(resource.data.classId);
+        || staffManagesCourse(resource.data.courseId);
 
       allow create: if mine();
       // Both halves matter: `mine()` stops a student writing someone else's uid
@@ -204,13 +204,13 @@ service cloud.firestore {
     // written ONLY by the server (the fan-out trigger and the callables), so
     // every client write is denied. Reads follow the same read-free-arm-first,
     // resource.data-constrained discipline as /enrollments — a student lists
-    // their own (constrained by studentUid), a manager reads their classes'
+    // their own (constrained by studentUid), a manager reads their courses'
     // (one class get() per row, affordable only for a query scoped to a class).
     match /assignments/{assignmentId} {
       allow get, list: if (isStudent() && resource.data.studentUid == request.auth.uid)
         || isAdmin()
         || (isStaff() && request.auth.uid in
-            get(/databases/$(database)/documents/classes/$(resource.data.classId)).data.managerUids);
+            get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.managerUids);
       allow write: if false;
     }
 
@@ -228,11 +228,11 @@ service cloud.firestore {
       }
       allow get: if (isStudent()
           && (resource == null || resource.data.studentUid == request.auth.uid))
-        || (resource != null && staffManagesClass(resource.data.classId));
+        || (resource != null && staffManagesCourse(resource.data.courseId));
       // Staff read the roster's completions for the recording/class ledger,
       // class-scoped.
       allow list: if (isStudent() && resource.data.studentUid == request.auth.uid)
-        || staffManagesClass(resource.data.classId);
+        || staffManagesCourse(resource.data.courseId);
       allow create: if mineC();
       allow update: if mineC() && resource.data.studentUid == request.auth.uid;
       allow delete: if false;
@@ -248,7 +248,7 @@ service cloud.firestore {
         && request.resource.data.actor == 'student';
       // Staff read a student's mark/unmark history for the ledger, class-scoped.
       allow get, list: if (isStudent() && resource.data.studentUid == request.auth.uid)
-        || staffManagesClass(resource.data.classId);
+        || staffManagesCourse(resource.data.courseId);
       allow update, delete: if false;
     }
 
@@ -261,22 +261,22 @@ service cloud.firestore {
     // staff read it scoped to their class for the ledger.
     match /completionOverrides/{overrideId} {
       allow get, list: if (isStudent() && resource.data.studentUid == request.auth.uid)
-        || staffManagesClass(resource.data.classId);
+        || staffManagesCourse(resource.data.courseId);
       allow write: if false;
     }
 
     // ---- Audit log ----
     // Server-written only (the auditedCall wrapper + the auth trigger). Reads
     // are scoped like the rest of staff data: an admin sees everything; a manager
-    // sees only entries tagged with a class they run. Class-less entries (cohort,
-    // staff, student-directory changes) have classId == null and are therefore
-    // ADMIN-ONLY — which is exactly "managers manage audit within their classes".
-    // The `classId != null` guard also keeps a manager's list query constrained.
+    // sees only entries tagged with a class they run. Course-less entries (cohort,
+    // staff, student-directory changes) have courseId == null and are therefore
+    // ADMIN-ONLY — which is exactly "managers manage audit within their courses".
+    // The `courseId != null` guard also keeps a manager's list query constrained.
     match /auditLog/{entryId} {
       allow get, list: if isAdmin()
-        || (isStaff() && resource.data.classId != null
+        || (isStaff() && resource.data.courseId != null
             && request.auth.uid in
-               get(/databases/$(database)/documents/classes/$(resource.data.classId)).data.managerUids);
+               get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.managerUids);
       allow write: if false;
     }
 

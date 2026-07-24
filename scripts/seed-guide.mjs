@@ -25,18 +25,18 @@ for (const name of NAMES){
 // Fatima gets a password so she can be shown signing in for the STUDENT screenshots.
 await auth.updateUser(students[0].uid,{ password:'HikamStudent1', emailVerified:true });
 
-// ---- cohort + classes ----
+// ---- cohort + courses ----
 const cohortId='guide-cohort';
 await db.collection('cohorts').doc(cohortId).set({ name:'Autumn 2026', archived:false, createdAt:now-45*day, createdBy:'seed' });
-const classes={
+const courses={
   hikam:{ id:'guide-hikam', name:'Hikam Foundations' },
   arabic:{ id:'guide-arabic', name:'Arabic I' },
 };
-for (const c of Object.values(classes))
-  await db.collection('classes').doc(c.id).set({ cohortId, name:c.name, archived:false, effectiveActive:true, archivedAccess:false, managerUids:[], createdAt:now-45*day, createdBy:'seed' });
+for (const c of Object.values(courses))
+  await db.collection('courses').doc(c.id).set({ cohortId, name:c.name, archived:false, effectiveActive:true, archivedAccess:false, managerUids:[], createdAt:now-45*day, createdBy:'seed' });
 // enroll all 8 in Hikam; first 4 also in Arabic
-for (const s of students) await db.collection('enrollments').doc(`${s.uid}_${classes.hikam.id}`).set({ studentUid:s.uid, classId:classes.hikam.id, cohortId, active:true, enrolledAt:now-40*day, enrolledBy:'seed' });
-for (const s of students.slice(0,4)) await db.collection('enrollments').doc(`${s.uid}_${classes.arabic.id}`).set({ studentUid:s.uid, classId:classes.arabic.id, cohortId, active:true, enrolledAt:now-40*day, enrolledBy:'seed' });
+for (const s of students) await db.collection('enrollments').doc(`${s.uid}_${courses.hikam.id}`).set({ studentUid:s.uid, courseId:courses.hikam.id, cohortId, active:true, enrolledAt:now-40*day, enrolledBy:'seed' });
+for (const s of students.slice(0,4)) await db.collection('enrollments').doc(`${s.uid}_${courses.arabic.id}`).set({ studentUid:s.uid, courseId:courses.arabic.id, cohortId, active:true, enrolledAt:now-40*day, enrolledBy:'seed' });
 
 // ---- recordings (Hikam): a mix of statuses + due dates ----
 const audio=readFileSync('e2e-shots/test-lecture.m4a');
@@ -45,7 +45,7 @@ async function rec(id, title, {status='published', dueOffset=null, recordedDaysA
   if (status!=='draft'){ await admin.storage().bucket().file(path).save(audio,{ contentType:'audio/mp4' }); }
   const dueDate = dueOffset===null ? null : iso(now+dueOffset*day);
   await db.collection('recordings').doc(id).set({
-    cohortId, classId:classes.hikam.id, title, status, source:'manual',
+    cohortId, courseId:courses.hikam.id, title, status, source:'manual',
     recordedAt: now-recordedDaysAgo*day, dueDate, notes: title.includes('Patience')?'Focus on the section about gratitude in hardship — we will discuss it next week.':'',
     audioPath: status==='draft'?null:path, durationSec: status==='draft'?null:720, sizeBytes: status==='draft'?null:audio.length,
     createdAt: now-recordedDaysAgo*day, createdBy:'seed', updatedAt: now-recordedDaysAgo*day,
@@ -62,45 +62,45 @@ R.s4=await rec('g-s4','Session 4 — Sincerity of Intention', {dueOffset:null, r
 R.s5=await rec('g-s5','Session 5 — Reliance and Trust', {status:'draft', recordedDaysAgo:0});
 R.s6=await rec('g-s6','Session 6 — (import needs review)', {status:'needsAttention', recordedDaysAgo:1, attention:'Audio file looks truncated — re-upload before publishing.'});
 // Arabic I: two published
-async function recIn(cls, id, title, dueOffset){ const path=`recordings/${id}/audio.m4a`; await admin.storage().bucket().file(path).save(audio,{contentType:'audio/mp4'}); await db.collection('recordings').doc(id).set({ cohortId, classId:cls, title, status:'published', source:'manual', recordedAt:now-7*day, dueDate: dueOffset===null?null:iso(now+dueOffset*day), notes:'', audioPath:path, durationSec:720, sizeBytes:audio.length, createdAt:now-7*day, createdBy:'seed', updatedAt:now-7*day, publishedAt:now-7*day }); }
-await recIn(classes.arabic.id,'g-a1','Lesson 1 — The Arabic Alphabet', -2);
-await recIn(classes.arabic.id,'g-a2','Lesson 2 — Short Vowels', 5);
+async function recIn(cls, id, title, dueOffset){ const path=`recordings/${id}/audio.m4a`; await admin.storage().bucket().file(path).save(audio,{contentType:'audio/mp4'}); await db.collection('recordings').doc(id).set({ cohortId, courseId:cls, title, status:'published', source:'manual', recordedAt:now-7*day, dueDate: dueOffset===null?null:iso(now+dueOffset*day), notes:'', audioPath:path, durationSec:720, sizeBytes:audio.length, createdAt:now-7*day, createdBy:'seed', updatedAt:now-7*day, publishedAt:now-7*day }); }
+await recIn(courses.arabic.id,'g-a1','Lesson 1 — The Arabic Alphabet', -2);
+await recIn(courses.arabic.id,'g-a2','Lesson 2 — Short Vowels', 5);
 
 // ---- assignments (publish fan-out, done directly) for published Hikam sessions ----
 const publishedHikam=[['g-s1',-14],['g-s2',-6],['g-s3',3],['g-s4',null]];
 for (const s of students){
   for (const [rid,due] of publishedHikam){
-    await db.collection('assignments').doc(`${s.uid}_${rid}`).set({ studentUid:s.uid, recordingId:rid, classId:classes.hikam.id, cohortId, dueDate: due===null?null:iso(now+due*day), source:'publish', active:true, assignedAt:now-10*day, assignedBy:'system' });
+    await db.collection('assignments').doc(`${s.uid}_${rid}`).set({ studentUid:s.uid, recordingId:rid, courseId:courses.hikam.id, cohortId, dueDate: due===null?null:iso(now+due*day), source:'publish', active:true, assignedAt:now-10*day, assignedBy:'system' });
   }
 }
 
 // ---- completions / progress / overrides: a realistic mix ----
 async function complete(uid, rid, cls, listenedFrac=1){
-  await db.collection('completions').doc(`${uid}_${rid}`).set({ studentUid:uid, recordingId:rid, classId:cls, completed:true, completedAt:now-2*day, updatedAt:now-2*day });
-  await db.collection('listeningProgress').doc(`${uid}_${rid}`).set({ studentUid:uid, recordingId:rid, classId:cls, positionMs:720000*listenedFrac, listenedMs:720000*listenedFrac, updatedAt:now-2*day });
+  await db.collection('completions').doc(`${uid}_${rid}`).set({ studentUid:uid, recordingId:rid, courseId:cls, completed:true, completedAt:now-2*day, updatedAt:now-2*day });
+  await db.collection('listeningProgress').doc(`${uid}_${rid}`).set({ studentUid:uid, recordingId:rid, courseId:cls, positionMs:720000*listenedFrac, listenedMs:720000*listenedFrac, updatedAt:now-2*day });
 }
 async function progressOnly(uid, rid, cls, frac){
-  await db.collection('listeningProgress').doc(`${uid}_${rid}`).set({ studentUid:uid, recordingId:rid, classId:cls, positionMs:720000*frac, listenedMs:720000*frac, updatedAt:now-3*day });
+  await db.collection('listeningProgress').doc(`${uid}_${rid}`).set({ studentUid:uid, recordingId:rid, courseId:cls, positionMs:720000*frac, listenedMs:720000*frac, updatedAt:now-3*day });
 }
 // Most students completed s1 & s2 (the overdue ones); a few didn't (=> overdue rows).
 for (let i=0;i<students.length;i++){
   const s=students[i];
   // s1: everyone except the last 2 completed
-  if (i<6) await complete(s.uid,'g-s1',classes.hikam.id);
-  else await progressOnly(s.uid,'g-s1',classes.hikam.id,0.3);
+  if (i<6) await complete(s.uid,'g-s1',courses.hikam.id);
+  else await progressOnly(s.uid,'g-s1',courses.hikam.id,0.3);
   // s2: about half completed
-  if (i%2===0) await complete(s.uid,'g-s2',classes.hikam.id); else await progressOnly(s.uid,'g-s2',classes.hikam.id,0.5);
+  if (i%2===0) await complete(s.uid,'g-s2',courses.hikam.id); else await progressOnly(s.uid,'g-s2',courses.hikam.id,0.5);
   // s3 (due soon): Fatima part-listened, a couple completed
-  if (i===0) await progressOnly(s.uid,'g-s3',classes.hikam.id,0.4);
-  else if (i<3) await complete(s.uid,'g-s3',classes.hikam.id);
+  if (i===0) await progressOnly(s.uid,'g-s3',courses.hikam.id,0.4);
+  else if (i<3) await complete(s.uid,'g-s3',courses.hikam.id);
 }
 // Fatima completed s4 (no-due) — shows a Completed item on her home.
-await complete(students[0].uid,'g-s4',classes.hikam.id);
+await complete(students[0].uid,'g-s4',courses.hikam.id);
 // One staff override with a reason (Ibrahim on s2 — attended live).
-await db.collection('completionOverrides').doc(`${students[7].uid}_g-s2`).set({ studentUid:students[7].uid, recordingId:'g-s2', classId:classes.hikam.id, completed:true, reason:'Attended the class live; confirmed with the teacher.', overriddenBy:'seed-admin', at:now-1*day });
+await db.collection('completionOverrides').doc(`${students[7].uid}_g-s2`).set({ studentUid:students[7].uid, recordingId:'g-s2', courseId:courses.hikam.id, completed:true, reason:'Attended the class live; confirmed with the teacher.', overriddenBy:'seed-admin', at:now-1*day });
 
 // ---- audit log: realistic recent history ----
-const A=(action,detail,extra={})=>({ at:now-(Math.random()*3*day), actorUid:'seed-admin', actorRole:'admin', action, classId:classes.hikam.id, targets:extra, ...(detail?{detail}:{}) });
+const A=(action,detail,extra={})=>({ at:now-(Math.random()*3*day), actorUid:'seed-admin', actorRole:'admin', action, courseId:courses.hikam.id, targets:extra, ...(detail?{detail}:{}) });
 const auditEntries=[
   A('overrideCompletion',{completed:true, reason:'Attended the class live; confirmed with the teacher.'},{recordingId:'g-s2', studentUid:students[7].uid}),
   A('setRecordingStatus',{status:'published'},{recordingId:'g-s4'}),
@@ -112,6 +112,6 @@ const auditEntries=[
 ];
 for (const e of auditEntries) await db.collection('auditLog').add(e);
 // a couple of class-less (admin-only) entries
-await db.collection('auditLog').add({ at:now-2*day, actorUid:'seed-admin', actorRole:'admin', action:'createCohort', classId:null, targets:{cohortId} });
+await db.collection('auditLog').add({ at:now-2*day, actorUid:'seed-admin', actorRole:'admin', action:'createCohort', courseId:null, targets:{cohortId} });
 
-console.log(JSON.stringify({ studentEmail:students[0].email, studentPw:'HikamStudent1', hikamClassId:classes.hikam.id, managerUidNeeded:true }, null, 0));
+console.log(JSON.stringify({ studentEmail:students[0].email, studentPw:'HikamStudent1', hikamCourseId:courses.hikam.id, managerUidNeeded:true }, null, 0));

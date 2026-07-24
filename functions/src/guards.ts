@@ -53,14 +53,14 @@ export function requireAdmin(req: CallableRequest): string {
  * "may you touch this class's roster?" is actually decided. Reads the class
  * fresh rather than trusting anything the caller sent.
  */
-export async function requireClassScope(
+export async function requireCourseScope(
   req: CallableRequest,
-  classId: string,
+  courseId: string,
 ): Promise<string> {
   const uid = requireStaff(req);
   if (claims(req).role === 'admin') return uid;
 
-  const snap = await getFirestore().collection(COLLECTIONS.classes).doc(classId).get();
+  const snap = await getFirestore().collection(COLLECTIONS.courses).doc(courseId).get();
   if (!snap.exists) throw new HttpsError('not-found', 'No such class.');
 
   const managerUids = (snap.data() as { managerUids?: string[] }).managerUids ?? [];

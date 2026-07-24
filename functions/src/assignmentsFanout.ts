@@ -29,10 +29,10 @@ function chunked<T>(items: T[], size = CHUNK): T[][] {
 }
 
 /** Active enrollments (the roster that becomes accountable) for a class. */
-async function activeRoster(db: Firestore, classId: string): Promise<EnrollmentDoc[]> {
+async function activeRoster(db: Firestore, courseId: string): Promise<EnrollmentDoc[]> {
   const snap = await db
     .collection(COLLECTIONS.enrollments)
-    .where('classId', '==', classId)
+    .where('courseId', '==', courseId)
     .where('active', '==', true)
     .get();
   return snap.docs.map((d) => d.data() as EnrollmentDoc);
@@ -48,7 +48,7 @@ async function activeRoster(db: Firestore, classId: string): Promise<EnrollmentD
  */
 async function assignRecordingToStudents(
   db: Firestore,
-  rec: { id: string; classId: string; cohortId: string; dueDate: string | null },
+  rec: { id: string; courseId: string; cohortId: string; dueDate: string | null },
   studentUids: string[],
   assignedBy: string,
 ): Promise<void> {
@@ -72,7 +72,7 @@ async function assignRecordingToStudents(
       const doc: AssignmentDoc = {
         studentUid: uid,
         recordingId: rec.id,
-        classId: rec.classId,
+        courseId: rec.courseId,
         cohortId: rec.cohortId,
         dueDate: rec.dueDate,
         source: 'publish',
@@ -89,10 +89,10 @@ async function assignRecordingToStudents(
 /** Publish the recording to its whole current active roster. */
 async function assignRecordingToRoster(
   db: Firestore,
-  rec: { id: string; classId: string; cohortId: string; dueDate: string | null },
+  rec: { id: string; courseId: string; cohortId: string; dueDate: string | null },
   assignedBy: string,
 ): Promise<void> {
-  const roster = await activeRoster(db, rec.classId);
+  const roster = await activeRoster(db, rec.courseId);
   await assignRecordingToStudents(
     db,
     rec,
@@ -143,14 +143,14 @@ async function updatePublishDueDates(
  */
 export async function assignPublishedRecordingsToStudent(
   db: Firestore,
-  classId: string,
+  courseId: string,
   studentUid: string,
   today: string,
   assignedBy: string,
 ): Promise<void> {
   const snap = await db
     .collection(COLLECTIONS.recordings)
-    .where('classId', '==', classId)
+    .where('courseId', '==', courseId)
     .where('status', '==', 'published')
     .get();
 
@@ -166,7 +166,7 @@ export async function assignPublishedRecordingsToStudent(
       const doc: AssignmentDoc = {
         studentUid,
         recordingId: r.id,
-        classId,
+        courseId,
         cohortId: r.cohortId,
         dueDate: r.dueDate,
         source: 'publish',
@@ -184,15 +184,15 @@ export async function assignPublishedRecordingsToStudent(
 }
 
 /** Turn off a student's obligations in a class (unenrolment), keeping history. */
-export async function deactivateStudentAssignmentsInClass(
+export async function deactivateStudentAssignmentsInCourse(
   db: Firestore,
-  classId: string,
+  courseId: string,
   studentUid: string,
 ): Promise<void> {
   const snap = await db
     .collection(COLLECTIONS.assignments)
     .where('studentUid', '==', studentUid)
-    .where('classId', '==', classId)
+    .where('courseId', '==', courseId)
     .get();
   for (const group of chunked(snap.docs)) {
     const batch = db.batch();
@@ -228,7 +228,7 @@ export async function applyRecordingFanout(
   const isPublished = after.status === 'published';
   const rec = {
     id: recordingId,
-    classId: after.classId,
+    courseId: after.courseId,
     cohortId: after.cohortId,
     dueDate: after.dueDate,
   };
@@ -242,7 +242,7 @@ export async function applyRecordingFanout(
     return;
   }
   if (wasPublished && isPublished && before) {
-    if (before.classId !== after.classId) {
+    if (before.courseId !== after.courseId) {
       await deactivateAssignmentsForRecording(db, recordingId);
       await assignRecordingToRoster(db, rec, 'system');
     } else if (before.dueDate !== after.dueDate) {

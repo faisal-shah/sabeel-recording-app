@@ -7,12 +7,12 @@ import {
   audioStoragePath,
   canTransition,
   publishBlockers,
-  type ClassDoc,
+  type CourseDoc,
   type RecordingDoc,
   type RecordingSource,
   type RecordingStatus,
 } from '@sabeel/shared';
-import { requireAdmin, requireClassScope } from './guards';
+import { requireAdmin, requireCourseScope } from './guards';
 
 /** Max upload size, mirrored in storage.rules. A 2-hour 128 kbps M4A is ~115 MB;
  *  300 MB leaves room without letting a video file through by accident. */
@@ -21,15 +21,15 @@ export const MAX_AUDIO_BYTES = 300 * 1024 * 1024;
 // ---------------------------------------------------------------- create --
 
 export interface CreateRecordingInput {
-  classId: string;
+  courseId: string;
   title: string;
   recordedAt: number | null;
 }
 
 export function validateCreateRecording(data: unknown): CreateRecordingInput {
   const d = data as Partial<CreateRecordingInput> | null;
-  if (typeof d?.classId !== 'string' || !d.classId) {
-    throw new HttpsError('invalid-argument', 'classId is required.');
+  if (typeof d?.courseId !== 'string' || !d.courseId) {
+    throw new HttpsError('invalid-argument', 'courseId is required.');
   }
   const title = typeof d.title === 'string' ? d.title.trim() : '';
   if (!title) throw new HttpsError('invalid-argument', 'A title is required.');
@@ -42,7 +42,7 @@ export function validateCreateRecording(data: unknown): CreateRecordingInput {
         : (() => {
             throw new HttpsError('invalid-argument', 'recordedAt must be epoch ms or null.');
           })();
-  return { classId: d.classId, title, recordedAt };
+  return { courseId: d.courseId, title, recordedAt };
 }
 
 /**
@@ -60,12 +60,12 @@ export async function createRecordingDraft(
   origin: { source?: RecordingSource; zoomUuid?: string; zoomFileId?: string } = {},
 ) {
   const db = getFirestore();
-  const clsSnap = await db.collection(COLLECTIONS.classes).doc(input.classId).get();
+  const clsSnap = await db.collection(COLLECTIONS.courses).doc(input.courseId).get();
   if (!clsSnap.exists) throw new HttpsError('not-found', 'No such class.');
 
   const doc: RecordingDoc = {
-    cohortId: (clsSnap.data() as ClassDoc).cohortId,
-    classId: input.classId,
+    cohortId: (clsSnap.data() as CourseDoc).cohortId,
+    courseId: input.courseId,
     title: input.title,
     status: 'draft',
     source: origin.source ?? 'manual',
@@ -87,8 +87,8 @@ export async function createRecordingDraft(
 
 export const createRecording = auditedCall('createRecording', async (req, audit) => {
   const input = validateCreateRecording(req.data);
-  const uid = await requireClassScope(req, input.classId);
-  audit.classId = input.classId;
+  const uid = await requireCourseScope(req, input.courseId);
+  audit.courseId = input.courseId;
   return createRecordingDraft(uid, input);
 });
 
@@ -155,9 +155,9 @@ export const finalizeRecordingUpload = auditedCall('finalizeRecordingUpload', as
   const input = validateFinalize(req.data);
   const rec = await getFirestore().collection(COLLECTIONS.recordings).doc(input.recordingId).get();
   if (!rec.exists) throw new HttpsError('not-found', 'No such recording.');
-  const classId = (rec.data() as RecordingDoc).classId;
-  await requireClassScope(req, classId);
-  audit.classId = classId;
+  const courseId = (rec.data() as RecordingDoc).courseId;
+  await requireCourseScope(req, courseId);
+  audit.courseId = courseId;
   return finalizeRecording(input);
 });
 
@@ -224,9 +224,9 @@ export const updateRecording = auditedCall('updateRecording', async (req, audit)
   const input = validateUpdateRecording(req.data);
   const rec = await getFirestore().collection(COLLECTIONS.recordings).doc(input.recordingId).get();
   if (!rec.exists) throw new HttpsError('not-found', 'No such recording.');
-  const classId = (rec.data() as RecordingDoc).classId;
-  await requireClassScope(req, classId);
-  audit.classId = classId;
+  const courseId = (rec.data() as RecordingDoc).courseId;
+  await requireCourseScope(req, courseId);
+  audit.courseId = courseId;
   return applyRecordingUpdate(input);
 });
 
@@ -300,9 +300,9 @@ export const setRecordingStatus = auditedCall('setRecordingStatus', async (req, 
   const input = validateSetStatus(req.data);
   const rec = await getFirestore().collection(COLLECTIONS.recordings).doc(input.recordingId).get();
   if (!rec.exists) throw new HttpsError('not-found', 'No such recording.');
-  const classId = (rec.data() as RecordingDoc).classId;
-  await requireClassScope(req, classId);
-  audit.classId = classId;
+  const courseId = (rec.data() as RecordingDoc).courseId;
+  await requireCourseScope(req, courseId);
+  audit.courseId = courseId;
   audit.detail = { status: input.status };
   return applyRecordingStatus(input);
 });
@@ -346,9 +346,9 @@ export const clearRecordingAudio = auditedCall('clearRecordingAudio', async (req
   }
   const rec = await getFirestore().collection(COLLECTIONS.recordings).doc(d.recordingId).get();
   if (!rec.exists) throw new HttpsError('not-found', 'No such recording.');
-  const classId = (rec.data() as RecordingDoc).classId;
-  await requireClassScope(req, classId);
-  audit.classId = classId;
+  const courseId = (rec.data() as RecordingDoc).courseId;
+  await requireCourseScope(req, courseId);
+  audit.courseId = courseId;
   return clearAudio(d.recordingId);
 });
 
@@ -405,7 +405,7 @@ export async function applyDeleteRecording(recordingId: string) {
 
   // 3. The recording itself.
   await ref.delete();
-  return { recordingId, classId: rec.classId };
+  return { recordingId, courseId: rec.courseId };
 }
 
 export const deleteRecording = auditedCall('deleteRecording', async (req, audit) => {
@@ -415,6 +415,6 @@ export const deleteRecording = auditedCall('deleteRecording', async (req, audit)
     throw new HttpsError('invalid-argument', 'recordingId is required.');
   }
   const res = await applyDeleteRecording(d.recordingId);
-  audit.classId = res.classId; // recordingId target is auto-picked from req.data
+  audit.courseId = res.courseId; // recordingId target is auto-picked from req.data
   return { recordingId: res.recordingId };
 });

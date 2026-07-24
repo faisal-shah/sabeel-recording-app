@@ -38,13 +38,13 @@ export interface StudentDoc {
 
 export interface CohortDoc {
   name: string;
-  /** Manually set when the cohort ends. Archiving cascades to its classes. */
+  /** Manually set when the cohort ends. Archiving cascades to its courses. */
   archived: boolean;
   createdAt: number;
   createdBy: string;
 }
 
-export interface ClassDoc {
+export interface CourseDoc {
   cohortId: string;
   name: string;
   /** The class's own state, independent of its cohort's. */
@@ -78,13 +78,13 @@ export interface ClassDoc {
 /**
  * Student membership in a class.
  *
- * Document id is `${studentUid}_${classId}` so a rule can check membership with
+ * Document id is `${studentUid}_${courseId}` so a rule can check membership with
  * a single exists(), and a student can list their own with
  * `where('studentUid','==',uid)` — no cross-document read either way.
  */
 export interface EnrollmentDoc {
   studentUid: string;
-  classId: string;
+  courseId: string;
   cohortId: string;
   /**
    * Unenrolling sets this false; it never deletes the row.
@@ -102,6 +102,6 @@ export interface EnrollmentDoc {
   unenrolledAt?: number;
 }
 
-export function enrollmentId(studentUid: string, classId: string): string {
-  return `${studentUid}_${classId}`;
+export function enrollmentId(studentUid: string, courseId: string): string {
+  return `${studentUid}_${courseId}`;
 }

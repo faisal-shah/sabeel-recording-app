@@ -1,24 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { collection, doc, getDoc, query, where } from 'firebase/firestore';
-import { COLLECTIONS, type ClassDoc, type RecordingDoc } from '@sabeel/shared';
+import { COLLECTIONS, type CourseDoc, type RecordingDoc } from '@sabeel/shared';
 import { Card, Empty, Notice, Screen, SectionTitle } from '../components/ui';
 import { db } from '../firebase';
 import { useLiveQuery } from '../liveQuery';
 import { useMyAssignments } from '../completion';
-import { useMyEnrollments, type ClassRow } from '../structure';
+import { useMyEnrollments, type CourseRow } from '../structure';
 import type { RecordingRow } from '../recordings';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
 
 /**
- * A student's classes, and the published recordings in them.
+ * A student's courses, and the published recordings in them.
  *
  * The queries here are shaped by the security rules rather than the other way
  * round: a student lists their own enrollments (constrained by studentUid),
- * reads each class BY ID, then lists published recordings per class. Listing
- * classes, or listing recordings unconstrained, is denied — so this shape is
+ * reads each course BY ID, then lists published recordings per course. Listing
+ * courses, or listing recordings unconstrained, is denied — so this shape is
  * not a style choice.
  */
 export function MyRecordingsScreen({
@@ -26,16 +26,16 @@ export function MyRecordingsScreen({
   onOpen,
 }: {
   uid: string;
-  onOpen: (recording: RecordingRow, cls: ClassRow) => void;
+  onOpen: (recording: RecordingRow, cls: CourseRow) => void;
 }) {
   const enrollments = useMyEnrollments(uid);
-  const classIds = useMemo(
-    () => enrollments.filter((e) => e.active).map((e) => e.classId),
+  const courseIds = useMemo(
+    () => enrollments.filter((e) => e.active).map((e) => e.courseId),
     [enrollments],
   );
 
-  // Which recordings are REQUIRED for this student — everything else in a class
-  // is accessible but "not assigned" (brief § Class access & archive).
+  // Which recordings are REQUIRED for this student — everything else in a course
+  // is accessible but "not assigned" (brief § Course access & archive).
   const assignments = useMyAssignments(uid);
   const assignedIds = useMemo(
     () => new Set(assignments.map((a) => a.recordingId)),
@@ -44,11 +44,11 @@ export function MyRecordingsScreen({
 
   return (
     <Screen subtitle="Your recordings">
-      {classIds.length === 0 ? (
-        <Empty>You are not enrolled in any classes yet.</Empty>
+      {courseIds.length === 0 ? (
+        <Empty>You are not enrolled in any courses yet.</Empty>
       ) : (
-        classIds.map((classId) => (
-          <ClassSection key={classId} classId={classId} assignedIds={assignedIds} onOpen={onOpen} />
+        courseIds.map((courseId) => (
+          <CourseSection key={courseId} courseId={courseId} assignedIds={assignedIds} onOpen={onOpen} />
         ))
       )}
     </Screen>
@@ -56,20 +56,20 @@ export function MyRecordingsScreen({
 }
 
 /**
- * One class by id.
+ * One course by id.
  *
- * A plain get, not a live subscription: a student may GET a class they are
- * enrolled in but never LIST classes, and a class's own details change rarely
+ * A plain get, not a live subscription: a student may GET a course they are
+ * enrolled in but never LIST courses, and a course's own details change rarely
  * enough that a listener each would be noise.
  */
-function useClass(classId: string): ClassRow | null {
-  const [cls, setCls] = useState<ClassRow | null>(null);
+function useCourse(courseId: string): CourseRow | null {
+  const [cls, setCls] = useState<CourseRow | null>(null);
   useEffect(() => {
     let cancelled = false;
-    void getDoc(doc(db, COLLECTIONS.classes, classId))
+    void getDoc(doc(db, COLLECTIONS.courses, courseId))
       .then((snap) => {
         if (cancelled) return;
-        setCls(snap.exists() ? { id: snap.id, ...(snap.data() as ClassDoc) } : null);
+        setCls(snap.exists() ? { id: snap.id, ...(snap.data() as CourseDoc) } : null);
       })
       .catch(() => {
         if (!cancelled) setCls(null);
@@ -77,31 +77,31 @@ function useClass(classId: string): ClassRow | null {
     return () => {
       cancelled = true;
     };
-  }, [classId]);
+  }, [courseId]);
   return cls;
 }
 
-function ClassSection({
-  classId,
+function CourseSection({
+  courseId,
   assignedIds,
   onOpen,
 }: {
-  classId: string;
+  courseId: string;
   assignedIds: Set<string>;
-  onOpen: (r: RecordingRow, c: ClassRow) => void;
+  onOpen: (r: RecordingRow, c: CourseRow) => void;
 }) {
-  const cls = useClass(classId);
+  const cls = useCourse(courseId);
   const recordings = useLiveQuery<RecordingRow[]>(
     'studentRecordings',
     () =>
       query(
         collection(db, COLLECTIONS.recordings),
-        where('classId', '==', classId),
+        where('courseId', '==', courseId),
         where('status', '==', 'published'),
       ),
     (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as RecordingDoc) })),
     [],
-    [classId],
+    [courseId],
   );
 
   if (!cls) return null;
@@ -112,11 +112,11 @@ function ClassSection({
       <SectionTitle>{cls.name}</SectionTitle>
       {listeningOff ? (
         <Notice tone="info">
-          This class is archived and listening has been turned off. Your history is kept.
+          This course is archived and listening has been turned off. Your history is kept.
         </Notice>
       ) : null}
       {recordings.length === 0 ? (
-        <Empty>Nothing published in this class yet.</Empty>
+        <Empty>Nothing published in this course yet.</Empty>
       ) : (
         recordings.map((r) => (
           <Card key={r.id}>

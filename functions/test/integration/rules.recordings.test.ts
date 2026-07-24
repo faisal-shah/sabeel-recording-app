@@ -57,7 +57,7 @@ beforeEach(async () => {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
     const cls = (id: string, managerUids: string[]) =>
-      setDoc(doc(db, COLLECTIONS.classes, id), {
+      setDoc(doc(db, COLLECTIONS.courses, id), {
         cohortId: 'c1',
         name: id,
         archived: false,
@@ -67,10 +67,10 @@ beforeEach(async () => {
         createdAt: 1,
         createdBy: ADMIN,
       });
-    const rec = (id: string, classId: string, status: string) =>
+    const rec = (id: string, courseId: string, status: string) =>
       setDoc(doc(db, COLLECTIONS.recordings, id), {
         cohortId: 'c1',
-        classId,
+        courseId,
         title: id,
         status,
         source: 'manual',
@@ -92,7 +92,7 @@ beforeEach(async () => {
       rec(THEIR_REC, CLASS_THEIRS, 'published'),
       setDoc(doc(db, COLLECTIONS.enrollments, enrollmentId(STUDENT, CLASS_MINE)), {
         studentUid: STUDENT,
-        classId: CLASS_MINE,
+        courseId: CLASS_MINE,
         cohortId: 'c1',
         active: true,
         enrolledAt: 1,
@@ -119,7 +119,7 @@ describe('recordings: staff reads', () => {
       getDocs(
         query(
           collection(mine().firestore(), COLLECTIONS.recordings),
-          where('classId', '==', CLASS_MINE),
+          where('courseId', '==', CLASS_MINE),
         ),
       ),
     );
@@ -131,7 +131,7 @@ describe('recordings: staff reads', () => {
       getDocs(
         query(
           collection(mine().firestore(), COLLECTIONS.recordings),
-          where('classId', '==', CLASS_THEIRS),
+          where('courseId', '==', CLASS_THEIRS),
         ),
       ),
     );
@@ -164,7 +164,7 @@ describe('recordings: student reads', () => {
       getDocs(
         query(
           collection(student().firestore(), COLLECTIONS.recordings),
-          where('classId', '==', CLASS_MINE),
+          where('courseId', '==', CLASS_MINE),
           where('status', '==', 'published'),
         ),
       ),
@@ -253,7 +253,7 @@ describe('listeningProgress', () => {
   const row = (uid: string) => ({
     studentUid: uid,
     recordingId: PUBLISHED,
-    classId: CLASS_MINE,
+    courseId: CLASS_MINE,
     positionMs: 1000,
     listenedMs: 1000,
     updatedAt: 1,

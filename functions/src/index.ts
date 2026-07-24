@@ -18,7 +18,7 @@ export { onUserCreate } from './authTrigger';
 export { setStaffAccess } from './staff';
 export { createStudent, setStudentAccess } from './students';
 export { createCohort, setCohortArchived } from './cohorts';
-export { createClass, updateClass, setClassManagers } from './classes';
+export { createCourse, updateCourse, setCourseManagers } from './courses';
 export { createEnrollment, setEnrollmentActive } from './enrollments';
 export {
   createRecording,

@@ -8,19 +8,19 @@ import {
   NEW_STUDENT_ACCESS,
   enrollmentId,
   todayInZone,
-  type ClassDoc,
+  type CourseDoc,
   type EnrollmentDoc,
   type StudentDoc,
   type UserStatus,
 } from '@sabeel/shared';
-import { requireAdmin, requireClassScope, requireStaff } from './guards';
+import { requireAdmin, requireCourseScope, requireStaff } from './guards';
 import { assignPublishedRecordingsToStudent } from './assignmentsFanout';
 
 export interface CreateStudentInput {
   displayName: string;
   email: string;
   /** Optional: enrol into this class in the same operation. */
-  classId?: string;
+  courseId?: string;
 }
 
 export function validateCreateStudent(data: unknown): CreateStudentInput {
@@ -37,19 +37,19 @@ export function validateCreateStudent(data: unknown): CreateStudentInput {
   // `null` counts as absent, not as a bad value.
   //
   // The callable wire format cannot tell them apart: the client SDK serializes
-  // an explicitly-`undefined` property as `null`, so `{ classId: undefined }`
-  // arrives as `{ classId: null }`. A guard testing only `!== undefined` then
-  // rejects "no class selected" with "classId must be a class id" — which is
+  // an explicitly-`undefined` property as `null`, so `{ courseId: undefined }`
+  // arrives as `{ courseId: null }`. A guard testing only `!== undefined` then
+  // rejects "no class selected" with "courseId must be a class id" — which is
   // what happened to the very first student created in production, before any
   // class existed to select.
-  if (d?.classId !== undefined && d?.classId !== null) {
+  if (d?.courseId !== undefined && d?.courseId !== null) {
     // Trimmed before the emptiness check: '   ' is truthy, so testing the raw
     // value let a whitespace-only id through to a document lookup.
-    const classId = typeof d.classId === 'string' ? d.classId.trim() : '';
-    if (!classId) {
-      throw new HttpsError('invalid-argument', 'classId must be a class id.');
+    const courseId = typeof d.courseId === 'string' ? d.courseId.trim() : '';
+    if (!courseId) {
+      throw new HttpsError('invalid-argument', 'courseId must be a class id.');
     }
-    out.classId = classId;
+    out.courseId = courseId;
   }
   return out;
 }
@@ -112,19 +112,19 @@ export async function createStudentAccount(callerUid: string, input: CreateStude
   // an enrolment pointing at a student record that was never written is not.
   const batch = db.batch();
   batch.set(db.collection(COLLECTIONS.students).doc(user.uid), doc);
-  if (input.classId) {
-    const cls = await db.collection(COLLECTIONS.classes).doc(input.classId).get();
+  if (input.courseId) {
+    const cls = await db.collection(COLLECTIONS.courses).doc(input.courseId).get();
     if (!cls.exists) throw new HttpsError('not-found', 'No such class.');
     const enrollment: EnrollmentDoc = {
       studentUid: user.uid,
-      classId: input.classId,
-      cohortId: (cls.data() as ClassDoc).cohortId,
+      courseId: input.courseId,
+      cohortId: (cls.data() as CourseDoc).cohortId,
       active: true,
       enrolledAt: Date.now(),
       enrolledBy: callerUid,
     };
     batch.set(
-      db.collection(COLLECTIONS.enrollments).doc(enrollmentId(user.uid, input.classId)),
+      db.collection(COLLECTIONS.enrollments).doc(enrollmentId(user.uid, input.courseId)),
       enrollment,
     );
   }
@@ -133,17 +133,17 @@ export async function createStudentAccount(callerUid: string, input: CreateStude
   // A student enrolled at creation time inherits the same late-enrollment
   // default as one enrolled later: accountable for the class's not-yet-due
   // published recordings. Runs after the commit so it never blocks the account.
-  if (input.classId) {
+  if (input.courseId) {
     await assignPublishedRecordingsToStudent(
       db,
-      input.classId,
+      input.courseId,
       user.uid,
       todayInZone(INSTITUTE_TIMEZONE),
       callerUid,
     );
   }
 
-  return { uid: user.uid, email: input.email, classId: input.classId ?? null };
+  return { uid: user.uid, email: input.email, courseId: input.courseId ?? null };
 }
 
 export const createStudent = auditedCall('createStudent', async (req, audit) => {
@@ -151,11 +151,11 @@ export const createStudent = auditedCall('createStudent', async (req, audit) => 
   // Scope is checked BEFORE the account is created: a manager naming a class
   // they do not run must fail with nothing written, not leave an orphan Auth
   // user behind.
-  const callerUid = input.classId
-    ? await requireClassScope(req, input.classId)
+  const callerUid = input.courseId
+    ? await requireCourseScope(req, input.courseId)
     : requireStaff(req);
-  // classId when enrolled at creation, so the scoped manager sees it in audit.
-  if (input.classId) audit.classId = input.classId;
+  // courseId when enrolled at creation, so the scoped manager sees it in audit.
+  if (input.courseId) audit.courseId = input.courseId;
   return createStudentAccount(callerUid, input);
 });
 
@@ -193,7 +193,7 @@ export async function applyStudentAccess(input: StudentAccessInput) {
   return { uid: input.uid, status: input.status };
 }
 
-// Enable/disable is directory-level (a student spans classes) → admin-only audit.
+// Enable/disable is directory-level (a student spans courses) → admin-only audit.
 export const setStudentAccess = auditedCall('setStudentAccess', async (req, audit) => {
   requireAdmin(req);
   const input = validateStudentAccess(req.data);
