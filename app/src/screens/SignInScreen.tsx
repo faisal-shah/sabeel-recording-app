@@ -39,7 +39,7 @@ export function SignInScreen() {
   };
 
   return (
-    <Screen title="Course Recordings" subtitle="Sabeel Institute">
+    <Screen title="Class Recordings" subtitle="Sabeel Institute">
       <View style={styles.block}>
         <Text style={styles.groupTitle}>Staff</Text>
         <Text style={styles.groupHint}>

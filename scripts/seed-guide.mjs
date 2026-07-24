@@ -43,7 +43,11 @@ const audio=readFileSync('e2e-shots/test-lecture.m4a');
 const uids=students.map(s=>s.uid);
 // Attendance snapshot: first `present` students present, the rest absent; any in
 // `excused` are excused (still accountable). Absent + excused get the recording.
-const attend=(present, excused=[])=>Object.fromEntries(uids.map((u,i)=>[u, excused.includes(u)?'excused':(i<present?'present':'absent')]));
+const attend=(present, {excused=[], absent=[]}={})=>Object.fromEntries(uids.map((u,i)=>{
+  if (excused.includes(u)) return [u,'excused'];
+  if (absent.includes(u)) return [u,'absent'];
+  return [u, i<present?'present':'absent'];
+}));
 
 async function mkSession(courseId, sid, rid, title, { status='published', dueOffset=null, daysAgo=7, notes='', attendance=null, attention=null }={}){
   const date=iso(now-daysAgo*day);
@@ -76,9 +80,11 @@ async function mkSession(courseId, sid, rid, title, { status='published', dueOff
 }
 const H=courses.hikam.id;
 // Hikam: attendance taken, most present, a few absent/excused (assigned). Overdue ones.
-await mkSession(H,'g-s1','g-s1r','Session 1 — Introduction to the Hikam', {dueOffset:-14, daysAgo:21, attendance:attend(6, [uids[7]])});
-await mkSession(H,'g-s2','g-s2r','Session 2 — Knowledge and Certainty', {dueOffset:-6, daysAgo:14, attendance:attend(4)});
-await mkSession(H,'g-s3','g-s3r','Session 3 — Patience in Hardship', {dueOffset:3, daysAgo:5, notes:'Focus on the section about gratitude in hardship — we will discuss it next week.', attendance:attend(5)});
+await mkSession(H,'g-s1','g-s1r','Session 1 — Introduction to the Hikam', {dueOffset:-14, daysAgo:21, attendance:attend(6, {excused:[uids[7]]})});
+// Fatima (uids[0], the demo student) missed sessions 2 and 3, so she has real
+// required listening on the student screenshots: s2 overdue, s3 due-soon (60%).
+await mkSession(H,'g-s2','g-s2r','Session 2 — Knowledge and Certainty', {dueOffset:-6, daysAgo:14, attendance:attend(4, {absent:[uids[0]]})});
+await mkSession(H,'g-s3','g-s3r','Session 3 — Patience in Hardship', {dueOffset:3, daysAgo:5, notes:'Focus on the section about gratitude in hardship — we will discuss it next week.', attendance:attend(5, {absent:[uids[0]]})});
 await mkSession(H,'g-s4','g-s4r','Session 4 — Sincerity of Intention', {dueOffset:null, daysAgo:2, attendance:attend(6)});
 // Session 5: recording published but attendance NOT taken yet — nobody assigned.
 await mkSession(H,'g-s5','g-s5r','Session 5 — Reliance and Trust', {status:'published', daysAgo:1, attendance:null});

@@ -93,7 +93,7 @@ export default function App() {
             {/* Every screen inside the navigator keeps its header: it carries the
                 back affordance on pushed screens, and on Home it is what provides
                 the status-bar inset. Hiding it here put the title under the clock. */}
-            <Stack.Screen name="Home" options={{ title: 'Course Recordings' }}>
+            <Stack.Screen name="Home" options={{ title: 'Class Recordings' }}>
               {() => <Landing name={profile.doc.displayName} role={role} uid={user.uid} />}
             </Stack.Screen>
             <Stack.Screen name="Staff" options={{ title: 'Staff' }}>
