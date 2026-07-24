@@ -18,7 +18,7 @@ export function MyCoursesScreen({
 }) {
   const courses = useMyCourses(uid);
   return (
-    <Screen subtitle="Coursees you have been assigned">
+    <Screen subtitle="Courses you have been assigned">
       <SectionTitle>My courses ({courses.length})</SectionTitle>
       {courses.length === 0 ? (
         <>

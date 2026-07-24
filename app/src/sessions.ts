@@ -29,11 +29,6 @@ export const submitAttendance = call<
   { sessionId: string; marked: number }
 >('submitAttendance');
 
-export const archiveSession = call<
-  { sessionId: string; archived: boolean },
-  { sessionId: string; archived: boolean }
->('archiveSession');
-
 export const deleteSession = call<{ sessionId: string }, { sessionId: string }>('deleteSession');
 
 /** A course's sessions, newest meeting first. Staff-only (rules). */

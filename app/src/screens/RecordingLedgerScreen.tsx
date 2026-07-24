@@ -16,6 +16,7 @@ import {
 import { exportCsv } from '../exportCsv';
 import { useListenerError } from '../liveQuery';
 import { useCohortName, type CourseRow } from '../structure';
+import type { SessionRow } from '../sessions';
 import type { RecordingRow } from '../recordings';
 import { getTheme, spacing } from '../theme';
 
@@ -32,6 +33,8 @@ export function RecordingLedgerScreen({
   cls,
 }: {
   recording: RecordingRow;
+  // The session is passed for the Phase C attendance split (accountable vs present).
+  session: SessionRow;
   cls: CourseRow;
 }) {
   const listenerError = useListenerError();

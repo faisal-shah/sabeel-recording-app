@@ -20,13 +20,7 @@ export { createStudent, setStudentAccess } from './students';
 export { createCohort, setCohortArchived } from './cohorts';
 export { createCourse, updateCourse, setCourseManagers } from './courses';
 export { createEnrollment, setEnrollmentActive } from './enrollments';
-export {
-  createSession,
-  updateSession,
-  submitAttendance,
-  archiveSession,
-  deleteSession,
-} from './sessions';
+export { createSession, updateSession, submitAttendance, deleteSession } from './sessions';
 export {
   createRecording,
   finalizeRecordingUpload,

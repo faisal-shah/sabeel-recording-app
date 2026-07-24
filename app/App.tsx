@@ -20,7 +20,8 @@ import { StudentsScreen } from './src/screens/StudentsScreen';
 import { CohortsScreen } from './src/screens/CohortsScreen';
 import { CoursesScreen } from './src/screens/CoursesScreen';
 import { CourseDetailScreen } from './src/screens/CourseDetailScreen';
-import { RecordingsScreen } from './src/screens/RecordingsScreen';
+import { SessionsScreen } from './src/screens/SessionsScreen';
+import { SessionDetailScreen } from './src/screens/SessionDetailScreen';
 import { RecordingLedgerScreen } from './src/screens/RecordingLedgerScreen';
 import { StudentLedgerScreen } from './src/screens/StudentLedgerScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
@@ -31,9 +32,8 @@ import { StudentHomeScreen } from './src/screens/StudentHomeScreen';
 import { PlayerScreen } from './src/screens/PlayerScreen';
 import { MyCoursesScreen } from './src/screens/MyCoursesScreen';
 import { TokensScreen } from './src/screens/TokensScreen';
-import { loadRecording } from './src/recordings';
-import { loadCourse } from './src/structure';
 import type { RootStackParamList } from './src/nav';
+import { loadSession } from './src/sessions';
 import { getTheme } from './src/theme';
 
 const t = getTheme();
@@ -104,14 +104,17 @@ export default function App() {
             <Stack.Screen name="Cohorts" options={{ title: 'Cohorts' }}>
               {() => <Cohorts />}
             </Stack.Screen>
-            <Stack.Screen name="Coursees" options={{ title: 'Coursees' }}>
-              {() => <Coursees />}
+            <Stack.Screen name="Courses" options={{ title: 'Courses' }}>
+              {() => <Courses />}
             </Stack.Screen>
             <Stack.Screen name="CourseDetail" options={{ title: 'Course' }}>
               {() => <CourseDetail isAdmin={isAdmin} />}
             </Stack.Screen>
-            <Stack.Screen name="Recordings" options={{ title: 'Recordings' }}>
-              {() => <Recordings isAdmin={isAdmin} />}
+            <Stack.Screen name="Sessions" options={{ title: 'Sessions' }}>
+              {() => <Sessions />}
+            </Stack.Screen>
+            <Stack.Screen name="SessionDetail" options={{ title: 'Session' }}>
+              {() => <SessionDetail isAdmin={isAdmin} />}
             </Stack.Screen>
             <Stack.Screen name="RecordingLedger" options={{ title: 'Listening progress' }}>
               {() => <RecordingLedger />}
@@ -123,13 +126,13 @@ export default function App() {
               {() => <Library uid={user.uid} isAdmin={isAdmin} />}
             </Stack.Screen>
             <Stack.Screen name="ZoomImport" options={{ title: 'Import from Zoom' }}>
-              {() => <ZoomImport uid={user.uid} isAdmin={isAdmin} />}
+              {() => <ZoomImport />}
             </Stack.Screen>
             <Stack.Screen name="Audit" options={{ title: 'Audit' }}>
               {() => <Audit />}
             </Stack.Screen>
-            <Stack.Screen name="MyCoursees" options={{ title: 'My courses' }}>
-              {() => <MyCoursees uid={user.uid} />}
+            <Stack.Screen name="MyCourses" options={{ title: 'My courses' }}>
+              {() => <MyCourses uid={user.uid} />}
             </Stack.Screen>
             <Stack.Screen name="MyRecordings" options={{ title: 'Recordings' }}>
               {() => <MyRecordings uid={user.uid} />}
@@ -182,12 +185,12 @@ function Landing({ name, role, uid }: { name: string; role: Role; uid: string })
 
 function Cohorts() {
   const navigation = useNavigation<Nav>();
-  return <CohortsScreen onOpen={(cohort) => navigation.navigate('Coursees', { cohort })} />;
+  return <CohortsScreen onOpen={(cohort) => navigation.navigate('Courses', { cohort })} />;
 }
 
-function Coursees() {
+function Courses() {
   const navigation = useNavigation<Nav>();
-  const { cohort } = useRoute<RouteProp<RootStackParamList, 'Coursees'>>().params;
+  const { cohort } = useRoute<RouteProp<RootStackParamList, 'Courses'>>().params;
   return (
     <CoursesScreen
       cohortId={cohort.id}
@@ -205,11 +208,38 @@ function CourseDetail({ isAdmin }: { isAdmin: boolean }) {
     <CourseDetailScreen
       cls={cls}
       isAdmin={isAdmin}
-      onOpenRecordings={() => navigation.navigate('Recordings', { cls })}
+      onOpenSessions={() => navigation.navigate('Sessions', { cls })}
       onOpenStudent={(studentUid, studentName) =>
         navigation.navigate('StudentLedger', { studentUid, studentName, cls })
       }
       onOpenAudit={() => navigation.navigate('Audit', { courseId: cls.id, title: cls.name })}
+    />
+  );
+}
+
+function Sessions() {
+  const navigation = useNavigation<Nav>();
+  const { cls } = useRoute<RouteProp<RootStackParamList, 'Sessions'>>().params;
+  return (
+    <SessionsScreen
+      courseId={cls.id}
+      courseName={cls.name}
+      onOpenSession={(session) => navigation.navigate('SessionDetail', { session, cls })}
+    />
+  );
+}
+
+function SessionDetail({ isAdmin }: { isAdmin: boolean }) {
+  const navigation = useNavigation<Nav>();
+  const { session, cls } = useRoute<RouteProp<RootStackParamList, 'SessionDetail'>>().params;
+  return (
+    <SessionDetailScreen
+      sessionId={session.id}
+      cls={cls}
+      isAdmin={isAdmin}
+      onOpenLedger={(recording, s) => navigation.navigate('RecordingLedger', { recording, session: s, cls })}
+      onPlay={(recording, s) => navigation.navigate('Player', { recording, cls, dueDate: s.dueDate })}
+      onImportZoom={(s) => navigation.navigate('ZoomImport', { session: s, cls })}
     />
   );
 }
@@ -225,50 +255,29 @@ function MyRecordings({ uid }: { uid: string }) {
 }
 
 function Play({ studentUid }: { studentUid: string | null }) {
-  const { recording, cls } = useRoute<RouteProp<RootStackParamList, 'Player'>>().params;
-  return <PlayerScreen recording={recording} cls={cls} studentUid={studentUid} />;
-}
-
-function Recordings({ isAdmin }: { isAdmin: boolean }) {
-  const navigation = useNavigation<Nav>();
-  const { cls } = useRoute<RouteProp<RootStackParamList, 'Recordings'>>().params;
+  const { recording, cls, dueDate } = useRoute<RouteProp<RootStackParamList, 'Player'>>().params;
   return (
-    <RecordingsScreen
-      courseId={cls.id}
-      courseName={cls.name}
-      isAdmin={isAdmin}
-      onOpenLedger={(recording) => navigation.navigate('RecordingLedger', { recording, cls })}
-      onPlay={(recording) => navigation.navigate('Player', { recording, cls })}
-    />
+    <PlayerScreen recording={recording} cls={cls} studentUid={studentUid} dueDate={dueDate ?? null} />
   );
 }
+
 function RecordingLedger() {
-  const { recording, cls } = useRoute<RouteProp<RootStackParamList, 'RecordingLedger'>>().params;
-  return <RecordingLedgerScreen recording={recording} cls={cls} />;
+  const { recording, session, cls } = useRoute<RouteProp<RootStackParamList, 'RecordingLedger'>>().params;
+  return <RecordingLedgerScreen recording={recording} session={session} cls={cls} />;
 }
 function StudentLedger() {
   const { studentUid, studentName, cls } = useRoute<RouteProp<RootStackParamList, 'StudentLedger'>>().params;
   return <StudentLedgerScreen studentUid={studentUid} studentName={studentName} cls={cls} />;
 }
-function ZoomImport({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
+function ZoomImport() {
   const navigation = useNavigation<Nav>();
+  const { session, cls } = useRoute<RouteProp<RootStackParamList, 'ZoomImport'>>().params;
   return (
     <ZoomImportScreen
-      uid={uid}
-      isAdmin={isAdmin}
-      // After importing, land on the target class's Recordings — the new draft
-      // is there, ready to preview (Listen) and publish.
-      onImported={(cls) => navigation.navigate('Recordings', { cls })}
-      // Tapping an already-imported row opens that recording's player directly.
-      onOpenImported={(recordingId, courseId) => {
-        void (async () => {
-          const [recording, cls] = await Promise.all([
-            loadRecording(recordingId),
-            loadCourse(courseId),
-          ]);
-          if (recording && cls) navigation.navigate('Player', { recording, cls });
-        })();
-      }}
+      session={session}
+      cls={cls}
+      // After importing into this session, return to it (the draft is now there).
+      onImported={() => navigation.navigate('SessionDetail', { session, cls })}
     />
   );
 }
@@ -279,7 +288,12 @@ function Library({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
     <LibraryScreen
       uid={uid}
       isAdmin={isAdmin}
-      onOpenProgress={(recording, cls) => navigation.navigate('RecordingLedger', { recording, cls })}
+      onOpenProgress={(recording, cls) => {
+        void (async () => {
+          const session = await loadSession(recording.sessionId);
+          if (session) navigation.navigate('RecordingLedger', { recording, session, cls });
+        })();
+      }}
       onPlay={(recording, cls) => navigation.navigate('Player', { recording, cls })}
     />
   );
@@ -289,7 +303,7 @@ function Audit() {
   return <AuditScreen courseId={courseId} title={title} />;
 }
 
-function MyCoursees({ uid }: { uid: string }) {
+function MyCourses({ uid }: { uid: string }) {
   const navigation = useNavigation<Nav>();
   return (
     <MyCoursesScreen uid={uid} onOpen={(cls) => navigation.navigate('CourseDetail', { cls })} />

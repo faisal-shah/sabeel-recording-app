@@ -31,7 +31,7 @@ const t = getTheme();
  */
 export function CohortsScreen({ onOpen }: { onOpen: (cohort: CohortRow) => void }) {
   const cohorts = useCohorts(true);
-  // Coursees across all cohorts, counted per cohort so each card shows its size
+  // Courses across all cohorts, counted per cohort so each card shows its size
   // without a tap. Admin-only screen, so the all-courses list is readable.
   const courses = useAllCourses(true);
   const courseCounts = courses.reduce<Record<string, number>>((acc, c) => {

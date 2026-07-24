@@ -1,10 +1,9 @@
-import { collection, doc, getDoc, orderBy, query, where } from 'firebase/firestore';
+import { collection, orderBy, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { ref, uploadBytesResumable } from 'firebase/storage';
 import {
   COLLECTIONS,
   audioStoragePath,
-  type AssignmentDoc,
   type RecordingDoc,
   type RecordingStatus,
 } from '@sabeel/shared';
@@ -13,12 +12,6 @@ import { useLiveQuery } from './liveQuery';
 
 export interface RecordingRow extends RecordingDoc {
   id: string;
-}
-
-/** Load one recording by id (for opening it directly, e.g. from the Zoom picker). */
-export async function loadRecording(id: string): Promise<RecordingRow | null> {
-  const snap = await getDoc(doc(db, COLLECTIONS.recordings, id));
-  return snap.exists() ? { id: snap.id, ...(snap.data() as RecordingDoc) } : null;
 }
 
 /**
@@ -63,48 +56,30 @@ export function useAllRecordings(enabled: boolean): RecordingRow[] {
 const call = <I, O>(name: string) => (input: I) =>
   httpsCallable<I, O>(functions, name)(input).then((r) => r.data);
 
-export const createRecording = call<
-  { courseId: string; title: string; recordedAt: number | null },
-  { id: string; audioPath: string }
->('createRecording');
+/** Create the draft recording for a session (audio uploaded next). */
+export const createRecording = call<{ sessionId: string }, { id: string; audioPath: string }>(
+  'createRecording',
+);
 
-/** Assign an earlier recording to a late-enrolled student as catch-up. */
-export const assignCatchup = call<
-  { studentUid: string; recordingId: string; dueDate: string | null },
-  { studentUid: string; recordingId: string }
->('assignCatchup');
-
-/**
- * Who already has an obligation for this recording — so the catch-up picker can
- * show, and skip, students who are already accountable. Staff-scoped: the rule's
- * manager arm resolves the recording's class per row, affordable for this
- * single-recording query.
- */
-export interface AssignmentRow extends AssignmentDoc {
-  id: string;
-}
-export function useRecordingAssignments(recordingId: string | null): AssignmentRow[] {
-  return useLiveQuery<AssignmentRow[]>(
-    'recordingAssignments',
+/** Live single recording (a session's, for the session detail screen). */
+export function useRecording(recordingId: string | null): RecordingRow | null {
+  const rows = useLiveQuery<RecordingRow[]>(
+    'recording',
     () =>
       recordingId
-        ? query(collection(db, COLLECTIONS.assignments), where('recordingId', '==', recordingId))
+        ? query(collection(db, COLLECTIONS.recordings), where('__name__', '==', recordingId))
         : null,
-    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as AssignmentDoc) })),
+    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as RecordingDoc) })),
     [],
     [recordingId],
   );
+  return rows[0] ?? null;
 }
 
 export const finalizeRecordingUpload = call<
   { recordingId: string; durationSec: number | null },
   { recordingId: string; sizeBytes: number }
 >('finalizeRecordingUpload');
-
-export const updateRecording = call<
-  { recordingId: string; title?: string; notes?: string; dueDate?: string | null },
-  unknown
->('updateRecording');
 
 export const setRecordingStatus = call<
   { recordingId: string; status: RecordingStatus },

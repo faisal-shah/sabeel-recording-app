@@ -29,7 +29,7 @@ export function LibraryScreen({
 }) {
   const listenerError = useListenerError();
   const [status, setStatus] = useState<StatusFilter>('all');
-  const myCoursees = useMyCourses(isAdmin ? null : uid);
+  const myCourses = useMyCourses(isAdmin ? null : uid);
   // A course name alone is ambiguous across cohorts; this library spans them.
   const cohortNameOf = useCohortName();
 
@@ -56,10 +56,10 @@ export function LibraryScreen({
           onPlay={onPlay}
           onOpenProgress={onOpenProgress}
         />
-      ) : myCoursees.length === 0 ? (
+      ) : myCourses.length === 0 ? (
         <Empty>You are not assigned to any courses.</Empty>
       ) : (
-        myCoursees.map((cls) => (
+        myCourses.map((cls) => (
           <CourseSection
             key={cls.id}
             cls={cls}
@@ -198,7 +198,7 @@ function RecordingLine({
         <StatusChip status={r.status} />
         <Text style={styles.sub}>
           {r.durationSec ? `${Math.round(r.durationSec / 60)} min` : 'no audio'}
-          {r.dueDate ? ` · due ${r.dueDate}` : ''}
+          {r.date ? ` · ${r.date}` : ''}
         </Text>
       </View>
       <Row>

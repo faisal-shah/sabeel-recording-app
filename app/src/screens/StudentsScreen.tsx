@@ -213,9 +213,9 @@ interface CourseOption {
  */
 function useCourseOptions(isAdmin: boolean, uid: string): CourseOption[] {
   const cohorts = useCohorts(true);
-  const adminCoursees = useAllCourses(isAdmin);
-  const myCoursees = useMyCourses(isAdmin ? null : uid);
-  const courses = isAdmin ? adminCoursees : myCoursees;
+  const adminCourses = useAllCourses(isAdmin);
+  const myCourses = useMyCourses(isAdmin ? null : uid);
+  const courses = isAdmin ? adminCourses : myCourses;
   const cohortName = (id: string) => cohorts.find((c) => c.id === id)?.name ?? '';
   return courses
     .map((c) => ({ id: c.id, name: c.name, cohortName: cohortName(c.cohortId) }))

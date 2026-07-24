@@ -85,7 +85,7 @@ async function deactivateExcept(
 }
 
 /** Turn accountability off for every assignment of a recording, keeping history. */
-export async function deactivateAssignmentsForRecording(
+async function deactivateAssignmentsForRecording(
   db: Firestore,
   recordingId: string,
 ): Promise<void> {

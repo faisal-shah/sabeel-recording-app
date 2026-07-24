@@ -18,9 +18,7 @@ export function HomeScreen({
 }: {
   name: string;
   role: Role;
-  onOpen: (
-    route: 'Staff' | 'Students' | 'Cohorts' | 'MyCoursees' | 'Library' | 'ZoomImport' | 'Tokens',
-  ) => void;
+  onOpen: (route: 'Staff' | 'Students' | 'Cohorts' | 'MyCourses' | 'Library' | 'Tokens') => void;
   /** Admin-only global audit view (managers reach a scoped one from a course). */
   onOpenAudit: () => void;
 }) {
@@ -42,7 +40,7 @@ export function HomeScreen({
             />
           </>
         ) : (
-          <Button testID="nav-myclasses" label="My courses" onPress={() => onOpen('MyCoursees')} />
+          <Button testID="nav-myclasses" label="My courses" onPress={() => onOpen('MyCourses')} />
         )}
         <Button
           testID="nav-students"
@@ -50,14 +48,8 @@ export function HomeScreen({
           variant="secondary"
           onPress={() => onOpen('Students')}
         />
-        {/* Staff (admin + manager) pull course audio from the central Zoom
-            account; the course is chosen at import time. */}
-        <Button
-          testID="nav-zoom-import"
-          label="Import from Zoom"
-          variant="secondary"
-          onPress={() => onOpen('ZoomImport')}
-        />
+        {/* Zoom import is reached per-session now (from a session's recording
+            section) — a Zoom recording is imported INTO a specific session. */}
       </Card>
 
       <SectionTitle>Reports</SectionTitle>

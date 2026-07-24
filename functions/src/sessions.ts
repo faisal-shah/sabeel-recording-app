@@ -24,7 +24,7 @@ export interface CreateSessionInput {
   notes: string;
 }
 
-export function validateCreateSession(data: unknown): CreateSessionInput {
+function validateCreateSession(data: unknown): CreateSessionInput {
   const d = data as Partial<CreateSessionInput> | null;
   if (typeof d?.courseId !== 'string' || !d.courseId) {
     throw new HttpsError('invalid-argument', 'courseId is required.');
@@ -84,7 +84,7 @@ export interface UpdateSessionInput {
   notes?: string;
 }
 
-export function validateUpdateSession(data: unknown): UpdateSessionInput {
+function validateUpdateSession(data: unknown): UpdateSessionInput {
   const d = data as Partial<UpdateSessionInput> | null;
   if (typeof d?.sessionId !== 'string' || !d.sessionId) {
     throw new HttpsError('invalid-argument', 'sessionId is required.');
@@ -201,25 +201,6 @@ export const submitAttendance = auditedCall('submitAttendance', async (req, audi
 });
 
 // --------------------------------------------------------- archive/delete --
-
-export const archiveSession = auditedCall('archiveSession', async (req, audit) => {
-  const d = req.data as { sessionId?: unknown; archived?: unknown };
-  if (typeof d?.sessionId !== 'string' || !d.sessionId) {
-    throw new HttpsError('invalid-argument', 'sessionId is required.');
-  }
-  if (typeof d.archived !== 'boolean') {
-    throw new HttpsError('invalid-argument', 'archived must be a boolean.');
-  }
-  const db = getFirestore();
-  const ref = db.collection(COLLECTIONS.sessions).doc(d.sessionId);
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError('not-found', 'No such session.');
-  const courseId = (snap.data() as SessionDoc).courseId;
-  await requireCourseScope(req, courseId);
-  audit.courseId = courseId;
-  await ref.update({ archived: d.archived, updatedAt: Date.now() });
-  return { sessionId: d.sessionId, archived: d.archived };
-});
 
 /**
  * PERMANENTLY delete a session and its recording. Refuses a session whose

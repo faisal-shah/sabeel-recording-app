@@ -27,10 +27,14 @@ export function PlayerScreen({
   recording,
   cls,
   studentUid,
+  dueDate,
 }: {
   recording: RecordingRow;
   cls: CourseRow;
   studentUid: string | null;
+  /** The caller's due date: the session's for staff, the student's own
+   *  assignment for students, or null when browsing something not assigned. */
+  dueDate: string | null;
 }) {
   const listenerError = useListenerError();
   const allowed = canPlayFromCourse(cls);
@@ -153,8 +157,8 @@ export function PlayerScreen({
         </>
       ) : null}
 
-      {recording.dueDate ? (
-        <Text style={styles.due}>Due {recording.dueDate}</Text>
+      {dueDate ? (
+        <Text style={styles.due}>Due {dueDate}</Text>
       ) : (
         <Text style={styles.due}>No due date</Text>
       )}
@@ -182,11 +186,7 @@ function Hero({
         {cohortName ? ` · ${cohortName.toUpperCase()}` : ''}
       </Text>
       <Text style={styles.heroTitle}>{recording.title}</Text>
-      {recording.recordedAt ? (
-        <Text style={styles.heroDate}>
-          Recorded {new Date(recording.recordedAt).toLocaleDateString()}
-        </Text>
-      ) : null}
+      {recording.date ? <Text style={styles.heroDate}>Recorded {recording.date}</Text> : null}
     </View>
   );
 }

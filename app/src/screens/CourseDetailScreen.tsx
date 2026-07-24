@@ -38,13 +38,13 @@ const t = getTheme();
 export function CourseDetailScreen({
   cls,
   isAdmin,
-  onOpenRecordings,
+  onOpenSessions,
   onOpenStudent,
   onOpenAudit,
 }: {
   cls: CourseRow;
   isAdmin: boolean;
-  onOpenRecordings: () => void;
+  onOpenSessions: () => void;
   onOpenStudent: (studentUid: string, studentName: string) => void;
   onOpenAudit: () => void;
 }) {
@@ -94,7 +94,7 @@ export function CourseDetailScreen({
       {error ? <Notice tone="error">{error}</Notice> : null}
 
       <Card>
-        <Button testID="nav-recordings" label="Recordings" onPress={onOpenRecordings} />
+        <Button testID="nav-sessions" label="Sessions" onPress={onOpenSessions} />
         <View style={styles.meta}>
           <StatusChip status={cls.effectiveActive ? 'active' : 'inactive'} />
           {!cls.effectiveActive ? (

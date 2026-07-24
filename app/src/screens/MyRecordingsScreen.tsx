@@ -130,7 +130,7 @@ function CourseSection({
               <View style={styles.meta}>
                 <Text style={styles.hint}>
                   {r.durationSec ? `${Math.round(r.durationSec / 60)} min` : 'duration unknown'}
-                  {r.dueDate ? ` · due ${r.dueDate}` : ' · no due date'}
+                  {r.date ? ` · ${r.date}` : ''}
                 </Text>
                 {!assignedIds.has(r.id) ? (
                   <Text style={styles.notRequired}>Not required</Text>

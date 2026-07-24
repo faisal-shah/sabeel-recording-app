@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { collection, doc, getDoc, orderBy, query, where } from 'firebase/firestore';
+import { collection, orderBy, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import {
   COLLECTIONS,
@@ -17,11 +17,6 @@ export interface CourseRow extends CourseDoc {
   id: string;
 }
 
-/** Load one class by id (for opening a recording's class directly). */
-export async function loadCourse(id: string): Promise<CourseRow | null> {
-  const snap = await getDoc(doc(db, COLLECTIONS.courses, id));
-  return snap.exists() ? { id: snap.id, ...(snap.data() as CourseDoc) } : null;
-}
 export interface EnrollmentRow extends EnrollmentDoc {
   id: string;
 }
@@ -80,7 +75,7 @@ export function useCoursesInCohort(cohortId: string | null): CourseRow[] {
  */
 export function useAllCourses(enabled: boolean): CourseRow[] {
   return useLiveQuery<CourseRow[]>(
-    'allCoursees',
+    'allCourses',
     () =>
       enabled
         ? query(collection(db, COLLECTIONS.courses), orderBy('createdAt', 'asc'))
@@ -101,7 +96,7 @@ export function useAllCourses(enabled: boolean): CourseRow[] {
  */
 export function useMyCourses(uid: string | null): CourseRow[] {
   return useLiveQuery<CourseRow[]>(
-    'myCoursees',
+    'myCourses',
     () =>
       uid
         ? query(collection(db, COLLECTIONS.courses), where('managerUids', 'array-contains', uid))

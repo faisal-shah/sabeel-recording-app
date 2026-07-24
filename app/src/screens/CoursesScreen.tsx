@@ -74,7 +74,7 @@ export function CoursesScreen({
         />
       </Card>
 
-      <SectionTitle>Coursees ({courses.length})</SectionTitle>
+      <SectionTitle>Courses ({courses.length})</SectionTitle>
       {courses.length === 0 ? (
         <Empty>No courses in this cohort yet.</Empty>
       ) : (
