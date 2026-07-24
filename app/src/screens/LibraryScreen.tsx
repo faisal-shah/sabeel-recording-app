@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { isVisibleToStudents, type RecordingStatus } from '@sabeel/shared';
 import { Card, Empty, Notice, Screen, SectionTitle, StatusChip } from '../components/ui';
 import { useAllRecordings, useClassRecordings, type RecordingRow } from '../recordings';
-import { useMyClasses, type ClassRow } from '../structure';
+import { useAllClasses, useMyClasses, type ClassRow } from '../structure';
 import { useListenerError } from '../liveQuery';
 import { getTheme, spacing } from '../theme';
 
@@ -66,13 +66,19 @@ function AdminLibrary({
   onOpen: (r: RecordingRow, c: ClassRow) => void;
 }) {
   const all = useAllRecordings(true);
+  // Real class rows so the flat list can show which class each recording is in,
+  // and the ledger it opens shows the class NAME — not the raw id (which is what
+  // a placeholder `{ name: classId }` row leaked into the ledger subtitle).
+  const classes = useAllClasses(true);
+  const classById = useMemo(() => new Map(classes.map((c) => [c.id, c])), [classes]);
   const filtered = useMemo(
     () => (status === 'all' ? all : all.filter((r) => r.status === status)),
     [all, status],
   );
-  // The library needs a class row to open a recording; admin opening the ledger
-  // resolves the class in ClassDetail, so a minimal row by id is enough here.
   const clsFor = (r: RecordingRow): ClassRow =>
+    classById.get(r.classId) ??
+    // Fallback for a recording whose class was deleted: still openable, and the
+    // id at least tells you which class is missing.
     ({ id: r.classId, name: r.classId, cohortId: r.cohortId } as ClassRow);
   return (
     <>
@@ -80,7 +86,12 @@ function AdminLibrary({
       {filtered.length === 0 ? (
         <Empty>No recordings with that status.</Empty>
       ) : (
-        filtered.map((r) => <RecordingLine key={r.id} r={r} onOpen={() => onOpen(r, clsFor(r))} />)
+        filtered.map((r) => {
+          const cls = clsFor(r);
+          return (
+            <RecordingLine key={r.id} r={r} className={cls.name} onOpen={() => onOpen(r, cls)} />
+          );
+        })
       )}
     </>
   );
@@ -121,11 +132,22 @@ function Counts({ recordings }: { recordings: RecordingRow[] }) {
   );
 }
 
-function RecordingLine({ r, onOpen }: { r: RecordingRow; onOpen: () => void }) {
+function RecordingLine({
+  r,
+  className,
+  onOpen,
+}: {
+  r: RecordingRow;
+  className?: string;
+  onOpen: () => void;
+}) {
   return (
     <Card>
       <Pressable testID={`library-open-${r.title}`} accessibilityRole="button" onPress={onOpen}>
         <Text style={styles.title}>{r.title}</Text>
+        {/* Admin flat list shows the class; the manager view already groups by
+            class, so it passes no className. */}
+        {className ? <Text style={styles.className}>{className}</Text> : null}
         <View style={styles.meta}>
           <StatusChip status={r.status} />
           <Text style={styles.sub}>
@@ -146,6 +168,7 @@ const styles = StyleSheet.create({
   chipTextOn: { color: t.accent.onAccent },
   counts: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(2) },
   title: { fontSize: 16, fontWeight: '600', color: t.text.primary },
+  className: { fontSize: 13, color: t.text.secondary, marginTop: 2 },
   meta: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginTop: spacing(2) },
   sub: { fontSize: 13, color: t.text.secondary },
 });
