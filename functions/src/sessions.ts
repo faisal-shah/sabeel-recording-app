@@ -121,12 +121,26 @@ export const updateSession = auditedCall('updateSession', async (req, audit) => 
   const ref = db.collection(COLLECTIONS.sessions).doc(input.sessionId);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'No such session.');
-  const courseId = (snap.data() as SessionDoc).courseId;
-  await requireCourseScope(req, courseId);
-  audit.courseId = courseId;
+  const session = snap.data() as SessionDoc;
+  await requireCourseScope(req, session.courseId);
+  audit.courseId = session.courseId;
   const { sessionId: _id, ...fields } = input;
   // A dueDate edit re-flows to obligations via the onSessionWritten trigger.
   await ref.update({ ...fields, updatedAt: Date.now() });
+
+  // Keep the recording's student-facing display copy in sync with the session.
+  if (session.recordingId) {
+    const denorm: Record<string, unknown> = {};
+    if (fields.title !== undefined) denorm.title = fields.title;
+    if (fields.notes !== undefined) denorm.notes = fields.notes;
+    if (fields.date !== undefined) denorm.date = fields.date;
+    if (Object.keys(denorm).length > 0) {
+      await db
+        .collection(COLLECTIONS.recordings)
+        .doc(session.recordingId)
+        .update({ ...denorm, updatedAt: Date.now() });
+    }
+  }
   return { sessionId: input.sessionId };
 });
 

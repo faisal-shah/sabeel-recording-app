@@ -93,6 +93,8 @@ describe('createRecordingDraft', () => {
     const { id, audioPath } = await createRecordingDraft(ADMIN, { sessionId });
     const d = await rec(id);
     expect(d).toMatchObject({ sessionId, courseId, status: 'draft', source: 'manual' });
+    // Student-facing display copy is denormalized from the session.
+    expect(d).toMatchObject({ title: 'Session 1', date: '2026-07-06', notes: '' });
     expect(d.audioPath).toBeNull(); // stays null until the upload is CONFIRMED
     expect(d.cohortId).toBeTruthy();
     expect(audioPath).toBe(audioStoragePath(id));

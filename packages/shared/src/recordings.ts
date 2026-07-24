@@ -17,17 +17,27 @@ export type RecordingStatus =
 export type RecordingSource = 'manual' | 'zoom';
 
 /**
- * The audio artifact of a session — pure media + lifecycle.
+ * The audio artifact of a session — media, lifecycle, and the student-facing
+ * display copy of its session.
  *
- * The meeting-level metadata (title, date, due date, notes) lives on the
- * `SessionDoc`; a recording only carries what makes it a playable asset with a
- * publish lifecycle. `courseId`/`cohortId` are denormalized from the session for
- * queries and the assignment fan-out.
+ * The `SessionDoc` is the source of truth for the meeting metadata (and owns the
+ * private attendance map). But students CANNOT read sessions — that is what keeps
+ * attendance private — so the display fields a student needs to see what they are
+ * listening to (`title`, `notes`, `date`) are denormalized here, on the
+ * published recording they are allowed to read. `dueDate` is likewise
+ * denormalized onto the student's own assignment. Staff edit the session; the
+ * create/update-session paths keep these copies in sync. `courseId`/`cohortId`
+ * are denormalized too, for queries and the assignment fan-out.
  */
 export interface RecordingDoc {
   sessionId: string;
   courseId: string;
   cohortId: string;
+  /** Denormalized from the session (source of truth) so students can display it. */
+  title: string;
+  notes: string;
+  /** The session's meeting date, `YYYY-MM-DD`. Denormalized for student display. */
+  date: string;
   status: RecordingStatus;
   source: RecordingSource;
   /** Set by finalizeRecordingUpload once audio is actually in Storage. */
