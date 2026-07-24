@@ -49,25 +49,35 @@ The product should be designed for Android, web, and future iOS support. Initial
 The primary hierarchy is:
 
 ```text
-Cohort/Semester -> Class -> Recordings
+Cohort/Semester -> Course -> Session -> Recording
 ```
 
-- A student account can be enrolled in multiple cohorts/classes over time.
+- A **course** is the subject taught over a cohort (formerly "class"; renamed because "class" was overloaded with "class meeting").
+- A **session** is one dated meeting of a course. It owns the **attendance** for that meeting and has zero or one recording. A session exists whether or not it was recorded.
+- A **recording** is the audio for a session, linked by `recording.sessionId`. It is pure media + lifecycle; the student-facing title/notes/date are copied (denormalised) from the session, because students cannot read sessions.
+- A student account can be enrolled in multiple cohorts/courses over time.
 - Listening history is preserved across enrollments.
-- Admins and Managers can create and manage cohorts/semesters and classes within their permissions.
+- Admins and Managers can create and manage cohorts, courses, and sessions within their permissions.
 - Cohorts are manually marked inactive or archived when they end.
-- Classes can be inactive or archived independently.
-- A class is effectively active only when both its cohort and the class itself are active.
-- Archiving a cohort makes all classes within it effectively inactive.
-- Reactivating a cohort restores classes according to each class's own active/archived state.
+- Courses can be inactive or archived independently.
+- A course is effectively active only when both its cohort and the course itself are active.
+- Archiving a cohort makes all courses within it effectively inactive.
+- Reactivating a cohort restores courses according to each course's own active/archived state.
 
-### Archived class access
+### Attendance
 
-- Archived classes move out of default student views into history/archive.
-- When a class is archived, the default setting is to turn off student access to recordings.
-- Staff can explicitly keep archived class recordings available.
-- If access is off, students can still see the class/history, but playback is disabled with a clear message.
-- When a class is archived, active overdue reminders and active accountability counts stop. Final ledger history remains available for reporting and audit.
+- Attendance is taken **per session**, in-app, by staff: each enrolled student is marked **present**, **absent**, or **excused**, with an explicit **submit** step. Until attendance is submitted, nobody is assigned even if a recording is published.
+- The submitted attendance is a **snapshot**: it drives who is accountable for that session's recording, and it is what makes accountability start at enrollment (a student not enrolled when attendance was taken is simply not in the snapshot).
+- `present` exempts a student from the recording (they were there). `absent` and `excused` both make the recording required listening; they differ only for attendance reporting. "Everyone must listen" is expressed by marking everyone absent.
+- Attendance is staff-read only. Students never read a session or its attendance — they only ever see their own obligation.
+
+### Archived course access
+
+- Archived courses move out of default student views into history/archive.
+- When a course is archived, the default setting is to turn off student access to recordings.
+- Staff can explicitly keep archived course recordings available.
+- If access is off, students can still see the course/history, but playback is disabled with a clear message.
+- When a course is archived, active overdue reminders and active accountability counts stop. Final ledger history remains available for reporting and audit.
 
 ## Recording ingestion
 
@@ -122,15 +132,9 @@ flowchart LR
 
 ### Required metadata before publish
 
-- Cohort
-- Class
-- Title/session number
-- Optional due date
-- Shared notes/instructions
+Title, date, due date, and shared notes live on the **session**, not the recording — set when the session is created and edited there. So the only thing a recording needs before publish is its **audio**; everything student-facing is inherited from the session it belongs to. (The session's title/notes/date are denormalised onto the recording so students, who cannot read sessions, can still see them.)
 
-Recording date should be imported from Zoom when available. Due date is optional.
-
-Recording notes are visible to everyone who can access the recording. They are not private staff notes. File attachments are out of scope for the first release.
+Session date defaults to the meeting date. Due date is optional. Notes are visible to everyone who can access the recording — they are not private staff notes. File attachments are out of scope for the first release.
 
 ### Recording statuses
 
@@ -142,39 +146,29 @@ Recording notes are visible to everyone who can access the recording. They are n
 
 ### Editing published recordings
 
-Staff can edit published recording metadata freely, including cohort/class. Every change is recorded in audit history.
+Staff edit a recording's student-facing metadata (title, date, notes) by editing its **session**; the change propagates to the recording's denormalised copy and is recorded in audit history. A recording belongs to one session for its life — there is no "move to another course" on the recording itself.
 
-If staff change the cohort/class after publishing, treat it as moving the assignment:
+Accountability follows the session's attendance, so it is corrected by re-taking attendance (which reconciles assignments), not by editing the recording. Archive hides a recording from default views and preserves history. Unpublish removes current accountability and preserves audit history.
 
-- The new class roster becomes accountable.
-- Old class students are removed from current accountability counts.
-- Old listening/submission history remains attached to the recording history for audit.
-
-Archive hides a recording from default views and preserves history. Unpublish removes current accountability and preserves audit history.
-
-Permanent deletion of recordings, students, classes, or ledger history is Admin-only, requires strong confirmation, and is recorded in the audit log. Normal operations should use disable, archive, or unpublish.
+Permanent deletion of recordings, students, courses, or ledger history is Admin-only, requires strong confirmation, and is recorded in the audit log. Normal operations should use disable, archive, or unpublish.
 
 ## Assignment, access, and accountability
 
 ### Core rule
 
-Class membership grants access to all recordings in that class. Assignment creates required listening in the accountability ledger.
+Course membership grants access to all recordings in that course. **Attendance** creates required listening in the accountability ledger: assignment is attendance-driven.
 
-Publishing a recording for a class creates a listening obligation for every currently enrolled student in that class. There are no per-student exceptions for normal class publishing. If a student should not be accountable for that class recording, they should not be enrolled in that class.
+For a session, the students marked **absent** or **excused** are assigned its recording (it is required listening — they missed the content). Students marked **present** are exempt; they may still listen and their listening is shown to staff, but they are never overdue or flagged incomplete. Assignment happens once the recording is **published** AND attendance has been **submitted**; changing either — publishing, unpublishing, or re-submitting a corrected attendance — reconciles the obligations, deactivating an assignment (while keeping its completion/progress history) if a student is no longer accountable.
+
+There is no separate "assign to everyone" action and no per-recording roster fan-out. "Everyone must listen" is expressed by marking everyone absent for that session.
 
 ### Late enrollment
 
-Late-registered students can view all recordings in the class.
+Late-registered students can view all recordings in the course.
 
-By default, late-registered students are accountable only for recordings whose due date has not passed. Staff can optionally assign earlier recordings as catch-up for that student.
+Accountability starts at enrollment: a student is only ever accountable for sessions whose attendance was taken **after** they enrolled (they are in that session's snapshot). A student enrolled after a session's attendance was submitted is never retroactively assigned it. To make a late enrollee accountable for an earlier session, staff re-take that session's attendance and mark them absent — re-submitting reconciles and assigns them.
 
-For catch-up assignments:
-
-- Staff can choose a new due date.
-- Staff can choose no due date.
-- The student must be a member of the class to receive the catch-up assignment.
-
-Older accessible recordings that are not assigned for accountability appear in the class archive as not required/not assigned. They do not appear in the student's required-listening home list.
+Older accessible recordings that a student is not accountable for appear in the course archive as not required/not assigned. They do not appear in the student's required-listening home list.
 
 Students can listen to and mark accessible unassigned recordings complete. Staff can see this history, but it does not count as required accountability or overdue work.
 
@@ -305,9 +299,10 @@ The ledger should help staff find action items without inspecting every student 
 
 ### Primary views
 
-1. **Recording ledger:** class roster by recording.
-2. **Student ledger:** all assigned recordings for a student, filterable by class and status.
-3. **Class-level views:** grouped by cohort/class with incomplete and overdue counts.
+1. **Recording ledger:** split by the session's attendance — the **accountable** set (absent + excused, with the excused flagged) shown with completion/overdue, and the **attendees** (present) shown with their listening but never overdue or required. A residual "also listened" catches anyone who listened without being accountable or a recorded attendee.
+2. **Student ledger:** all assigned recordings for a student, filterable by course and status.
+3. **Course-level views:** grouped by cohort/course with incomplete and overdue counts.
+4. **Attendance report:** per course, a toggle between a by-session summary (present/absent/excused counts, un-taken sessions flagged) and a by-student summary (attendance tallies + catch-up status: of the sessions each student missed, how many recordings are complete/overdue). CSV export per cut.
 
 ### Recording ledger fields
 
@@ -450,17 +445,16 @@ This is not the final schema. It captures the product objects that need first-cl
 
 | Object | Purpose |
 |---|---|
-| `staffUsers` | Staff identity, role, approval state, and admin/manager permissions. |
-| `managerClassScopes` | Class-level Manager assignments. |
+| `staffUsers` (`staff`) | Staff identity, role, approval state, and admin/manager permissions. Manager course scoping is `managerUids` on each course, not a separate collection. |
 | `students` | Student identity, active/disabled state, and profile fields. |
 | `cohorts` | Cohort/semester records and archive state. |
-| `classes` | Classes inside cohorts, archive state, and archived access setting. |
-| `enrollments` | Student membership in classes over time. |
-| `recordingSources` | Zoom source configuration and manual upload source metadata. |
-| `recordings` | Recording asset, metadata, status, source, notes, and audit history. |
-| `assignments` | Required-listening obligations derived from class publishing or catch-up assignment. |
+| `courses` | Courses (the subject) inside cohorts, archive state, and archived-access setting. |
+| `sessions` | One dated meeting of a course: attendance (present/absent/excused snapshot + submitted marker), date, title, due date, notes, and its 0..1 `recordingId`. Staff-read only. |
+| `enrollments` | Student membership in courses over time. |
+| `recordings` | Recording asset for a session (`sessionId`), status, source (`manual`/`zoom`), audio path/duration/size, and the denormalised student-facing title/notes/date. |
+| `assignments` | Required-listening obligations, one per accountable (absent/excused) student × recording, reconciled from the session's attendance. `active:false` retains history. |
 | `listeningProgress` | Playback progress, listened percent, last listened, and device/sync metadata. |
-| `completionEvents` | Student completion/uncompletion events and staff overrides. |
+| `completions` / `completionEvents` | Student completion state doc and the append-only event log; `completionOverrides` holds staff overrides (server-only). |
 | `notifications` | Student notification preferences and sent notification records. |
 | `backendStats` | Admin-facing operational metrics such as storage usage, recording counts, import failures, background jobs, and notification errors. |
 | `auditLog` | Staff and system changes that must remain inspectable. |

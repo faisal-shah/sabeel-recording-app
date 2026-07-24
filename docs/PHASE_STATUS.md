@@ -34,6 +34,32 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-07-24 — **Attendance-driven assignment: Class → Course, and a new Session
+  entity (major model rework).** The app exists for students who *missed* the
+  in-person class; a recording is required listening only for the absentees. So
+  obligations are now driven by attendance, not by a blanket publish fan-out.
+  Model is now **Cohort → Course → Session → Recording**: `class` → `course`
+  throughout, and a new `sessions/{id}` owns `attendance`
+  (`present`/`absent`/`excused` per student, an explicit-submit SNAPSHOT),
+  `date`, `title`, `dueDate`, `notes`, and its 0..1 `recordingId`. A recording is
+  pure media + lifecycle, linked by `recording.sessionId`; the student-facing
+  `title`/`notes`/`date` are **denormalised** onto it (students cannot read
+  sessions). Assignment target = `absent ∪ excused`, reconciled by
+  `reconcileSessionAssignments` once the recording is published AND attendance
+  submitted; two triggers converge on it (`onRecordingWritten` +
+  `onSessionWritten`). Greenfield, so this was a rewrite, not a migration:
+  **deleted** the `catchup` concept + its screen, `assignment.source`, the
+  retroactive late-enroll fan-out (accountability is now enrollment-onward — a
+  student not in a session's snapshot is never assigned it), and the recording's
+  own `title`/`dueDate`/`notes`/`recordedAt`. Phases: **A** model/engine/rules/
+  re-seed, **B** staff UI (Sessions + SessionDetail with 3-state attendance,
+  recording-in-session, Zoom→session), **C** recording-ledger split (accountable
+  = absent+excused with the excused flagged; attendees = present, listening shown
+  but never overdue), **D** course attendance report (by-session / by-student
+  toggle + catch-up status, CSV per cut). All green: unit + emulator suites and
+  the rewritten `web-e2e.mjs` drive the full attendance→publish→assign→ledger
+  flow. Supersedes the recording-centric class screen shipped 2026-07-22/24.
+
 - 2026-07-24 — **Cohort shown with class name in cross-cohort STAFF views;
   deferred for STUDENT views.** A class name alone is ambiguous when the same
   name recurs across cohorts (two "Arabic 1"s). Fixed in the recording library,

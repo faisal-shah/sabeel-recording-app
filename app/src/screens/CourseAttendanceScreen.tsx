@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { INSTITUTE_TIMEZONE, todayInZone } from '@sabeel/shared';
-import { Button, Card, Empty, Notice, Screen, SectionTitle } from '../components/ui';
+import { Button, Card, Empty, Notice, Screen } from '../components/ui';
 import { useCourseAttendance } from '../ledger';
 import { exportCsv } from '../exportCsv';
 import { useListenerError } from '../liveQuery';
@@ -10,6 +10,8 @@ import type { CourseRow } from '../structure';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
+
+type Tab = 'sessions' | 'students';
 
 /**
  * A course's attendance report: sessions rolled up (who was there) and students
@@ -22,6 +24,7 @@ export function CourseAttendanceScreen({ cls }: { cls: CourseRow }) {
   const today = todayInZone(INSTITUTE_TIMEZONE);
   const report = useCourseAttendance(cls.id, today);
   const students = useStudents(true);
+  const [tab, setTab] = useState<Tab>('sessions');
   const nameOf = useMemo(() => {
     const m = new Map(students.map((s) => [s.uid, s.displayName]));
     return (uid: string) => m.get(uid) ?? uid;
@@ -70,49 +73,55 @@ export function CourseAttendanceScreen({ cls }: { cls: CourseRow }) {
     <Screen title="Attendance" subtitle={`${cls.name} · ${report.sessionsWithAttendance} of ${report.totalSessions} sessions taken`}>
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
 
-      <View style={styles.headRow}>
-        <SectionTitle>By session ({report.sessions.length})</SectionTitle>
-        <Button
-          testID="attendance-export-sessions"
-          label="Export CSV"
-          variant="secondary"
-          disabled={report.sessions.length === 0}
-          onPress={exportSessions}
-        />
-      </View>
-      {report.sessions.length === 0 ? (
-        <Empty>No sessions in this course yet.</Empty>
-      ) : (
-        report.sessions.map((s) => (
-          <Card key={s.sessionId}>
-            <Text style={styles.name}>{s.title}</Text>
-            <Text style={styles.hint}>{s.date}</Text>
-            {s.submitted ? (
-              <Text style={styles.counts}>
-                <Text style={styles.present}>{s.present} present</Text>
-                {'   '}
-                <Text style={styles.absent}>{s.absent} absent</Text>
-                {'   '}
-                <Text style={styles.excused}>{s.excused} excused</Text>
+      <View style={styles.toggleRow}>
+        <View style={styles.toggle}>
+          {(['sessions', 'students'] as Tab[]).map((k) => (
+            <Pressable
+              key={k}
+              testID={`attendance-tab-${k}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: tab === k }}
+              onPress={() => setTab(k)}
+              style={[styles.tabBtn, tab === k ? styles.tabOn : null]}
+            >
+              <Text style={[styles.tabText, tab === k ? styles.tabTextOn : null]}>
+                {k === 'sessions' ? `By session (${report.sessions.length})` : `By student (${studentRows.length})`}
               </Text>
-            ) : (
-              <Text style={styles.notTaken}>Attendance not taken</Text>
-            )}
-          </Card>
-        ))
-      )}
-
-      <View style={styles.headRow}>
-        <SectionTitle>By student ({studentRows.length})</SectionTitle>
+            </Pressable>
+          ))}
+        </View>
         <Button
-          testID="attendance-export-students"
+          testID={tab === 'sessions' ? 'attendance-export-sessions' : 'attendance-export-students'}
           label="Export CSV"
           variant="secondary"
-          disabled={studentRows.length === 0}
-          onPress={exportStudents}
+          disabled={tab === 'sessions' ? report.sessions.length === 0 : studentRows.length === 0}
+          onPress={tab === 'sessions' ? exportSessions : exportStudents}
         />
       </View>
-      {studentRows.length === 0 ? (
+
+      {tab === 'sessions' ? (
+        report.sessions.length === 0 ? (
+          <Empty>No sessions in this course yet.</Empty>
+        ) : (
+          report.sessions.map((s) => (
+            <Card key={s.sessionId}>
+              <Text style={styles.name}>{s.title}</Text>
+              <Text style={styles.hint}>{s.date}</Text>
+              {s.submitted ? (
+                <Text style={styles.counts}>
+                  <Text style={styles.present}>{s.present} present</Text>
+                  {'   '}
+                  <Text style={styles.absent}>{s.absent} absent</Text>
+                  {'   '}
+                  <Text style={styles.excused}>{s.excused} excused</Text>
+                </Text>
+              ) : (
+                <Text style={styles.notTaken}>Attendance not taken</Text>
+              )}
+            </Card>
+          ))
+        )
+      ) : studentRows.length === 0 ? (
         <Empty>Nobody is enrolled in this course yet.</Empty>
       ) : (
         studentRows.map((s) => (
@@ -142,7 +151,24 @@ export function CourseAttendanceScreen({ cls }: { cls: CourseRow }) {
 }
 
 const styles = StyleSheet.create({
-  headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing(2) },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing(2),
+    marginBottom: spacing(4),
+    flexWrap: 'wrap',
+  },
+  toggle: {
+    flexDirection: 'row',
+    backgroundColor: t.bg.inset,
+    borderRadius: 999,
+    padding: 3,
+  },
+  tabBtn: { paddingVertical: spacing(2), paddingHorizontal: spacing(3), borderRadius: 999 },
+  tabOn: { backgroundColor: t.accent.base },
+  tabText: { fontSize: 13, fontWeight: '600', color: t.text.secondary },
+  tabTextOn: { color: t.accent.onAccent },
   name: { fontSize: 15, fontWeight: '600', color: t.text.primary },
   hint: { fontSize: 13, color: t.text.secondary },
   counts: { fontSize: 14, color: t.text.secondary, marginTop: spacing(1) },
