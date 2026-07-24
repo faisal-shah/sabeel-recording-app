@@ -70,11 +70,11 @@ export function RecordingLedgerScreen({
       r.dueDate ?? '',
       r.overrideReason ?? '',
     ]);
-    void exportCsv(`${cls.name} - ${recording.title} ledger.csv`, [header, ...body]);
+    void exportCsv(`${cls.name} - ${recording.title} progress.csv`, [header, ...body]);
   };
 
   return (
-    <Screen title={recording.title} subtitle={`${cls.name} · ledger`}>
+    <Screen title={recording.title} subtitle={`${cls.name} · listening progress`}>
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
 

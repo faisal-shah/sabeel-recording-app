@@ -211,7 +211,7 @@ export function ClassDetailScreen({
                 <Row>
                   <Button
                     testID={`student-ledger-${s?.email ?? r.studentUid}`}
-                    label="Ledger"
+                    label="Listening progress"
                     onPress={() => onOpenStudent(r.studentUid, s?.displayName ?? r.studentUid)}
                   />
                   <Button

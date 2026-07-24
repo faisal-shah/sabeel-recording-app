@@ -110,10 +110,10 @@ export default function App() {
             <Stack.Screen name="Recordings" options={{ title: 'Recordings' }}>
               {() => <Recordings />}
             </Stack.Screen>
-            <Stack.Screen name="RecordingLedger" options={{ title: 'Ledger' }}>
+            <Stack.Screen name="RecordingLedger" options={{ title: 'Listening progress' }}>
               {() => <RecordingLedger />}
             </Stack.Screen>
-            <Stack.Screen name="StudentLedger" options={{ title: 'Student' }}>
+            <Stack.Screen name="StudentLedger" options={{ title: 'Student progress' }}>
               {() => <StudentLedger />}
             </Stack.Screen>
             <Stack.Screen name="Library" options={{ title: 'Library' }}>
@@ -231,6 +231,7 @@ function Recordings() {
       classId={cls.id}
       className={cls.name}
       onOpenLedger={(recording) => navigation.navigate('RecordingLedger', { recording, cls })}
+      onPlay={(recording) => navigation.navigate('Player', { recording, cls })}
     />
   );
 }
@@ -248,7 +249,8 @@ function Library({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
     <LibraryScreen
       uid={uid}
       isAdmin={isAdmin}
-      onOpen={(recording, cls) => navigation.navigate('RecordingLedger', { recording, cls })}
+      onOpenProgress={(recording, cls) => navigation.navigate('RecordingLedger', { recording, cls })}
+      onPlay={(recording, cls) => navigation.navigate('Player', { recording, cls })}
     />
   );
 }

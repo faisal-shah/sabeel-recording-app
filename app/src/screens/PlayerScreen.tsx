@@ -109,23 +109,32 @@ export function PlayerScreen({
       {/* ---- below the fold ---- */}
       <View style={styles.divider} />
 
-      <Text style={styles.sectionHeading}>Your listening</Text>
-      <View style={styles.listenedTrack}>
-        <View style={[styles.listenedFill, { width: `${Math.round(listened * 100)}%` }]} />
-      </View>
-      <Text style={styles.body}>
-        {Math.round(listened * 100)}% of this recording listened. Your place is saved
-        automatically, so you can carry on from another device.
-      </Text>
-
+      {/* Staff reach this player to preview/reference audio; there is no student
+          to track, so the listening bar and completion control are student-only.
+          A short note says why, rather than leaving a bare gap. */}
       {studentUid ? (
-        <CompletionControl
-          studentUid={studentUid}
-          recordingId={recording.id}
-          classId={recording.classId}
-          everPlayed={state.listenedMs > 0 || state.positionMs > 0}
-        />
-      ) : null}
+        <>
+          <Text style={styles.sectionHeading}>Your listening</Text>
+          <View style={styles.listenedTrack}>
+            <View style={[styles.listenedFill, { width: `${Math.round(listened * 100)}%` }]} />
+          </View>
+          <Text style={styles.body}>
+            {Math.round(listened * 100)}% of this recording listened. Your place is saved
+            automatically, so you can carry on from another device.
+          </Text>
+          <CompletionControl
+            studentUid={studentUid}
+            recordingId={recording.id}
+            classId={recording.classId}
+            everPlayed={state.listenedMs > 0 || state.positionMs > 0}
+          />
+        </>
+      ) : (
+        <Text style={styles.staffNote}>
+          Staff preview — your listening isn&apos;t recorded, and there&apos;s nothing to mark
+          complete here.
+        </Text>
+      )}
 
       {recording.notes ? (
         <>
@@ -303,6 +312,7 @@ const styles = StyleSheet.create({
   },
   listenedFill: { height: 6, backgroundColor: t.feedback.success },
   body: { fontSize: 15, color: t.text.secondary, lineHeight: 22 },
+  staffNote: { fontSize: 14, color: t.text.muted, fontStyle: 'italic', lineHeight: 20 },
   due: { fontSize: 14, color: t.text.secondary, marginTop: spacing(5) },
 
   completeButton: {

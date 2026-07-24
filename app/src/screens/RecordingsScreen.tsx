@@ -50,10 +50,12 @@ export function RecordingsScreen({
   classId,
   className,
   onOpenLedger,
+  onPlay,
 }: {
   classId: string;
   className: string;
   onOpenLedger: (recording: RecordingRow) => void;
+  onPlay: (recording: RecordingRow) => void;
 }) {
   const recordings = useClassRecordings(classId);
   const today = todayInZone(INSTITUTE_TIMEZONE);
@@ -165,6 +167,7 @@ export function RecordingsScreen({
             nameByUid={nameByUid}
             counts={byRecording.get(r.id)}
             onOpenLedger={() => onOpenLedger(r)}
+            onPlay={() => onPlay(r)}
           />
         ))
       )}
@@ -180,6 +183,7 @@ function RecordingCard({
   nameByUid,
   counts,
   onOpenLedger,
+  onPlay,
 }: {
   recording: RecordingRow;
   busy: string | null;
@@ -188,6 +192,7 @@ function RecordingCard({
   nameByUid: Map<string, string>;
   counts: { complete: number; total: number } | undefined;
   onOpenLedger: () => void;
+  onPlay: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(r.title);
@@ -242,6 +247,17 @@ function RecordingCard({
         </>
       ) : (
         <Row>
+          {/* Staff can listen to ANY status — the point is to preview a draft
+              before publishing, or check a published one. getPlaybackUrl already
+              authorizes staff on any status. */}
+          {r.audioPath ? (
+            <Button
+              testID={`recording-listen-${r.title}`}
+              label="Listen"
+              variant="secondary"
+              onPress={onPlay}
+            />
+          ) : null}
           <Button label="Edit details" variant="secondary" onPress={() => setEditing(true)} />
           {/* `needsAttention` is a review state for problematic IMPORTS — it is
               set by the import pipeline, not something staff flag on their own
@@ -288,7 +304,7 @@ function RecordingCard({
           </Text>
           <Button
             testID={`recording-ledger-${r.title}`}
-            label="Ledger"
+            label="Listening progress"
             variant="secondary"
             onPress={onOpenLedger}
           />

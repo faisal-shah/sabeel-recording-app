@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { isVisibleToStudents, type RecordingStatus } from '@sabeel/shared';
-import { Card, Empty, Notice, Screen, SectionTitle, StatusChip } from '../components/ui';
+import { Button, Card, Empty, Notice, Row, Screen, SectionTitle, StatusChip } from '../components/ui';
 import { useAllRecordings, useClassRecordings, type RecordingRow } from '../recordings';
 import { useAllClasses, useMyClasses, type ClassRow } from '../structure';
 import { useListenerError } from '../liveQuery';
@@ -19,11 +19,13 @@ const STATUSES: StatusFilter[] = ['all', 'published', 'draft', 'archived', 'unpu
 export function LibraryScreen({
   uid,
   isAdmin,
-  onOpen,
+  onPlay,
+  onOpenProgress,
 }: {
   uid: string;
   isAdmin: boolean;
-  onOpen: (recording: RecordingRow, cls: ClassRow) => void;
+  onPlay: (recording: RecordingRow, cls: ClassRow) => void;
+  onOpenProgress: (recording: RecordingRow, cls: ClassRow) => void;
 }) {
   const listenerError = useListenerError();
   const [status, setStatus] = useState<StatusFilter>('all');
@@ -46,12 +48,18 @@ export function LibraryScreen({
       </View>
 
       {isAdmin ? (
-        <AdminLibrary status={status} onOpen={onOpen} />
+        <AdminLibrary status={status} onPlay={onPlay} onOpenProgress={onOpenProgress} />
       ) : myClasses.length === 0 ? (
         <Empty>You are not assigned to any classes.</Empty>
       ) : (
         myClasses.map((cls) => (
-          <ClassSection key={cls.id} cls={cls} status={status} onOpen={onOpen} />
+          <ClassSection
+            key={cls.id}
+            cls={cls}
+            status={status}
+            onPlay={onPlay}
+            onOpenProgress={onOpenProgress}
+          />
         ))
       )}
     </Screen>
@@ -60,10 +68,12 @@ export function LibraryScreen({
 
 function AdminLibrary({
   status,
-  onOpen,
+  onPlay,
+  onOpenProgress,
 }: {
   status: StatusFilter;
-  onOpen: (r: RecordingRow, c: ClassRow) => void;
+  onPlay: (r: RecordingRow, c: ClassRow) => void;
+  onOpenProgress: (r: RecordingRow, c: ClassRow) => void;
 }) {
   const all = useAllRecordings(true);
   // Real class rows so the flat list can show which class each recording is in,
@@ -89,7 +99,13 @@ function AdminLibrary({
         filtered.map((r) => {
           const cls = clsFor(r);
           return (
-            <RecordingLine key={r.id} r={r} className={cls.name} onOpen={() => onOpen(r, cls)} />
+            <RecordingLine
+              key={r.id}
+              r={r}
+              className={cls.name}
+              onPlay={() => onPlay(r, cls)}
+              onOpenProgress={() => onOpenProgress(r, cls)}
+            />
           );
         })
       )}
@@ -100,11 +116,13 @@ function AdminLibrary({
 function ClassSection({
   cls,
   status,
-  onOpen,
+  onPlay,
+  onOpenProgress,
 }: {
   cls: ClassRow;
   status: StatusFilter;
-  onOpen: (r: RecordingRow, c: ClassRow) => void;
+  onPlay: (r: RecordingRow, c: ClassRow) => void;
+  onOpenProgress: (r: RecordingRow, c: ClassRow) => void;
 }) {
   const recordings = useClassRecordings(cls.id);
   const filtered = status === 'all' ? recordings : recordings.filter((r) => r.status === status);
@@ -115,7 +133,14 @@ function ClassSection({
       {filtered.length === 0 ? (
         <Empty>No recordings with that status.</Empty>
       ) : (
-        filtered.map((r) => <RecordingLine key={r.id} r={r} onOpen={() => onOpen(r, cls)} />)
+        filtered.map((r) => (
+          <RecordingLine
+            key={r.id}
+            r={r}
+            onPlay={() => onPlay(r, cls)}
+            onOpenProgress={() => onOpenProgress(r, cls)}
+          />
+        ))
       )}
     </>
   );
@@ -135,27 +160,45 @@ function Counts({ recordings }: { recordings: RecordingRow[] }) {
 function RecordingLine({
   r,
   className,
-  onOpen,
+  onPlay,
+  onOpenProgress,
 }: {
   r: RecordingRow;
   className?: string;
-  onOpen: () => void;
+  onPlay: () => void;
+  onOpenProgress: () => void;
 }) {
   return (
     <Card>
-      <Pressable testID={`library-open-${r.title}`} accessibilityRole="button" onPress={onOpen}>
-        <Text style={styles.title}>{r.title}</Text>
-        {/* Admin flat list shows the class; the manager view already groups by
-            class, so it passes no className. */}
-        {className ? <Text style={styles.className}>{className}</Text> : null}
-        <View style={styles.meta}>
-          <StatusChip status={r.status} />
-          <Text style={styles.sub}>
-            {r.durationSec ? `${Math.round(r.durationSec / 60)} min` : 'no audio'}
-            {r.dueDate ? ` · due ${r.dueDate}` : ''}
-          </Text>
-        </View>
-      </Pressable>
+      <Text style={styles.title}>{r.title}</Text>
+      {/* Admin flat list shows the class; the manager view already groups by
+          class, so it passes no className. */}
+      {className ? <Text style={styles.className}>{className}</Text> : null}
+      <View style={styles.meta}>
+        <StatusChip status={r.status} />
+        <Text style={styles.sub}>
+          {r.durationSec ? `${Math.round(r.durationSec / 60)} min` : 'no audio'}
+          {r.dueDate ? ` · due ${r.dueDate}` : ''}
+        </Text>
+      </View>
+      <Row>
+        {r.audioPath ? (
+          <Button
+            testID={`library-listen-${r.title}`}
+            label="Listen"
+            variant="secondary"
+            onPress={onPlay}
+          />
+        ) : null}
+        {r.status === 'published' ? (
+          <Button
+            testID={`library-progress-${r.title}`}
+            label="Listening progress"
+            variant="secondary"
+            onPress={onOpenProgress}
+          />
+        ) : null}
+      </Row>
     </Card>
   );
 }
