@@ -1,6 +1,6 @@
 # Sabeel Class Recordings — User Manual
 
-*For app version 0.2.3 · July 2026*
+*For app version 0.2.4 · July 2026*
 
 Welcome! This guide explains everything the Sabeel Class Recordings app can do —
 from listening to your first class to taking attendance and tracking who has
@@ -367,6 +367,11 @@ two ways — a toggle switches between them:
   for, how many are complete and how many overdue.
 
 Each view has its own **Export CSV**.
+
+**Tap any card to go straight to the detail.** A session opens that session — its
+attendance roster and its recording; a student opens that student's listening
+progress for the course. So the report is where you spot the problem, and one tap
+is where you deal with it.
 
 ## 2.10 The recording library
 
