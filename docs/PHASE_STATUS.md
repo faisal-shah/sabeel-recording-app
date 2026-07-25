@@ -34,6 +34,28 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-07-25 — **A control may wrap, but must never be crushed** (v0.2.3). A
+  screen-recording showed **Publish** rendered at a third the width of the button
+  beside it with its label broken mid-word — "Publ / ish". `Row`'s items had
+  `flexShrink: 1`, so a line that did not quite fit was squeezed rather than
+  wrapped, and a squeezed button is narrower than its own text. Now
+  `flexShrink: 0`: a line either fits or wraps. Separately, a label longer than
+  its button still broke mid-word at large accessibility font sizes ("Submit att
+  / endance" at font scale 2.0), so button labels allow two lines, wrap between
+  words, and scale down only as a last resort (`minimumFontScale` 0.7).
+  Two process notes worth keeping:
+  - **The exact trigger was never reproduced** — not on web at 12 viewport
+    widths, nor on the AVD across density 420/440/455/520 × font scale
+    1.0/1.3/2.0, and the reporter's display and font settings were both default.
+    Fixing the *mechanism* rather than the trigger was what made that acceptable:
+    with shrink disabled a button cannot be narrower than its basis no matter why
+    a line does not fit. Confirmed fixed on the reporting device.
+  - **Web is not evidence about native, again.** This never reproduced under
+    react-native-web at any width; it is a Yoga behaviour. The same run also
+    caught `Upload audio` sitting outside `ConfirmDanger` (v0.2.2) — invisible on
+    web because that check ran in a state where the button was not rendered. A
+    state-dependent control needs its assertions *in that state*.
+
 - 2026-07-24 — **The recording upload is a state, not a branch** (v0.2.1 fixes,
   from a screen-recording of the live app). A staff upload *spans* the moment the
   recording document starts existing — the server must mint the id before the
