@@ -118,6 +118,30 @@ export function canPublish(recording: {
   return publishBlockers(recording).length === 0;
 }
 
+/**
+ * A recording that holds nothing yet: no audio, and not live.
+ *
+ * Such a recording provably has NO dependent history — `publishBlockers` refuses
+ * to publish without audio, and assignments only fan out once published — so
+ * there is no completion, progress or assignment doc that could point at it.
+ * That is what makes discarding one non-destructive, and why it does not need
+ * the admin-only guard that permanent deletion otherwise carries: whoever had
+ * the course scope to create it may discard it.
+ *
+ * Also what the UI keys "needs audio" off: this is a normal, recoverable state
+ * (a just-created draft mid-upload, an upload that failed, audio removed for
+ * replacement), not an error.
+ */
+export function isEmptyDraft(recording: {
+  audioPath: string | null;
+  status: RecordingStatus;
+}): boolean {
+  return (
+    recording.audioPath === null &&
+    (recording.status === 'draft' || recording.status === 'needsAttention')
+  );
+}
+
 /** Students only ever see published recordings. */
 export function isVisibleToStudents(status: RecordingStatus): boolean {
   return status === 'published';

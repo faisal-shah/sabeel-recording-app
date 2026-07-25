@@ -1,4 +1,4 @@
-import { Children, type ReactNode } from 'react';
+import { Children, useEffect, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -213,6 +213,83 @@ export function Empty({ children }: { children: ReactNode }) {
   return <Text style={styles.empty}>{children}</Text>;
 }
 
+/**
+ * A destructive action that TAKES OVER while it is being confirmed.
+ *
+ * `children` are the card's normal actions. While the confirm is open they are
+ * not rendered at all — which is the whole point. The first version of this was
+ * hand-rolled twice and simply appended the warning BELOW the live buttons, so
+ * during "permanently delete this?" the Listen/Publish/Back-to-draft row stayed
+ * tappable and two red panels stacked. A confirmation that leaves the thing it
+ * is guarding still operable is not a confirmation.
+ *
+ * Owns its own open state so a caller cannot forget to reset it, and renders
+ * nothing at all when `enabled` is false (e.g. a published recording, which must
+ * be unpublished first).
+ */
+export function ConfirmDanger({
+  enabled = true,
+  label,
+  confirmLabel,
+  warning,
+  busy,
+  onConfirm,
+  testID,
+  confirmTestID,
+  children,
+}: {
+  enabled?: boolean;
+  /** The button that opens the confirm. */
+  label: string;
+  /** The button that performs it. */
+  confirmLabel: string;
+  warning: string;
+  busy?: boolean;
+  onConfirm: () => void;
+  testID?: string;
+  confirmTestID?: string;
+  /** The actions this replaces while confirming. */
+  children?: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+
+  // If the underlying thing stops being deletable while the confirm is open
+  // (someone else published it), close it — otherwise the stale `open` would
+  // spring the confirm back the moment it became deletable again.
+  useEffect(() => {
+    if (!enabled) setOpen(false);
+  }, [enabled]);
+
+  if (!enabled) return <>{children}</>;
+
+  if (open) {
+    return (
+      <View style={styles.confirm}>
+        <Notice tone="error">{warning}</Notice>
+        <Row>
+          <Button
+            testID={confirmTestID}
+            label={confirmLabel}
+            variant="danger"
+            busy={busy}
+            onPress={onConfirm}
+          />
+          <Button label="Cancel" variant="secondary" disabled={busy} onPress={() => setOpen(false)} />
+        </Row>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      {children}
+      <View style={styles.dangerZone}>
+        <Button testID={testID} label={label} variant="danger" onPress={() => setOpen(true)} />
+      </View>
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
   canvas: { flex: 1, backgroundColor: t.bg.canvas },
   content: {
@@ -299,4 +376,13 @@ const styles = StyleSheet.create({
   },
   rowItem: { flexGrow: 1, flexShrink: 1, flexBasis: 150 },
   empty: { fontSize: 14, color: t.text.secondary, paddingVertical: spacing(3) },
+  // Separated from the actions above it, so a destructive button is never the
+  // one you hit by muscle memory.
+  dangerZone: {
+    marginTop: spacing(4),
+    paddingTop: spacing(3),
+    borderTopWidth: 1,
+    borderTopColor: t.border.subtle,
+  },
+  confirm: { gap: spacing(2) },
 });

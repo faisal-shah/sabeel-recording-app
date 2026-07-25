@@ -265,6 +265,53 @@ describe('applyDeleteRecording', () => {
     await applyDeleteRecording(id);
     expect(await recExists(id)).toBe(false);
   });
+
+  // The two round-trips the session screen's recovery paths depend on. Both
+  // failed silently before: the UI offered no way back from a recording with no
+  // audio, so these are the invariants that keep it out of a dead-end.
+  it('deletes audio that landed but never finalized (audioPath still null)', async () => {
+    // The real failure this guards: the bytes reach Storage, then finalize fails,
+    // so the doc's audioPath is still null. Deleting only what the field points at
+    // would leave those bytes orphaned and billable forever.
+    const { id } = await newDraft();
+    await putAudio(id);
+    expect((await rec(id)).audioPath).toBeNull(); // never finalized
+    expect(await audioExists(id)).toBe(true);
+
+    await applyDeleteRecording(id);
+    expect(await audioExists(id)).toBe(false);
+  });
+
+  it('discarding an empty draft frees the session for a NEW recording', async () => {
+    const { id, sessionId } = await newDraft();
+    // A session holds 0..1 recordings, so a stale pointer here would make every
+    // later attempt fail with "This session already has a recording".
+    await applyDeleteRecording(id);
+    expect((await session(sessionId)).recordingId).toBeNull();
+
+    const second = await createRecordingDraft(ADMIN, { sessionId });
+    expect(second.id).not.toBe(id);
+    expect((await session(sessionId)).recordingId).toBe(second.id);
+  });
+
+  it('audio removed from a draft can be re-uploaded onto the SAME recording', async () => {
+    // clearAudio exists "so it can be re-uploaded" — the storage object is
+    // write-once, so this only works because clearAudio deletes it first.
+    const { id } = await newDraft();
+    await putAudio(id);
+    await finalizeRecording({ recordingId: id, durationSec: 5 });
+    expect((await rec(id)).audioPath).not.toBeNull();
+
+    await clearAudio(id);
+    expect((await rec(id)).audioPath).toBeNull();
+    expect(await audioExists(id)).toBe(false);
+
+    await putAudio(id);
+    await finalizeRecording({ recordingId: id, durationSec: 7 });
+    const after = await rec(id);
+    expect(after.audioPath).toBe(audioStoragePath(id));
+    expect(after.durationSec).toBe(7);
+  });
 });
 
 describe('the size limit is stated in two places and must not drift', () => {

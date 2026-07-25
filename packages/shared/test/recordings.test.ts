@@ -4,6 +4,7 @@ import {
   audioStoragePath,
   canPublish,
   canTransition,
+  isEmptyDraft,
   isVisibleToStudents,
   listenedFraction,
   mergeProgress,
@@ -103,6 +104,37 @@ describe('publishBlockers', () => {
     // Both are optional per the brief; a no-due recording is still required
     // listening, it simply never becomes overdue.
     expect(canPublish(ready)).toBe(true);
+  });
+});
+
+describe('isEmptyDraft', () => {
+  it('is true only when there is no audio AND the recording is not live', () => {
+    expect(isEmptyDraft({ audioPath: null, status: 'draft' })).toBe(true);
+    // A failed Zoom import is the same situation: nothing landed, nothing lost.
+    expect(isEmptyDraft({ audioPath: null, status: 'needsAttention' })).toBe(true);
+  });
+
+  it('is false as soon as audio exists — that is a real artifact', () => {
+    for (const s of ALL) {
+      expect(isEmptyDraft({ audioPath: 'recordings/r1/audio.m4a', status: s })).toBe(false);
+    }
+  });
+
+  it('is false for any status that has been live, even with no audio', () => {
+    // published/archived/unpublished imply students could have listened, so these
+    // are never "discard freely" — they keep the admin-only deletion guard.
+    for (const s of ['published', 'archived', 'unpublished'] as RecordingStatus[]) {
+      expect(isEmptyDraft({ audioPath: null, status: s })).toBe(false);
+    }
+  });
+
+  it('agrees with publishBlockers: an empty draft can never have been published', () => {
+    // This is the invariant the relaxed delete guard leans on — no audio means
+    // publish is blocked, and assignments only fan out on publish, so an empty
+    // draft provably has no dependent history to destroy.
+    const empty = { audioPath: null, status: 'draft' as RecordingStatus };
+    expect(isEmptyDraft(empty)).toBe(true);
+    expect(publishBlockers(empty)).toContain('audio');
   });
 });
 

@@ -34,6 +34,38 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-07-24 — **The recording upload is a state, not a branch** (v0.2.1 fixes,
+  from a screen-recording of the live app). A staff upload *spans* the moment the
+  recording document starts existing — the server must mint the id before the
+  client may write to Storage — so the live listener flips `recording` from null
+  to set **mid-upload**. Anything keyed on that branch is destroyed exactly when
+  it is needed: the progress bar lived only in the no-recording branch, so a
+  healthy upload rendered as `draft · no duration` + *"This recording has no
+  audio"* + a delete button for its whole duration. Fixed by owning the upload
+  state **above** the branch and making "exists but has no audio" a first-class,
+  recoverable state (mid-upload / failed / audio removed) rather than an error.
+  Consequences worth keeping:
+  - **An audio-less recording must offer a way back.** `clearAudio` was always
+    documented "so it can be re-uploaded" and `storage.rules` re-allows the write
+    once the object is gone, but no UI path existed — so **Remove audio was a
+    one-way door** out of a usable recording, escapable only by deleting it.
+  - **Discarding an empty draft is not permanent deletion.** Deletion is
+    admin-only *because* it destroys listening history; an empty draft provably
+    has none (publish is blocked without audio — `publishBlockers` — and
+    assignments only fan out on publish), so course scope suffices. See
+    `isEmptyDraft`. This is what lets a manager clean up their own failed upload.
+  - **Delete the audio object at its CANONICAL path, not via `audioPath`.** Bytes
+    that landed but never finalized leave the field `null`; keying the delete off
+    the field orphaned them in Storage forever — the one thing here that costs
+    money.
+  - **A confirmation that leaves its subject operable is not a confirmation.**
+    Both destructive confirms appended below still-live action rows. Now one
+    shared `ConfirmDanger` that *replaces* the actions while open.
+  - **Testing gotcha:** going offline mid-upload does **not** fail an upload —
+    `uploadBytesResumable` resumes when the network returns (this produced a
+    false negative). Block the `finalizeRecordingUpload` callable instead: bytes
+    land, confirmation never does, which is a real failure mode and fails fast.
+
 - 2026-07-24 — **Attendance-driven assignment: Class → Course, and a new Session
   entity (major model rework).** The app exists for students who *missed* the
   in-person class; a recording is required listening only for the absentees. So

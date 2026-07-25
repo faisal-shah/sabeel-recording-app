@@ -6,6 +6,7 @@ import {
   COLLECTIONS,
   audioStoragePath,
   canTransition,
+  isEmptyDraft,
   publishBlockers,
   type RecordingDoc,
   type RecordingSource,
@@ -328,10 +329,15 @@ export async function applyDeleteRecording(recordingId: string) {
   }
   await Promise.all(commits);
 
-  // 2. The audio object (draft recordings may have none).
-  if (rec.audioPath) {
-    await getStorage().bucket().file(rec.audioPath).delete({ ignoreNotFound: true });
-  }
+  // 2. The audio object — at the CANONICAL path, not only when `audioPath` is
+  //    set. An upload that landed in Storage but never finalized leaves the
+  //    object there with the field still null; keying the delete off the field
+  //    would orphan those bytes forever, and they are the one thing here that
+  //    costs money. The path is derived from the id, so this is exact.
+  await getStorage()
+    .bucket()
+    .file(rec.audioPath ?? audioStoragePath(recordingId))
+    .delete({ ignoreNotFound: true });
 
   // 3. The recording itself, and clear the session's pointer so a new recording
   //    can be added. The session may itself be mid-delete — a harmless no-op then.
@@ -345,11 +351,25 @@ export async function applyDeleteRecording(recordingId: string) {
 }
 
 export const deleteRecording = auditedCall('deleteRecording', async (req, audit) => {
-  requireAdmin(req); // permanent deletion is admin-only, always
   const d = req.data as { recordingId?: unknown };
   if (typeof d?.recordingId !== 'string' || !d.recordingId) {
     throw new HttpsError('invalid-argument', 'recordingId is required.');
   }
+  const snap = await getFirestore().collection(COLLECTIONS.recordings).doc(d.recordingId).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'No such recording.');
+  const rec = snap.data() as RecordingDoc;
+
+  // Permanent deletion is admin-only BECAUSE it destroys listening history. An
+  // empty draft has none to destroy (see `isEmptyDraft`), so discarding one is
+  // not the same act: whoever had the course scope to create it may discard it —
+  // which is what lets a manager clean up their own failed upload rather than
+  // leaving an unusable draft parked on the session until an admin appears.
+  if (isEmptyDraft(rec)) {
+    await requireCourseScope(req, rec.courseId);
+  } else {
+    requireAdmin(req);
+  }
+
   const res = await applyDeleteRecording(d.recordingId);
   audit.courseId = res.courseId; // recordingId target is auto-picked from req.data
   return { recordingId: res.recordingId };

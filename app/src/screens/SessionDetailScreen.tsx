@@ -1,12 +1,24 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   allowedTransitions,
+  isEmptyDraft,
   publishBlockers,
   type AttendanceStatus,
   type RecordingStatus,
 } from '@sabeel/shared';
-import { Button, Card, Empty, Field, Notice, Row, Screen, SectionTitle, StatusChip } from '../components/ui';
+import {
+  Button,
+  Card,
+  ConfirmDanger,
+  Empty,
+  Field,
+  Notice,
+  Row,
+  Screen,
+  SectionTitle,
+  StatusChip,
+} from '../components/ui';
 import { DateField } from '../components/DateField';
 import {
   deleteSession,
@@ -90,7 +102,6 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
   const [date, setDate] = useState(session.date);
   const [dueDate, setDueDate] = useState(session.dueDate ?? '');
   const [notes, setNotes] = useState(session.notes);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -145,31 +156,23 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
         Due for absentees: {session.dueDate ?? 'no due date'}
       </Text>
       {session.notes ? <Text style={styles.notes}>{session.notes}</Text> : null}
-      <Row>
-        <Button label="Edit session" variant="secondary" onPress={() => setEditing(true)} />
-      </Row>
-      {isAdmin && !session.recordingId ? (
-        <View style={styles.dangerZone}>
-          {confirmingDelete ? (
-            <>
-              <Notice tone="error">
-                Permanently delete this session and its attendance? This can&apos;t be undone.
-              </Notice>
-              <Row>
-                <Button
-                  label="Delete permanently"
-                  variant="danger"
-                  busy={busy === 'del'}
-                  onPress={() => run('del', () => deleteSession({ sessionId: session.id }))}
-                />
-                <Button label="Cancel" variant="secondary" onPress={() => setConfirmingDelete(false)} />
-              </Row>
-            </>
-          ) : (
-            <Button label="Delete session" variant="danger" onPress={() => setConfirmingDelete(true)} />
-          )}
-        </View>
-      ) : null}
+      <ConfirmDanger
+        // A session with a recording is deleted by removing the recording first,
+        // which is the deliberate order — otherwise attendance would vanish out
+        // from under a recording students may already be accountable for.
+        enabled={isAdmin && !session.recordingId}
+        label="Delete session"
+        confirmLabel="Delete permanently"
+        warning="Permanently delete this session and its attendance? This can't be undone."
+        busy={busy === 'del'}
+        testID="session-delete"
+        confirmTestID="session-delete-confirm"
+        onConfirm={() => run('del', () => deleteSession({ sessionId: session.id }))}
+      >
+        <Row>
+          <Button label="Edit session" variant="secondary" onPress={() => setEditing(true)} />
+        </Row>
+      </ConfirmDanger>
     </Card>
   );
 }
@@ -189,8 +192,14 @@ function AttendanceSection({ session }: { session: SessionRow }) {
     [roster],
   );
 
-  // Local marks: default present, seeded from a prior submit.
+  // Local marks: default present, seeded from a prior submit. Cleared whenever
+  // the submitted attendance changes underneath us (a second staff member
+  // submitting, or our own submit landing) so the screen shows what was actually
+  // recorded rather than silently keeping stale local edits on top of it.
   const [marks, setMarks] = useState<Record<string, AttendanceStatus>>({});
+  useEffect(() => {
+    setMarks({});
+  }, [session.attendanceSubmittedAt]);
   const statusOf = (uid: string): AttendanceStatus =>
     marks[uid] ?? session.attendance[uid] ?? 'present';
   const setStatus = (uid: string, s: AttendanceStatus) =>
@@ -225,10 +234,14 @@ function AttendanceSection({ session }: { session: SessionRow }) {
       <Card>
         {error ? <Notice tone="error">{error}</Notice> : null}
         {info ? <Notice tone="success">{info}</Notice> : null}
+        {/* With nobody on the roster there is nothing to mark, so telling someone
+            to mark it is just noise — say the one thing they can act on. */}
         <Text style={styles.meta}>
-          {session.attendanceSubmittedAt
-            ? 'Submitted. Absent and excused students are assigned the recording; present students are exempt.'
-            : 'Not taken yet. Mark who was present, then submit — nothing is assigned until you do.'}
+          {activeUids.length === 0
+            ? 'Enrol students in this course first — attendance is taken from its roster.'
+            : session.attendanceSubmittedAt
+              ? 'Submitted. Absent and excused students are assigned the recording; present students are exempt.'
+              : 'Everyone starts as Present — change the ones who missed, then submit. Nothing is assigned until you do.'}
         </Text>
         {activeUids.length === 0 ? (
           <Empty>No students enrolled in this course yet.</Empty>
@@ -287,7 +300,6 @@ function RecordingSection({
   const [progress, setProgress] = useState<number | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const run = (key: string, fn: () => Promise<unknown>) =>
     void (async () => {
@@ -302,30 +314,71 @@ function RecordingSection({
       }
     })();
 
-  const upload = () =>
+  /**
+   * Put audio on this session's recording, creating the recording first if there
+   * isn't one.
+   *
+   * The upload SPANS the moment the recording doc starts existing: the server
+   * has to mint the id before the client may write to Storage (that ordering is
+   * what makes the upload authorized — see createRecordingDraft). The live
+   * listener therefore flips `recording` from null to set mid-upload, which is
+   * why nothing about this flow may live in a branch keyed on that: the progress
+   * state is owned here, above the branch, and `uploading` drives the card.
+   *
+   * Passing an existing id is the retry path — a draft whose audio failed to
+   * land, or whose audio was removed for replacement.
+   */
+  const upload = (existingId?: string) =>
     void (async () => {
       const picked = await pickAudioFile();
       if (!picked) return;
       setBusy('upload');
       setError(null);
+      let createdId: string | null = null;
       try {
-        const { id } = await createRecording({ sessionId: session.id });
+        if (!existingId) createdId = (await createRecording({ sessionId: session.id })).id;
+        const id = existingId ?? createdId!;
         setProgress(0);
         await uploadRecordingAudio(id, picked.blob, setProgress);
         await finalizeRecordingUpload({ recordingId: id, durationSec: picked.durationSec });
       } catch (e) {
         setError((e as Error).message);
+        // Roll back a draft this attempt created: it holds nothing, and leaving
+        // it parked on the session would block the next attempt (a session takes
+        // 0..1 recordings) behind a delete. A draft we were only retrying is left
+        // alone — the caller can try again or discard it deliberately.
+        if (createdId) await deleteRecording({ recordingId: createdId }).catch(() => undefined);
       } finally {
         setProgress(null);
         setBusy(null);
       }
     })();
 
+  const uploading = busy === 'upload';
+
   return (
     <>
       <SectionTitle>Recording</SectionTitle>
       <Card>
         {error ? <Notice tone="error">{error}</Notice> : null}
+
+        {/* Rendered outside the recording/no-recording branch on purpose: the
+            upload crosses that boundary, and this is the only feedback the
+            person has while it does. */}
+        {uploading ? (
+          <View style={styles.progressWrap}>
+            <View
+              style={[styles.progressBar, { width: `${Math.round((progress ?? 0) * 100)}%` }]}
+            />
+            <Text style={styles.progressText}>
+              {progress === null
+                ? 'Preparing…'
+                : progress < 1
+                  ? `Uploading ${Math.round(progress * 100)}%`
+                  : 'Finishing…'}
+            </Text>
+          </View>
+        ) : null}
 
         {!recording ? (
           <>
@@ -334,15 +387,12 @@ function RecordingSection({
               date are used automatically.
             </Text>
             {canPickAudio ? (
-              <>
-                {progress !== null ? (
-                  <View style={styles.progressWrap}>
-                    <View style={[styles.progressBar, { width: `${Math.round(progress * 100)}%` }]} />
-                    <Text style={styles.progressText}>Uploading {Math.round(progress * 100)}%</Text>
-                  </View>
-                ) : null}
-                <Button testID="recording-upload" label="Upload audio…" busy={busy === 'upload'} onPress={upload} />
-              </>
+              <Button
+                testID="recording-upload"
+                label="Upload audio…"
+                busy={uploading}
+                onPress={() => upload()}
+              />
             ) : (
               <Notice tone="info">Uploading is done from the web app on a computer.</Notice>
             )}
@@ -350,6 +400,7 @@ function RecordingSection({
               testID="recording-import-zoom"
               label="Import from Zoom"
               variant="secondary"
+              disabled={uploading}
               onPress={() => onImportZoom(session)}
             />
           </>
@@ -359,8 +410,8 @@ function RecordingSection({
             session={session}
             isAdmin={isAdmin}
             busy={busy}
-            confirmingDelete={confirmingDelete}
-            setConfirmingDelete={setConfirmingDelete}
+            uploading={uploading}
+            onUpload={() => upload(recording.id)}
             onRun={run}
             onOpenLedger={onOpenLedger}
             onPlay={onPlay}
@@ -376,8 +427,8 @@ function RecordingCard({
   session,
   isAdmin,
   busy,
-  confirmingDelete,
-  setConfirmingDelete,
+  uploading,
+  onUpload,
   onRun,
   onOpenLedger,
   onPlay,
@@ -386,104 +437,125 @@ function RecordingCard({
   session: SessionRow;
   isAdmin: boolean;
   busy: string | null;
-  confirmingDelete: boolean;
-  setConfirmingDelete: (v: boolean) => void;
+  uploading: boolean;
+  onUpload: () => void;
   onRun: (key: string, fn: () => Promise<unknown>) => void;
   onOpenLedger: (recording: RecordingRow, session: SessionRow) => void;
   onPlay: (recording: RecordingRow, session: SessionRow) => void;
 }) {
   const blockers = publishBlockers(r);
   const moves = allowedTransitions(r.status).filter((to) => to !== 'needsAttention');
+  // No audio is a NORMAL state here, not a failure: mid-upload, after a failed
+  // one, or after Remove audio. Only say something is wrong once nothing is in
+  // flight — otherwise a healthy upload reads as broken for its whole duration.
+  const needsAudio = !r.audioPath && !uploading;
+  // Discarding an empty draft destroys nothing, so it is not the admin-only
+  // permanent delete (server agrees — see isEmptyDraft).
+  const canDiscard = isEmptyDraft(r);
 
   return (
     <>
       <View style={styles.recMeta}>
         <StatusChip status={r.status} />
         <Text style={styles.hint}>
-          {r.durationSec ? fmtDuration(r.durationSec) : 'no duration'}
-          {r.sizeBytes ? ` · ${(r.sizeBytes / 1024 / 1024).toFixed(1)} MB` : ''}
+          {/* Silent while uploading — the progress bar above already says it,
+              and two live descriptions of one operation just compete. */}
+          {uploading
+            ? ''
+            : r.audioPath
+              ? [r.durationSec ? fmtDuration(r.durationSec) : null,
+                 r.sizeBytes ? `${(r.sizeBytes / 1024 / 1024).toFixed(1)} MB` : null]
+                  .filter(Boolean)
+                  .join(' · ')
+              : 'no audio yet'}
         </Text>
       </View>
 
-      {blockers.includes('audio') ? (
-        <Notice tone="error">This recording has no audio. Upload one before publishing.</Notice>
+      {needsAudio ? (
+        <Notice tone="info">
+          {r.source === 'zoom'
+            ? 'No audio on this recording yet. Retry the Zoom import, or upload the file.'
+            : 'No audio on this recording yet. Upload the file to finish it.'}
+        </Notice>
       ) : null}
       {r.status === 'needsAttention' && r.attentionReason ? (
         <Notice tone="error">{r.attentionReason}</Notice>
       ) : null}
+
+      {/* The way back from an audio-less recording. Without it, Remove audio and
+          any failed upload are one-way doors out of a usable recording. */}
+      {needsAudio && canPickAudio ? (
+        <Button testID="recording-upload" label="Upload audio…" onPress={onUpload} />
+      ) : null}
       {r.status === 'needsAttention' && r.source === 'zoom' ? (
         <Button
           label="Retry import"
+          variant="secondary"
           busy={busy === `retry-${r.id}`}
+          disabled={uploading}
           onPress={() => onRun(`retry-${r.id}`, () => retryZoomImport({ recordingId: r.id }))}
         />
       ) : null}
 
-      <Row>
-        {r.audioPath ? (
-          <Button testID="recording-listen" label="Listen" variant="secondary" onPress={() => onPlay(r, session)} />
-        ) : null}
-        {moves.map((to) => (
-          <Button
-            key={to}
-            testID={`recording-${to}`}
-            label={LABELS[to]}
-            variant={to === 'published' ? 'primary' : 'secondary'}
-            disabled={to === 'published' && blockers.length > 0}
-            busy={busy === `status-${r.id}`}
-            onPress={() => onRun(`status-${r.id}`, () => setRecordingStatus({ recordingId: r.id, status: to }))}
-          />
-        ))}
-        {r.audioPath && (r.status === 'draft' || r.status === 'needsAttention') ? (
-          <Button
-            label="Remove audio"
-            variant="secondary"
-            busy={busy === `clear-${r.id}`}
-            onPress={() => onRun(`clear-${r.id}`, () => clearRecordingAudio({ recordingId: r.id }))}
-          />
-        ) : null}
-      </Row>
-
-      {r.status === 'published' ? (
-        <View style={styles.ledgerRow}>
-          <Button
-            testID="recording-ledger"
-            label="Listening progress"
-            variant="secondary"
-            onPress={() => onOpenLedger(r, session)}
-          />
-        </View>
-      ) : null}
-
-      {isAdmin && r.status !== 'published' ? (
-        <View style={styles.dangerZone}>
-          {confirmingDelete ? (
-            <>
-              <Notice tone="error">
-                This permanently removes the audio and every listening record for it — it can&apos;t
-                be undone. Archiving keeps everything; delete only to free up storage.
-              </Notice>
-              <Row>
-                <Button
-                  testID="recording-delete-confirm"
-                  label="Delete permanently"
-                  variant="danger"
-                  busy={busy === `del-${r.id}`}
-                  onPress={() => onRun(`del-${r.id}`, () => deleteRecording({ recordingId: r.id }))}
-                />
-                <Button label="Cancel" variant="secondary" onPress={() => setConfirmingDelete(false)} />
-              </Row>
-            </>
-          ) : (
+      <ConfirmDanger
+        // Never for a live recording — the server refuses it too (unpublish or
+        // archive first), so offering the button would only produce an error.
+        enabled={r.status !== 'published' && (isAdmin || canDiscard)}
+        label={canDiscard ? 'Discard recording' : 'Delete recording'}
+        confirmLabel={canDiscard ? 'Discard' : 'Delete permanently'}
+        warning={
+          canDiscard
+            ? 'This clears the empty recording off the session so you can start again. Nothing has been uploaded, so nothing is lost.'
+            : "This permanently removes the audio and every listening record for it — it can't be undone. Archiving keeps everything; delete only to free up storage."
+        }
+        busy={busy === `del-${r.id}`}
+        testID="recording-delete"
+        confirmTestID="recording-delete-confirm"
+        onConfirm={() => onRun(`del-${r.id}`, () => deleteRecording({ recordingId: r.id }))}
+      >
+        <Row>
+          {r.audioPath ? (
             <Button
-              testID="recording-delete"
-              label="Delete recording"
-              variant="danger"
-              onPress={() => setConfirmingDelete(true)}
+              testID="recording-listen"
+              label="Listen"
+              variant="secondary"
+              disabled={uploading}
+              onPress={() => onPlay(r, session)}
             />
-          )}
-        </View>
-      ) : null}
+          ) : null}
+          {moves.map((to) => (
+            <Button
+              key={to}
+              testID={`recording-${to}`}
+              label={LABELS[to]}
+              variant={to === 'published' ? 'primary' : 'secondary'}
+              disabled={uploading || (to === 'published' && blockers.length > 0)}
+              busy={busy === `status-${r.id}`}
+              onPress={() => onRun(`status-${r.id}`, () => setRecordingStatus({ recordingId: r.id, status: to }))}
+            />
+          ))}
+          {r.audioPath && (r.status === 'draft' || r.status === 'needsAttention') ? (
+            <Button
+              label="Remove audio"
+              variant="secondary"
+              busy={busy === `clear-${r.id}`}
+              disabled={uploading}
+              onPress={() => onRun(`clear-${r.id}`, () => clearRecordingAudio({ recordingId: r.id }))}
+            />
+          ) : null}
+        </Row>
+
+        {r.status === 'published' ? (
+          <View style={styles.ledgerRow}>
+            <Button
+              testID="recording-ledger"
+              label="Listening progress"
+              variant="secondary"
+              onPress={() => onOpenLedger(r, session)}
+            />
+          </View>
+        ) : null}
+      </ConfirmDanger>
     </>
   );
 }
@@ -515,7 +587,6 @@ const styles = StyleSheet.create({
   segTextOn: { color: t.accent.onAccent },
   recMeta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing(3), marginBottom: spacing(2) },
   ledgerRow: { marginTop: spacing(3), paddingTop: spacing(3), borderTopWidth: 1, borderTopColor: t.border.subtle },
-  dangerZone: { marginTop: spacing(4), paddingTop: spacing(3), borderTopWidth: 1, borderTopColor: t.border.subtle },
   progressWrap: { marginTop: spacing(3), backgroundColor: t.bg.inset, borderRadius: 6, overflow: 'hidden', minHeight: 26, justifyContent: 'center' },
   progressBar: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: t.bg.sage },
   progressText: { fontSize: 12, color: t.text.primary, paddingHorizontal: spacing(2), paddingVertical: spacing(1) },
