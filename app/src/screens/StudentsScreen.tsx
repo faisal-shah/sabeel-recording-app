@@ -5,8 +5,9 @@ import {
   Card,
   Empty,
   Field,
+  IconButton,
   Notice,
-  Row,
+  PersonRow,
   Screen,
   SectionTitle,
   StatusChip,
@@ -138,16 +139,17 @@ export function StudentsScreen({ isAdmin, uid }: { isAdmin: boolean; uid: string
         <Empty>No students yet.</Empty>
       ) : (
         students.map((s) => (
-          <Card key={s.uid}>
-            <Text style={styles.name}>{s.displayName}</Text>
-            <Text style={styles.email}>{s.email}</Text>
-            <View style={styles.meta}>
-              <StatusChip status={s.status} />
-            </View>
-            <Row>
+          <PersonRow
+            key={s.uid}
+            name={s.displayName}
+            status={<StatusChip status={s.status} />}
+            detail={s.email}
+            actions={
+              <>
               <Button
-                label="Resend password link"
+                label="Resend link"
                 variant="secondary"
+                compact
                 busy={busyUid === s.uid}
                 onPress={() =>
                   void (async () => {
@@ -166,8 +168,15 @@ export function StudentsScreen({ isAdmin, uid }: { isAdmin: boolean; uid: string
                 }
               />
               {canManageAccess ? (
-                <Button
-                  label={s.status === 'disabled' ? 'Re-enable' : 'Disable'}
+                <IconButton
+                  // Disabling is reversible, so the re-enable side is not
+                  // destructive and must not be dressed as if it were.
+                  glyph={s.status === 'disabled' ? '↺' : '×'}
+                  label={
+                    s.status === 'disabled'
+                      ? `Re-enable ${s.displayName}`
+                      : `Disable ${s.displayName}`
+                  }
                   variant={s.status === 'disabled' ? 'secondary' : 'danger'}
                   busy={busyUid === s.uid}
                   onPress={() =>
@@ -188,8 +197,9 @@ export function StudentsScreen({ isAdmin, uid }: { isAdmin: boolean; uid: string
                   }
                 />
               ) : null}
-            </Row>
-          </Card>
+              </>
+            }
+          />
         ))
       )}
     </Screen>
@@ -225,9 +235,6 @@ function useCourseOptions(isAdmin: boolean, uid: string): CourseOption[] {
 }
 
 const styles = StyleSheet.create({
-  name: { fontSize: 16, fontWeight: '600', color: t.text.primary },
-  email: { fontSize: 14, color: t.text.secondary, marginTop: 2 },
-  meta: { flexDirection: 'row', alignItems: 'center', marginTop: spacing(2) },
   picker: { marginTop: spacing(3) },
   pickerLabel: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(1) },
   pickRow: {

@@ -5,7 +5,9 @@ import {
   Card,
   Empty,
   Field,
+  IconButton,
   Notice,
+  PersonRow,
   Row,
   Screen,
   SectionTitle,
@@ -228,33 +230,42 @@ export function CourseDetailScreen({
           .filter((r) => r.active)
           .map((r) => {
             const s = byUid.get(r.studentUid);
+            const who = s?.displayName ?? r.studentUid;
+            // The roster is a list to scan, so it is one line per student: the
+            // email added nothing here (you identify classmates by name) and cost
+            // a line each, which on a 20-student course is most of the screen.
             return (
-              <Card key={r.id}>
-                <Text style={styles.name}>{s?.displayName ?? r.studentUid}</Text>
-                {s ? <Text style={styles.hint}>{s.email}</Text> : null}
-                <Row>
-                  <Button
-                    testID={`student-ledger-${s?.email ?? r.studentUid}`}
-                    label="Listening progress"
-                    onPress={() => onOpenStudent(r.studentUid, s?.displayName ?? r.studentUid)}
-                  />
-                  <Button
-                    testID={`roster-remove-${s?.email ?? r.studentUid}`}
-                    label="Remove from course"
-                    variant="secondary"
-                    busy={busy === `rm-${r.id}`}
-                    onPress={() =>
-                      void run(`rm-${r.id}`, () =>
-                        setEnrollmentActive({
-                          studentUid: r.studentUid,
-                          courseId: cls.id,
-                          active: false,
-                        }),
-                      )
-                    }
-                  />
-                </Row>
-              </Card>
+              <PersonRow
+                key={r.id}
+                name={who}
+                actions={
+                  <>
+                    <Button
+                      testID={`student-ledger-${s?.email ?? r.studentUid}`}
+                      label="Progress"
+                      variant="secondary"
+                      compact
+                      onPress={() => onOpenStudent(r.studentUid, who)}
+                    />
+                    <IconButton
+                      testID={`roster-remove-${s?.email ?? r.studentUid}`}
+                      glyph="×"
+                      label={`Remove ${who} from this course`}
+                      variant="danger"
+                      busy={busy === `rm-${r.id}`}
+                      onPress={() =>
+                        void run(`rm-${r.id}`, () =>
+                          setEnrollmentActive({
+                            studentUid: r.studentUid,
+                            courseId: cls.id,
+                            active: false,
+                          }),
+                        )
+                      }
+                    />
+                  </>
+                }
+              />
             );
           })
       )}

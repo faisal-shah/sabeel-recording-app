@@ -59,6 +59,7 @@ export function Button({
   variant = 'primary',
   busy,
   disabled,
+  compact,
   testID,
 }: {
   label: string;
@@ -66,6 +67,8 @@ export function Button({
   variant?: 'primary' | 'secondary' | 'danger';
   busy?: boolean;
   disabled?: boolean;
+  /** A row-level action sitting beside a name, not a full-width page action. */
+  compact?: boolean;
   testID?: string;
 }) {
   const isDisabled = disabled || busy;
@@ -85,6 +88,7 @@ export function Button({
       disabled={isDisabled}
       style={({ pressed }) => [
         styles.btn,
+        compact ? styles.btnCompact : null,
         style,
         pressed && !isDisabled ? styles.btnPressed : null,
         isDisabled ? styles.btnDisabled : null,
@@ -109,6 +113,104 @@ export function Button({
         </Text>
       )}
     </Pressable>
+  );
+}
+
+/**
+ * A single-glyph action for a list row — remove, disable, re-enable.
+ *
+ * Glyphs are TEXT-presentation characters (`×`, `↺`), never emoji: an emoji
+ * renders as a colour bitmap that ignores `color`, so a destructive control
+ * would not read as destructive. There is no icon font in this app, and adding
+ * one to draw two shapes is not worth the bundle.
+ *
+ * Icon-only means the label is invisible, so `label` is required and becomes the
+ * accessibility name — a screen reader gets "Remove Fatima Ahmed from the
+ * course", not "times". The square is 44pt because that is the minimum touch
+ * target, even though the glyph inside is small.
+ */
+export function IconButton({
+  glyph,
+  label,
+  variant = 'secondary',
+  busy,
+  disabled,
+  onPress,
+  testID,
+}: {
+  glyph: string;
+  /** Required: with no visible text this IS the button's name. */
+  label: string;
+  variant?: 'secondary' | 'danger';
+  busy?: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+  testID?: string;
+}) {
+  const isDisabled = disabled || busy;
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      disabled={isDisabled}
+      style={({ pressed }) => [
+        styles.iconBtn,
+        variant === 'danger' ? styles.iconBtnDanger : styles.iconBtnSecondary,
+        pressed && !isDisabled ? styles.btnPressed : null,
+        isDisabled ? styles.btnDisabled : null,
+      ]}
+    >
+      {busy ? (
+        <ActivityIndicator color={variant === 'danger' ? t.text.danger : t.text.primary} />
+      ) : (
+        <Text
+          style={[
+            styles.iconGlyph,
+            variant === 'danger' ? styles.iconGlyphDanger : styles.iconGlyphSecondary,
+            isDisabled ? styles.btnDisabledText : null,
+          ]}
+        >
+          {glyph}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
+/**
+ * One person in a list: name (and status) on the first line, details under it,
+ * actions on the right of the same line — wrapping to their own line when the
+ * name needs the width.
+ */
+export function PersonRow({
+  name,
+  status,
+  detail,
+  actions,
+}: {
+  name: string;
+  status?: ReactNode;
+  detail?: string;
+  actions: ReactNode;
+}) {
+  return (
+    <View style={styles.personCard}>
+      <View style={styles.personHead}>
+        {/* Name, status and detail are ONE block, so when the actions wrap to
+            their own line they go below the whole identity rather than landing
+            between the name and the email. */}
+        <View style={styles.personIdent}>
+          <View style={styles.personNameLine}>
+            <Text style={styles.personName}>{name}</Text>
+            {status ?? null}
+          </View>
+          {detail ? <Text style={styles.personDetail}>{detail}</Text> : null}
+        </View>
+        <View style={styles.personActions}>{actions}</View>
+      </View>
+    </View>
   );
 }
 
@@ -396,6 +498,63 @@ const styles = StyleSheet.create({
   // fits or wraps — both readable. maxWidth caps the one case shrink used to
   // cover: a basis wider than the container itself, on a very narrow screen.
   rowItem: { flexGrow: 1, flexShrink: 0, flexBasis: 150, maxWidth: '100%' },
+
+  // --- compact row actions -------------------------------------------------
+  btnCompact: { paddingVertical: spacing(2), paddingHorizontal: spacing(3), minHeight: 40 },
+  iconBtn: {
+    width: 44,
+    height: 44, // minimum touch target, whatever the glyph's size
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconBtnSecondary: { backgroundColor: t.bg.sage },
+  iconBtnDanger: { backgroundColor: t.bg.dangerSoft },
+  iconGlyph: { fontSize: 20, lineHeight: 24, fontWeight: '700' },
+  iconGlyphSecondary: { color: t.text.primary },
+  iconGlyphDanger: { color: t.text.danger },
+
+  // --- a person in a list --------------------------------------------------
+  personCard: {
+    backgroundColor: t.bg.surface,
+    borderRadius: 12,
+    paddingVertical: spacing(2),
+    paddingHorizontal: spacing(4),
+    marginBottom: spacing(2),
+    borderWidth: 1,
+    borderColor: t.border.subtle,
+  },
+  // Wraps rather than squeezes: a long name pushes the actions onto their own
+  // line instead of crushing them (see `rowItem` for why shrink is never on).
+  personHead: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing(2),
+    minHeight: 52,
+  },
+  personIdent: { flexGrow: 1, flexShrink: 1, flexBasis: 180, gap: 2 },
+  personNameLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing(2),
+  },
+  personName: { fontSize: 16, fontWeight: '600', color: t.text.primary, flexShrink: 1 },
+  // Centred when they wrap to their own line, right-hand end when they share the
+  // name's line — one rule that reads correctly in both.
+  personActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing(2),
+    flexGrow: 1,
+    flexBasis: 'auto',
+  },
+  // secondary, not muted: an email address is content someone reads, and true
+  // taupe on ivory is ~2.7:1 — reserved for text you could delete without
+  // losing anything.
+  personDetail: { fontSize: 13, color: t.text.secondary },
   empty: { fontSize: 14, color: t.text.secondary, paddingVertical: spacing(3) },
   // Separated from the actions above it, so a destructive button is never the
   // one you hit by muscle memory.
