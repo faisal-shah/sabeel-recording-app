@@ -93,7 +93,18 @@ export function Button({
       {busy ? (
         <ActivityIndicator color={variant === 'secondary' ? t.text.primary : t.accent.onAccent} />
       ) : (
-        <Text style={[styles.btnText, isDisabled ? styles.btnDisabledText : textStyle]}>
+        // A label may wrap between words, but must never break INSIDE one:
+        // "Submit att / endance" is what a phone at a large accessibility font
+        // size does otherwise. Two lines are allowed, and if a single word still
+        // does not fit, the text scales down rather than splitting — the person
+        // asked for large text, so shrink only as the last resort and only as far
+        // as minimumFontScale.
+        <Text
+          style={[styles.btnText, isDisabled ? styles.btnDisabledText : textStyle]}
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+        >
           {label}
         </Text>
       )}
@@ -197,6 +208,11 @@ export function StatusChip({ status }: { status: string }) {
  * Each child is wrapped rather than styled directly, so the flex behaviour
  * belongs to the row: putting flexGrow on the button itself made every
  * standalone button stretch to fill the column it sat in.
+ *
+ * Items GROW to share a line but never SHRINK (see `rowItem`). Shrinking is what
+ * produced a Publish button squeezed to a third of its neighbour with its label
+ * broken mid-word — "Publ / ish" — on a real phone. A row is allowed to wrap; it
+ * is not allowed to crush a control below the width of its own text.
  */
 export function Row({ children }: { children: ReactNode }) {
   return (
@@ -374,7 +390,12 @@ const styles = StyleSheet.create({
     gap: spacing(2),
     paddingVertical: spacing(1),
   },
-  rowItem: { flexGrow: 1, flexShrink: 1, flexBasis: 150 },
+  // flexShrink 0 is load-bearing, not a tidy-up: with shrink enabled a line that
+  // does not quite fit squeezes its items instead of wrapping, and a squeezed
+  // button breaks its label mid-word. Refusing to shrink means the line either
+  // fits or wraps — both readable. maxWidth caps the one case shrink used to
+  // cover: a basis wider than the container itself, on a very narrow screen.
+  rowItem: { flexGrow: 1, flexShrink: 0, flexBasis: 150, maxWidth: '100%' },
   empty: { fontSize: 14, color: t.text.secondary, paddingVertical: spacing(3) },
   // Separated from the actions above it, so a destructive button is never the
   // one you hit by muscle memory.
