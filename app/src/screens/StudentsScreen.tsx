@@ -7,7 +7,7 @@ import {
   Field,
   IconButton,
   Notice,
-  PersonRow,
+  ListRow,
   Screen,
   SectionTitle,
   StatusChip,
@@ -139,7 +139,7 @@ export function StudentsScreen({ isAdmin, uid }: { isAdmin: boolean; uid: string
         <Empty>No students yet.</Empty>
       ) : (
         students.map((s) => (
-          <PersonRow
+          <ListRow
             key={s.uid}
             name={s.displayName}
             status={<StatusChip status={s.status} />}

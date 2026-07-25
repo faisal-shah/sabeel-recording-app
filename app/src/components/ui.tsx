@@ -23,18 +23,34 @@ const t = getTheme();
  * Page wrapper. Renders the latest live-data error above the content — a
  * rejected listener otherwise dies as a console warning nobody sees on a phone.
  */
-export function Screen({ title, subtitle, children }: {
+export function Screen({ title, subtitle, badge, children }: {
   title?: string;
   subtitle?: string;
+  /** A status chip belonging to the thing being viewed — sits on the heading's
+   *  own line rather than costing a row of its own further down. */
+  badge?: ReactNode;
   children: ReactNode;
 }) {
   const listenerError = useListenerError();
+  // The badge rides whichever heading line exists.
+  const titleLine = title ? (
+    <View style={styles.headLine}>
+      <Text style={styles.h1}>{title}</Text>
+      {badge ?? null}
+    </View>
+  ) : null;
+  const subtitleLine = subtitle ? (
+    <View style={styles.headLine}>
+      <Text style={styles.lede}>{subtitle}</Text>
+      {title ? null : (badge ?? null)}
+    </View>
+  ) : null;
   return (
     <KbScroll style={styles.canvas} contentContainerStyle={styles.content}>
       {/* Chrome is ivory with a dark title, never a raspberry app bar: a
           brand-coloured bar on every screen puts raspberry far past its share. */}
-      {title ? <Text style={styles.h1}>{title}</Text> : null}
-      {subtitle ? <Text style={styles.lede}>{subtitle}</Text> : null}
+      {titleLine}
+      {subtitleLine}
       {listenerError ? (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>{listenerError}</Text>
@@ -180,35 +196,61 @@ export function IconButton({
 }
 
 /**
- * One person in a list: name (and status) on the first line, details under it,
- * actions on the right of the same line — wrapping to their own line when the
- * name needs the width.
+ * One entry in a list — a person, a cohort, anything with a name and a couple of
+ * controls. Title (and status) on the first line, detail under it, actions on
+ * the right of the same line, wrapping to their own line when the title needs
+ * the width.
+ *
+ * `onPress` makes the identity block open the thing. The actions stay outside
+ * that press target so tapping Archive cannot be mistaken for opening.
  */
-export function PersonRow({
+export function ListRow({
   name,
   status,
   detail,
   actions,
+  onPress,
+  openLabel,
+  testID,
 }: {
   name: string;
   status?: ReactNode;
   detail?: string;
-  actions: ReactNode;
+  actions?: ReactNode;
+  onPress?: () => void;
+  /** Accessibility name for the press target; visually the row speaks for itself. */
+  openLabel?: string;
+  testID?: string;
 }) {
+  const ident = (
+    <>
+      <View style={styles.rowTitleLine}>
+        <Text style={styles.rowTitle}>{name}</Text>
+        {status ?? null}
+      </View>
+      {detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
+    </>
+  );
   return (
-    <View style={styles.personCard}>
-      <View style={styles.personHead}>
-        {/* Name, status and detail are ONE block, so when the actions wrap to
+    <View style={styles.rowCard}>
+      <View style={styles.rowHead2}>
+        {/* Title, status and detail are ONE block, so when the actions wrap to
             their own line they go below the whole identity rather than landing
-            between the name and the email. */}
-        <View style={styles.personIdent}>
-          <View style={styles.personNameLine}>
-            <Text style={styles.personName}>{name}</Text>
-            {status ?? null}
-          </View>
-          {detail ? <Text style={styles.personDetail}>{detail}</Text> : null}
-        </View>
-        <View style={styles.personActions}>{actions}</View>
+            between the title and its detail. */}
+        {onPress ? (
+          <Pressable
+            testID={testID}
+            accessibilityRole="button"
+            accessibilityLabel={openLabel ?? `Open ${name}`}
+            onPress={onPress}
+            style={styles.rowIdent}
+          >
+            {ident}
+          </Pressable>
+        ) : (
+          <View style={styles.rowIdent}>{ident}</View>
+        )}
+        {actions ? <View style={styles.rowActions}>{actions}</View> : null}
       </View>
     </View>
   );
@@ -515,7 +557,8 @@ const styles = StyleSheet.create({
   iconGlyphDanger: { color: t.text.danger },
 
   // --- a person in a list --------------------------------------------------
-  personCard: {
+  headLine: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing(2) },
+  rowCard: {
     backgroundColor: t.bg.surface,
     borderRadius: 12,
     paddingVertical: spacing(2),
@@ -526,24 +569,24 @@ const styles = StyleSheet.create({
   },
   // Wraps rather than squeezes: a long name pushes the actions onto their own
   // line instead of crushing them (see `rowItem` for why shrink is never on).
-  personHead: {
+  rowHead2: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing(2),
     minHeight: 52,
   },
-  personIdent: { flexGrow: 1, flexShrink: 1, flexBasis: 180, gap: 2 },
-  personNameLine: {
+  rowIdent: { flexGrow: 1, flexShrink: 1, flexBasis: 180, gap: 2 },
+  rowTitleLine: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: spacing(2),
   },
-  personName: { fontSize: 16, fontWeight: '600', color: t.text.primary, flexShrink: 1 },
+  rowTitle: { fontSize: 16, fontWeight: '600', color: t.text.primary, flexShrink: 1 },
   // Centred when they wrap to their own line, right-hand end when they share the
   // name's line — one rule that reads correctly in both.
-  personActions: {
+  rowActions: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -554,7 +597,7 @@ const styles = StyleSheet.create({
   // secondary, not muted: an email address is content someone reads, and true
   // taupe on ivory is ~2.7:1 — reserved for text you could delete without
   // losing anything.
-  personDetail: { fontSize: 13, color: t.text.secondary },
+  rowDetail: { fontSize: 13, color: t.text.secondary },
   empty: { fontSize: 14, color: t.text.secondary, paddingVertical: spacing(3) },
   // Separated from the actions above it, so a destructive button is never the
   // one you hit by muscle memory.

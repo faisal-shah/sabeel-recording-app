@@ -132,7 +132,6 @@ export function CourseAttendanceScreen({
                 ) : (
                   <Text style={styles.notTaken}>Attendance not taken</Text>
                 )}
-                <Text style={styles.openHint}>Tap to open</Text>
               </Pressable>
             </Card>
           ))
@@ -165,7 +164,6 @@ export function CourseAttendanceScreen({
               ) : (
                 <Text style={styles.hint}>Catch-up: nothing required</Text>
               )}
-              <Text style={styles.openHint}>Tap to open</Text>
             </Pressable>
           </Card>
         ))
@@ -195,9 +193,6 @@ const styles = StyleSheet.create({
   tabTextOn: { color: t.accent.onAccent },
   name: { fontSize: 15, fontWeight: '600', color: t.text.primary },
   hint: { fontSize: 13, color: t.text.secondary },
-  // muted, not secondary: it is an affordance cue, not information — losing it
-  // costs the reader nothing.
-  openHint: { fontSize: 12, color: t.text.muted, marginTop: spacing(2) },
   counts: { fontSize: 14, color: t.text.secondary, marginTop: spacing(1) },
   present: { color: t.feedback.success, fontWeight: '600' },
   absent: { color: t.text.primary, fontWeight: '600' },

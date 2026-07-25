@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   Button,
   Card,
   Empty,
   Field,
+  ListRow,
   Notice,
-  Row,
   Screen,
   SectionTitle,
   StatusChip,
@@ -18,9 +17,7 @@ import {
   useCohorts,
   type CohortRow,
 } from '../structure';
-import { getTheme, spacing } from '../theme';
 
-const t = getTheme();
 
 /**
  * Admin-only: cohorts, and the archive switch that cascades to their courses.
@@ -90,25 +87,19 @@ export function CohortsScreen({ onOpen }: { onOpen: (cohort: CohortRow) => void 
         <Empty>No cohorts yet.</Empty>
       ) : (
         cohorts.map((c) => (
-          <Card key={c.id}>
-            <Pressable
-              testID={`cohort-open-${c.name}`}
-              accessibilityRole="button"
-              accessibilityLabel={`Open ${c.name}`}
-              onPress={() => onOpen(c)}
-            >
-              <Text style={styles.name}>{c.name}</Text>
-              <View style={styles.meta}>
-                <StatusChip status={c.archived ? 'archived' : 'active'} />
-                <Text style={styles.count}>{courseLabel(courseCounts[c.id] ?? 0)}</Text>
-                <Text style={styles.hint}>Tap to open</Text>
-              </View>
-            </Pressable>
-            <Row>
+          <ListRow
+            key={c.id}
+            testID={`cohort-open-${c.name}`}
+            name={c.name}
+            status={<StatusChip status={c.archived ? 'archived' : 'active'} />}
+            detail={courseLabel(courseCounts[c.id] ?? 0)}
+            onPress={() => onOpen(c)}
+            actions={
               <Button
                 testID={`cohort-archive-${c.name}`}
                 label={c.archived ? 'Reactivate' : 'Archive'}
                 variant="secondary"
+                compact
                 busy={busyId === c.id}
                 onPress={() =>
                   void run(
@@ -117,8 +108,8 @@ export function CohortsScreen({ onOpen }: { onOpen: (cohort: CohortRow) => void 
                   )
                 }
               />
-            </Row>
-          </Card>
+            }
+          />
         ))
       )}
     </Screen>
@@ -129,9 +120,3 @@ function courseLabel(n: number): string {
   return n === 1 ? '1 course' : `${n} courses`;
 }
 
-const styles = StyleSheet.create({
-  name: { fontSize: 16, fontWeight: '600', color: t.text.primary },
-  meta: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginTop: spacing(2) },
-  count: { fontSize: 13, fontWeight: '600', color: t.text.secondary },
-  hint: { fontSize: 13, color: t.text.muted },
-});

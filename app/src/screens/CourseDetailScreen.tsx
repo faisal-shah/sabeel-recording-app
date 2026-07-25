@@ -7,7 +7,7 @@ import {
   Field,
   IconButton,
   Notice,
-  PersonRow,
+  ListRow,
   Row,
   Screen,
   SectionTitle,
@@ -94,7 +94,10 @@ export function CourseDetailScreen({
   };
 
   return (
-    <Screen subtitle={cls.name}>
+    <Screen
+      subtitle={cls.name}
+      badge={<StatusChip status={cls.effectiveActive ? 'active' : 'inactive'} />}
+    >
       {error ? <Notice tone="error">{error}</Notice> : null}
 
       <Card>
@@ -105,16 +108,15 @@ export function CourseDetailScreen({
           variant="secondary"
           onPress={onOpenAttendance}
         />
-        <View style={styles.meta}>
-          <StatusChip status={cls.effectiveActive ? 'active' : 'inactive'} />
-          {!cls.effectiveActive ? (
-            <Text style={styles.hint}>
-              {cls.archivedAccess
-                ? 'archived — students can still listen'
-                : 'archived — listening is off'}
-            </Text>
-          ) : null}
-        </View>
+        {/* The chip itself now rides the heading line; only the consequence of
+            being archived still needs saying here. */}
+        {!cls.effectiveActive ? (
+          <Text style={styles.hint}>
+            {cls.archivedAccess
+              ? 'archived — students can still listen'
+              : 'archived — listening is off'}
+          </Text>
+        ) : null}
       </Card>
 
       {/* Course-level accountability at a glance. Zeroes out when archived (no
@@ -235,7 +237,7 @@ export function CourseDetailScreen({
             // email added nothing here (you identify classmates by name) and cost
             // a line each, which on a 20-student course is most of the screen.
             return (
-              <PersonRow
+              <ListRow
                 key={r.id}
                 name={who}
                 actions={
