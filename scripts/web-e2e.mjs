@@ -592,6 +592,33 @@ check(
   `${studentCsv.length} lines`,
 );
 
+// Both cuts of the report drill down, and land on the row that was tapped —
+// a report you cannot click through from is a dead end.
+const stuCard = admin.locator('[data-testid^="attendance-student-"]').first();
+const stuName = (await stuCard.innerText()).split('\n')[0].trim();
+await stuCard.click();
+await admin.waitForTimeout(2500);
+let drill = await admin.locator('body').innerText();
+check(
+  'a by-student card opens THAT student’s listening progress',
+  /required listening/i.test(drill) && drill.includes(stuName),
+  stuName,
+);
+
+await openHikam(admin);
+await tap(admin, 'nav-attendance');
+await admin.getByTestId('attendance-tab-sessions').waitFor({ timeout: 10000 });
+const sesCard = admin.locator('[data-testid^="attendance-session-"]').first();
+const sesName = (await sesCard.innerText()).split('\n')[0].trim();
+await sesCard.click();
+await admin.waitForTimeout(2500);
+drill = await admin.locator('body').innerText();
+check(
+  'a by-session card opens THAT session',
+  /ATTENDANCE/i.test(drill) && drill.includes(sesName),
+  sesName,
+);
+
 // The override is in the audit trail with its reason.
 await openHikam(admin);
 await tap(admin, 'nav-audit');

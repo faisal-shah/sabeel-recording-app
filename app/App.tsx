@@ -223,8 +223,17 @@ function CourseDetail({ isAdmin }: { isAdmin: boolean }) {
 }
 
 function CourseAttendance() {
+  const navigation = useNavigation<Nav>();
   const { cls } = useRoute<RouteProp<RootStackParamList, 'CourseAttendance'>>().params;
-  return <CourseAttendanceScreen cls={cls} />;
+  return (
+    <CourseAttendanceScreen
+      cls={cls}
+      onOpenSession={(sessionId) => navigation.navigate('SessionDetail', { sessionId, cls })}
+      onOpenStudent={(studentUid, studentName) =>
+        navigation.navigate('StudentLedger', { studentUid, studentName, cls })
+      }
+    />
+  );
 }
 
 function Sessions() {
@@ -234,17 +243,17 @@ function Sessions() {
     <SessionsScreen
       courseId={cls.id}
       courseName={cls.name}
-      onOpenSession={(session) => navigation.navigate('SessionDetail', { session, cls })}
+      onOpenSession={(session) => navigation.navigate('SessionDetail', { sessionId: session.id, cls })}
     />
   );
 }
 
 function SessionDetail({ isAdmin }: { isAdmin: boolean }) {
   const navigation = useNavigation<Nav>();
-  const { session, cls } = useRoute<RouteProp<RootStackParamList, 'SessionDetail'>>().params;
+  const { sessionId, cls } = useRoute<RouteProp<RootStackParamList, 'SessionDetail'>>().params;
   return (
     <SessionDetailScreen
-      sessionId={session.id}
+      sessionId={sessionId}
       cls={cls}
       isAdmin={isAdmin}
       onOpenLedger={(recording, s) => navigation.navigate('RecordingLedger', { recording, session: s, cls })}
@@ -287,7 +296,7 @@ function ZoomImport() {
       session={session}
       cls={cls}
       // After importing into this session, return to it (the draft is now there).
-      onImported={() => navigation.navigate('SessionDetail', { session, cls })}
+      onImported={() => navigation.navigate('SessionDetail', { sessionId: session.id, cls })}
     />
   );
 }

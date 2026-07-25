@@ -19,7 +19,15 @@ type Tab = 'sessions' | 'students';
  * the underlying reads are the same course-scoped session/roster/assignment
  * queries the rules already allow.
  */
-export function CourseAttendanceScreen({ cls }: { cls: CourseRow }) {
+export function CourseAttendanceScreen({
+  cls,
+  onOpenSession,
+  onOpenStudent,
+}: {
+  cls: CourseRow;
+  onOpenSession: (sessionId: string) => void;
+  onOpenStudent: (studentUid: string, studentName: string) => void;
+}) {
   const listenerError = useListenerError();
   const today = todayInZone(INSTITUTE_TIMEZONE);
   const report = useCourseAttendance(cls.id, today);
@@ -105,19 +113,27 @@ export function CourseAttendanceScreen({ cls }: { cls: CourseRow }) {
         ) : (
           report.sessions.map((s) => (
             <Card key={s.sessionId}>
-              <Text style={styles.name}>{s.title}</Text>
-              <Text style={styles.hint}>{s.date}</Text>
-              {s.submitted ? (
-                <Text style={styles.counts}>
-                  <Text style={styles.present}>{s.present} present</Text>
-                  {'   '}
-                  <Text style={styles.absent}>{s.absent} absent</Text>
-                  {'   '}
-                  <Text style={styles.excused}>{s.excused} excused</Text>
-                </Text>
-              ) : (
-                <Text style={styles.notTaken}>Attendance not taken</Text>
-              )}
+              <Pressable
+                testID={`attendance-session-${s.title}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${s.title}`}
+                onPress={() => onOpenSession(s.sessionId)}
+              >
+                <Text style={styles.name}>{s.title}</Text>
+                <Text style={styles.hint}>{s.date}</Text>
+                {s.submitted ? (
+                  <Text style={styles.counts}>
+                    <Text style={styles.present}>{s.present} present</Text>
+                    {'   '}
+                    <Text style={styles.absent}>{s.absent} absent</Text>
+                    {'   '}
+                    <Text style={styles.excused}>{s.excused} excused</Text>
+                  </Text>
+                ) : (
+                  <Text style={styles.notTaken}>Attendance not taken</Text>
+                )}
+                <Text style={styles.openHint}>Tap to open</Text>
+              </Pressable>
             </Card>
           ))
         )
@@ -126,23 +142,31 @@ export function CourseAttendanceScreen({ cls }: { cls: CourseRow }) {
       ) : (
         studentRows.map((s) => (
           <Card key={s.studentUid}>
-            <Text style={styles.name}>{nameOf(s.studentUid)}</Text>
-            <Text style={styles.counts}>
-              <Text style={styles.present}>{s.present} present</Text>
-              {'   '}
-              <Text style={styles.absent}>{s.absent} absent</Text>
-              {'   '}
-              <Text style={styles.excused}>{s.excused} excused</Text>
-              {s.notMarked > 0 ? <Text style={styles.hint}>{`   ${s.notMarked} not marked`}</Text> : null}
-            </Text>
-            {s.assigned > 0 ? (
-              <Text style={styles.catchup}>
-                Catch-up: {s.completed}/{s.assigned} complete
-                {s.overdue > 0 ? <Text style={styles.overdue}>{`  ·  ${s.overdue} overdue`}</Text> : null}
+            <Pressable
+              testID={`attendance-student-${nameOf(s.studentUid)}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Open listening progress for ${nameOf(s.studentUid)}`}
+              onPress={() => onOpenStudent(s.studentUid, nameOf(s.studentUid))}
+            >
+              <Text style={styles.name}>{nameOf(s.studentUid)}</Text>
+              <Text style={styles.counts}>
+                <Text style={styles.present}>{s.present} present</Text>
+                {'   '}
+                <Text style={styles.absent}>{s.absent} absent</Text>
+                {'   '}
+                <Text style={styles.excused}>{s.excused} excused</Text>
+                {s.notMarked > 0 ? <Text style={styles.hint}>{`   ${s.notMarked} not marked`}</Text> : null}
               </Text>
-            ) : (
-              <Text style={styles.hint}>Catch-up: nothing required</Text>
-            )}
+              {s.assigned > 0 ? (
+                <Text style={styles.catchup}>
+                  Catch-up: {s.completed}/{s.assigned} complete
+                  {s.overdue > 0 ? <Text style={styles.overdue}>{`  ·  ${s.overdue} overdue`}</Text> : null}
+                </Text>
+              ) : (
+                <Text style={styles.hint}>Catch-up: nothing required</Text>
+              )}
+              <Text style={styles.openHint}>Tap to open</Text>
+            </Pressable>
           </Card>
         ))
       )}
@@ -171,6 +195,9 @@ const styles = StyleSheet.create({
   tabTextOn: { color: t.accent.onAccent },
   name: { fontSize: 15, fontWeight: '600', color: t.text.primary },
   hint: { fontSize: 13, color: t.text.secondary },
+  // muted, not secondary: it is an affordance cue, not information — losing it
+  // costs the reader nothing.
+  openHint: { fontSize: 12, color: t.text.muted, marginTop: spacing(2) },
   counts: { fontSize: 14, color: t.text.secondary, marginTop: spacing(1) },
   present: { color: t.feedback.success, fontWeight: '600' },
   absent: { color: t.text.primary, fontWeight: '600' },

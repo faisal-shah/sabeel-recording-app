@@ -14,7 +14,11 @@ export type RootStackParamList = {
   CourseDetail: { cls: CourseRow };
   CourseAttendance: { cls: CourseRow };
   Sessions: { cls: CourseRow };
-  SessionDetail: { session: SessionRow; cls: CourseRow };
+  /** By id, not by document: the screen re-reads the session live, so a snapshot
+   *  in the params would only ever be a staler copy of what it already has — and
+   *  carrying the id lets any screen that knows one (the attendance report) open
+   *  it. */
+  SessionDetail: { sessionId: string; cls: CourseRow };
   RecordingLedger: { recording: RecordingRow; session: SessionRow; cls: CourseRow };
   StudentLedger: { studentUid: string; studentName: string; cls: CourseRow };
   Library: undefined;
