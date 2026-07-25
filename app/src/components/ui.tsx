@@ -23,34 +23,31 @@ const t = getTheme();
  * Page wrapper. Renders the latest live-data error above the content — a
  * rejected listener otherwise dies as a console warning nobody sees on a phone.
  */
-export function Screen({ title, subtitle, badge, children }: {
+export function Screen({ title, subtitle, status, children }: {
   title?: string;
   subtitle?: string;
-  /** A status chip belonging to the thing being viewed — sits on the heading's
-   *  own line rather than costing a row of its own further down. */
-  badge?: ReactNode;
+  /** The state of the thing this screen is about. Rendered as a lamp on the
+   *  LEFT of the heading, with the heading centred against it — the same shape
+   *  on a phone and on a wide screen. */
+  status?: string;
   children: ReactNode;
 }) {
   const listenerError = useListenerError();
-  // The badge rides whichever heading line exists.
-  const titleLine = title ? (
-    <View style={styles.headLine}>
-      <Text style={styles.h1}>{title}</Text>
-      {badge ?? null}
-    </View>
-  ) : null;
-  const subtitleLine = subtitle ? (
-    <View style={styles.headLine}>
-      <Text style={styles.lede}>{subtitle}</Text>
-      {title ? null : (badge ?? null)}
-    </View>
-  ) : null;
+  const heading =
+    title || subtitle ? (
+      <View style={styles.headRow}>
+        {status ? <StatusLight status={status} /> : null}
+        <View style={styles.headText}>
+          {title ? <Text style={styles.h1}>{title}</Text> : null}
+          {subtitle ? <Text style={styles.lede}>{subtitle}</Text> : null}
+        </View>
+      </View>
+    ) : null;
   return (
     <KbScroll style={styles.canvas} contentContainerStyle={styles.content}>
       {/* Chrome is ivory with a dark title, never a raspberry app bar: a
           brand-coloured bar on every screen puts raspberry far past its share. */}
-      {titleLine}
-      {subtitleLine}
+      {heading}
       {listenerError ? (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>{listenerError}</Text>
@@ -328,20 +325,43 @@ const STATUS_TONE: Record<string, 'good' | 'bad' | 'attention' | 'neutral'> = {
   inactive: 'neutral',
 };
 
-export function StatusChip({ status }: { status: string }) {
+/** One place decides what a status colour means; chip and light both read it. */
+function statusColour(status: string): string {
   const tone = STATUS_TONE[status] ?? 'neutral';
-  const dot =
-    tone === 'good'
-      ? t.feedback.success
-      : tone === 'bad'
-        ? t.feedback.danger
-        : tone === 'attention'
-          ? t.feedback.warning
-          : t.text.muted;
+  return tone === 'good'
+    ? t.feedback.success
+    : tone === 'bad'
+      ? t.feedback.danger
+      : tone === 'attention'
+        ? t.feedback.warning
+        : t.text.muted;
+}
+
+export function StatusChip({ status }: { status: string }) {
   return (
     <View style={styles.chip}>
-      <View style={[styles.chipDot, { backgroundColor: dot }]} />
+      <View style={[styles.chipDot, { backgroundColor: statusColour(status) }]} />
       <Text style={styles.chipText}>{status}</Text>
+    </View>
+  );
+}
+
+/**
+ * The status of the thing a whole screen is about: a lamp with its word beneath
+ * it, sitting to the LEFT of the heading with the title centred against it.
+ *
+ * Distinct from `StatusChip`, which is an inline tag in a list row. Set beside a
+ * page heading a chip reads as an afterthought stuck to the end of the name; a
+ * lamp reads as the state of the thing, is findable in the same spot on every
+ * screen, and costs no vertical space of its own.
+ */
+function StatusLight({ status }: { status: string }) {
+  return (
+    <View style={styles.light} accessibilityLabel={`Status: ${status}`}>
+      <View style={[styles.lightDot, { backgroundColor: statusColour(status) }]} />
+      <Text style={styles.lightText} numberOfLines={1}>
+        {status}
+      </Text>
     </View>
   );
 }
@@ -557,7 +577,15 @@ const styles = StyleSheet.create({
   iconGlyphDanger: { color: t.text.danger },
 
   // --- a person in a list --------------------------------------------------
-  headLine: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing(2) },
+  // The heading: lamp on the left, title centred against it.
+  headRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
+  headText: { flexShrink: 1, flexGrow: 1 },
+  light: { alignItems: 'center', width: 56 },
+  // Bigger than the chip's 8pt dot — at a page heading this is the thing you
+  // look for first.
+  lightDot: { width: 16, height: 16, borderRadius: 8 },
+  // secondary, not muted: the status word is content, and true taupe is ~2.7:1.
+  lightText: { fontSize: 11, color: t.text.secondary, marginTop: spacing(1), textAlign: 'center' },
   rowCard: {
     backgroundColor: t.bg.surface,
     borderRadius: 12,

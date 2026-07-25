@@ -11,7 +11,6 @@ import {
   Row,
   Screen,
   SectionTitle,
-  StatusChip,
 } from '../components/ui';
 import { INSTITUTE_TIMEZONE, todayInZone } from '@sabeel/shared';
 import { useCourseLedger } from '../ledger';
@@ -96,7 +95,7 @@ export function CourseDetailScreen({
   return (
     <Screen
       subtitle={cls.name}
-      badge={<StatusChip status={cls.effectiveActive ? 'active' : 'inactive'} />}
+      status={cls.effectiveActive ? 'active' : 'inactive'}
     >
       {error ? <Notice tone="error">{error}</Notice> : null}
 
