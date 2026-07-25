@@ -482,21 +482,6 @@ function RecordingCard({
         <Notice tone="error">{r.attentionReason}</Notice>
       ) : null}
 
-      {/* The way back from an audio-less recording. Without it, Remove audio and
-          any failed upload are one-way doors out of a usable recording. */}
-      {needsAudio && canPickAudio ? (
-        <Button testID="recording-upload" label="Upload audio…" onPress={onUpload} />
-      ) : null}
-      {r.status === 'needsAttention' && r.source === 'zoom' ? (
-        <Button
-          label="Retry import"
-          variant="secondary"
-          busy={busy === `retry-${r.id}`}
-          disabled={uploading}
-          onPress={() => onRun(`retry-${r.id}`, () => retryZoomImport({ recordingId: r.id }))}
-        />
-      ) : null}
-
       <ConfirmDanger
         // Never for a live recording — the server refuses it too (unpublish or
         // archive first), so offering the button would only produce an error.
@@ -513,6 +498,23 @@ function RecordingCard({
         confirmTestID="recording-delete-confirm"
         onConfirm={() => onRun(`del-${r.id}`, () => deleteRecording({ recordingId: r.id }))}
       >
+        {/* EVERY action on this card belongs inside the confirm, so opening it
+            replaces all of them. These two sat outside at first and stayed
+            tappable underneath "discard this?" — the exact flaw ConfirmDanger
+            exists to prevent, and one only a native run in the needs-audio state
+            surfaced. */}
+        {needsAudio && canPickAudio ? (
+          <Button testID="recording-upload" label="Upload audio…" onPress={onUpload} />
+        ) : null}
+        {r.status === 'needsAttention' && r.source === 'zoom' ? (
+          <Button
+            label="Retry import"
+            variant="secondary"
+            busy={busy === `retry-${r.id}`}
+            disabled={uploading}
+            onPress={() => onRun(`retry-${r.id}`, () => retryZoomImport({ recordingId: r.id }))}
+          />
+        ) : null}
         <Row>
           {r.audioPath ? (
             <Button
