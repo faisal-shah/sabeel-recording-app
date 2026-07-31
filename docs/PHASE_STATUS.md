@@ -34,6 +34,30 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-07-31 — **One Sabeel mark, badged per app; no wordmark** (v0.2.8). The
+  three Sabeel apps now share one calligraphic mark and are told apart only by a
+  Dark Raspberry badge — board, stopwatch, microphone. "SABEEL INSTITUTE" is
+  dropped from the icon: at 48dp it is a smudge, and it costs the space the badge
+  needs to read. Two things about this change are easy to get wrong:
+  - **`app.json` alone ships nothing.** Because `android/` is committed, Gradle
+    compiles `res/mipmap-*` and never reads `app.json`. Both must change
+    together, and they are kept identical so a later `expo prebuild` is a no-op.
+  - **Do not run `expo prebuild` to regenerate them.** It rewrites the native
+    project from its template and silently reverts hand edits — in this repo
+    `android/build.gradle` carries the `google-services` classpath and the
+    jitpack repo, neither of which the template knows about. The icons come from
+    one generator (`scripts/make-app-icons.py recordings` in the kanban repo),
+    which re-proves its geometry on every run.
+
+  The safe-radius rule is the part worth writing down, because a plausible check
+  gets it wrong: the adaptive foreground fills all 108dp and only the central
+  72dp survives the mask, so the safe radius on a 1024 canvas is **341px**
+  (66.67%, not the ~68% that "roughly two thirds" suggests). Measuring *any*
+  non-transparent pixel fails it — the ivory halo around the badge reaches 351px.
+  What matters is *ink*: raspberry, calligraphy and gold all stop at 337px, and
+  the halo is `#F6EBDD`, identical to the adaptive background, so the mask clips
+  it invisibly. Verify against visible ink, not against alpha.
+
 - 2026-07-25 — **A control may wrap, but must never be crushed** (v0.2.3). A
   screen-recording showed **Publish** rendered at a third the width of the button
   beside it with its label broken mid-word — "Publ / ish". `Row`'s items had

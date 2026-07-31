@@ -34,7 +34,7 @@ cover = f"""
   <img class="cover-logo" src="data:image/png;base64,{logo_b64}" alt="Sabeel Institute">
   <div class="cover-title">Class Recordings</div>
   <div class="cover-sub">User Manual</div>
-  <div class="cover-meta">App version 0.2.7 &nbsp;·&nbsp; July 2026</div>
+  <div class="cover-meta">App version 0.2.8 &nbsp;·&nbsp; July 2026</div>
 </div>
 """
 
