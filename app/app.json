@@ -10,17 +10,23 @@
       "android",
       "web"
     ],
+    "icon": "./assets/icon.png",
     "android": {
       "package": "com.sabeelinstitute.classrecordings",
       "googleServicesFile": "./google-services.json",
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.POST_NOTIFICATIONS"
-      ]
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F6EBDD"
+      }
     },
     "web": {
       "bundler": "metro",
-      "output": "single"
+      "output": "single",
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "@react-native-google-signin/google-signin",
