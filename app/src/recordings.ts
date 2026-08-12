@@ -1,4 +1,4 @@
-import { collection, orderBy, query, where } from 'firebase/firestore';
+import { collection, doc, orderBy, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { ref, uploadBytesResumable } from 'firebase/storage';
 import {
@@ -8,7 +8,7 @@ import {
   type RecordingStatus,
 } from '@sabeel/shared';
 import { db, functions, storage } from './firebase';
-import { useLiveQuery } from './liveQuery';
+import { useLiveDoc, useLiveQuery } from './liveQuery';
 
 export interface RecordingRow extends RecordingDoc {
   id: string;
@@ -65,21 +65,24 @@ export const createRecording = call<{ sessionId: string }, { id: string; audioPa
   'createRecording',
 );
 
-/** Live single recording (a session's, for the session detail screen). */
+/**
+ * One recording, live — a DOCUMENT listener, for the same reason as useCourse.
+ *
+ * The player resolves its recording through this and is reached by students,
+ * whose arm on the recordings rule is a per-document check (published, and they
+ * are enrolled in its course). A `__name__` query would be a list instead, and
+ * would fail closed on exactly that population.
+ */
 export function useRecording(recordingId: string | null): RecordingRow | null {
-  const rows = useLiveQuery<RecordingRow[]>(
-    () =>
-      recordingId
-        ? query(collection(db, COLLECTIONS.recordings), where('__name__', '==', recordingId))
-        : null,
+  return useLiveDoc<RecordingRow | null>(
+    () => (recordingId ? doc(db, COLLECTIONS.recordings, recordingId) : null),
     [recordingId],
     {
       label: 'recording',
-      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as RecordingDoc) })),
-      empty: [],
+      map: (snap) => ({ id: snap.id, ...(snap.data() as RecordingDoc) }),
+      empty: null,
     },
   );
-  return rows[0] ?? null;
 }
 
 export const finalizeRecordingUpload = call<

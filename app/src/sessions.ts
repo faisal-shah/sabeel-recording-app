@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, orderBy, query, where } from 'firebase/firestore';
+import { collection, orderBy, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { COLLECTIONS, type AttendanceStatus, type SessionDoc } from '@sabeel/shared';
 import { db, functions } from './firebase';
@@ -66,10 +66,4 @@ export function useSession(sessionId: string | null): SessionRow | null {
     },
   );
   return rows[0] ?? null;
-}
-
-/** Load one session by id (for opening its recording's player directly). */
-export async function loadSession(id: string): Promise<SessionRow | null> {
-  const snap = await getDoc(doc(db, COLLECTIONS.sessions, id));
-  return snap.exists() ? { id: snap.id, ...(snap.data() as SessionDoc) } : null;
 }

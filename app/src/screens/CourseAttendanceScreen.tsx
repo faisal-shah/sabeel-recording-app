@@ -26,7 +26,7 @@ export function CourseAttendanceScreen({
 }: {
   cls: CourseRow;
   onOpenSession: (sessionId: string) => void;
-  onOpenStudent: (studentUid: string, studentName: string) => void;
+  onOpenStudent: (studentUid: string) => void;
 }) {
   const listenerError = useListenerError();
   const today = todayInZone(INSTITUTE_TIMEZONE);
@@ -145,7 +145,7 @@ export function CourseAttendanceScreen({
               testID={`attendance-student-${nameOf(s.studentUid)}`}
               accessibilityRole="button"
               accessibilityLabel={`Open listening progress for ${nameOf(s.studentUid)}`}
-              onPress={() => onOpenStudent(s.studentUid, nameOf(s.studentUid))}
+              onPress={() => onOpenStudent(s.studentUid)}
             >
               <Text style={styles.name}>{nameOf(s.studentUid)}</Text>
               <Text style={styles.counts}>

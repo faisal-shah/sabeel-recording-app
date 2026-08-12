@@ -90,35 +90,29 @@ export function useCoursesInCohort(cohortId: string | null): CourseRow[] {
 }
 
 /**
- * One course, live.
+ * One course, live — a DOCUMENT listener, which is what makes it usable by
+ * everyone who needs it.
  *
- * The course detail screen MUST use this rather than the CourseRow it was
- * navigated with. A navigation param is a snapshot frozen at the moment of the
- * tap: every control on that screen (managers, archive, archived-listening,
- * rename) both renders from the course and computes its next value from it, so
- * a frozen copy means no control ever appears to work, and — worse — each write
- * is computed from the same pre-change state, so consecutive edits silently
- * overwrite one another.
+ * It must not be a `where('__name__','==',id)` query: that is a LIST, and the
+ * courses rule grants students `get` without `list`. The player and the course
+ * screens are reached by staff AND students, so a list here fails closed on a
+ * student — an empty screen and a console warning, not an error anyone notices.
+ * The e2e caught exactly that.
  *
- * STAFF ONLY. This is a list query (`__name__ ==`), and the courses rule gives
- * students `get` without `list` — they read a course through their enrollment,
- * one document at a time. On a student screen this fails closed as a listener
- * error and an empty screen; use the one-shot get in MyRecordingsScreen instead.
+ * The screens that EDIT a course also read it through this, so none of them
+ * renders from the navigation param it arrived with — a copy frozen at the tap,
+ * which is how the manager toggles came to do nothing.
  */
 export function useCourse(courseId: string | null): CourseRow | null {
-  const rows = useLiveQuery<CourseRow[]>(
-    () =>
-      courseId
-        ? query(collection(db, COLLECTIONS.courses), where('__name__', '==', courseId))
-        : null,
+  return useLiveDoc<CourseRow | null>(
+    () => (courseId ? doc(db, COLLECTIONS.courses, courseId) : null),
     [courseId],
     {
       label: 'course',
-      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CourseDoc) })),
-      empty: [],
+      map: (snap) => ({ id: snap.id, ...(snap.data() as CourseDoc) }),
+      empty: null,
     },
   );
-  return rows[0] ?? null;
 }
 
 /**

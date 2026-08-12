@@ -245,6 +245,44 @@ for (const name of ['Hikam Foundations', 'Arabic I']) {
 check('a cohort and two courses are created', true);
 await shot(admin, '04-courses');
 
+// ------------------------------------------------------- browser history --
+// Back used to leave the site: with no `linking` config React Navigation never
+// touches history, so the whole app sat in one entry. Every screen now has a
+// path, which also means the params must stay ids — a document param serialises
+// to "[object Object]" in the URL and comes back as that string.
+const path = () => new URL(admin.url()).pathname;
+await goHome(admin);
+await tap(admin, 'nav-cohorts');
+check('navigating pushes a real URL', path() === '/cohorts', path());
+await tap(admin, 'cohort-open-Autumn 2026');
+await admin.waitForTimeout(1200);
+const cohortUrl = admin.url();
+check('a cohort is addressable', /^\/cohorts\/.+/.test(path()), path());
+await tap(admin, 'course-open-Hikam Foundations');
+await admin.waitForTimeout(1200);
+const courseUrl = admin.url();
+check('a course is addressable', /^\/courses\/.+/.test(path()), path());
+
+await admin.goBack();
+await admin.waitForTimeout(1500);
+check('Back returns to the cohort rather than leaving the site', admin.url() === cohortUrl, path());
+await admin.goForward();
+await admin.waitForTimeout(1500);
+check('Forward returns to the course', admin.url() === courseUrl, path());
+
+// Cold-loading a deep URL must land on that screen, which only works because the
+// screen resolves its documents from the id rather than a passed-in snapshot.
+await admin.goto(courseUrl, { waitUntil: 'domcontentloaded' });
+await admin.waitForTimeout(5000);
+check(
+  'a course URL opened cold renders that course',
+  (await admin.locator('body').innerText()).toLowerCase().includes('hikam foundations'),
+  path(),
+);
+// Leave the browser back on the cohort, where the next section starts from.
+await admin.goto(cohortUrl, { waitUntil: 'domcontentloaded' });
+await admin.waitForTimeout(3000);
+
 // Scope ONE course to the manager.
 //
 // The toggle is asserted from the ADMIN's own screen, three times, because the

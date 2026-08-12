@@ -37,12 +37,9 @@ export function courseLabel(n: number): string {
  */
 export function CoursesScreen({
   cohortId,
-  cohortName,
   onOpen,
 }: {
   cohortId: string;
-  /** Seeds the header for the first frame, before the live cohort arrives. */
-  cohortName: string;
   onOpen: (cls: CourseRow) => void;
 }) {
   const cohort = useCohort(cohortId);
@@ -65,7 +62,7 @@ export function CoursesScreen({
   };
 
   return (
-    <Screen subtitle={cohort?.name ?? cohortName} status={archived ? 'archived' : 'active'}>
+    <Screen subtitle={cohort?.name ?? ''} status={archived ? 'archived' : 'active'}>
       {error ? <Notice tone="error">{error}</Notice> : null}
       {archived ? (
         <Notice tone="info">

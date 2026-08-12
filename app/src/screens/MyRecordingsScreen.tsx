@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { collection, doc, query, where } from 'firebase/firestore';
-import { COLLECTIONS, type CourseDoc, type RecordingDoc } from '@sabeel/shared';
+import { collection, query, where } from 'firebase/firestore';
+import { COLLECTIONS, type RecordingDoc } from '@sabeel/shared';
 import { Card, Empty, Notice, Screen, SectionTitle } from '../components/ui';
 import { db } from '../firebase';
-import { useLiveDoc, useLiveQuery } from '../liveQuery';
+import { useLiveQuery } from '../liveQuery';
 import { useMyAssignments } from '../completion';
-import { useStudentEnrollments, type CourseRow } from '../structure';
+import { useCourse, useStudentEnrollments, type CourseRow } from '../structure';
 import type { RecordingRow } from '../recordings';
 import { getTheme, spacing } from '../theme';
 
@@ -52,34 +52,6 @@ export function MyRecordingsScreen({
         ))
       )}
     </Screen>
-  );
-}
-
-/**
- * One course by id, live.
- *
- * A DOCUMENT listener, not the list-shaped useCourse in structure.ts: a student
- * is granted `get` on a course they are enrolled in and never `list`, and
- * `where('__name__','==',id)` is a list. The list form fails closed here — empty
- * screen, listener error — which is why the distinction is worth the comment.
- *
- * Live rather than a one-shot get because this screen decides two things from
- * the course: whether to show the archived-listening notice, and which course it
- * hands the player, whose transport is gated on the same flags. Frozen at mount,
- * a student who was browsing when staff archived the course saw no notice and
- * reached a player with working controls, only to be refused at the point of
- * play by getPlaybackUrl (which re-reads the course, so the rule always held —
- * but as a dead end rather than an explanation).
- */
-function useCourse(courseId: string): CourseRow | null {
-  return useLiveDoc<CourseRow | null>(
-    () => doc(db, COLLECTIONS.courses, courseId),
-    [courseId],
-    {
-      label: 'studentCourse',
-      map: (snap) => ({ id: snap.id, ...(snap.data() as CourseDoc) }),
-      empty: null,
-    },
   );
 }
 

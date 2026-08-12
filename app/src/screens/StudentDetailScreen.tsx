@@ -45,7 +45,7 @@ export function StudentDetailScreen({
   isAdmin: boolean;
   /** The signed-in staff member, for the manager's course list. */
   uid: string;
-  onOpenCourse: (cls: CourseRow, studentName: string) => void;
+  onOpenCourse: (cls: CourseRow) => void;
 }) {
   const student = useStudent(studentUid);
   const [busy, setBusy] = useState<string | null>(null);
@@ -145,7 +145,7 @@ function AdminCourses({
 }: {
   studentUid: string;
   who: string;
-  onOpenCourse: (cls: CourseRow, studentName: string) => void;
+  onOpenCourse: (cls: CourseRow) => void;
 }) {
   const enrollments = useStudentEnrollments(studentUid);
   const courses = useAllCourses(true);
@@ -194,7 +194,7 @@ function ManagerCourses({
   studentUid: string;
   uid: string;
   who: string;
-  onOpenCourse: (cls: CourseRow, studentName: string) => void;
+  onOpenCourse: (cls: CourseRow) => void;
 }) {
   const courses = useMyCourses(uid);
   const cohortNameOf = useCohortName();
@@ -232,7 +232,7 @@ function ManagedCourseRow({
   cohortName: string;
   studentUid: string;
   who: string;
-  onOpenCourse: (cls: CourseRow, studentName: string) => void;
+  onOpenCourse: (cls: CourseRow) => void;
 }) {
   // A document read, not `where('__name__','==')`: the latter is a LIST, and the
   // manager arm is affordable per-document but not per-row across courses.
@@ -268,7 +268,7 @@ function CourseEnrollmentRow({
   cohortName: string;
   active: boolean;
   who: string;
-  onOpenCourse: (cls: CourseRow, studentName: string) => void;
+  onOpenCourse: (cls: CourseRow) => void;
 }) {
   return (
     <ListRow
@@ -278,7 +278,7 @@ function CourseEnrollmentRow({
       detail={cohortName || undefined}
       status={<StatusChip status={active ? 'active' : 'inactive'} />}
       openLabel={`Open ${who}'s progress in ${course.name}`}
-      onPress={() => onOpenCourse(course, who)}
+      onPress={() => onOpenCourse(course)}
     />
   );
 }

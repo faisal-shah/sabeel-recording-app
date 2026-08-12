@@ -1,9 +1,10 @@
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import {
   NavigationContainer,
+  type LinkingOptions,
   type NavigationProp,
   type RouteProp,
   useNavigation,
@@ -35,13 +36,84 @@ import { PlayerScreen } from './src/screens/PlayerScreen';
 import { MyCoursesScreen } from './src/screens/MyCoursesScreen';
 import { TokensScreen } from './src/screens/TokensScreen';
 import type { RootStackParamList } from './src/nav';
-import { loadSession } from './src/sessions';
+// Aliased: `useSession` here is the AUTH session, imported above.
+import { useSession as useSessionDoc } from './src/sessions';
+import { useRecording } from './src/recordings';
+import { useStudent } from './src/students';
 import { useCourse } from './src/structure';
+import { Empty, Screen } from './src/components/ui';
 import { getTheme } from './src/theme';
 
 const t = getTheme();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 type Nav = NavigationProp<RootStackParamList>;
+
+/**
+ * What makes the browser's Back button work.
+ *
+ * React Navigation only touches browser history when a `linking` config is
+ * present — with none, the whole app lives in one history entry and Back leaves
+ * the site. Every screen therefore needs a path: a screen without one
+ * contributes nothing to the URL, so navigating to it adds no history entry and
+ * Back skips straight past it.
+ *
+ * WEB ONLY, deliberately. Native already has a working back gesture through the
+ * stack, and enabling it there would mean an `expo-linking` dependency and a
+ * scheme to register for no benefit.
+ */
+const linking: LinkingOptions<RootStackParamList> = {
+  enabled: Platform.OS === 'web',
+  prefixes: Platform.OS === 'web' && typeof window !== 'undefined' ? [window.location.origin] : [],
+  // Nested under the resource they belong to, so a URL reads as a place:
+  // /courses/<id>/sessions/<id> rather than a flat list of screen names.
+  config: {
+    screens: {
+      Home: '',
+      Staff: 'staff',
+      Students: 'students',
+      StudentDetail: 'students/:studentUid',
+      Cohorts: 'cohorts',
+      Courses: 'cohorts/:cohortId',
+      CourseDetail: 'courses/:courseId',
+      CourseAttendance: 'courses/:courseId/attendance',
+      Sessions: 'courses/:courseId/sessions',
+      SessionDetail: 'courses/:courseId/sessions/:sessionId',
+      StudentLedger: 'courses/:courseId/students/:studentUid',
+      RecordingLedger: 'recordings/:recordingId/progress',
+      ZoomImport: 'sessions/:sessionId/import',
+      Player: 'play/:recordingId',
+      Library: 'library',
+      Audit: 'audit',
+      MyCourses: 'my-courses',
+      MyRecordings: 'my-recordings',
+      Tokens: 'tokens',
+    },
+  },
+};
+
+/** Otherwise the browser tab reads the route name — "CourseDetail". */
+const documentTitle = {
+  formatter: (options?: { title?: string }, route?: { name?: string }) =>
+    `${options?.title ?? route?.name ?? ''} · Class Recordings`,
+};
+
+/**
+ * Shown while a screen's documents are still resolving from their ids.
+ *
+ * KNOWN GAP: a live document hook returns its empty value both while the first
+ * snapshot is in flight and when the document does not exist, so a URL pointing
+ * at something deleted sits here rather than saying so. Telling those apart
+ * needs a "has the listener fired?" flag threaded through useLiveDoc, which is
+ * worth doing the first time someone hits it — deep links only became possible
+ * in this change, so nobody has a stale one yet.
+ */
+function Loading() {
+  return (
+    <Screen>
+      <Empty>Loading…</Empty>
+    </Screen>
+  );
+}
 
 // Chrome is ivory with a dark title, deliberately not a raspberry app bar —
 // a brand-coloured header on every screen puts raspberry far past its share.
@@ -90,7 +162,7 @@ export default function App() {
       const role = claims.role as Role;
       const isAdmin = role === 'admin';
       content = (
-        <NavigationContainer theme={navTheme}>
+        <NavigationContainer theme={navTheme} linking={linking} documentTitle={documentTitle}>
           <Stack.Navigator screenOptions={{ headerTintColor: t.text.primary }}>
             {/* Every screen inside the navigator keeps its header: it carries the
                 back affordance on pushed screens, and on Home it is what provides
@@ -180,7 +252,7 @@ function Landing({ name, role, uid }: { name: string; role: Role; uid: string })
     return (
       <StudentHomeScreen
         uid={uid}
-        onOpen={(recording, cls) => navigation.navigate('Player', { recording, cls })}
+        onOpen={(recording) => navigation.navigate('Player', { recordingId: recording.id })}
         onBrowse={() => navigation.navigate('MyRecordings')}
       />
     );
@@ -190,14 +262,16 @@ function Landing({ name, role, uid }: { name: string; role: Role; uid: string })
       name={name}
       role={role}
       onOpen={(route) => navigation.navigate(route)}
-      onOpenAudit={() => navigation.navigate('Audit', { courseId: null, title: 'All courses' })}
+      onOpenAudit={() => navigation.navigate('Audit', {})}
     />
   );
 }
 
 function Cohorts() {
   const navigation = useNavigation<Nav>();
-  return <CohortsScreen onOpen={(cohort) => navigation.navigate('Courses', { cohort })} />;
+  return (
+    <CohortsScreen onOpen={(cohort) => navigation.navigate('Courses', { cohortId: cohort.id })} />
+  );
 }
 
 function Students({ isAdmin, uid }: { isAdmin: boolean; uid: string }) {
@@ -219,82 +293,86 @@ function StudentDetail({ isAdmin, uid }: { isAdmin: boolean; uid: string }) {
       studentUid={studentUid}
       isAdmin={isAdmin}
       uid={uid}
-      onOpenCourse={(cls, studentName) =>
-        navigation.navigate('StudentLedger', { studentUid, studentName, cls })
-      }
+      onOpenCourse={(cls) => navigation.navigate('StudentLedger', { studentUid, courseId: cls.id })}
     />
   );
 }
 
 function Courses() {
   const navigation = useNavigation<Nav>();
-  const { cohort } = useRoute<RouteProp<RootStackParamList, 'Courses'>>().params;
+  const { cohortId } = useRoute<RouteProp<RootStackParamList, 'Courses'>>().params;
   return (
     <CoursesScreen
-      cohortId={cohort.id}
-      cohortName={cohort.name}
-      onOpen={(cls) => navigation.navigate('CourseDetail', { cls })}
+      cohortId={cohortId}
+      onOpen={(cls) => navigation.navigate('CourseDetail', { courseId: cls.id })}
     />
   );
 }
 
 function CourseDetail({ isAdmin }: { isAdmin: boolean }) {
   const navigation = useNavigation<Nav>();
-  const { cls: seed } = useRoute<RouteProp<RootStackParamList, 'CourseDetail'>>().params;
-  // The param seeds the first frame; everything rendered from here on is live,
-  // because this screen edits the course it displays. See useCourse.
-  const cls = useCourse(seed.id) ?? seed;
+  const { courseId } = useRoute<RouteProp<RootStackParamList, 'CourseDetail'>>().params;
+  const cls = useCourse(courseId);
+  if (!cls) return <Loading />;
   return (
     <CourseDetailScreen
       cls={cls}
       isAdmin={isAdmin}
-      onOpenSessions={() => navigation.navigate('Sessions', { cls })}
-      onOpenAttendance={() => navigation.navigate('CourseAttendance', { cls })}
-      onOpenStudent={(studentUid, studentName) =>
-        navigation.navigate('StudentLedger', { studentUid, studentName, cls })
-      }
-      onOpenAudit={() => navigation.navigate('Audit', { courseId: cls.id, title: cls.name })}
+      onOpenSessions={() => navigation.navigate('Sessions', { courseId })}
+      onOpenAttendance={() => navigation.navigate('CourseAttendance', { courseId })}
+      onOpenStudent={(studentUid) => navigation.navigate('StudentLedger', { studentUid, courseId })}
+      onOpenAudit={() => navigation.navigate('Audit', { courseId })}
     />
   );
 }
 
 function CourseAttendance() {
   const navigation = useNavigation<Nav>();
-  const { cls } = useRoute<RouteProp<RootStackParamList, 'CourseAttendance'>>().params;
+  const { courseId } = useRoute<RouteProp<RootStackParamList, 'CourseAttendance'>>().params;
+  const cls = useCourse(courseId);
+  if (!cls) return <Loading />;
   return (
     <CourseAttendanceScreen
       cls={cls}
-      onOpenSession={(sessionId) => navigation.navigate('SessionDetail', { sessionId, cls })}
-      onOpenStudent={(studentUid, studentName) =>
-        navigation.navigate('StudentLedger', { studentUid, studentName, cls })
-      }
+      onOpenSession={(sessionId) => navigation.navigate('SessionDetail', { sessionId, courseId })}
+      onOpenStudent={(studentUid) => navigation.navigate('StudentLedger', { studentUid, courseId })}
     />
   );
 }
 
 function Sessions() {
   const navigation = useNavigation<Nav>();
-  const { cls } = useRoute<RouteProp<RootStackParamList, 'Sessions'>>().params;
+  const { courseId } = useRoute<RouteProp<RootStackParamList, 'Sessions'>>().params;
+  const cls = useCourse(courseId);
+  if (!cls) return <Loading />;
   return (
     <SessionsScreen
-      courseId={cls.id}
+      courseId={courseId}
       courseName={cls.name}
-      onOpenSession={(session) => navigation.navigate('SessionDetail', { sessionId: session.id, cls })}
+      onOpenSession={(session) =>
+        navigation.navigate('SessionDetail', { sessionId: session.id, courseId })
+      }
     />
   );
 }
 
 function SessionDetail({ isAdmin }: { isAdmin: boolean }) {
   const navigation = useNavigation<Nav>();
-  const { sessionId, cls } = useRoute<RouteProp<RootStackParamList, 'SessionDetail'>>().params;
+  const { sessionId, courseId } = useRoute<RouteProp<RootStackParamList, 'SessionDetail'>>().params;
+  const cls = useCourse(courseId);
+  if (!cls) return <Loading />;
   return (
     <SessionDetailScreen
       sessionId={sessionId}
       cls={cls}
       isAdmin={isAdmin}
-      onOpenLedger={(recording, s) => navigation.navigate('RecordingLedger', { recording, session: s, cls })}
-      onPlay={(recording, s) => navigation.navigate('Player', { recording, cls, dueDate: s.dueDate })}
-      onImportZoom={(s) => navigation.navigate('ZoomImport', { session: s, cls })}
+      onOpenLedger={(recording) =>
+        navigation.navigate('RecordingLedger', { recordingId: recording.id })
+      }
+      onPlay={(recording, s) =>
+        navigation.navigate('Player', { recordingId: recording.id, dueDate: s.dueDate })
+      }
+      onImportZoom={(s) => navigation.navigate('ZoomImport', { sessionId: s.id })}
     />
   );
 }
@@ -304,35 +382,63 @@ function MyRecordings({ uid }: { uid: string }) {
   return (
     <MyRecordingsScreen
       uid={uid}
-      onOpen={(recording, cls) => navigation.navigate('Player', { recording, cls })}
+      onOpen={(recording) => navigation.navigate('Player', { recordingId: recording.id })}
     />
   );
 }
 
 function Play({ studentUid }: { studentUid: string | null }) {
-  const { recording, cls, dueDate } = useRoute<RouteProp<RootStackParamList, 'Player'>>().params;
+  const { recordingId, dueDate } = useRoute<RouteProp<RootStackParamList, 'Player'>>().params;
+  // Chained: the recording names its own course, so the course resolves only
+  // once the recording has. Both are live, so an unpublish or an archive lands
+  // on screen rather than waiting for the listener to be torn down.
+  const recording = useRecording(recordingId);
+  const cls = useCourse(recording?.courseId ?? null);
+  if (!recording || !cls) return <Loading />;
   return (
     <PlayerScreen recording={recording} cls={cls} studentUid={studentUid} dueDate={dueDate ?? null} />
   );
 }
 
 function RecordingLedger() {
-  const { recording, session, cls } = useRoute<RouteProp<RootStackParamList, 'RecordingLedger'>>().params;
+  const { recordingId } = useRoute<RouteProp<RootStackParamList, 'RecordingLedger'>>().params;
+  const recording = useRecording(recordingId);
+  const session = useSessionDoc(recording?.sessionId ?? null);
+  const cls = useCourse(recording?.courseId ?? null);
+  if (!recording || !session || !cls) return <Loading />;
   return <RecordingLedgerScreen recording={recording} session={session} cls={cls} />;
 }
+
 function StudentLedger() {
-  const { studentUid, studentName, cls } = useRoute<RouteProp<RootStackParamList, 'StudentLedger'>>().params;
-  return <StudentLedgerScreen studentUid={studentUid} studentName={studentName} cls={cls} />;
+  const { studentUid, courseId } = useRoute<RouteProp<RootStackParamList, 'StudentLedger'>>().params;
+  const cls = useCourse(courseId);
+  const student = useStudent(studentUid);
+  if (!cls) return <Loading />;
+  return (
+    <StudentLedgerScreen
+      studentUid={studentUid}
+      // The directory is readable by all staff, so a missing student here means
+      // the account is gone rather than out of scope.
+      studentName={student?.displayName ?? ''}
+      cls={cls}
+    />
+  );
 }
+
 function ZoomImport() {
   const navigation = useNavigation<Nav>();
-  const { session, cls } = useRoute<RouteProp<RootStackParamList, 'ZoomImport'>>().params;
+  const { sessionId } = useRoute<RouteProp<RootStackParamList, 'ZoomImport'>>().params;
+  const session = useSessionDoc(sessionId);
+  const cls = useCourse(session?.courseId ?? null);
+  if (!session || !cls) return <Loading />;
   return (
     <ZoomImportScreen
       session={session}
       cls={cls}
       // After importing into this session, return to it (the draft is now there).
-      onImported={() => navigation.navigate('SessionDetail', { sessionId: session.id, cls })}
+      onImported={() =>
+        navigation.navigate('SessionDetail', { sessionId, courseId: session.courseId })
+      }
     />
   );
 }
@@ -343,25 +449,35 @@ function Library({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
     <LibraryScreen
       uid={uid}
       isAdmin={isAdmin}
-      onOpenProgress={(recording, cls) => {
-        void (async () => {
-          const session = await loadSession(recording.sessionId);
-          if (session) navigation.navigate('RecordingLedger', { recording, session, cls });
-        })();
-      }}
-      onPlay={(recording, cls) => navigation.navigate('Player', { recording, cls })}
+      // The ledger route takes the recording id alone and resolves the session
+      // itself, so the library no longer has to fetch one just to navigate.
+      onOpenProgress={(recording) =>
+        navigation.navigate('RecordingLedger', { recordingId: recording.id })
+      }
+      onPlay={(recording) => navigation.navigate('Player', { recordingId: recording.id })}
     />
   );
 }
 function Audit() {
-  const { courseId, title } = useRoute<RouteProp<RootStackParamList, 'Audit'>>().params;
-  return <AuditScreen courseId={courseId} title={title} />;
+  const { courseId } = useRoute<RouteProp<RootStackParamList, 'Audit'>>().params;
+  // The heading is derived rather than passed: a title in the params would ride
+  // in the URL's query string, and would be a stale copy of the course's name.
+  const cls = useCourse(courseId ?? null);
+  return (
+    <AuditScreen
+      courseId={courseId ?? null}
+      title={courseId ? (cls?.name ?? '') : 'All courses'}
+    />
+  );
 }
 
 function MyCourses({ uid }: { uid: string }) {
   const navigation = useNavigation<Nav>();
   return (
-    <MyCoursesScreen uid={uid} onOpen={(cls) => navigation.navigate('CourseDetail', { cls })} />
+    <MyCoursesScreen
+      uid={uid}
+      onOpen={(cls) => navigation.navigate('CourseDetail', { courseId: cls.id })}
+    />
   );
 }
 

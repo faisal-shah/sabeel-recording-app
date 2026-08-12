@@ -169,10 +169,12 @@ describe('courses', () => {
    * `where('__name__','==',id)` looks like a document read and is not: it is a
    * LIST, evaluated against the `list` rule, which the student arm never grants
    * — even for the single class they are enrolled in. A document listener is a
-   * `get` and is allowed. That is why MyRecordingsScreen subscribes with
-   * useLiveDoc and the staff-only useCourse in structure.ts must never be reused
-   * there: the failure is an empty screen and a console warning, not an error
-   * anybody would notice.
+   * `get` and is allowed.
+   *
+   * This is why useCourse and useRecording are document listeners: both are
+   * reached by students through the player, and the query form fails closed on
+   * exactly that population — an empty screen and a console warning, not an
+   * error anybody would notice. It shipped that way for one e2e run.
    */
   it('deny a student the single-id LIST that mimics a document read', async () => {
     await assertFails(

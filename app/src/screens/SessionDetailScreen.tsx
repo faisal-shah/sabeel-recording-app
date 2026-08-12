@@ -69,7 +69,7 @@ export function SessionDetailScreen({
   sessionId: string;
   cls: { id: string; name: string };
   isAdmin: boolean;
-  onOpenLedger: (recording: RecordingRow, session: SessionRow) => void;
+  onOpenLedger: (recording: RecordingRow) => void;
   onPlay: (recording: RecordingRow, session: SessionRow) => void;
   onImportZoom: (session: SessionRow) => void;
 }) {
@@ -305,7 +305,7 @@ function RecordingSection({
   session: SessionRow;
   recording: RecordingRow | null;
   isAdmin: boolean;
-  onOpenLedger: (recording: RecordingRow, session: SessionRow) => void;
+  onOpenLedger: (recording: RecordingRow) => void;
   onPlay: (recording: RecordingRow, session: SessionRow) => void;
   onImportZoom: (session: SessionRow) => void;
 }) {
@@ -452,7 +452,7 @@ function RecordingCard({
   uploading: boolean;
   onUpload: () => void;
   onRun: (key: string, fn: () => Promise<unknown>) => void;
-  onOpenLedger: (recording: RecordingRow, session: SessionRow) => void;
+  onOpenLedger: (recording: RecordingRow) => void;
   onPlay: (recording: RecordingRow, session: SessionRow) => void;
 }) {
   const blockers = publishBlockers(r);
@@ -602,7 +602,7 @@ function RecordingCard({
               testID="recording-ledger"
               label="Listening progress"
               variant="secondary"
-              onPress={() => onOpenLedger(r, session)}
+              onPress={() => onOpenLedger(r)}
             />
           </View>
         ) : null}

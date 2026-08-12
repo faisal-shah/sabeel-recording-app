@@ -48,7 +48,7 @@ export function CourseDetailScreen({
   isAdmin: boolean;
   onOpenSessions: () => void;
   onOpenAttendance: () => void;
-  onOpenStudent: (studentUid: string, studentName: string) => void;
+  onOpenStudent: (studentUid: string) => void;
   onOpenAudit: () => void;
 }) {
   const roster = useRoster(cls.id);
@@ -300,7 +300,7 @@ export function CourseDetailScreen({
                 testID={`student-ledger-${s?.email ?? r.studentUid}`}
                 name={who}
                 openLabel={`Open ${who}'s progress`}
-                onPress={() => onOpenStudent(r.studentUid, who)}
+                onPress={() => onOpenStudent(r.studentUid)}
                 actionsPinned
                 actions={
                   <IconButton
