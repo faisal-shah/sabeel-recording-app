@@ -128,6 +128,9 @@ export async function reconcileSessionAssignments(
 /**
  * React to a recording write: reconcile its session's obligations. A deleted
  * recording deactivates everything pointing at it.
+ *
+ * The event payload decides only WHETHER to reconcile (deleted or not) — never
+ * WHAT to write. See applySessionFanout for why.
  */
 export async function applyRecordingFanout(
   db: Firestore,
@@ -140,15 +143,30 @@ export async function applyRecordingFanout(
     await deactivateAssignmentsForRecording(db, recordingId);
     return;
   }
+  const rec = (await db.collection(COLLECTIONS.recordings).doc(recordingId).get()).data() as
+    | RecordingDoc
+    | undefined;
+  if (!rec?.sessionId) {
+    await deactivateAssignmentsForRecording(db, recordingId);
+    return;
+  }
   const session = (
-    await db.collection(COLLECTIONS.sessions).doc(after.sessionId).get()
+    await db.collection(COLLECTIONS.sessions).doc(rec.sessionId).get()
   ).data() as SessionDoc | undefined;
-  await reconcileSessionAssignments(db, after.sessionId, session, after);
+  await reconcileSessionAssignments(db, rec.sessionId, session, rec);
 }
 
 /**
  * React to a session write (attendance / due-date change): reconcile its
  * recording's obligations.
+ *
+ * Both sides are RE-READ rather than taken from the event's `after` snapshot.
+ * Cloud Functions delivery is at-least-once and unordered, so two quick writes
+ * — submit attendance, then correct one student and re-submit — can reconcile in
+ * reverse order. Reconciling from a snapshot lets the older invocation write
+ * last and silently restore the obligation that was just removed, and it stays
+ * wrong until the next write to that session. Reconciling from stored truth
+ * converges no matter what order the events arrive in.
  */
 export async function applySessionFanout(
   db: Firestore,
@@ -157,13 +175,17 @@ export async function applySessionFanout(
   after: SessionDoc | undefined,
 ): Promise<void> {
   if (!after) return; // a deleted session cascades its assignments in the delete callable
-  const recId = after.recordingId;
+  const session = (await db.collection(COLLECTIONS.sessions).doc(sessionId).get()).data() as
+    | SessionDoc
+    | undefined;
+  if (!session) return;
+  const recId = session.recordingId;
   const rec = recId
     ? ((await db.collection(COLLECTIONS.recordings).doc(recId).get()).data() as
         | RecordingDoc
         | undefined)
     : undefined;
-  await reconcileSessionAssignments(db, sessionId, after, rec);
+  await reconcileSessionAssignments(db, sessionId, session, rec);
 }
 
 /** Turn off a student's obligations in a course (unenrolment), keeping history. */
