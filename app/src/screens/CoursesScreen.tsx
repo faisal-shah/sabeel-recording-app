@@ -13,7 +13,7 @@ import {
 import {
   createCourse,
   setCohortArchived,
-  useCohort,
+  useCohortState,
   useCoursesInCohort,
   type CourseRow,
 } from '../structure';
@@ -42,7 +42,8 @@ export function CoursesScreen({
   cohortId: string;
   onOpen: (cls: CourseRow) => void;
 }) {
-  const cohort = useCohort(cohortId);
+  const cohortState = useCohortState(cohortId);
+  const cohort = cohortState.value;
   const courses = useCoursesInCohort(cohortId);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -61,8 +62,23 @@ export function CoursesScreen({
     }
   };
 
+  // A URL can name a cohort that does not exist. Say so rather than rendering a
+  // settings card and an add-a-course form for nothing — the server would
+  // refuse the create anyway ("No such cohort"), but only after the typing.
+  if (!cohort) {
+    return (
+      <Screen>
+        <Empty>
+          {cohortState.resolved
+            ? 'That cohort is not available. It may have been removed.'
+            : 'Loading…'}
+        </Empty>
+      </Screen>
+    );
+  }
+
   return (
-    <Screen subtitle={cohort?.name ?? ''} status={archived ? 'archived' : 'active'}>
+    <Screen subtitle={cohort.name} status={archived ? 'archived' : 'active'}>
       {error ? <Notice tone="error">{error}</Notice> : null}
       {archived ? (
         <Notice tone="info">
@@ -89,7 +105,6 @@ export function CoursesScreen({
           label={archived ? 'Reactivate cohort' : 'Archive cohort'}
           variant="secondary"
           busy={busy === 'archive'}
-          disabled={!cohort}
           onPress={() =>
             void run('archive', () => setCohortArchived({ cohortId, archived: !archived }))
           }

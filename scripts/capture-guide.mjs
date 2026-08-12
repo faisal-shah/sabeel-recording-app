@@ -1,8 +1,8 @@
 /**
  * Capture user-manual screenshots from the WEB app — every screen at phone
  * (390) and desktop (1280) width. Against the emulator with the guide dataset
- * (scripts/seed-guide.mjs). Home is a RELOAD (goto), not goBack — the nav stack
- * is not browser history.
+ * (scripts/seed-guide.mjs). Home is a goto of `/`, which is the Home path — the
+ * stack is browser history now, so goBack() would work too.
  *
  * Model: Cohort → Course → Session → Recording. Recordings and attendance live
  * on a session; obligations are attendance-driven (absent∪excused catch up).

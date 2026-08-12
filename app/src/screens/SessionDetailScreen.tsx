@@ -24,7 +24,7 @@ import {
   deleteSession,
   submitAttendance,
   updateSession,
-  useSession,
+  useSessionState,
   type SessionRow,
 } from '../sessions';
 import {
@@ -73,10 +73,24 @@ export function SessionDetailScreen({
   onPlay: (recording: RecordingRow, session: SessionRow) => void;
   onImportZoom: (session: SessionRow) => void;
 }) {
-  const session = useSession(sessionId);
+  const sessionState = useSessionState(sessionId);
+  const session = sessionState.value;
   const recording = useRecording(session?.recordingId ?? null);
 
-  if (!session) return <Screen subtitle={cls.name}><Empty>Loading…</Empty></Screen>;
+  // Deleting a session leaves you standing on it, and a URL can point at one
+  // that is already gone — so say which of the two this is rather than showing
+  // a spinner that never resolves.
+  if (!session) {
+    return (
+      <Screen subtitle={cls.name}>
+        <Empty>
+          {sessionState.resolved
+            ? 'That session is not available. It may have been removed.'
+            : 'Loading…'}
+        </Empty>
+      </Screen>
+    );
+  }
 
   return (
     <Screen title={session.title} subtitle={`${cls.name} · ${session.date}`}>
@@ -461,6 +475,14 @@ function RecordingCard({
   // Zoom import has to be re-imported while a manual upload needs the original
   // again. It sat unguarded among the safe controls, reading like one of them.
   const [confirmClear, setConfirmClear] = useState(false);
+  // The server only allows it on a draft or a needs-attention recording. Close
+  // the confirm if that stops being true underneath it — the same guard
+  // ConfirmDanger applies, so the open panel can never outlive its precondition
+  // and offer a button that could only fail.
+  const canClearAudio = !!r.audioPath && (r.status === 'draft' || r.status === 'needsAttention');
+  useEffect(() => {
+    if (!canClearAudio) setConfirmClear(false);
+  }, [canClearAudio]);
   // No audio is a NORMAL state here, not a failure: mid-upload, after a failed
   // one, or after Remove audio. Only say something is wrong once nothing is in
   // flight — otherwise a healthy upload reads as broken for its whole duration.
@@ -471,7 +493,7 @@ function RecordingCard({
 
   // Takes over the card for the same reason ConfirmDanger does: a confirmation
   // that leaves Publish and Delete tappable underneath it is not a confirmation.
-  if (confirmClear) {
+  if (confirmClear && canClearAudio) {
     return (
       <Card>
         <Notice tone="error">
@@ -586,7 +608,7 @@ function RecordingCard({
               onPress={() => onRun(`status-${r.id}`, () => setRecordingStatus({ recordingId: r.id, status: to }))}
             />
           ))}
-          {r.audioPath && (r.status === 'draft' || r.status === 'needsAttention') ? (
+          {canClearAudio ? (
             <Button
               label="Remove audio"
               variant="secondary"

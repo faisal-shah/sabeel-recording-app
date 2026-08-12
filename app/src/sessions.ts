@@ -1,8 +1,8 @@
-import { collection, orderBy, query, where } from 'firebase/firestore';
+import { collection, doc, orderBy, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { COLLECTIONS, type AttendanceStatus, type SessionDoc } from '@sabeel/shared';
 import { db, functions } from './firebase';
-import { useLiveQuery } from './liveQuery';
+import { useLiveDocState, useLiveQuery } from './liveQuery';
 
 export interface SessionRow extends SessionDoc {
   id: string;
@@ -52,18 +52,23 @@ export function useCourseSessions(courseId: string | null): SessionRow[] {
 }
 
 /** Live single session (for the session detail / attendance screen). */
-export function useSession(sessionId: string | null): SessionRow | null {
-  const rows = useLiveQuery<SessionRow[]>(
-    () =>
-      sessionId
-        ? query(collection(db, COLLECTIONS.sessions), where('__name__', '==', sessionId))
-        : null,
+/**
+ * One session, live, plus whether the listener has answered.
+ *
+ * A DOCUMENT listener rather than `where('__name__','==',id)`, matching
+ * useCourse and useRecording: sessions are staff-only and the rule grants get
+ * and list alike, so this is not a permissions fix — but a screen resolving a
+ * session from a URL has to be able to say "no such session", and only the
+ * document form reports that.
+ */
+export function useSessionState(sessionId: string | null) {
+  return useLiveDocState<SessionRow | null>(
+    () => (sessionId ? doc(db, COLLECTIONS.sessions, sessionId) : null),
     [sessionId],
     {
       label: 'session',
-      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as SessionDoc) })),
-      empty: [],
+      map: (snap) => ({ id: snap.id, ...(snap.data() as SessionDoc) }),
+      empty: null,
     },
   );
-  return rows[0] ?? null;
 }

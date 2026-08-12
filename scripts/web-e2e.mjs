@@ -122,7 +122,8 @@ async function tap(page, testId, timeout = 20000) {
 const sawText = (page, text, timeout = 20000) =>
   page.getByText(text, { exact: false }).first().waitFor({ timeout });
 
-/** Home is a reload, not goBack(): the navigation stack is not browser history. */
+/** Home by URL. Since the linking config landed the stack IS browser history,
+ *  so goBack() works too — this goes to `/`, which is the Home path. */
 async function goHome(page) {
   await page.goto(WEB, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(3000);
@@ -279,6 +280,18 @@ check(
   (await admin.locator('body').innerText()).toLowerCase().includes('hikam foundations'),
   path(),
 );
+// A URL whose subject is gone must SAY so. The screens resolve their subject
+// from the id, and a live document read is empty both while it is in flight and
+// when there is nothing there — so without the resolved flag this spins for
+// ever, which is what a student would see when a recording they had open is
+// unpublished out from under them.
+await admin.goto(`${WEB}courses/no-such-course-id`, { waitUntil: 'domcontentloaded' });
+await admin.waitForTimeout(6000);
+check(
+  'a URL pointing at something deleted says so instead of loading for ever',
+  (await admin.locator('body').innerText()).toLowerCase().includes('not available'),
+);
+
 // Leave the browser back on the cohort, where the next section starts from.
 await admin.goto(cohortUrl, { waitUntil: 'domcontentloaded' });
 await admin.waitForTimeout(3000);
@@ -805,6 +818,51 @@ await shot(admin, '20b-students-disabled');
 await tap(admin, 'student-open-bilal@example.com');
 await tap(admin, 'student-access');
 await admin.waitForTimeout(2500);
+
+// The MANAGER's view of the same page is a DIFFERENT query shape, and the one
+// that can fail closed: they may not query a student's enrollments across
+// courses, so the screen walks the courses they manage and reads one enrollment
+// document each. A denial here is an empty section, not an error — so assert the
+// course actually appears.
+await goHome(mgr);
+await tap(mgr, 'nav-students');
+await tap(mgr, 'student-open-fatima@example.com');
+await mgr.waitForTimeout(3500);
+const mgrStudent = (await mgr.locator('body').innerText()).toLowerCase();
+check('a manager can open a student page', mgrStudent.includes('fatima ahmed'));
+check(
+  'it is scoped to the courses they manage, and says so',
+  mgrStudent.includes('courses you manage') && mgrStudent.includes('hikam foundations'),
+);
+check(
+  'the admin-only disable control is absent for them',
+  (await mgr.getByTestId('student-access').count()) === 0,
+);
+check(
+  'resending a password link is still theirs to do',
+  (await mgr.getByTestId('student-resend').count()) === 1,
+);
+await shot(mgr, '20c-student-page-manager');
+
+// A student in NONE of the manager's courses. Each row owns its own enrollment
+// read and renders nothing when it does not match, so without an explicit empty
+// state the heading stood over a blank space. Needs a student with no enrolment
+// at all — one merely REMOVED from a course keeps an inactive enrolment row.
+await goHome(admin);
+await tap(admin, 'nav-students');
+await admin.getByTestId('student-name').fill('Zayd Noor');
+await admin.getByTestId('student-email').fill('zayd@example.com');
+await tap(admin, 'student-create');
+await admin.getByTestId('student-open-zayd@example.com').waitFor({ timeout: 20000 });
+
+await goHome(mgr);
+await tap(mgr, 'nav-students');
+await tap(mgr, 'student-open-zayd@example.com');
+await mgr.waitForTimeout(3500);
+check(
+  'a student in none of their courses says so, rather than showing a bare heading',
+  (await mgr.locator('body').innerText()).toLowerCase().includes('is not in any of the courses you manage'),
+);
 
 // ------------------------------------------------- roster removal confirms --
 // The row opens the student's progress, so the × beside it must not remove

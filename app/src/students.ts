@@ -3,7 +3,7 @@ import { sendPasswordResetEmail } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import { COLLECTIONS, type StudentDoc, type UserStatus } from '@sabeel/shared';
 import { auth, db, functions } from './firebase';
-import { useLiveDoc, useLiveQuery } from './liveQuery';
+import { useLiveDocState, useLiveQuery } from './liveQuery';
 
 export interface StudentRow extends StudentDoc {
   uid: string;
@@ -16,7 +16,13 @@ export interface StudentRow extends StudentDoc {
  * the same hook, where a list would be denied.
  */
 export function useStudent(uid: string | null): StudentRow | null {
-  return useLiveDoc<StudentRow | null>(
+  return useStudentState(uid).value;
+}
+
+/** As useStudent, plus whether the listener has answered — a student page is
+ *  reachable by URL, so it has to be able to say "no such student". */
+export function useStudentState(uid: string | null) {
+  return useLiveDocState<StudentRow | null>(
     () => (uid ? doc(db, COLLECTIONS.students, uid) : null),
     [uid],
     {

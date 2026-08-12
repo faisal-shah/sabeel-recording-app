@@ -8,7 +8,7 @@ import {
   type RecordingStatus,
 } from '@sabeel/shared';
 import { db, functions, storage } from './firebase';
-import { useLiveDoc, useLiveQuery } from './liveQuery';
+import { useLiveDocState, useLiveQuery } from './liveQuery';
 
 export interface RecordingRow extends RecordingDoc {
   id: string;
@@ -74,7 +74,12 @@ export const createRecording = call<{ sessionId: string }, { id: string; audioPa
  * would fail closed on exactly that population.
  */
 export function useRecording(recordingId: string | null): RecordingRow | null {
-  return useLiveDoc<RecordingRow | null>(
+  return useRecordingState(recordingId).value;
+}
+
+/** As useRecording, plus whether the listener has answered. */
+export function useRecordingState(recordingId: string | null) {
+  return useLiveDocState<RecordingRow | null>(
     () => (recordingId ? doc(db, COLLECTIONS.recordings, recordingId) : null),
     [recordingId],
     {

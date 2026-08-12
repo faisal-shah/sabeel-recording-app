@@ -112,8 +112,10 @@ see…" for exactly that reason.
 
 Two more things that cost time here:
 
-- **`page.goBack()` does not work.** React Navigation's stack is not browser
-  history; reload the page instead (the session persists).
+- **`page.goBack()` works, and is worth asserting.** The navigator has a
+  `linking` config, so every screen has a URL and the stack IS browser history.
+  Reloading a deep URL restores that screen rather than Home — `goto(WEB)` still
+  lands on Home only because `/` is the Home path.
 - **Text locators can resolve to hidden nodes.** React Navigation keeps the
   previous screen mounted, so `getByText('Managers')` can match a stale hidden
   element and hang until timeout. Wait on `getByTestId` instead. `innerText()`

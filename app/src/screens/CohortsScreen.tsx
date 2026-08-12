@@ -9,7 +9,6 @@ import {
   Notice,
   Screen,
   SectionTitle,
-  StatusChip,
 } from '../components/ui';
 import { createCohort, useAllCourses, useCohorts, type CohortRow } from '../structure';
 import { courseLabel } from './CoursesScreen';
@@ -106,10 +105,12 @@ function CohortRowItem({
   onOpen: (cohort: CohortRow) => void;
 }) {
   return (
+    // No status chip: which section a cohort is in already says whether it is
+    // archived, and repeating it on every row is the clutter this screen was
+    // reorganised to remove.
     <ListRow
       testID={`cohort-open-${cohort.name}`}
       name={cohort.name}
-      status={<StatusChip status={cohort.archived ? 'archived' : 'active'} />}
       detail={courseLabel(count)}
       onPress={() => onOpen(cohort)}
     />

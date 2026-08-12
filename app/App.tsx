@@ -36,11 +36,12 @@ import { PlayerScreen } from './src/screens/PlayerScreen';
 import { MyCoursesScreen } from './src/screens/MyCoursesScreen';
 import { TokensScreen } from './src/screens/TokensScreen';
 import type { RootStackParamList } from './src/nav';
-// Aliased: `useSession` here is the AUTH session, imported above.
-import { useSession as useSessionDoc } from './src/sessions';
-import { useRecording } from './src/recordings';
+// Note the two senses of "session" in this file: `useSession` above is the AUTH
+// session; these resolve the documents a route names.
+import { useSessionState } from './src/sessions';
+import { useRecordingState } from './src/recordings';
 import { useStudent } from './src/students';
-import { useCourse } from './src/structure';
+import { useCourse, useCourseState } from './src/structure';
 import { Empty, Screen } from './src/components/ui';
 import { getTheme } from './src/theme';
 
@@ -97,22 +98,46 @@ const documentTitle = {
     `${options?.title ?? route?.name ?? ''} · Class Recordings`,
 };
 
-/**
- * Shown while a screen's documents are still resolving from their ids.
- *
- * KNOWN GAP: a live document hook returns its empty value both while the first
- * snapshot is in flight and when the document does not exist, so a URL pointing
- * at something deleted sits here rather than saying so. Telling those apart
- * needs a "has the listener fired?" flag threaded through useLiveDoc, which is
- * worth doing the first time someone hits it — deep links only became possible
- * in this change, so nobody has a stale one yet.
- */
+/** Shown while a screen's documents are still resolving from their ids. */
 function Loading() {
   return (
     <Screen>
       <Empty>Loading…</Empty>
     </Screen>
   );
+}
+
+/**
+ * The route's subject does not exist, or the viewer may not read it.
+ *
+ * Reachable in ordinary use, not just from a stale bookmark: unpublishing a
+ * recording revokes a student's access to it, so one sitting on the player is
+ * told it is gone rather than left on a spinner.
+ */
+function NotFound({ what }: { what: string }) {
+  return (
+    <Screen>
+      <Empty>That {what} is not available. It may have been removed.</Empty>
+    </Screen>
+  );
+}
+
+/**
+ * Every screen below is KEYED ON ITS SUBJECT.
+ *
+ * `navigate` to a route already on top updates its params in place rather than
+ * pushing, so without a key a screen would carry state belonging to the previous
+ * subject: the rename field still holding the old course's name, attendance
+ * marks from another session, "password link sent to …" naming someone else. No
+ * path does that today — but making every route addressable by URL is what makes
+ * same-route-different-subject navigation possible, and this is precisely the
+ * class of bug the rest of this work has been about.
+ */
+
+/** value ?? still-loading ?? gone — the shape every id-resolving wrapper uses. */
+function resolve<T>(state: { value: T | null; resolved: boolean }, what: string) {
+  if (state.value) return null;
+  return state.resolved ? <NotFound what={what} /> : <Loading />;
 }
 
 // Chrome is ivory with a dark title, deliberately not a raspberry app bar —
@@ -290,6 +315,7 @@ function StudentDetail({ isAdmin, uid }: { isAdmin: boolean; uid: string }) {
   const { studentUid } = useRoute<RouteProp<RootStackParamList, 'StudentDetail'>>().params;
   return (
     <StudentDetailScreen
+      key={studentUid}
       studentUid={studentUid}
       isAdmin={isAdmin}
       uid={uid}
@@ -303,6 +329,7 @@ function Courses() {
   const { cohortId } = useRoute<RouteProp<RootStackParamList, 'Courses'>>().params;
   return (
     <CoursesScreen
+      key={cohortId}
       cohortId={cohortId}
       onOpen={(cls) => navigation.navigate('CourseDetail', { courseId: cls.id })}
     />
@@ -312,11 +339,12 @@ function Courses() {
 function CourseDetail({ isAdmin }: { isAdmin: boolean }) {
   const navigation = useNavigation<Nav>();
   const { courseId } = useRoute<RouteProp<RootStackParamList, 'CourseDetail'>>().params;
-  const cls = useCourse(courseId);
-  if (!cls) return <Loading />;
+  const cls = useCourseState(courseId);
+  if (!cls.value) return resolve(cls, 'course');
   return (
     <CourseDetailScreen
-      cls={cls}
+      key={courseId}
+      cls={cls.value}
       isAdmin={isAdmin}
       onOpenSessions={() => navigation.navigate('Sessions', { courseId })}
       onOpenAttendance={() => navigation.navigate('CourseAttendance', { courseId })}
@@ -329,11 +357,12 @@ function CourseDetail({ isAdmin }: { isAdmin: boolean }) {
 function CourseAttendance() {
   const navigation = useNavigation<Nav>();
   const { courseId } = useRoute<RouteProp<RootStackParamList, 'CourseAttendance'>>().params;
-  const cls = useCourse(courseId);
-  if (!cls) return <Loading />;
+  const cls = useCourseState(courseId);
+  if (!cls.value) return resolve(cls, 'course');
   return (
     <CourseAttendanceScreen
-      cls={cls}
+      key={courseId}
+      cls={cls.value}
       onOpenSession={(sessionId) => navigation.navigate('SessionDetail', { sessionId, courseId })}
       onOpenStudent={(studentUid) => navigation.navigate('StudentLedger', { studentUid, courseId })}
     />
@@ -343,12 +372,13 @@ function CourseAttendance() {
 function Sessions() {
   const navigation = useNavigation<Nav>();
   const { courseId } = useRoute<RouteProp<RootStackParamList, 'Sessions'>>().params;
-  const cls = useCourse(courseId);
-  if (!cls) return <Loading />;
+  const cls = useCourseState(courseId);
+  if (!cls.value) return resolve(cls, 'course');
   return (
     <SessionsScreen
+      key={courseId}
       courseId={courseId}
-      courseName={cls.name}
+      courseName={cls.value.name}
       onOpenSession={(session) =>
         navigation.navigate('SessionDetail', { sessionId: session.id, courseId })
       }
@@ -359,12 +389,13 @@ function Sessions() {
 function SessionDetail({ isAdmin }: { isAdmin: boolean }) {
   const navigation = useNavigation<Nav>();
   const { sessionId, courseId } = useRoute<RouteProp<RootStackParamList, 'SessionDetail'>>().params;
-  const cls = useCourse(courseId);
-  if (!cls) return <Loading />;
+  const cls = useCourseState(courseId);
+  if (!cls.value) return resolve(cls, 'course');
   return (
     <SessionDetailScreen
+      key={sessionId}
       sessionId={sessionId}
-      cls={cls}
+      cls={cls.value}
       isAdmin={isAdmin}
       onOpenLedger={(recording) =>
         navigation.navigate('RecordingLedger', { recordingId: recording.id })
@@ -392,35 +423,52 @@ function Play({ studentUid }: { studentUid: string | null }) {
   // Chained: the recording names its own course, so the course resolves only
   // once the recording has. Both are live, so an unpublish or an archive lands
   // on screen rather than waiting for the listener to be torn down.
-  const recording = useRecording(recordingId);
-  const cls = useCourse(recording?.courseId ?? null);
-  if (!recording || !cls) return <Loading />;
+  const recording = useRecordingState(recordingId);
+  const cls = useCourseState(recording.value?.courseId ?? null);
+  const gate = resolve(recording, 'recording') ?? resolve(cls, 'course');
+  if (gate || !recording.value || !cls.value) return gate;
   return (
-    <PlayerScreen recording={recording} cls={cls} studentUid={studentUid} dueDate={dueDate ?? null} />
+    <PlayerScreen
+      key={recordingId}
+      recording={recording.value}
+      cls={cls.value}
+      studentUid={studentUid}
+      dueDate={dueDate ?? null}
+    />
   );
 }
 
 function RecordingLedger() {
   const { recordingId } = useRoute<RouteProp<RootStackParamList, 'RecordingLedger'>>().params;
-  const recording = useRecording(recordingId);
-  const session = useSessionDoc(recording?.sessionId ?? null);
-  const cls = useCourse(recording?.courseId ?? null);
-  if (!recording || !session || !cls) return <Loading />;
-  return <RecordingLedgerScreen recording={recording} session={session} cls={cls} />;
+  const recording = useRecordingState(recordingId);
+  const session = useSessionState(recording.value?.sessionId ?? null);
+  const cls = useCourseState(recording.value?.courseId ?? null);
+  const gate =
+    resolve(recording, 'recording') ?? resolve(session, 'session') ?? resolve(cls, 'course');
+  if (gate || !recording.value || !session.value || !cls.value) return gate;
+  return (
+    <RecordingLedgerScreen
+      key={recordingId}
+      recording={recording.value}
+      session={session.value}
+      cls={cls.value}
+    />
+  );
 }
 
 function StudentLedger() {
   const { studentUid, courseId } = useRoute<RouteProp<RootStackParamList, 'StudentLedger'>>().params;
-  const cls = useCourse(courseId);
+  const cls = useCourseState(courseId);
   const student = useStudent(studentUid);
-  if (!cls) return <Loading />;
+  if (!cls.value) return resolve(cls, 'course');
   return (
     <StudentLedgerScreen
+      key={`${studentUid}_${courseId}`}
       studentUid={studentUid}
       // The directory is readable by all staff, so a missing student here means
       // the account is gone rather than out of scope.
       studentName={student?.displayName ?? ''}
-      cls={cls}
+      cls={cls.value}
     />
   );
 }
@@ -428,16 +476,21 @@ function StudentLedger() {
 function ZoomImport() {
   const navigation = useNavigation<Nav>();
   const { sessionId } = useRoute<RouteProp<RootStackParamList, 'ZoomImport'>>().params;
-  const session = useSessionDoc(sessionId);
-  const cls = useCourse(session?.courseId ?? null);
-  if (!session || !cls) return <Loading />;
+  const session = useSessionState(sessionId);
+  const cls = useCourseState(session.value?.courseId ?? null);
+  const gate = resolve(session, 'session') ?? resolve(cls, 'course');
+  // Locals so the callback below closes over a narrowed value, not a field.
+  const sessionDoc = session.value;
+  const course = cls.value;
+  if (gate || !sessionDoc || !course) return gate;
   return (
     <ZoomImportScreen
-      session={session}
-      cls={cls}
+      key={sessionId}
+      session={sessionDoc}
+      cls={course}
       // After importing into this session, return to it (the draft is now there).
       onImported={() =>
-        navigation.navigate('SessionDetail', { sessionId, courseId: session.courseId })
+        navigation.navigate('SessionDetail', { sessionId, courseId: sessionDoc.courseId })
       }
     />
   );

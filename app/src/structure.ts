@@ -8,7 +8,7 @@ import {
   type EnrollmentDoc,
 } from '@sabeel/shared';
 import { db, functions } from './firebase';
-import { useLiveDoc, useLiveQuery } from './liveQuery';
+import { useLiveDocState, useLiveQuery } from './liveQuery';
 
 export interface CohortRow extends CohortDoc {
   id: string;
@@ -41,9 +41,12 @@ export function useCohortName(enabled = true): (cohortId: string) => string {
  * must not render from the navigation param it arrived with: that is a copy
  * frozen at the tap, and a control that both renders and computes its next
  * value from a frozen copy never appears to work. See useCourse.
+ *
+ * Returns `resolved` too: the cohort screen is reachable by URL, so it has to be
+ * able to tell "still loading" from "no such cohort".
  */
-export function useCohort(cohortId: string | null): CohortRow | null {
-  return useLiveDoc<CohortRow | null>(
+export function useCohortState(cohortId: string | null) {
+  return useLiveDocState<CohortRow | null>(
     () => (cohortId ? doc(db, COLLECTIONS.cohorts, cohortId) : null),
     [cohortId],
     {
@@ -104,7 +107,13 @@ export function useCoursesInCohort(cohortId: string | null): CourseRow[] {
  * which is how the manager toggles came to do nothing.
  */
 export function useCourse(courseId: string | null): CourseRow | null {
-  return useLiveDoc<CourseRow | null>(
+  return useCourseState(courseId).value;
+}
+
+/** As useCourse, plus whether the listener has answered — for a screen resolving
+ *  a course from a URL, which must be able to say "no such course". */
+export function useCourseState(courseId: string | null) {
+  return useLiveDocState<CourseRow | null>(
     () => (courseId ? doc(db, COLLECTIONS.courses, courseId) : null),
     [courseId],
     {

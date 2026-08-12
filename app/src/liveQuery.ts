@@ -131,40 +131,53 @@ export interface LiveDocOptions<T> {
  * One document, live — the single-document counterpart of useLiveQuery, with the
  * same reset-on-input-change and reset-on-error invariants.
  *
- * Exists because a document listener is evaluated as `get`, while
- * `where('__name__','==',id)` is a `list`. Students are granted `get` on a
- * course they are enrolled in and never `list`, so this is the ONLY way a
- * student screen can hold a live course — a one-shot getDoc leaves the archived
- * and archived-listening flags frozen at mount, which decides whether the
- * "listening is off" notice shows and whether the player enables its transport.
+ * A DOCUMENT listener, not `where('__name__','==',id)`: the latter is a `list`,
+ * and students are granted `get` on a course they are enrolled in and never
+ * `list`. So this is the only way a student screen can hold a live course — and
+ * a one-shot getDoc would leave the archived and archived-listening flags frozen
+ * at mount, which decide whether the "listening is off" notice shows and whether
+ * the player enables its transport.
+ *
+ * `resolved` says whether the listener has answered. `empty` alone cannot tell
+ * "still loading" from "there is no such document", and that difference became
+ * visible the moment screens started resolving their subjects from a URL: a link
+ * to something deleted, or a recording unpublished while a student had the
+ * player open, would otherwise sit on a spinner for ever. It stays false while
+ * the ref is null — "not subscribed", which for a chained read (recording → its
+ * course) means still waiting on the step before it, not an answer.
  *
  * Argument order matches useLiveQuery, and for the same reason: `make` at 0 and
  * `deps` at 1 is what lets react-hooks/exhaustive-deps check the dependencies.
  */
-export function useLiveDoc<T>(
+export function useLiveDocState<T>(
   make: () => DocumentReference | null,
   deps: readonly unknown[],
   { label, map, empty }: LiveDocOptions<T>,
-): T {
-  const [value, setValue] = useState<T>(empty);
+): { value: T; resolved: boolean } {
+  const [state, setState] = useState<{ value: T; resolved: boolean }>({
+    value: empty,
+    resolved: false,
+  });
   useEffect(() => {
-    setValue(empty);
+    setState({ value: empty, resolved: false });
     const ref = make();
     if (!ref) return;
     return onSnapshot(
       ref,
       (snap) => {
-        setValue(snap.exists() ? map(snap) : empty);
+        setState({ value: snap.exists() ? map(snap) : empty, resolved: true });
         reportListenerSuccess(label);
       },
       (e) => {
-        setValue(empty);
+        // A denial is an answer too: the caller may not read it, and telling
+        // them it is unavailable beats a spinner that never stops.
+        setState({ value: empty, resolved: true });
         reportListenerError(label, e);
       },
     );
     // Same caller-supplied-deps contract as useLiveQuery; see the note there.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
-  return value;
+  return state;
 }
 

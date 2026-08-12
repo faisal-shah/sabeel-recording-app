@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { doc } from 'firebase/firestore';
 import { COLLECTIONS, enrollmentId, type EnrollmentDoc } from '@sabeel/shared';
 import {
@@ -12,8 +12,8 @@ import {
   StatusChip,
 } from '../components/ui';
 import { db } from '../firebase';
-import { useLiveDoc } from '../liveQuery';
-import { resendPasswordSetup, setStudentAccess, useStudent } from '../students';
+import { useLiveDocState } from '../liveQuery';
+import { resendPasswordSetup, setStudentAccess, useStudentState } from '../students';
 import {
   useAllCourses,
   useCohortName,
@@ -47,7 +47,8 @@ export function StudentDetailScreen({
   uid: string;
   onOpenCourse: (cls: CourseRow) => void;
 }) {
-  const student = useStudent(studentUid);
+  const studentState = useStudentState(studentUid);
+  const student = studentState.value;
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -78,7 +79,11 @@ export function StudentDetailScreen({
       {info ? <Notice tone="success">{info}</Notice> : null}
 
       {!student ? (
-        <Empty>Loading…</Empty>
+        <Empty>
+          {studentState.resolved
+            ? 'That student is not available. They may have been removed.'
+            : 'Loading…'}
+        </Empty>
       ) : (
         <>
           <SectionTitle>Access</SectionTitle>
@@ -198,6 +203,16 @@ function ManagerCourses({
 }) {
   const courses = useMyCourses(uid);
   const cohortNameOf = useCohortName();
+  // Only the rows know whether they matched — each owns its own enrollment
+  // listener, because one read per managed course is the only shape a manager
+  // may issue. So they report back; without it a student in none of these
+  // courses left the heading standing over nothing.
+  const [enrolledIn, setEnrolledIn] = useState<Record<string, boolean>>({});
+  const report = useCallback((courseId: string, enrolled: boolean) => {
+    setEnrolledIn((m) => (m[courseId] === enrolled ? m : { ...m, [courseId]: enrolled }));
+  }, []);
+  const allAnswered = courses.length > 0 && courses.every((c) => c.id in enrolledIn);
+  const noneMatched = allAnswered && courses.every((c) => !enrolledIn[c.id]);
 
   return (
     <>
@@ -205,16 +220,22 @@ function ManagerCourses({
       {courses.length === 0 ? (
         <Empty>You are not assigned to any courses.</Empty>
       ) : (
-        courses.map((c) => (
-          <ManagedCourseRow
-            key={c.id}
-            course={c}
-            cohortName={cohortNameOf(c.cohortId)}
-            studentUid={studentUid}
-            who={who}
-            onOpenCourse={onOpenCourse}
-          />
-        ))
+        <>
+          {courses.map((c) => (
+            <ManagedCourseRow
+              key={c.id}
+              course={c}
+              cohortName={cohortNameOf(c.cohortId)}
+              studentUid={studentUid}
+              who={who}
+              onOpenCourse={onOpenCourse}
+              onAnswered={report}
+            />
+          ))}
+          {noneMatched ? (
+            <Empty>{who} is not in any of the courses you manage.</Empty>
+          ) : null}
+        </>
       )}
     </>
   );
@@ -227,16 +248,18 @@ function ManagedCourseRow({
   studentUid,
   who,
   onOpenCourse,
+  onAnswered,
 }: {
   course: CourseRow;
   cohortName: string;
   studentUid: string;
   who: string;
   onOpenCourse: (cls: CourseRow) => void;
+  onAnswered: (courseId: string, enrolled: boolean) => void;
 }) {
   // A document read, not `where('__name__','==')`: the latter is a LIST, and the
   // manager arm is affordable per-document but not per-row across courses.
-  const enrollment = useLiveDoc<EnrollmentDoc | null>(
+  const enrollment = useLiveDocState<EnrollmentDoc | null>(
     () => doc(db, COLLECTIONS.enrollments, enrollmentId(studentUid, course.id)),
     [studentUid, course.id],
     {
@@ -245,12 +268,17 @@ function ManagedCourseRow({
       empty: null,
     },
   );
-  if (!enrollment) return null;
+  const { resolved } = enrollment;
+  const enrolled = !!enrollment.value;
+  useEffect(() => {
+    if (resolved) onAnswered(course.id, enrolled);
+  }, [resolved, enrolled, course.id, onAnswered]);
+  if (!enrollment.value) return null;
   return (
     <CourseEnrollmentRow
       course={course}
       cohortName={cohortName}
-      active={enrollment.active}
+      active={enrollment.value.active}
       who={who}
       onOpenCourse={onOpenCourse}
     />

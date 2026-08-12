@@ -501,17 +501,17 @@ export function ConfirmDanger({
 export function Collapsible({
   title,
   count,
-  defaultOpen = false,
   testID,
   children,
 }: {
   title: string;
   count?: number;
-  defaultOpen?: boolean;
   testID?: string;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  // Always starts closed. A `defaultOpen` prop went in with no caller, which is
+  // the speculative infrastructure this repo keeps out on purpose.
+  const [open, setOpen] = useState(false);
   const label = count === undefined ? title : `${title} (${count})`;
   return (
     <>
