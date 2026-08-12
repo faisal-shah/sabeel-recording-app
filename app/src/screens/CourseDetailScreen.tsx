@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   Button,
   Card,
@@ -79,6 +79,8 @@ export function CourseDetailScreen({
     () => students.filter((s) => s.status === 'active' && !enrolled.includes(s.uid)),
     [students, enrolled],
   );
+
+  const managerWriteInFlight = busy?.startsWith('mgr-') ?? false;
 
   const run = async (key: string, fn: () => Promise<void>) => {
     setBusy(key);
@@ -191,13 +193,23 @@ export function CourseDetailScreen({
             ) : (
               assignableManagers.map((s) => {
                   const on = cls.managerUids.includes(s.uid);
+                  const pending = busy === `mgr-${s.uid}`;
                   return (
                     <Pressable
                       key={s.uid}
                       testID={`course-manager-${s.email}`}
                       accessibilityRole="checkbox"
-                      accessibilityState={{ checked: on }}
+                      // aria-*, not accessibilityState: react-native-web has no
+                      // mapping for accessibilityState, so it reaches the DOM as
+                      // nothing at all and the checkbox exposes no checked state
+                      // to assistive tech. RN supports the aria props natively.
+                      aria-checked={on}
+                      aria-disabled={managerWriteInFlight}
                       accessibilityLabel={`${on ? 'Remove' : 'Assign'} ${s.displayName}`}
+                      // Locked while ANY manager write is in flight: this sends the
+                      // whole array, so a second tap computed from the pre-write
+                      // list would silently undo the first.
+                      disabled={managerWriteInFlight}
                       onPress={() =>
                         void run(`mgr-${s.uid}`, () =>
                           setCourseManagers({
@@ -208,9 +220,16 @@ export function CourseDetailScreen({
                           }),
                         )
                       }
-                      style={styles.pickRow}
+                      style={[
+                        styles.pickRow,
+                        managerWriteInFlight && !pending ? styles.rowWaiting : null,
+                      ]}
                     >
-                      <View style={[styles.tick, on ? styles.tickOn : null]} />
+                      {pending ? (
+                        <ActivityIndicator style={styles.tick} color={t.accent.base} />
+                      ) : (
+                        <View style={[styles.tick, on ? styles.tickOn : null]} />
+                      )}
                       <View style={styles.pickText}>
                         <Text style={styles.name}>{s.displayName}</Text>
                         <Text style={styles.hint}>{s.email}</Text>
@@ -323,6 +342,7 @@ const styles = StyleSheet.create({
     gap: spacing(3),
   },
   pickText: { flex: 1 },
+  rowWaiting: { opacity: 0.5 },
   // A tappable list, not a dropdown: React Native has no dropdown primitive, and
   // the same shape is already used for approve-as-manager/-admin.
   tick: {

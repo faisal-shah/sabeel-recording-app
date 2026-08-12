@@ -36,21 +36,22 @@ export function useCohortName(enabled = true): (cohortId: string) => string {
 
 export function useCohorts(enabled: boolean): CohortRow[] {
   return useLiveQuery<CohortRow[]>(
-    'cohorts',
     () =>
       enabled
         ? query(collection(db, COLLECTIONS.cohorts), orderBy('createdAt', 'desc'))
         : null,
-    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CohortDoc) })),
-    [],
     [enabled],
+    {
+      label: 'cohorts',
+      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CohortDoc) })),
+      empty: [],
+    },
   );
 }
 
 /** Every class in a cohort. Admin-only: the rule has no scoped arm for this shape. */
 export function useCoursesInCohort(cohortId: string | null): CourseRow[] {
   return useLiveQuery<CourseRow[]>(
-    'coursesInCohort',
     () =>
       cohortId
         ? query(
@@ -59,10 +60,45 @@ export function useCoursesInCohort(cohortId: string | null): CourseRow[] {
             orderBy('createdAt', 'asc'),
           )
         : null,
-    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CourseDoc) })),
-    [],
     [cohortId],
+    {
+      label: 'coursesInCohort',
+      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CourseDoc) })),
+      empty: [],
+    },
   );
+}
+
+/**
+ * One course, live.
+ *
+ * The course detail screen MUST use this rather than the CourseRow it was
+ * navigated with. A navigation param is a snapshot frozen at the moment of the
+ * tap: every control on that screen (managers, archive, archived-listening,
+ * rename) both renders from the course and computes its next value from it, so
+ * a frozen copy means no control ever appears to work, and — worse — each write
+ * is computed from the same pre-change state, so consecutive edits silently
+ * overwrite one another.
+ *
+ * STAFF ONLY. This is a list query (`__name__ ==`), and the courses rule gives
+ * students `get` without `list` — they read a course through their enrollment,
+ * one document at a time. On a student screen this fails closed as a listener
+ * error and an empty screen; use the one-shot get in MyRecordingsScreen instead.
+ */
+export function useCourse(courseId: string | null): CourseRow | null {
+  const rows = useLiveQuery<CourseRow[]>(
+    () =>
+      courseId
+        ? query(collection(db, COLLECTIONS.courses), where('__name__', '==', courseId))
+        : null,
+    [courseId],
+    {
+      label: 'course',
+      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CourseDoc) })),
+      empty: [],
+    },
+  );
+  return rows[0] ?? null;
 }
 
 /**
@@ -75,14 +111,16 @@ export function useCoursesInCohort(cohortId: string | null): CourseRow[] {
  */
 export function useAllCourses(enabled: boolean): CourseRow[] {
   return useLiveQuery<CourseRow[]>(
-    'allCourses',
     () =>
       enabled
         ? query(collection(db, COLLECTIONS.courses), orderBy('createdAt', 'asc'))
         : null,
-    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CourseDoc) })),
-    [],
     [enabled],
+    {
+      label: 'allCourses',
+      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CourseDoc) })),
+      empty: [],
+    },
   );
 }
 
@@ -96,14 +134,16 @@ export function useAllCourses(enabled: boolean): CourseRow[] {
  */
 export function useMyCourses(uid: string | null): CourseRow[] {
   return useLiveQuery<CourseRow[]>(
-    'myCourses',
     () =>
       uid
         ? query(collection(db, COLLECTIONS.courses), where('managerUids', 'array-contains', uid))
         : null,
-    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CourseDoc) })),
-    [],
     [uid],
+    {
+      label: 'myCourses',
+      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CourseDoc) })),
+      empty: [],
+    },
   );
 }
 
@@ -116,14 +156,16 @@ export function useMyCourses(uid: string | null): CourseRow[] {
  */
 export function useRoster(courseId: string | null): EnrollmentRow[] {
   return useLiveQuery<EnrollmentRow[]>(
-    'roster',
     () =>
       courseId
         ? query(collection(db, COLLECTIONS.enrollments), where('courseId', '==', courseId))
         : null,
-    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as EnrollmentDoc) })),
-    [],
     [courseId],
+    {
+      label: 'roster',
+      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as EnrollmentDoc) })),
+      empty: [],
+    },
   );
 }
 
@@ -134,14 +176,16 @@ export function useRoster(courseId: string | null): EnrollmentRow[] {
  */
 export function useMyEnrollments(uid: string | null): EnrollmentRow[] {
   return useLiveQuery<EnrollmentRow[]>(
-    'myEnrollments',
     () =>
       uid
         ? query(collection(db, COLLECTIONS.enrollments), where('studentUid', '==', uid))
         : null,
-    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as EnrollmentDoc) })),
-    [],
     [uid],
+    {
+      label: 'myEnrollments',
+      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as EnrollmentDoc) })),
+      empty: [],
+    },
   );
 }
 

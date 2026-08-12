@@ -10,7 +10,13 @@
 //  2. Listener errors also reset to `empty`: an empty screen plus a console
 //     warning beats silently-wrong data that never corrects itself.
 import { useEffect, useState } from 'react';
-import { onSnapshot, type Query, type QuerySnapshot } from 'firebase/firestore';
+import {
+  onSnapshot,
+  type DocumentReference,
+  type DocumentSnapshot,
+  type Query,
+  type QuerySnapshot,
+} from 'firebase/firestore';
 import { captureError } from './sentry';
 
 // ---- Listener-error visibility -------------------------------------------
@@ -50,22 +56,37 @@ export function useListenerError(): string | null {
 }
 // ---------------------------------------------------------------------------
 
-/** Live query results. `make`/`map` are called fresh per (re)subscription;
- *  a null query means "not subscribed" (e.g. role-gated queries) → `empty`.
+export interface LiveQueryOptions<T> {
+  /** Names this subscription in listener errors and in Sentry. */
+  label: string;
+  map: (snap: QuerySnapshot) => T;
+  /** Rendered before the first snapshot, and after an error or an input change. */
+  empty: T;
+  /**
+   * Also re-fire when only metadata changes — specifically when a local write
+   * flips from pending to synced. Screens showing a "Pending sync" state need
+   * that transition; without it the snapshot fires once with `hasPendingWrites`
+   * true and never again when the write lands, so the badge sticks forever. Off
+   * by default because it doubles snapshot callbacks and most screens do not care.
+   */
+  includeMetadataChanges?: boolean;
+}
+
+/**
+ * Live query results. `make`/`map` are called fresh per (re)subscription;
+ * a null query means "not subscribed" (e.g. role-gated queries) → `empty`.
  *
- *  `includeMetadataChanges` makes the subscription also re-fire when only
- *  metadata changes — specifically when a local write flips from pending to
- *  synced. Screens showing a "Pending sync" state need that transition; without
- *  it the snapshot fires once with `hasPendingWrites` true and never again when
- *  the write lands, so the badge would stick forever. Off by default because it
- *  doubles snapshot callbacks, and most screens do not care. */
+ * ARGUMENT ORDER IS LOAD-BEARING. `make` first and `deps` second is the only
+ * shape `react-hooks/exhaustive-deps` can read (see eslint.config.mjs), and that
+ * rule is what mechanically proves every live screen resubscribes when its
+ * inputs change. Everything else is options precisely so these two stay in the
+ * positions the linter requires — move them and the check goes quiet without
+ * failing, which is worse than never having had it.
+ */
 export function useLiveQuery<T>(
-  label: string,
   make: () => Query | null,
-  map: (snap: QuerySnapshot) => T,
-  empty: T,
   deps: readonly unknown[],
-  includeMetadataChanges = false,
+  { label, map, empty, includeMetadataChanges = false }: LiveQueryOptions<T>,
 ): T {
   const [value, setValue] = useState<T>(empty);
   useEffect(() => {
@@ -86,6 +107,63 @@ export function useLiveQuery<T>(
     );
     // deps are the caller's subscription inputs; make/map/empty are per-render
     // closures over exactly those inputs.
+    //
+    // The one place exhaustive-deps is deliberately overridden, and the only
+    // one that should ever be: this hook's contract IS a caller-supplied dep
+    // list, so the rule cannot see what it needs to. Obeying it here would mean
+    // adding make/map/empty — all rebuilt on every render — which tears down and
+    // re-establishes the Firestore listener on every render of every live
+    // screen. Callers get no exemption: their `deps` argument must still list
+    // every input `make` reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  return value;
+}
+
+export interface LiveDocOptions<T> {
+  label: string;
+  map: (snap: DocumentSnapshot) => T;
+  /** Rendered before the first snapshot, on an error, and when the doc is absent. */
+  empty: T;
+}
+
+/**
+ * One document, live — the single-document counterpart of useLiveQuery, with the
+ * same reset-on-input-change and reset-on-error invariants.
+ *
+ * Exists because a document listener is evaluated as `get`, while
+ * `where('__name__','==',id)` is a `list`. Students are granted `get` on a
+ * course they are enrolled in and never `list`, so this is the ONLY way a
+ * student screen can hold a live course — a one-shot getDoc leaves the archived
+ * and archived-listening flags frozen at mount, which decides whether the
+ * "listening is off" notice shows and whether the player enables its transport.
+ *
+ * Argument order matches useLiveQuery, and for the same reason: `make` at 0 and
+ * `deps` at 1 is what lets react-hooks/exhaustive-deps check the dependencies.
+ */
+export function useLiveDoc<T>(
+  make: () => DocumentReference | null,
+  deps: readonly unknown[],
+  { label, map, empty }: LiveDocOptions<T>,
+): T {
+  const [value, setValue] = useState<T>(empty);
+  useEffect(() => {
+    setValue(empty);
+    const ref = make();
+    if (!ref) return;
+    return onSnapshot(
+      ref,
+      (snap) => {
+        setValue(snap.exists() ? map(snap) : empty);
+        reportListenerSuccess(label);
+      },
+      (e) => {
+        setValue(empty);
+        reportListenerError(label, e);
+      },
+    );
+    // Same caller-supplied-deps contract as useLiveQuery; see the note there.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
   return value;
 }

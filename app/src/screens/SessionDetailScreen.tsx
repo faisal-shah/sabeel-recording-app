@@ -105,6 +105,18 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Seed the form when the editor OPENS, not when the header mounts. Save writes
+  // all four fields back at once, so a form still holding what the session said
+  // when the screen loaded would silently revert every change made since —
+  // including another staff member's.
+  const openEditor = () => {
+    setTitle(session.title);
+    setDate(session.date);
+    setDueDate(session.dueDate ?? '');
+    setNotes(session.notes);
+    setEditing(true);
+  };
+
   const run = (key: string, fn: () => Promise<unknown>) =>
     void (async () => {
       setBusy(key);
@@ -170,7 +182,7 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
         onConfirm={() => run('del', () => deleteSession({ sessionId: session.id }))}
       >
         <Row>
-          <Button label="Edit session" variant="secondary" onPress={() => setEditing(true)} />
+          <Button label="Edit session" variant="secondary" onPress={openEditor} />
         </Row>
       </ConfirmDanger>
     </Card>

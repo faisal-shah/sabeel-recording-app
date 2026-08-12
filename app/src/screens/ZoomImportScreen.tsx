@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ZoomImportRow } from '@sabeel/shared';
 import { Button, Card, Empty, Field, Notice, Screen } from '../components/ui';
@@ -44,20 +44,27 @@ export function ZoomImportScreen({
   const [status, setStatus] = useState<StatusFilter>('available');
   const [hideShort, setHideShort] = useState(true);
 
-  const load = async () => {
+  // Takes the range as an argument rather than closing over `from`/`to`, so it
+  // has no dependencies and cannot serve a stale range.
+  const load = useCallback(async (range: { from: string; to: string }) => {
     setLoading(true);
     setError(null);
     try {
-      setRows(await listZoomRecordings({ from, to }));
+      setRows(await listZoomRecordings(range));
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  };
-  useEffect(() => {
-    void load();
   }, []);
+
+  // Arrive with the default range already fetched; after that the Load button
+  // applies whatever the user picked. `load` is stable, so this runs once — and
+  // it must: every call is a Zoom API request, and the date fields change on
+  // each keystroke.
+  useEffect(() => {
+    void load({ from: defaultFrom(), to: ymd(new Date()) });
+  }, [load]);
 
   const filtered = (rows ?? []).filter(
     (r) =>
@@ -71,7 +78,12 @@ export function ZoomImportScreen({
       <Card>
         <DateField label="From" value={from} onChange={setFrom} />
         <DateField label="To" value={to} onChange={setTo} />
-        <Button testID="zoom-load" label="Load recordings" busy={loading} onPress={() => void load()} />
+        <Button
+          testID="zoom-load"
+          label="Load recordings"
+          busy={loading}
+          onPress={() => void load({ from, to })}
+        />
       </Card>
 
       <Field label="Search by title" value={search} onChangeText={setSearch} placeholder="topic…" />

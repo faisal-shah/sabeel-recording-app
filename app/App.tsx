@@ -35,6 +35,7 @@ import { MyCoursesScreen } from './src/screens/MyCoursesScreen';
 import { TokensScreen } from './src/screens/TokensScreen';
 import type { RootStackParamList } from './src/nav';
 import { loadSession } from './src/sessions';
+import { useCourse } from './src/structure';
 import { getTheme } from './src/theme';
 
 const t = getTheme();
@@ -207,7 +208,10 @@ function Courses() {
 
 function CourseDetail({ isAdmin }: { isAdmin: boolean }) {
   const navigation = useNavigation<Nav>();
-  const { cls } = useRoute<RouteProp<RootStackParamList, 'CourseDetail'>>().params;
+  const { cls: seed } = useRoute<RouteProp<RootStackParamList, 'CourseDetail'>>().params;
+  // The param seeds the first frame; everything rendered from here on is live,
+  // because this screen edits the course it displays. See useCourse.
+  const cls = useCourse(seed.id) ?? seed;
   return (
     <CourseDetailScreen
       cls={cls}

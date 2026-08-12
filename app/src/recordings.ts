@@ -23,7 +23,6 @@ export interface RecordingRow extends RecordingDoc {
  */
 export function useCourseRecordings(courseId: string | null): RecordingRow[] {
   return useLiveQuery<RecordingRow[]>(
-    'courseRecordings',
     () =>
       courseId
         ? query(
@@ -32,9 +31,12 @@ export function useCourseRecordings(courseId: string | null): RecordingRow[] {
             orderBy('createdAt', 'desc'),
           )
         : null,
-    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as RecordingDoc) })),
-    [],
     [courseId],
+    {
+      label: 'courseRecordings',
+      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as RecordingDoc) })),
+      empty: [],
+    },
   );
 }
 
@@ -45,11 +47,13 @@ export function useCourseRecordings(courseId: string | null): RecordingRow[] {
  */
 export function useAllRecordings(enabled: boolean): RecordingRow[] {
   return useLiveQuery<RecordingRow[]>(
-    'allRecordings',
     () => (enabled ? query(collection(db, COLLECTIONS.recordings), orderBy('createdAt', 'desc')) : null),
-    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as RecordingDoc) })),
-    [],
     [enabled],
+    {
+      label: 'allRecordings',
+      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as RecordingDoc) })),
+      empty: [],
+    },
   );
 }
 
@@ -64,14 +68,16 @@ export const createRecording = call<{ sessionId: string }, { id: string; audioPa
 /** Live single recording (a session's, for the session detail screen). */
 export function useRecording(recordingId: string | null): RecordingRow | null {
   const rows = useLiveQuery<RecordingRow[]>(
-    'recording',
     () =>
       recordingId
         ? query(collection(db, COLLECTIONS.recordings), where('__name__', '==', recordingId))
         : null,
-    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as RecordingDoc) })),
-    [],
     [recordingId],
+    {
+      label: 'recording',
+      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as RecordingDoc) })),
+      empty: [],
+    },
   );
   return rows[0] ?? null;
 }

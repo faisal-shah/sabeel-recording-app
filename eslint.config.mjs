@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import globals from 'globals';
+import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
   {
@@ -66,6 +67,38 @@ export default tseslint.config(
           message: 'Hardcoded color. Use a semantic token from src/theme.',
         },
       ],
+    },
+  },
+  {
+    // A hook that closes over a value missing from its dependency array keeps
+    // serving the value from the render that created it. That is the shape of
+    // the course-detail bug (a screen rendering and writing from a frozen
+    // snapshot), one layer down, and nothing in TypeScript can see it: a live
+    // row and a stale one are the same type. exhaustive-deps is the only
+    // mechanical check for it, so it is an ERROR, not the preset's warning —
+    // a warning does not fail CI, and a check that cannot fail is decoration.
+    //
+    // Deliberately NOT the plugin's `recommended` preset. v7 bundles the React
+    // Compiler rule family (refs, set-state-in-effect, purity, immutability…),
+    // which this app is not built for and would not benefit from today: it
+    // flagged four `setState` calls inside effects, three of which exist
+    // precisely to CLEAR state that has gone stale (liveQuery's reset on input
+    // change, ConfirmDanger closing when its target stops being deletable,
+    // attendance marks dropping when a submit lands). Those are the defence
+    // against the class of bug this rule set was added to catch. Revisit the
+    // whole family if React Compiler is ever adopted — as one deliberate
+    // migration, not as a side effect of installing a linter.
+    files: ['app/**/*.{ts,tsx}'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      // useLiveQuery is the app's subscription primitive and therefore the
+      // single most valuable thing to check — every live screen's freshness
+      // depends on its `deps` argument listing what `make` reads. The rule can
+      // only find the callback at argument 0 and the deps at argument 1, which
+      // is why useLiveQuery takes them in that order; with any other shape it
+      // reports "dependencies are unknown" and silently checks nothing.
+      'react-hooks/exhaustive-deps': ['error', { additionalHooks: '(useLiveQuery)' }],
     },
   },
   {

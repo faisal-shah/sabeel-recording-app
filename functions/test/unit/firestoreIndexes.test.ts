@@ -41,17 +41,32 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-/** Pull `useLiveQuery('label', () => query(collection(db, COLLECTIONS.x), …))` shapes. */
+/**
+ * Pull the shapes out of
+ * `useLiveQuery(() => query(collection(db, COLLECTIONS.x), …), [deps], { label: 'l', … })`.
+ *
+ * The query body comes FIRST and the label last, because `make` and `deps` have
+ * to sit at arguments 0 and 1 for react-hooks/exhaustive-deps to read them (see
+ * app/src/liveQuery.ts). So each call is isolated by splitting on the call
+ * itself, and within a chunk the query is everything before its `label:`.
+ */
 function parseQueries(): QueryShape[] {
   const out: QueryShape[] = [];
   for (const file of sourceFiles(APP_SRC)) {
     const src = readFileSync(file, 'utf8');
-    // matchAll only — calling exec() first on the same /g regex advances
-    // lastIndex and silently drops the FIRST match in every file, which is how
-    // this check managed to miss the very query it was written for.
-    const re = /useLiveQuery<[^>]*>\(\s*'([^']+)'([\s\S]{0,900}?)\n\s{4}\[/g;
-    for (const m of src.matchAll(re)) {
-      const [, label, body] = m;
+    // Split ON the call, so each chunk ends where the next call begins. A
+    // fixed-size window cannot do that: a wrapper whose label is a parameter has
+    // no literal to stop at, so its window ran on into the following call and
+    // fused the two queries into one shape that exists nowhere (auditLog
+    // acquiring a studentUid filter it has never had).
+    //
+    // The split also tolerates `>` inside the generic argument
+    // (`useLiveQuery<Map<string, V>>`); insisting on `<[^>]*>` silently skipped
+    // every such call — two of them — while still reporting a healthy count.
+    for (const chunk of src.split(/useLiveQuery\s*[<(]/).slice(1)) {
+      const label = /\blabel:\s*'([^']+)'/.exec(chunk)?.[1];
+      if (!label) continue; // parameterised label; see the call-site count test
+      const body = chunk.slice(0, chunk.indexOf('label:'));
       const coll = /COLLECTIONS\.(\w+)/.exec(body)?.[1];
       if (!coll) continue;
       out.push({
@@ -77,10 +92,22 @@ describe('firestore composite indexes cover the app’s queries', () => {
   const queries = parseQueries();
   const declared: DeclaredIndex[] = JSON.parse(readFileSync(INDEX_FILE, 'utf8')).indexes;
 
-  it('finds the query shapes at all (guards against the parser silently matching nothing)', () => {
-    // A parser that matches nothing would make every assertion below vacuous —
-    // the failure mode this whole file exists to prevent.
-    expect(queries.length).toBeGreaterThan(10);
+  it('parses EVERY useLiveQuery call, not just most of them', () => {
+    // "More than ten" is not a guard: the parser once matched 21 of 25 calls and
+    // looked perfectly healthy. Count the call sites independently, with a regex
+    // too simple to be wrong, and demand the parser account for all of them.
+    //
+    // The two exemptions are the generic wrappers in ledger.ts
+    // (useMapByStudent, useStudentCourseMap): their label is a parameter, so
+    // there is no literal to capture. Neither can need a composite index — both
+    // build equality-only filters with no orderBy, which Firestore serves by
+    // merging single-field indexes.
+    const DYNAMIC_LABEL_WRAPPERS = 2;
+    const callSites = sourceFiles(APP_SRC)
+      .filter((f) => !f.endsWith('liveQuery.ts'))
+      .reduce((n, f) => n + (readFileSync(f, 'utf8').match(/useLiveQuery\s*[<(]/g)?.length ?? 0), 0);
+
+    expect(queries.length).toBe(callSites - DYNAMIC_LABEL_WRAPPERS);
     expect(queries.map((q) => q.label)).toContain('courseRecordings');
   });
 

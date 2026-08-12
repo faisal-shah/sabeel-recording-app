@@ -11,14 +11,16 @@ export interface StudentRow extends StudentDoc {
 
 export function useStudents(enabled: boolean): StudentRow[] {
   return useLiveQuery<StudentRow[]>(
-    'students',
     () =>
       enabled
         ? query(collection(db, COLLECTIONS.students), orderBy('displayName', 'asc'))
         : null,
-    (snap) => snap.docs.map((d) => ({ uid: d.id, ...(d.data() as StudentDoc) })),
-    [],
     [enabled],
+    {
+      label: 'students',
+      map: (snap) => snap.docs.map((d) => ({ uid: d.id, ...(d.data() as StudentDoc) })),
+      empty: [],
+    },
   );
 }
 

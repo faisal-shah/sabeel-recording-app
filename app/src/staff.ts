@@ -14,7 +14,6 @@ export interface StaffRow extends StaffUserDoc {
  */
 export function usePendingStaff(enabled: boolean): StaffRow[] {
   return useLiveQuery<StaffRow[]>(
-    'pendingStaff',
     () =>
       enabled
         ? query(
@@ -23,16 +22,18 @@ export function usePendingStaff(enabled: boolean): StaffRow[] {
             orderBy('createdAt', 'asc'),
           )
         : null,
-    (snap) => snap.docs.map((d) => ({ uid: d.id, ...(d.data() as StaffUserDoc) })),
-    [],
     [enabled],
+    {
+      label: 'pendingStaff',
+      map: (snap) => snap.docs.map((d) => ({ uid: d.id, ...(d.data() as StaffUserDoc) })),
+      empty: [],
+    },
   );
 }
 
 /** Everyone who is not pending — the running list of who has access. */
 export function useDecidedStaff(enabled: boolean): StaffRow[] {
   return useLiveQuery<StaffRow[]>(
-    'decidedStaff',
     () =>
       enabled
         ? query(
@@ -41,9 +42,12 @@ export function useDecidedStaff(enabled: boolean): StaffRow[] {
             orderBy('displayName', 'asc'),
           )
         : null,
-    (snap) => snap.docs.map((d) => ({ uid: d.id, ...(d.data() as StaffUserDoc) })),
-    [],
     [enabled],
+    {
+      label: 'decidedStaff',
+      map: (snap) => snap.docs.map((d) => ({ uid: d.id, ...(d.data() as StaffUserDoc) })),
+      empty: [],
+    },
   );
 }
 

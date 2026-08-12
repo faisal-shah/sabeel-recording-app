@@ -25,7 +25,6 @@ export interface CompletionState {
  */
 export function useMyAssignments(uid: string | null): AssignmentRow[] {
   return useLiveQuery<AssignmentRow[]>(
-    'myAssignments',
     () =>
       uid
         ? query(
@@ -34,9 +33,12 @@ export function useMyAssignments(uid: string | null): AssignmentRow[] {
             where('active', '==', true),
           )
         : null,
-    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as AssignmentDoc) })),
-    [],
     [uid],
+    {
+      label: 'myAssignments',
+      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as AssignmentDoc) })),
+      empty: [],
+    },
   );
 }
 
@@ -49,25 +51,28 @@ export function useMyAssignments(uid: string | null): AssignmentRow[] {
  */
 export function useMyCompletions(uid: string | null): Map<string, CompletionState> {
   return useLiveQuery<Map<string, CompletionState>>(
-    'myCompletions',
     () =>
       uid
         ? query(collection(db, COLLECTIONS.completions), where('studentUid', '==', uid))
         : null,
-    (snap) => {
-      const map = new Map<string, CompletionState>();
-      for (const d of snap.docs) {
-        const data = d.data() as CompletionDoc;
-        map.set(data.recordingId, {
-          completed: data.completed,
-          pending: d.metadata.hasPendingWrites,
-        });
-      }
-      return map;
-    },
-    new Map(),
     [uid],
-    true, // includeMetadataChanges — needed for the pending→synced transition
+    {
+      label: 'myCompletions',
+      map: (snap) => {
+        const map = new Map<string, CompletionState>();
+        for (const d of snap.docs) {
+          const data = d.data() as CompletionDoc;
+          map.set(data.recordingId, {
+            completed: data.completed,
+            pending: d.metadata.hasPendingWrites,
+          });
+        }
+        return map;
+      },
+      empty: new Map(),
+      // Needed for the pending→synced transition.
+      includeMetadataChanges: true,
+    },
   );
 }
 
@@ -77,7 +82,6 @@ export function useMyCompletions(uid: string | null): Map<string, CompletionStat
  */
 export function useCompletion(uid: string | null, recordingId: string): CompletionState {
   return useLiveQuery<CompletionState>(
-    'completion',
     () =>
       uid
         ? query(
@@ -86,17 +90,20 @@ export function useCompletion(uid: string | null, recordingId: string): Completi
             where('recordingId', '==', recordingId),
           )
         : null,
-    (snap) => {
-      const d = snap.docs[0];
-      if (!d) return { completed: false, pending: false };
-      return {
-        completed: (d.data() as CompletionDoc).completed,
-        pending: d.metadata.hasPendingWrites,
-      };
-    },
-    { completed: false, pending: false },
     [uid, recordingId],
-    true,
+    {
+      label: 'completion',
+      map: (snap) => {
+        const d = snap.docs[0];
+        if (!d) return { completed: false, pending: false };
+        return {
+          completed: (d.data() as CompletionDoc).completed,
+          pending: d.metadata.hasPendingWrites,
+        };
+      },
+      empty: { completed: false, pending: false },
+      includeMetadataChanges: true,
+    },
   );
 }
 

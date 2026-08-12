@@ -162,6 +162,28 @@ describe('courses', () => {
     await assertFails(getDocs(collection(studentA(), COLLECTIONS.courses)));
   });
 
+  /**
+   * The get/list split decides how a student screen may subscribe, so it is
+   * asserted on the exact shape the app would otherwise reach for.
+   *
+   * `where('__name__','==',id)` looks like a document read and is not: it is a
+   * LIST, evaluated against the `list` rule, which the student arm never grants
+   * — even for the single class they are enrolled in. A document listener is a
+   * `get` and is allowed. That is why MyRecordingsScreen subscribes with
+   * useLiveDoc and the staff-only useCourse in structure.ts must never be reused
+   * there: the failure is an empty screen and a console warning, not an error
+   * anybody would notice.
+   */
+  it('deny a student the single-id LIST that mimics a document read', async () => {
+    await assertFails(
+      getDocs(
+        query(collection(studentA(), COLLECTIONS.courses), where('__name__', '==', CLASS_MINE)),
+      ),
+    );
+    // …while the document listener's underlying read of the SAME class is fine.
+    await assertSucceeds(getDoc(doc(studentA(), COLLECTIONS.courses, CLASS_MINE)));
+  });
+
   it('are write-denied to everyone', async () => {
     await assertFails(updateDoc(doc(admin(), COLLECTIONS.courses, CLASS_MINE), { name: 'x' }));
     await assertFails(

@@ -34,7 +34,6 @@ export const deleteSession = call<{ sessionId: string }, { sessionId: string }>(
 /** A course's sessions, newest meeting first. Staff-only (rules). */
 export function useCourseSessions(courseId: string | null): SessionRow[] {
   return useLiveQuery<SessionRow[]>(
-    'courseSessions',
     () =>
       courseId
         ? query(
@@ -43,23 +42,28 @@ export function useCourseSessions(courseId: string | null): SessionRow[] {
             orderBy('date', 'desc'),
           )
         : null,
-    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as SessionDoc) })),
-    [],
     [courseId],
+    {
+      label: 'courseSessions',
+      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as SessionDoc) })),
+      empty: [],
+    },
   );
 }
 
 /** Live single session (for the session detail / attendance screen). */
 export function useSession(sessionId: string | null): SessionRow | null {
   const rows = useLiveQuery<SessionRow[]>(
-    'session',
     () =>
       sessionId
         ? query(collection(db, COLLECTIONS.sessions), where('__name__', '==', sessionId))
         : null,
-    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as SessionDoc) })),
-    [],
     [sessionId],
+    {
+      label: 'session',
+      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as SessionDoc) })),
+      empty: [],
+    },
   );
   return rows[0] ?? null;
 }

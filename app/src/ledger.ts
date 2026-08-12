@@ -57,16 +57,22 @@ function useMapByStudent<T, V>(
   metadata = false,
 ) {
   return useLiveQuery<Map<string, V>>(
-    label,
     () => (value ? query(collection(db, coll), where(field, '==', value)) : null),
-    (snap) => {
-      const m = new Map<string, V>();
-      for (const d of snap.docs) m.set(keyOf(d.data() as T), pick(d.data() as T, d.metadata.hasPendingWrites));
-      return m;
+    // coll and field are constants at every call site today, so listing them
+    // changes nothing at runtime — but the query reads them, and a wrapper whose
+    // dep list quietly under-reports its inputs is how a subscription ends up
+    // serving another collection's data after a refactor.
+    [value, coll, field],
+    {
+      label: label,
+      map: (snap) => {
+        const m = new Map<string, V>();
+        for (const d of snap.docs) m.set(keyOf(d.data() as T), pick(d.data() as T, d.metadata.hasPendingWrites));
+        return m;
+      },
+      empty: new Map(),
+      includeMetadataChanges: metadata,
     },
-    new Map(),
-    [value],
-    metadata,
   );
 }
 
@@ -111,16 +117,18 @@ export function useRecordingLedger(
 ): RecordingLedger {
   const rid = recording.id;
   const assignments = useLiveQuery<Map<string, AssignmentDoc>>(
-    'ledgerAssignments',
     () =>
       query(
         collection(db, COLLECTIONS.assignments),
         where('recordingId', '==', rid),
         where('active', '==', true),
       ),
-    (snap) => new Map(snap.docs.map((d) => [(d.data() as AssignmentDoc).studentUid, d.data() as AssignmentDoc])),
-    new Map(),
     [rid],
+    {
+      label: 'ledgerAssignments',
+      map: (snap) => new Map(snap.docs.map((d) => [(d.data() as AssignmentDoc).studentUid, d.data() as AssignmentDoc])),
+      empty: new Map(),
+    },
   );
   const completions = useMapByStudent<CompletionDoc, { completed: boolean; completedAt: number | null; pending: boolean }>(
     'ledgerCompletions',
@@ -236,7 +244,6 @@ export interface CourseLedger {
  */
 export function useCourseLedger(courseId: string | null, today: string): CourseLedger {
   const assignments = useLiveQuery<AssignmentDoc[]>(
-    'courseLedgerAssignments',
     () =>
       courseId
         ? query(
@@ -245,9 +252,12 @@ export function useCourseLedger(courseId: string | null, today: string): CourseL
             where('active', '==', true),
           )
         : null,
-    (snap) => snap.docs.map((d) => d.data() as AssignmentDoc),
-    [],
     [courseId],
+    {
+      label: 'courseLedgerAssignments',
+      map: (snap) => snap.docs.map((d) => d.data() as AssignmentDoc),
+      empty: [],
+    },
   );
   const completions = useMapByStudent<CompletionDoc, boolean>(
     'courseLedgerCompletions',
@@ -331,7 +341,6 @@ export interface StudentLedgerItem {
  */
 export function useStudentLedger(studentUid: string | null, courseId: string): StudentLedgerItem[] {
   const assignments = useLiveQuery<AssignmentDoc[]>(
-    'studentLedgerAssignments',
     () =>
       studentUid
         ? query(
@@ -340,9 +349,12 @@ export function useStudentLedger(studentUid: string | null, courseId: string): S
             where('courseId', '==', courseId),
           )
         : null,
-    (snap) => snap.docs.map((d) => d.data() as AssignmentDoc).filter((a) => a.active),
-    [],
     [studentUid, courseId],
+    {
+      label: 'studentLedgerAssignments',
+      map: (snap) => snap.docs.map((d) => d.data() as AssignmentDoc).filter((a) => a.active),
+      empty: [],
+    },
   );
   const completions = useStudentCourseMap<CompletionDoc, boolean>(
     'studentLedgerCompletions',
@@ -384,7 +396,6 @@ function useStudentCourseMap<T extends { recordingId: string }, V>(
   pick: (data: T) => V,
 ) {
   return useLiveQuery<Map<string, V>>(
-    label,
     () =>
       studentUid
         ? query(
@@ -393,9 +404,13 @@ function useStudentCourseMap<T extends { recordingId: string }, V>(
             where('courseId', '==', courseId),
           )
         : null,
-    (snap) => new Map(snap.docs.map((d) => [(d.data() as T).recordingId, pick(d.data() as T)])),
-    new Map(),
-    [studentUid, courseId],
+    // `coll` for the same reason as useMapByStudent: the query reads it.
+    [studentUid, courseId, coll],
+    {
+      label: label,
+      map: (snap) => new Map(snap.docs.map((d) => [(d.data() as T).recordingId, pick(d.data() as T)])),
+      empty: new Map(),
+    },
   );
 }
 
@@ -411,7 +426,6 @@ export interface AuditRow extends AuditEntryDoc {
  */
 export function useAudit(courseId: string | null): AuditRow[] {
   return useLiveQuery<AuditRow[]>(
-    'audit',
     () =>
       courseId === null
         ? query(collection(db, COLLECTIONS.auditLog), orderBy('at', 'desc'))
@@ -420,8 +434,11 @@ export function useAudit(courseId: string | null): AuditRow[] {
             where('courseId', '==', courseId),
             orderBy('at', 'desc'),
           ),
-    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as AuditEntryDoc) })),
-    [],
     [courseId],
+    {
+      label: 'audit',
+      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as AuditEntryDoc) })),
+      empty: [],
+    },
   );
 }

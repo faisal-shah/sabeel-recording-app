@@ -246,9 +246,27 @@ check('a cohort and two courses are created', true);
 await shot(admin, '04-courses');
 
 // Scope ONE course to the manager.
+//
+// The toggle is asserted from the ADMIN's own screen, three times, because the
+// screen used to render a CourseRow frozen at navigation time: the tick never
+// moved (so the write looked like it had failed), and every toggle recomputed
+// the manager list from that same pre-change array, so each one silently undid
+// the last. Checking only that the manager ends up scoped would pass on the
+// broken build — the first write does land. The third tap is what proves the
+// list is live: computed from a stale array, "remove" sends the array that adds
+// them, and they stay a manager forever.
 await tap(admin, 'course-open-Hikam Foundations');
+const mgrTick = admin.getByTestId('course-manager-manager@oursabeel.com');
+const tickState = async () => {
+  await admin.waitForTimeout(2500);
+  return mgrTick.getAttribute('aria-checked');
+};
 await tap(admin, 'course-manager-manager@oursabeel.com');
-await admin.waitForTimeout(2500);
+check('assigning a manager ticks the row live, without leaving the screen', (await tickState()) === 'true');
+await tap(admin, 'course-manager-manager@oursabeel.com');
+check('un-assigning clears it — the next write reads the LIVE list', (await tickState()) === 'false');
+await tap(admin, 'course-manager-manager@oursabeel.com');
+check('re-assigning ticks it again', (await tickState()) === 'true');
 await shot(admin, '05-course-detail');
 
 await tap(mgr, 'nav-myclasses');
@@ -459,6 +477,24 @@ await student.getByTestId('task-Session 1').waitFor({ timeout: 8000 });
 const homeText = await student.locator('body').innerText();
 check('the student home moves the recording to Completed', /Completed/.test(homeText));
 await shot(student, '14-home-completed');
+
+// ------------------------------------------------ browse all (student read) --
+// This screen holds the course in a DOCUMENT listener, because a student is
+// granted `get` on their course and never `list` — the list-shaped subscription
+// used on staff screens is denied here, and denial looks like an empty screen
+// plus a console warning, not a crash. So the course NAME rendering is the
+// assertion: it can only come from a document listener that the rules allowed.
+await tap(student, 'nav-myrecordings');
+await student.getByTestId('play-Session 1').waitFor({ timeout: 20000 });
+// innerText returns RENDERED text, and SectionTitle uppercases via CSS — so this
+// compares case-insensitively rather than against the source string.
+const browseText = (await student.locator('body').innerText()).toLowerCase();
+check(
+  'a student can browse their course archive — the course doc listener is permitted',
+  browseText.includes('hikam foundations'),
+);
+check('the archive lists the published recording', browseText.includes('session 1'));
+await shot(student, '14b-browse-all');
 
 // ---------------------------------------- enrollment-onward accountability --
 console.log('\nEnrollment-onward (no retroactive assignment)');
