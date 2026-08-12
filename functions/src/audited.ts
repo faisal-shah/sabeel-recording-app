@@ -9,7 +9,10 @@ import { reportError } from './sentry';
  *  - `courseId`: set it to the class this action belongs to, so a manager can
  *    read the entry. The handler already has it (it loaded the class/recording
  *    to check scope). Left null → the entry is admin-only.
- *  - `detail`: semantic extra (an override reason, a status change).
+ *  - `detail`: semantic extra (an override reason, a status change). Keys whose
+ *    value is undefined are dropped before the write, so a handler may report a
+ *    partial change as `{ a: input.a, b: input.b }` without checking which the
+ *    caller actually sent.
  *  - `targets`: the ids touched; if the handler leaves it empty, the wrapper
  *    derives ids from the request data.
  */
@@ -31,6 +34,20 @@ function deriveTargets(data: unknown): Record<string, string> {
 /** Append an audit entry. Used by the wrapper and directly by the auth trigger. */
 export async function writeAudit(entry: AuditEntryDoc): Promise<void> {
   await getFirestore().collection(COLLECTIONS.auditLog).add(entry);
+}
+
+/**
+ * Drop keys whose value is `undefined`, and return undefined if nothing is left.
+ *
+ * Firestore rejects an `undefined` field value outright. A handler that reports
+ * a partial change (`{ role, status }` when only the role moved) would therefore
+ * lose the ENTIRE entry — silently, because the audit write is best-effort. The
+ * missing key already says "unchanged"; the undefined value adds nothing.
+ */
+export function pruneDetail(detail: Record<string, unknown>): Record<string, unknown> | undefined {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(detail)) if (v !== undefined) out[k] = v;
+  return Object.keys(out).length ? out : undefined;
 }
 
 /**
@@ -60,6 +77,7 @@ export function auditedCall<T>(
 
     try {
       const token = (req.auth?.token ?? {}) as { role?: Role };
+      const detail = audit.detail ? pruneDetail(audit.detail) : undefined;
       await writeAudit({
         at: Date.now(),
         actorUid: req.auth?.uid ?? 'unknown',
@@ -67,7 +85,7 @@ export function auditedCall<T>(
         action,
         courseId: audit.courseId,
         targets: Object.keys(audit.targets).length ? audit.targets : deriveTargets(req.data),
-        ...(audit.detail ? { detail: audit.detail } : {}),
+        ...(detail ? { detail } : {}),
       });
     } catch (e) {
       // Never fail (or undo) a completed mutation because the audit write did.
