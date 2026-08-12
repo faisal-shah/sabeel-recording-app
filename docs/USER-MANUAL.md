@@ -199,7 +199,13 @@ the audio of that meeting.
 <figure class="wd"><img src="manual/img/13-cohorts-desktop.png" alt="Cohorts list on a computer"><figcaption>On a computer</figcaption></figure>
 </div>
 
-Open a cohort to see its courses, and open a course to work with it.
+Finished terms move into an **Archived** section at the bottom of the cohort
+list — tap the heading to open it.
+
+Open a cohort to see **its settings and its courses**, and open a course to work
+with it. Archiving a cohort lives on the cohort's own page, not on the list, in
+the same way a course is archived from the course page. Archiving a cohort turns
+off every course in it; reactivating puts each course back to the setting it had.
 
 <div class="pair">
 <figure class="ph"><img src="manual/img/14-courses-phone.png" alt="Courses in a cohort on a phone"><figcaption>On a phone</figcaption></figure>
@@ -397,12 +403,34 @@ To add a student, enter their **full name** and **email**, optionally **enrol
 them in a course** right away, and tap **Create account**. The app emails them a
 link to set their own password — you never handle passwords.
 
-Each student in the list shows whether they're **active** or **disabled**, with
-two actions:
+The list itself is just for finding someone. **Tap a student to open their
+page**, where everything about them lives. Students you've disabled move out of
+the main list into a **Disabled** section at the bottom — tap the heading to
+open it.
+
+### A student's page
+
+<div class="pair">
+<figure class="ph"><img src="manual/img/11b-student-page-phone.png" alt="One student's page on a phone"><figcaption>On a phone</figcaption></figure>
+<figure class="wd"><img src="manual/img/11b-student-page-desktop.png" alt="One student's page on a computer"><figcaption>On a computer</figcaption></figure>
+</div>
+
+It shows their name, address and whether they're **active** or **disabled**, and
+carries the two actions:
 
 - **Resend password link** — if they lost the email or the link expired.
-- **Disable** — turns off access without deleting anything. (Disable, don't
-  delete — deletion is a separate, deliberate, admin-only step.)
+- **Disable account** — turns off access without deleting anything. (Disable,
+  don't delete — deletion is a separate, deliberate, admin-only step.) Admins
+  only; managers see the state but not the switch, because access spans every
+  course.
+
+Below that are **the courses they're in**. Tap one to open that student's
+listening progress for it.
+
+If you're a **manager**, this lists the courses *you* manage — it's headed
+**Courses you manage** to say so. You aren't shown classes you don't run, so
+treat it as your view of the student rather than their whole record. An admin
+sees every course.
 
 ---
 
@@ -500,8 +528,8 @@ for an admin to approve them. The screen updates by itself the moment they do �
 refresh needed. If you're stuck, contact your administrator.
 
 **A student can't sign in.** Check the email address matches the one on their
-account exactly, and use **Resend password link** (Students screen) so they can
-set a fresh password. New students have no password until they use that link.
+account exactly, then open their page from the Students screen and use
+**Resend password link** so they can set a fresh password. New students have no password until they use that link.
 
 **The audio won't play.** Streaming needs a working connection — try switching
 between Wi-Fi and mobile data. Play links refresh automatically, so simply

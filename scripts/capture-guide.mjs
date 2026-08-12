@@ -73,7 +73,14 @@ await adm.getByTestId('nav-cohorts').waitFor({ timeout: 30000 });
 await pair(adm, '10-staff-home');
 
 await tap(adm, 'nav-students'); await adm.waitForTimeout(3000);
+// Open the Disabled section so the list is photographed showing both parts —
+// a closed collapsible documents nothing about what is inside it.
+await tap(adm, 'students-disabled'); await adm.waitForTimeout(800);
 await pair(adm, '11-students');
+
+// One student's page: access, and the courses they are in.
+await tap(adm, 'student-open-fatima.ahmed@example.com'); await adm.waitForTimeout(3000);
+await pair(adm, '11b-student-page');
 
 await home(adm);
 await tap(adm, 'nav-staff'); await adm.waitForTimeout(1200);
@@ -81,7 +88,9 @@ await pair(adm, '12-staff-approvals');
 
 await home(adm);
 await tap(adm, 'nav-cohorts'); await adm.waitForTimeout(3000);
+await tap(adm, 'cohorts-archived'); await adm.waitForTimeout(800);
 await pair(adm, '13-cohorts');
+// The cohort's own page — its settings (archiving lives here now) and courses.
 await tap(adm, 'cohort-open-Autumn 2026'); await adm.waitForTimeout(3000);
 await pair(adm, '14-courses');
 await tap(adm, 'course-open-Hikam Foundations');

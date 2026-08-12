@@ -14,12 +14,15 @@ const iso=(ms)=>new Date(ms).toISOString().slice(0,10);
 // ---- students ----
 const NAMES=['Fatima Ahmed','Bilal Khan','Omar Siddiqui','Ayesha Rahman','Yusuf Ali','Maryam Iqbal','Zainab Hassan','Ibrahim Malik'];
 const students=[];
+// The last one is DISABLED, so the Students screen has something in its
+// "Disabled" section to photograph — an empty collapsible documents nothing.
 for (const name of NAMES){
   const email=name.toLowerCase().replace(/ /g,'.')+'@example.com';
+  const status = name===NAMES[NAMES.length-1] ? 'disabled' : 'active';
   let u; try { u=await auth.getUserByEmail(email); } catch { u=await auth.createUser({ email, displayName:name }); }
   await new Promise(r=>setTimeout(r,300));
-  await auth.setCustomUserClaims(u.uid,{ role:'student', status:'active' });
-  await db.collection('students').doc(u.uid).set({ email, displayName:name, role:'student', status:'active', createdAt:now-40*day, createdBy:'seed' });
+  await auth.setCustomUserClaims(u.uid,{ role:'student', status });
+  await db.collection('students').doc(u.uid).set({ email, displayName:name, role:'student', status, createdAt:now-40*day, createdBy:'seed' });
   students.push({ uid:u.uid, name, email });
 }
 // Fatima gets a password so she can be shown signing in for the STUDENT screenshots.
@@ -28,6 +31,10 @@ await auth.updateUser(students[0].uid,{ password:'HikamStudent1', emailVerified:
 // ---- cohort + courses ----
 const cohortId='guide-cohort';
 await db.collection('cohorts').doc(cohortId).set({ name:'Autumn 2026', archived:false, createdAt:now-45*day, createdBy:'seed' });
+// A finished term, so the cohort list has an "Archived" section to show. Its
+// course carries effectiveActive:false, which is what the cascade would leave.
+await db.collection('cohorts').doc('guide-cohort-past').set({ name:'Spring 2026', archived:true, createdAt:now-220*day, createdBy:'seed' });
+await db.collection('courses').doc('guide-past-course').set({ cohortId:'guide-cohort-past', name:'Seerah Survey', archived:false, effectiveActive:false, archivedAccess:false, managerUids:[], createdAt:now-220*day, createdBy:'seed' });
 const courses={
   hikam:{ id:'guide-hikam', name:'Hikam Foundations' },
   arabic:{ id:'guide-arabic', name:'Arabic I' },
