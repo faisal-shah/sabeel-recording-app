@@ -689,10 +689,12 @@ check(
   JSON.stringify(s),
 );
 
-// cohort-archive lives on the Cohorts LIST screen, not inside the cohort.
+// cohort-archive lives INSIDE the cohort now, mirroring a course: the list is a
+// list, and the settings are on the thing they belong to.
 await goHome(admin);
 await tap(admin, 'nav-cohorts');
-await tap(admin, 'cohort-archive-Autumn 2026');
+await tap(admin, 'cohort-open-Autumn 2026');
+await tap(admin, 'cohort-archive');
 await admin.waitForTimeout(3000);
 s = await courseState();
 check(
@@ -707,13 +709,87 @@ check(
 );
 await shot(admin, '19-cohort-archived');
 
-await tap(admin, 'cohort-archive-Autumn 2026');
+// Still on the cohort's own screen, which now reads the cohort LIVE — so the
+// button has already flipped to Reactivate without a reload. Tapping the same
+// testID twice is the assertion that it did.
+await tap(admin, 'cohort-archive');
 await admin.waitForTimeout(3000);
 s = await courseState();
 check(
   'reactivating restores each course to its OWN state',
   s['Arabic I'].eff === true && s['Hikam Foundations'].eff === false,
   JSON.stringify(s),
+);
+
+// ------------------------------------------------------- the student's page --
+// Everything about one student in one place. The courses list is the part worth
+// asserting: it is a single studentUid query for an ADMIN, which only the
+// zero-read admin arm of the enrollments rule permits (a manager walks their own
+// courses instead — rules.structure.test.ts owns that boundary).
+console.log('\nStudent page');
+await goHome(admin);
+await tap(admin, 'nav-students');
+await tap(admin, 'student-open-bilal@example.com');
+await admin.getByTestId('student-course-open-Hikam Foundations').waitFor({ timeout: 20000 });
+const stuPage = (await admin.locator('body').innerText()).toLowerCase();
+check('the student page names the student and their address', stuPage.includes('bilal khan') && stuPage.includes('bilal@example.com'));
+check('it lists the courses they are enrolled in', stuPage.includes('hikam foundations'));
+await shot(admin, '20-student-page');
+
+await tap(admin, 'student-course-open-Hikam Foundations');
+await admin.waitForTimeout(2500);
+const stuLedger = (await admin.locator('body').innerText()).toLowerCase();
+check(
+  'tapping a course opens THAT student\'s progress for it',
+  stuLedger.includes('bilal khan') && stuLedger.includes('hikam foundations'),
+);
+
+// Disabling moves them into a section that is CLOSED, and closed means
+// unmounted: the row must be unreachable until the section is expanded.
+await goHome(admin);
+await tap(admin, 'nav-students');
+await tap(admin, 'student-open-bilal@example.com');
+await tap(admin, 'student-access');
+await admin.waitForTimeout(2500);
+await goHome(admin);
+await tap(admin, 'nav-students');
+await admin.waitForTimeout(2000);
+check(
+  'a disabled student leaves the main list',
+  (await admin.getByTestId('student-open-bilal@example.com').count()) === 0,
+);
+await tap(admin, 'students-disabled');
+await admin.getByTestId('student-open-bilal@example.com').waitFor({ timeout: 10000 });
+check('…and is found by expanding Disabled', true);
+await shot(admin, '20b-students-disabled');
+
+// Put them back, so the audit assertions below read a tidy end state.
+await tap(admin, 'student-open-bilal@example.com');
+await tap(admin, 'student-access');
+await admin.waitForTimeout(2500);
+
+// ------------------------------------------------- roster removal confirms --
+// The row opens the student's progress, so the × beside it must not remove
+// anyone on a single tap.
+await openHikam(admin);
+await tap(admin, 'roster-remove-bilal@example.com');
+await admin.getByTestId('roster-remove-confirm-bilal@example.com').waitFor({ timeout: 10000 });
+check('the roster × asks before removing', true);
+await admin.getByText('Cancel', { exact: false }).first().click();
+await admin.waitForTimeout(1500);
+const stillEnrolled = (await readCollection('enrollments')).filter(
+  (e) => e.fields.active?.booleanValue === true,
+).length;
+await tap(admin, 'roster-remove-bilal@example.com');
+await tap(admin, 'roster-remove-confirm-bilal@example.com');
+await admin.waitForTimeout(2500);
+const afterRemove = (await readCollection('enrollments')).filter(
+  (e) => e.fields.active?.booleanValue === true,
+).length;
+check(
+  'cancelling keeps the enrolment, confirming ends it',
+  afterRemove === stillEnrolled - 1,
+  `${stillEnrolled} → ${afterRemove}`,
 );
 
 // -------------------------------------------------------------------- audit --

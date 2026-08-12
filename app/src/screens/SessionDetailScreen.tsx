@@ -457,6 +457,10 @@ function RecordingCard({
 }) {
   const blockers = publishBlockers(r);
   const moves = allowedTransitions(r.status).filter((to) => to !== 'needsAttention');
+  // Removing audio DELETES the object from Storage — the file is gone, and a
+  // Zoom import has to be re-imported while a manual upload needs the original
+  // again. It sat unguarded among the safe controls, reading like one of them.
+  const [confirmClear, setConfirmClear] = useState(false);
   // No audio is a NORMAL state here, not a failure: mid-upload, after a failed
   // one, or after Remove audio. Only say something is wrong once nothing is in
   // flight — otherwise a healthy upload reads as broken for its whole duration.
@@ -464,6 +468,40 @@ function RecordingCard({
   // Discarding an empty draft destroys nothing, so it is not the admin-only
   // permanent delete (server agrees — see isEmptyDraft).
   const canDiscard = isEmptyDraft(r);
+
+  // Takes over the card for the same reason ConfirmDanger does: a confirmation
+  // that leaves Publish and Delete tappable underneath it is not a confirmation.
+  if (confirmClear) {
+    return (
+      <Card>
+        <Notice tone="error">
+          Remove the audio from “{r.title}”? The file is deleted permanently. A Zoom
+          recording would have to be imported again; an uploaded one needs the original
+          file. The recording and its session stay.
+        </Notice>
+        <Row>
+          <Button
+            testID="recording-clear-confirm"
+            label="Remove audio"
+            variant="danger"
+            busy={busy === `clear-${r.id}`}
+            onPress={() =>
+              onRun(`clear-${r.id}`, async () => {
+                await clearRecordingAudio({ recordingId: r.id });
+                setConfirmClear(false);
+              })
+            }
+          />
+          <Button
+            label="Cancel"
+            variant="secondary"
+            disabled={busy === `clear-${r.id}`}
+            onPress={() => setConfirmClear(false)}
+          />
+        </Row>
+      </Card>
+    );
+  }
 
   return (
     <>
@@ -552,9 +590,8 @@ function RecordingCard({
             <Button
               label="Remove audio"
               variant="secondary"
-              busy={busy === `clear-${r.id}`}
               disabled={uploading}
-              onPress={() => onRun(`clear-${r.id}`, () => clearRecordingAudio({ recordingId: r.id }))}
+              onPress={() => setConfirmClear(true)}
             />
           ) : null}
         </Row>

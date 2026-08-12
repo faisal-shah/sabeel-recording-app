@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Button,
   Card,
+  Collapsible,
   Empty,
   Field,
   ListRow,
@@ -10,21 +11,17 @@ import {
   SectionTitle,
   StatusChip,
 } from '../components/ui';
-import {
-  createCohort,
-  setCohortArchived,
-  useAllCourses,
-  useCohorts,
-  type CohortRow,
-} from '../structure';
+import { createCohort, useAllCourses, useCohorts, type CohortRow } from '../structure';
+import { courseLabel } from './CoursesScreen';
 
 
 /**
- * Admin-only: cohorts, and the archive switch that cascades to their courses.
+ * Admin-only: the list of cohorts.
  *
- * Archiving is presented as reversible because it is — the cascade never writes
- * a course's own `archived` flag, so reactivating restores each course to the
- * state it was already in.
+ * No archive control here, matching courses: a cohort's settings live inside the
+ * cohort, so the list stays a list. Archived cohorts are kept out of the way in
+ * a closed section rather than interleaved — a finished term is history, and at
+ * three or four terms it was most of the screen.
  */
 export function CohortsScreen({ onOpen }: { onOpen: (cohort: CohortRow) => void }) {
   const cohorts = useCohorts(true);
@@ -35,22 +32,21 @@ export function CohortsScreen({ onOpen }: { onOpen: (cohort: CohortRow) => void 
     acc[c.cohortId] = (acc[c.cohortId] ?? 0) + 1;
     return acc;
   }, {});
+  const active = cohorts.filter((c) => !c.archived);
+  const archived = cohorts.filter((c) => c.archived);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const run = async (fn: () => Promise<void>, id?: string) => {
-    if (id) setBusyId(id);
-    else setBusy(true);
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
     setError(null);
     try {
       await fn();
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      if (id) setBusyId(null);
-      else setBusy(false);
+      setBusy(false);
     }
   };
 
@@ -82,41 +78,42 @@ export function CohortsScreen({ onOpen }: { onOpen: (cohort: CohortRow) => void 
         />
       </Card>
 
-      <SectionTitle>Cohorts ({cohorts.length})</SectionTitle>
-      {cohorts.length === 0 ? (
+      <SectionTitle>Cohorts ({active.length})</SectionTitle>
+      {active.length === 0 ? (
         <Empty>No cohorts yet.</Empty>
       ) : (
-        cohorts.map((c) => (
-          <ListRow
-            key={c.id}
-            testID={`cohort-open-${c.name}`}
-            name={c.name}
-            status={<StatusChip status={c.archived ? 'archived' : 'active'} />}
-            detail={courseLabel(courseCounts[c.id] ?? 0)}
-            onPress={() => onOpen(c)}
-            actions={
-              <Button
-                testID={`cohort-archive-${c.name}`}
-                label={c.archived ? 'Reactivate' : 'Archive'}
-                variant="secondary"
-                compact
-                busy={busyId === c.id}
-                onPress={() =>
-                  void run(
-                    () => setCohortArchived({ cohortId: c.id, archived: !c.archived }),
-                    c.id,
-                  )
-                }
-              />
-            }
-          />
-        ))
+        active.map((c) => <CohortRowItem key={c.id} cohort={c} count={courseCounts[c.id] ?? 0} onOpen={onOpen} />)
       )}
+
+      {archived.length > 0 ? (
+        <Collapsible testID="cohorts-archived" title="Archived" count={archived.length}>
+          {archived.map((c) => (
+            <CohortRowItem key={c.id} cohort={c} count={courseCounts[c.id] ?? 0} onOpen={onOpen} />
+          ))}
+        </Collapsible>
+      ) : null}
     </Screen>
   );
 }
 
-function courseLabel(n: number): string {
-  return n === 1 ? '1 course' : `${n} courses`;
+function CohortRowItem({
+  cohort,
+  count,
+  onOpen,
+}: {
+  cohort: CohortRow;
+  count: number;
+  onOpen: (cohort: CohortRow) => void;
+}) {
+  return (
+    <ListRow
+      testID={`cohort-open-${cohort.name}`}
+      name={cohort.name}
+      status={<StatusChip status={cohort.archived ? 'archived' : 'active'} />}
+      detail={courseLabel(count)}
+      onPress={() => onOpen(cohort)}
+    />
+  );
 }
+
 

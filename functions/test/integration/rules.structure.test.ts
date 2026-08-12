@@ -242,6 +242,38 @@ describe('enrollments', () => {
     );
   });
 
+  /**
+   * The constraint the student-detail screen is built around.
+   *
+   * "Which courses is this student in?" is one query for an admin and no query
+   * at all for a manager: the staff arm resolves a course get() per row, so a
+   * cross-course studentUid list denies the moment the student is in a class
+   * they do not run — and would blow the per-query document-access cap even if
+   * they ran every one. A manager must invert the loop and read one enrollment
+   * document per course they manage, which is the assertion below it.
+   */
+  it('deny a manager the cross-course studentUid query an admin may run', async () => {
+    await assertFails(
+      getDocs(
+        query(collection(mine(), COLLECTIONS.enrollments), where('studentUid', '==', STU_A)),
+      ),
+    );
+    await assertSucceeds(
+      getDocs(
+        query(collection(admin(), COLLECTIONS.enrollments), where('studentUid', '==', STU_A)),
+      ),
+    );
+  });
+
+  it('let a manager read one enrollment by id in a course they run', async () => {
+    // The manager's legal primitive: a document get, one access call, on a
+    // course they provably manage. StudentDetailScreen issues one of these per
+    // course from useMyCourses.
+    await assertSucceeds(
+      getDoc(doc(mine(), COLLECTIONS.enrollments, enrollmentId(STU_A, CLASS_MINE))),
+    );
+  });
+
   it('are write-denied to everyone', async () => {
     await assertFails(
       updateDoc(doc(admin(), COLLECTIONS.enrollments, enrollmentId(STU_A, CLASS_MINE)), {

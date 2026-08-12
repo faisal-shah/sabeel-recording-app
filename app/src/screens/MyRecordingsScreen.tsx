@@ -6,7 +6,7 @@ import { Card, Empty, Notice, Screen, SectionTitle } from '../components/ui';
 import { db } from '../firebase';
 import { useLiveDoc, useLiveQuery } from '../liveQuery';
 import { useMyAssignments } from '../completion';
-import { useMyEnrollments, type CourseRow } from '../structure';
+import { useStudentEnrollments, type CourseRow } from '../structure';
 import type { RecordingRow } from '../recordings';
 import { getTheme, spacing } from '../theme';
 
@@ -28,7 +28,7 @@ export function MyRecordingsScreen({
   uid: string;
   onOpen: (recording: RecordingRow, cls: CourseRow) => void;
 }) {
-  const enrollments = useMyEnrollments(uid);
+  const enrollments = useStudentEnrollments(uid);
   const courseIds = useMemo(
     () => enrollments.filter((e) => e.active).map((e) => e.courseId),
     [enrollments],

@@ -17,6 +17,7 @@ import { DisabledScreen, PendingScreen, ProvisioningScreen } from './src/screens
 import { HomeScreen } from './src/screens/HomeScreen';
 import { StaffScreen } from './src/screens/StaffScreen';
 import { StudentsScreen } from './src/screens/StudentsScreen';
+import { StudentDetailScreen } from './src/screens/StudentDetailScreen';
 import { CohortsScreen } from './src/screens/CohortsScreen';
 import { CoursesScreen } from './src/screens/CoursesScreen';
 import { CourseDetailScreen } from './src/screens/CourseDetailScreen';
@@ -101,12 +102,18 @@ export default function App() {
               {() => <StaffScreen selfUid={user.uid} />}
             </Stack.Screen>
             <Stack.Screen name="Students" options={{ title: 'Students' }}>
-              {() => <StudentsScreen isAdmin={isAdmin} uid={user.uid} />}
+              {() => <Students isAdmin={isAdmin} uid={user.uid} />}
+            </Stack.Screen>
+            <Stack.Screen name="StudentDetail" options={{ title: 'Student' }}>
+              {() => <StudentDetail isAdmin={isAdmin} uid={user.uid} />}
             </Stack.Screen>
             <Stack.Screen name="Cohorts" options={{ title: 'Cohorts' }}>
               {() => <Cohorts />}
             </Stack.Screen>
-            <Stack.Screen name="Courses" options={{ title: 'Courses' }}>
+            {/* Titled for what the screen IS — one cohort: its settings and the
+                courses inside it. The route keeps its name until the id-param
+                conversion renames routes wholesale. */}
+            <Stack.Screen name="Courses" options={{ title: 'Cohort' }}>
               {() => <Courses />}
             </Stack.Screen>
             <Stack.Screen name="CourseDetail" options={{ title: 'Course' }}>
@@ -193,6 +200,32 @@ function Cohorts() {
   return <CohortsScreen onOpen={(cohort) => navigation.navigate('Courses', { cohort })} />;
 }
 
+function Students({ isAdmin, uid }: { isAdmin: boolean; uid: string }) {
+  const navigation = useNavigation<Nav>();
+  return (
+    <StudentsScreen
+      isAdmin={isAdmin}
+      uid={uid}
+      onOpenStudent={(studentUid) => navigation.navigate('StudentDetail', { studentUid })}
+    />
+  );
+}
+
+function StudentDetail({ isAdmin, uid }: { isAdmin: boolean; uid: string }) {
+  const navigation = useNavigation<Nav>();
+  const { studentUid } = useRoute<RouteProp<RootStackParamList, 'StudentDetail'>>().params;
+  return (
+    <StudentDetailScreen
+      studentUid={studentUid}
+      isAdmin={isAdmin}
+      uid={uid}
+      onOpenCourse={(cls, studentName) =>
+        navigation.navigate('StudentLedger', { studentUid, studentName, cls })
+      }
+    />
+  );
+}
+
 function Courses() {
   const navigation = useNavigation<Nav>();
   const { cohort } = useRoute<RouteProp<RootStackParamList, 'Courses'>>().params;
@@ -200,7 +233,6 @@ function Courses() {
     <CoursesScreen
       cohortId={cohort.id}
       cohortName={cohort.name}
-      cohortArchived={cohort.archived}
       onOpen={(cls) => navigation.navigate('CourseDetail', { cls })}
     />
   );

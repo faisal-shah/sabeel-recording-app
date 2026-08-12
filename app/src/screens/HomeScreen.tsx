@@ -26,7 +26,7 @@ export function HomeScreen({
   const isAdmin = role === 'admin';
 
   return (
-    <Screen title={`Hello, ${name}`} subtitle={roleLabel(role)}>
+    <Screen title={`Salaam, ${name}`} subtitle={roleLabel(role)}>
       <SectionTitle>Manage</SectionTitle>
       <Card>
         {isAdmin ? (

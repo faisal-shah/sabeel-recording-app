@@ -206,6 +206,7 @@ export function ListRow({
   status,
   detail,
   actions,
+  actionsPinned = false,
   onPress,
   openLabel,
   testID,
@@ -214,6 +215,13 @@ export function ListRow({
   status?: ReactNode;
   detail?: string;
   actions?: ReactNode;
+  /**
+   * Keep the actions on the name's line, pinned right and centred, letting a
+   * long name WRAP instead of pushing them onto their own row. For a row whose
+   * only action is a single icon, wrapping reads as a layout fault rather than
+   * as making room.
+   */
+  actionsPinned?: boolean;
   onPress?: () => void;
   /** Accessibility name for the press target; visually the row speaks for itself. */
   openLabel?: string;
@@ -230,7 +238,7 @@ export function ListRow({
   );
   return (
     <View style={styles.rowCard}>
-      <View style={styles.rowHead2}>
+      <View style={[styles.rowHead2, actionsPinned ? styles.rowHeadPinned : null]}>
         {/* Title, status and detail are ONE block, so when the actions wrap to
             their own line they go below the whole identity rather than landing
             between the title and its detail. */}
@@ -240,14 +248,20 @@ export function ListRow({
             accessibilityRole="button"
             accessibilityLabel={openLabel ?? `Open ${name}`}
             onPress={onPress}
-            style={styles.rowIdent}
+            style={[styles.rowIdent, actionsPinned ? styles.rowIdentPinned : null]}
           >
             {ident}
           </Pressable>
         ) : (
-          <View style={styles.rowIdent}>{ident}</View>
+          <View style={[styles.rowIdent, actionsPinned ? styles.rowIdentPinned : null]}>
+            {ident}
+          </View>
         )}
-        {actions ? <View style={styles.rowActions}>{actions}</View> : null}
+        {actions ? (
+          <View style={[styles.rowActions, actionsPinned ? styles.rowActionsPinned : null]}>
+            {actions}
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -470,6 +484,56 @@ export function ConfirmDanger({
   );
 }
 
+/**
+ * A section that starts closed — for rows that must remain reachable without
+ * being in the way: archived cohorts, disabled students.
+ *
+ * Closed content is UNMOUNTED, not hidden. Height-zero content still matches a
+ * query and then swallows the click that was meant for whatever is drawn over
+ * it, and the e2e drives these screens by testID — an unmounted section fails
+ * honestly (the locator never resolves) instead of clicking something invisible.
+ *
+ * `aria-expanded`, not `accessibilityState`: react-native-web has no mapping for
+ * accessibilityState, so it reaches the DOM as nothing at all and the control
+ * announces no state. RN supports the aria props natively (see the manager
+ * checkbox in CourseDetailScreen for the same fix).
+ */
+export function Collapsible({
+  title,
+  count,
+  defaultOpen = false,
+  testID,
+  children,
+}: {
+  title: string;
+  count?: number;
+  defaultOpen?: boolean;
+  testID?: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const label = count === undefined ? title : `${title} (${count})`;
+  return (
+    <>
+      <Pressable
+        testID={testID}
+        accessibilityRole="button"
+        aria-expanded={open}
+        accessibilityLabel={`${open ? 'Hide' : 'Show'} ${label}`}
+        onPress={() => setOpen((v) => !v)}
+        style={styles.collapseHead}
+      >
+        {/* Text-presentation glyphs, not an icon font or emoji — same rule as
+            IconButton. These two share a baseline, which the arrowhead pair
+            (⌄ ›) did not: the open state sat visibly below the label. */}
+        <Text style={styles.collapseCaret}>{open ? '▾' : '▸'}</Text>
+        <Text style={styles.collapseTitle}>{label}</Text>
+      </Pressable>
+      {open ? children : null}
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
   canvas: { flex: 1, backgroundColor: t.bg.canvas },
   content: {
@@ -489,6 +553,24 @@ const styles = StyleSheet.create({
     color: t.text.secondary,
     marginTop: spacing(4),
     marginBottom: spacing(2),
+  },
+  // Reads as a SectionTitle that happens to be tappable, so a closed section
+  // still looks like part of the page rather than a stray button.
+  collapseHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(2),
+    minHeight: 44,
+    marginTop: spacing(4),
+    marginBottom: spacing(2),
+  },
+  collapseCaret: { fontSize: 13, fontWeight: '700', color: t.text.secondary, width: 12 },
+  collapseTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    color: t.text.secondary,
   },
   card: {
     backgroundColor: t.bg.surface,
@@ -605,6 +687,19 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   rowIdent: { flexGrow: 1, flexShrink: 1, flexBasis: 180, gap: 2 },
+  // The pinned variant: the name takes the room it needs and wraps within it,
+  // while the actions hold their size at the right-hand end, vertically centred.
+  rowHeadPinned: { flexWrap: 'nowrap' },
+  rowIdentPinned: { flexBasis: 'auto', minWidth: 0 },
+  // flexGrow MUST be cancelled, not just shrink: the base row lets the actions
+  // grow and centres them inside, which parks a lone icon in mid-air instead of
+  // at the edge — and only shows up next to a row whose name is short.
+  rowActionsPinned: {
+    flexGrow: 0,
+    flexShrink: 0,
+    justifyContent: 'flex-end',
+    alignSelf: 'center',
+  },
   rowTitleLine: {
     flexDirection: 'row',
     alignItems: 'center',

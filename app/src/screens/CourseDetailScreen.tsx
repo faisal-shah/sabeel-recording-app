@@ -66,6 +66,8 @@ export function CourseDetailScreen({
   const [name, setName] = useState(cls.name);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Enrollment id whose removal is being confirmed, if any. */
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
   const enrolled = useMemo(
     () => roster.filter((r) => r.active).map((r) => r.studentUid),
@@ -251,39 +253,63 @@ export function CourseDetailScreen({
           .map((r) => {
             const s = byUid.get(r.studentUid);
             const who = s?.displayName ?? r.studentUid;
+            // The whole row opens the student's progress, so the × beside it is
+            // one mis-tap away from silently unenrolling someone. It confirms IN
+            // PLACE, replacing the row: leaving the row still tappable under
+            // "remove?" is the flaw ConfirmDanger exists to prevent.
+            if (confirmRemove === r.id) {
+              return (
+                <View key={r.id} style={styles.confirmRow}>
+                  <Notice tone="error">
+                    Remove {who} from this course? Their listening history is kept, and you
+                    can add them back.
+                  </Notice>
+                  <Row>
+                    <Button
+                      testID={`roster-remove-confirm-${s?.email ?? r.studentUid}`}
+                      label="Remove"
+                      variant="danger"
+                      busy={busy === `rm-${r.id}`}
+                      onPress={() =>
+                        void run(`rm-${r.id}`, async () => {
+                          await setEnrollmentActive({
+                            studentUid: r.studentUid,
+                            courseId: cls.id,
+                            active: false,
+                          });
+                          setConfirmRemove(null);
+                        })
+                      }
+                    />
+                    <Button
+                      label="Cancel"
+                      variant="secondary"
+                      disabled={busy === `rm-${r.id}`}
+                      onPress={() => setConfirmRemove(null)}
+                    />
+                  </Row>
+                </View>
+              );
+            }
             // The roster is a list to scan, so it is one line per student: the
             // email added nothing here (you identify classmates by name) and cost
             // a line each, which on a 20-student course is most of the screen.
             return (
               <ListRow
                 key={r.id}
+                testID={`student-ledger-${s?.email ?? r.studentUid}`}
                 name={who}
+                openLabel={`Open ${who}'s progress`}
+                onPress={() => onOpenStudent(r.studentUid, who)}
+                actionsPinned
                 actions={
-                  <>
-                    <Button
-                      testID={`student-ledger-${s?.email ?? r.studentUid}`}
-                      label="Progress"
-                      variant="secondary"
-                      compact
-                      onPress={() => onOpenStudent(r.studentUid, who)}
-                    />
-                    <IconButton
-                      testID={`roster-remove-${s?.email ?? r.studentUid}`}
-                      glyph="×"
-                      label={`Remove ${who} from this course`}
-                      variant="danger"
-                      busy={busy === `rm-${r.id}`}
-                      onPress={() =>
-                        void run(`rm-${r.id}`, () =>
-                          setEnrollmentActive({
-                            studentUid: r.studentUid,
-                            courseId: cls.id,
-                            active: false,
-                          }),
-                        )
-                      }
-                    />
-                  </>
+                  <IconButton
+                    testID={`roster-remove-${s?.email ?? r.studentUid}`}
+                    glyph="×"
+                    label={`Remove ${who} from this course`}
+                    variant="danger"
+                    onPress={() => setConfirmRemove(r.id)}
+                  />
                 }
               />
             );
@@ -343,6 +369,16 @@ const styles = StyleSheet.create({
   },
   pickText: { flex: 1 },
   rowWaiting: { opacity: 0.5 },
+  // Sits where the row was, so the list does not jump while confirming.
+  confirmRow: {
+    backgroundColor: t.bg.surface,
+    borderRadius: 12,
+    paddingHorizontal: spacing(4),
+    paddingBottom: spacing(3),
+    marginBottom: spacing(2),
+    borderWidth: 1,
+    borderColor: t.border.subtle,
+  },
   // A tappable list, not a dropdown: React Native has no dropdown primitive, and
   // the same shape is already used for approve-as-manager/-admin.
   tick: {

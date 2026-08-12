@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { collection, orderBy, query, where } from 'firebase/firestore';
+import { collection, doc, orderBy, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import {
   COLLECTIONS,
@@ -8,7 +8,7 @@ import {
   type EnrollmentDoc,
 } from '@sabeel/shared';
 import { db, functions } from './firebase';
-import { useLiveQuery } from './liveQuery';
+import { useLiveDoc, useLiveQuery } from './liveQuery';
 
 export interface CohortRow extends CohortDoc {
   id: string;
@@ -32,6 +32,26 @@ export function useCohortName(enabled = true): (cohortId: string) => string {
     const byId = new Map(cohorts.map((c) => [c.id, c.name]));
     return (cohortId: string) => byId.get(cohortId) ?? '';
   }, [cohorts]);
+}
+
+/**
+ * One cohort, live — a DOCUMENT listener, so it is a `get` rather than a list.
+ *
+ * The cohort screen edits the cohort it displays (archive/reactivate), so it
+ * must not render from the navigation param it arrived with: that is a copy
+ * frozen at the tap, and a control that both renders and computes its next
+ * value from a frozen copy never appears to work. See useCourse.
+ */
+export function useCohort(cohortId: string | null): CohortRow | null {
+  return useLiveDoc<CohortRow | null>(
+    () => (cohortId ? doc(db, COLLECTIONS.cohorts, cohortId) : null),
+    [cohortId],
+    {
+      label: 'cohort',
+      map: (snap) => ({ id: snap.id, ...(snap.data() as CohortDoc) }),
+      empty: null,
+    },
+  );
 }
 
 export function useCohorts(enabled: boolean): CohortRow[] {
@@ -171,10 +191,18 @@ export function useRoster(courseId: string | null): EnrollmentRow[] {
 
 
 /**
- * A student's own enrollments. Must carry the studentUid constraint — the rule
- * depends on resource.data, so Firestore rejects an unconstrained list.
+ * Every enrollment of one student, across courses. Must carry the studentUid
+ * constraint — the rule depends on resource.data, so Firestore rejects an
+ * unconstrained list.
+ *
+ * Legal for the STUDENT THEMSELVES and for an ADMIN, and for nobody else. Both
+ * satisfy the enrollments rule with zero document reads. A manager does not:
+ * their arm resolves a course get() per row, so this query denies the moment the
+ * student is in a course they do not run, and blows the per-query
+ * document-access cap even when they run them all. A manager who needs this
+ * inverts the loop — see StudentDetailScreen.
  */
-export function useMyEnrollments(uid: string | null): EnrollmentRow[] {
+export function useStudentEnrollments(uid: string | null): EnrollmentRow[] {
   return useLiveQuery<EnrollmentRow[]>(
     () =>
       uid
@@ -182,7 +210,7 @@ export function useMyEnrollments(uid: string | null): EnrollmentRow[] {
         : null,
     [uid],
     {
-      label: 'myEnrollments',
+      label: 'studentEnrollments',
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as EnrollmentDoc) })),
       empty: [],
     },

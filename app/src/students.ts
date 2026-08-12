@@ -1,12 +1,30 @@
-import { collection, orderBy, query } from 'firebase/firestore';
+import { collection, doc, orderBy, query } from 'firebase/firestore';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import { COLLECTIONS, type StudentDoc, type UserStatus } from '@sabeel/shared';
 import { auth, db, functions } from './firebase';
-import { useLiveQuery } from './liveQuery';
+import { useLiveDoc, useLiveQuery } from './liveQuery';
 
 export interface StudentRow extends StudentDoc {
   uid: string;
+}
+
+/**
+ * One student, live. The whole staff directory is readable by any staff member
+ * (a deliberate privacy call recorded on the `students` rule), so this needs no
+ * scoping — but it is a document listener so the student's own screen could use
+ * the same hook, where a list would be denied.
+ */
+export function useStudent(uid: string | null): StudentRow | null {
+  return useLiveDoc<StudentRow | null>(
+    () => (uid ? doc(db, COLLECTIONS.students, uid) : null),
+    [uid],
+    {
+      label: 'student',
+      map: (snap) => ({ uid: snap.id, ...(snap.data() as StudentDoc) }),
+      empty: null,
+    },
+  );
 }
 
 export function useStudents(enabled: boolean): StudentRow[] {

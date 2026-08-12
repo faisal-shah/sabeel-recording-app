@@ -3,21 +3,16 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   Button,
   Card,
+  Collapsible,
   Empty,
   Field,
-  IconButton,
   Notice,
   ListRow,
   Screen,
   SectionTitle,
   StatusChip,
 } from '../components/ui';
-import {
-  createStudent,
-  resendPasswordSetup,
-  setStudentAccess,
-  useStudents,
-} from '../students';
+import { createStudent, useStudents } from '../students';
 import { useAllCourses, useCohorts, useMyCourses } from '../structure';
 import { getTheme, spacing } from '../theme';
 
@@ -33,15 +28,23 @@ const t = getTheme();
  *
  * Enrolment into a course is added in 1b, once courses exist.
  */
-export function StudentsScreen({ isAdmin, uid }: { isAdmin: boolean; uid: string }) {
-  const canManageAccess = isAdmin;
+export function StudentsScreen({
+  isAdmin,
+  uid,
+  onOpenStudent,
+}: {
+  isAdmin: boolean;
+  uid: string;
+  onOpenStudent: (studentUid: string) => void;
+}) {
   const students = useStudents(true);
+  const active = students.filter((s) => s.status !== 'disabled');
+  const disabled = students.filter((s) => s.status === 'disabled');
   const courseOptions = useCourseOptions(isAdmin, uid);
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [courseId, setCourseId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [busyUid, setBusyUid] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
@@ -134,74 +137,38 @@ export function StudentsScreen({ isAdmin, uid }: { isAdmin: boolean; uid: string
         {info ? <Notice tone="success">{info}</Notice> : null}
       </Card>
 
-      <SectionTitle>Students ({students.length})</SectionTitle>
-      {students.length === 0 ? (
+      {/* The list is for finding someone; everything you can DO to them lives on
+          their page. Per-row actions made every row three controls wide and
+          still answered nothing about the student. */}
+      <SectionTitle>Students ({active.length})</SectionTitle>
+      {active.length === 0 ? (
         <Empty>No students yet.</Empty>
       ) : (
-        students.map((s) => (
+        active.map((s) => (
           <ListRow
             key={s.uid}
+            testID={`student-open-${s.email}`}
             name={s.displayName}
-            status={<StatusChip status={s.status} />}
             detail={s.email}
-            actions={
-              <>
-              <Button
-                label="Resend link"
-                variant="secondary"
-                compact
-                busy={busyUid === s.uid}
-                onPress={() =>
-                  void (async () => {
-                    setBusyUid(s.uid);
-                    setError(null);
-                    setInfo(null);
-                    try {
-                      await resendPasswordSetup(s.email);
-                      setInfo(`Password link sent to ${s.email}.`);
-                    } catch (e) {
-                      setError((e as Error).message);
-                    } finally {
-                      setBusyUid(null);
-                    }
-                  })()
-                }
-              />
-              {canManageAccess ? (
-                <IconButton
-                  // Disabling is reversible, so the re-enable side is not
-                  // destructive and must not be dressed as if it were.
-                  glyph={s.status === 'disabled' ? '↺' : '×'}
-                  label={
-                    s.status === 'disabled'
-                      ? `Re-enable ${s.displayName}`
-                      : `Disable ${s.displayName}`
-                  }
-                  variant={s.status === 'disabled' ? 'secondary' : 'danger'}
-                  busy={busyUid === s.uid}
-                  onPress={() =>
-                    void (async () => {
-                      setBusyUid(s.uid);
-                      setError(null);
-                      try {
-                        await setStudentAccess({
-                          uid: s.uid,
-                          status: s.status === 'disabled' ? 'active' : 'disabled',
-                        });
-                      } catch (e) {
-                        setError((e as Error).message);
-                      } finally {
-                        setBusyUid(null);
-                      }
-                    })()
-                  }
-                />
-              ) : null}
-              </>
-            }
+            onPress={() => onOpenStudent(s.uid)}
           />
         ))
       )}
+
+      {disabled.length > 0 ? (
+        <Collapsible testID="students-disabled" title="Disabled" count={disabled.length}>
+          {disabled.map((s) => (
+            <ListRow
+              key={s.uid}
+              testID={`student-open-${s.email}`}
+              name={s.displayName}
+              status={<StatusChip status={s.status} />}
+              detail={s.email}
+              onPress={() => onOpenStudent(s.uid)}
+            />
+          ))}
+        </Collapsible>
+      ) : null}
     </Screen>
   );
 }

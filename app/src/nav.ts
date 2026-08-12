@@ -9,6 +9,9 @@ export type RootStackParamList = {
   Home: undefined;
   Staff: undefined;
   Students: undefined;
+  /** By uid: the screen reads the student live, and their courses depend on who
+   *  is looking (an admin queries; a manager walks their own courses). */
+  StudentDetail: { studentUid: string };
   Cohorts: undefined;
   Courses: { cohort: CohortRow };
   CourseDetail: { cls: CourseRow };
