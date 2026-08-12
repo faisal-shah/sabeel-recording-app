@@ -34,6 +34,36 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-08-12 — **A screen never renders from a snapshot it also writes**
+  (v0.2.9). Course detail read its `CourseRow` from a navigation param — a copy
+  frozen when the row was tapped — while every control on it both renders from
+  the course and computes its next write from it. The manager ticks never moved,
+  and each toggle was derived from the same pre-change array, so three taps left
+  only the last standing. The same shape appeared in the session editor (fields
+  seeded at mount, not on open, so Save reverted anything changed since) and,
+  server-side, in the assignment fan-out (reconciling from the trigger's event
+  snapshot, which Cloud Functions may deliver out of order).
+  `exhaustive-deps` is now an error, and `useLiveQuery` takes `(make, deps,
+  options)` **specifically** so the rule can read it — with any other argument
+  order it reports "dependencies are unknown" and checks nothing. Declined the
+  plugin's own preset: v7 bundles the React Compiler rules, three of whose
+  findings here are the deliberate resets that CLEAR stale state.
+- 2026-08-12 — **`useLiveDoc`, because get and list are different rules**
+  (v0.2.9). A student is granted `get` on their course and never `list`, and
+  `where('__name__','==',id)` is a **list** — so the staff subscription hook
+  fails closed on a student screen, as an empty screen and a console warning.
+  A document listener is a `get`. The browse screen now holds its course live
+  through one, which matters because it decides whether the archived-listening
+  notice shows and which course the player gates its transport on. Asserted on
+  the exact query shape in `rules.structure.test.ts`, mutation-tested by opening
+  the student arm to `allow get, list`.
+- 2026-08-12 — **A guard that reports "more than ten" is not a guard**
+  (v0.2.9). The composite-index checker matched 21 of 25 `useLiveQuery` calls —
+  a nested generic its regex could not cross — while its self-check passed. No
+  index was missing (both skipped queries are equality-only), but it was
+  certifying coverage it did not have. It now counts call sites independently
+  and demands the parser account for every one.
+
 - 2026-07-31 — **One Sabeel mark, badged per app; no wordmark** (v0.2.8). The
   three Sabeel apps now share one calligraphic mark and are told apart only by a
   Dark Raspberry badge — board, stopwatch, microphone. "SABEEL INSTITUTE" is
