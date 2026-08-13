@@ -34,6 +34,47 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-08-12 — **Every route carries an id, and the browser Back button works**
+  (v0.3.0). React Navigation only touches browser history when a `linking`
+  config is present; there was none, so the whole app sat in one history entry
+  and Back left the site. Adding one is not enough on its own: params are
+  serialised into the URL with `String(value)`, so the eight routes carrying
+  whole documents would have produced `[object Object]`. They now carry ids,
+  resolved live in the `App.tsx` wrappers — which also finished the
+  snapshot→live work of v0.2.9, since no navigation param is a frozen document
+  any more. Gated to web: native's stack already has a back gesture, and
+  `expo-linking` would be a dependency for nothing.
+- 2026-08-12 — **`useCourse` and `useRecording` are document listeners, not
+  `__name__` queries** (v0.3.0). The player is reached by students, whose arm on
+  the courses rule grants `get` without `list`, so the query form failed closed
+  for exactly that population — an empty screen and a console warning. The e2e
+  caught it. `rules.structure.test.ts` owns the get/list split and says why.
+- 2026-08-12 — **A live read reports whether it has answered** (v0.3.0).
+  `useLiveDocState` returns `resolved` alongside the value, because empty alone
+  cannot tell "still loading" from "there is nothing there". Without it any
+  screen resolving its subject from a URL sat on a spinner — including a student
+  whose recording was unpublished while they had the player open, which revokes
+  their access to it.
+- 2026-08-12 — **Screens are keyed on their subject** (v0.3.0). `navigate` to a
+  route already on top updates its params in place, so a screen would keep state
+  belonging to the previous subject: a rename field holding the old course's
+  name, attendance marks from another session. No path does that yet; making
+  every route addressable is what makes it possible.
+- 2026-08-12 — **A manager sees only the courses they manage on a student's
+  page** (v0.3.0). There is no query for "this student's courses" a manager may
+  run — the enrollments rule resolves a course `get()` per row, so a
+  cross-course `studentUid` list denies as soon as the student is in a class
+  they do not run. They walk their own courses and read one enrollment document
+  each. That is also the right product answer, since a manager is scoped class
+  by class, so the heading says "Courses you manage" rather than implying it is
+  the student's whole record.
+- 2026-08-12 — **Confirm only what cannot be undone** (v0.3.0). Removing audio
+  deletes the object from Storage and sat unguarded among the safe controls, so
+  it now asks; so does removing a student from a course, since the row became
+  tappable. Archiving a cohort does NOT ask — it is reversible, and it states
+  its blast radius instead ("also turns off N courses"). Obstructing the safe
+  action is how people learn to click through warnings.
+
 - 2026-08-12 — **A screen never renders from a snapshot it also writes**
   (v0.2.9). Course detail read its `CourseRow` from a navigation param — a copy
   frozen when the row was tapped — while every control on it both renders from
