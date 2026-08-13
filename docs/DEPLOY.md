@@ -62,9 +62,21 @@ A release bumps one version and ships it to both surfaces. In order:
      Private-repo release assets are not publicly downloadable — that is the whole
      reason the public download lives on the pages repo.
 
-5. **Bump the download-page version** in
-   `faisal-shah.github.io/sabeel-recording-app/index.html` and push. The APK
-   filenames are unversioned, so the download link itself never changes.
+5. **Update the download page** in
+   `faisal-shah.github.io/sabeel-recording-app/` and push. The APK filenames are
+   unversioned, so the download link itself never changes — but three things do:
+   - the **version and publish date** in `index.html`;
+   - the **What's new** list — a handful of plain-language lines, no jargon. This
+     is the only release note most people ever read;
+   - **`USER-MANUAL.pdf`**, copied from `docs/USER-MANUAL.pdf`. It is a SEPARATE
+     COPY, not a link, so it does not follow the repo automatically. Skipping this
+     is invisible — the page keeps serving an older manual quite happily, and it
+     had drifted three versions behind before anyone looked:
+     ```bash
+     cp docs/USER-MANUAL.pdf ../faisal-shah.github.io/sabeel-recording-app/
+     ```
+     Verify the published copy, not the local one:
+     `pdftotext -f 1 -l 1 USER-MANUAL.pdf - | grep -i version`
 
 There is no `npm run release` script yet (the sibling time-tracker has one); this
 is the manual recipe until one exists.
