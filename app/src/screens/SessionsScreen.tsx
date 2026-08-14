@@ -18,10 +18,12 @@ const t = getTheme();
 export function SessionsScreen({
   courseId,
   courseName,
+  onOpenCourse,
   onOpenSession,
 }: {
   courseId: string;
   courseName: string;
+  onOpenCourse: () => void;
   onOpenSession: (session: SessionRow) => void;
 }) {
   const sessions = useCourseSessions(courseId);
@@ -53,7 +55,7 @@ export function SessionsScreen({
     })();
 
   return (
-    <Screen subtitle={courseName}>
+    <Screen parent={{ label: courseName, testID: 'up-to-course-from-sessions', onPress: onOpenCourse }}>
       {error ? <Notice tone="error">{error}</Notice> : null}
 
       <SectionTitle>Add a session</SectionTitle>

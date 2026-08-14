@@ -26,14 +26,58 @@ import { captureError } from './sentry';
 const errorWatchers = new Set<(msg: string | null) => void>();
 let lastListenerError: string | null = null;
 
+/**
+ * Whether there is an account behind these subscriptions that may read anything.
+ *
+ * Signing out does not tear the listeners down first. Firestore re-issues every
+ * live listen the moment the credential drops, and the server refuses them —
+ * while React is still unmounting the screen that owns them. So the last thing
+ * a student does before leaving raises a permission denial from their own home
+ * screen, which is where the Sign out button is. It reached Sentry as a defect.
+ *
+ * It is not one: with no usable session, EVERY rule denies by design, so a
+ * denial in that state carries no information. Set from the auth session (see
+ * session.ts) — its `onAuthStateChanged` callback runs in the same tick the
+ * credential drops, well before the server's refusal can come back over the
+ * wire, so the flag is always already false by the time this is consulted.
+ *
+ * Narrow on purpose. It suppresses ONLY permission errors, and only while the
+ * app knows the account cannot read: a denial to a signed-in, active user is
+ * the interesting kind and still reports.
+ */
+let sessionCanRead = false;
+
+/** Called by the auth session whenever the account's readability changes. */
+export function setLiveDataSession(canRead: boolean): void {
+  sessionCanRead = canRead;
+}
+
 function reportListenerError(label: string, e: { code?: string; message: string }) {
+  const code = e.code ?? '';
+  if (!sessionCanRead && (code === 'permission-denied' || code === 'unauthenticated')) {
+    // Still logged, and marked — the e2e counts unmarked listener warnings and
+    // must not be blinded by this, but neither should it fail on a denial we
+    // deliberately expect.
+    console.warn(`${label} listener`, code, '(session ended — expected)');
+    return;
+  }
   lastListenerError = `Live data error (${label}): ${e.code ?? e.message}`;
   errorWatchers.forEach((w) => w(lastListenerError));
   console.warn(`${label} listener`, e.code ?? e.message);
   // Off-device visibility: a listener failure in a phone console is invisible.
-  // captureError is a no-op until a Sentry DSN exists; the call site is here so
-  // wiring it later reaches every listener at once.
-  captureError(e, { source: label });
+  //
+  // REPORT OUR MESSAGE, NOT FIRESTORE'S. Handing Sentry the raw FirebaseError
+  // groups every listener in the app into one issue titled "Missing or
+  // insufficient permissions", over a stack of minified SDK internals that names
+  // no screen and no collection — an issue that cannot be acted on without
+  // guessing which of two dozen subscriptions produced it. The label is the
+  // whole diagnostic, so it belongs in the title; the code and the original
+  // message ride along, and the SDK frames were never worth reading.
+  captureError(new Error(lastListenerError), {
+    source: label,
+    code: e.code ?? 'none',
+    detail: e.message,
+  });
 }
 
 function reportListenerSuccess(label: string) {

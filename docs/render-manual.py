@@ -13,6 +13,8 @@ HTML block (kept on contiguous lines so python-markdown passes it through):
     </div>
 """
 import base64
+import datetime
+import json
 import pathlib
 import re
 import subprocess
@@ -20,7 +22,25 @@ import subprocess
 HERE = pathlib.Path(__file__).parent
 import markdown  # python3-markdown
 
+# The app's manifest is the ONLY place the version is written. It was duplicated
+# into the cover string here and into the markdown's own version line, so a
+# release bumped app.json and shipped a manual still claiming the version before
+# it — silently, because a PDF renders perfectly whatever it says.
+VERSION = json.loads((HERE.parent / 'app/app.json').read_text())['expo']['version']
+DATELINE = datetime.date.today().strftime('%B %Y')
+
 md_text = (HERE / 'USER-MANUAL.md').read_text()
+
+# The markdown states the version too, for anyone reading the source rather than
+# the PDF. It cannot be canonical, so it is CHECKED against the manifest instead:
+# loud here, at the one moment someone is in a position to fix it, rather than
+# discovered on a published PDF three versions later.
+stated = re.search(r'For app version ([0-9.]+)', md_text)
+if not stated or stated.group(1) != VERSION:
+    raise SystemExit(
+        f"USER-MANUAL.md says version {stated.group(1) if stated else '(none)'}, "
+        f"app/app.json says {VERSION}. Update the line under the title."
+    )
 body = markdown.markdown(md_text, extensions=['tables', 'smarty'])
 # The cover page carries the title/version, so drop the markdown's own H1 and
 # the version line to avoid saying it twice.
@@ -34,7 +54,7 @@ cover = f"""
   <img class="cover-logo" src="data:image/png;base64,{logo_b64}" alt="Sabeel Institute">
   <div class="cover-title">Class Recordings</div>
   <div class="cover-sub">User Manual</div>
-  <div class="cover-meta">App version 0.3.0 &nbsp;·&nbsp; August 2026</div>
+  <div class="cover-meta">App version {VERSION} &nbsp;·&nbsp; {DATELINE}</div>
 </div>
 """
 

@@ -23,23 +23,54 @@ const t = getTheme();
  * Page wrapper. Renders the latest live-data error above the content — a
  * rejected listener otherwise dies as a console warning nobody sees on a phone.
  */
-export function Screen({ title, subtitle, status, children }: {
+export function Screen({ title, subtitle, status, parent, children }: {
   title?: string;
   subtitle?: string;
   /** The state of the thing this screen is about. Rendered as a lamp on the
    *  LEFT of the heading, with the heading centred against it — the same shape
    *  on a phone and on a wide screen. */
   status?: string;
+  /**
+   * The thing this screen belongs to, as the first part of the subtitle and a
+   * way back to it. The subtitle on a nested screen already NAMED its parent —
+   * this makes that name the link rather than adding a second one, so the header
+   * gains an affordance and no new line.
+   *
+   * Not a substitute for the header's Back arrow, which returns wherever you
+   * came from: two screens down inside a course, that is the list you came
+   * through, not the course. Both are useful and they do different things.
+   */
+  parent?: { label: string; testID: string; onPress: () => void };
   children: ReactNode;
 }) {
   const listenerError = useListenerError();
   const heading =
-    title || subtitle ? (
+    title || subtitle || parent ? (
       <View style={styles.headRow}>
         {status ? <StatusLight status={status} /> : null}
         <View style={styles.headText}>
           {title ? <Text style={styles.h1}>{title}</Text> : null}
-          {subtitle ? <Text style={styles.lede}>{subtitle}</Text> : null}
+          {parent || subtitle ? (
+            <Text style={styles.lede}>
+              {parent ? (
+                // Underlined, not coloured alone: colour by itself does not say
+                // "link" to anyone who cannot see it as different from the text
+                // beside it. NESTED in the subtitle Text so it wraps with the
+                // rest of the line instead of being a block of its own.
+                <Text
+                  style={styles.ledeLink}
+                  role="link"
+                  testID={parent.testID}
+                  aria-label={`Go to ${parent.label}`}
+                  onPress={parent.onPress}
+                >
+                  {parent.label}
+                </Text>
+              ) : null}
+              {parent && subtitle ? ' · ' : ''}
+              {subtitle}
+            </Text>
+          ) : null}
         </View>
       </View>
     ) : null;
@@ -545,6 +576,9 @@ const styles = StyleSheet.create({
   },
   h1: { fontSize: 26, fontWeight: '700', color: t.text.primary },
   lede: { fontSize: 15, color: t.text.secondary, marginTop: spacing(1), marginBottom: spacing(4) },
+  // Raspberry is the primary action's colour, and this IS the header's action.
+  // #83114F on the ivory canvas is far past 4.5:1, so it carries at 15pt.
+  ledeLink: { color: t.text.accent, textDecorationLine: 'underline' },
   sectionTitle: {
     fontSize: 13,
     fontWeight: '700',

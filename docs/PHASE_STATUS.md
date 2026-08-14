@@ -34,6 +34,67 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-08-13 — **The course name in a header is the way back to the course**
+  (Faisal's request). Sessions, one session, and the attendance report all
+  already NAMED their course in the subtitle, so that name became the link
+  rather than a new breadcrumb row — the header gains an affordance and no line.
+  It is not a duplicate of the back arrow: two screens into a course, Back
+  returns the list you came through, and a session opened from a URL has nothing
+  beneath it at all, so Back is not even drawn. `navigate` rather than `goBack`
+  for exactly that reason. Underlined as well as raspberry, because colour alone
+  does not say "link", and the testID names its screen — react-navigation keeps
+  the screen below mounted, so one shared id matched two elements at once.
+
+- 2026-08-13 — **The two populations get two route tables.** One navigator held
+  every screen for every role. That was harmless while no screen had a path —
+  a screen was reachable only if the UI offered it, and neither home offers the
+  other's. Giving every screen a URL in v0.3.0 made all of them reachable by
+  anyone signed in, and the way people actually arrive is not a typed URL but a
+  **shared device**: staff finish on a session page, sign out, a student signs in,
+  and React Navigation restores the path. The student got `SessionDetail` fully
+  rendered, every query beneath it denied; a manager landing on `/my-recordings`
+  got the student's "Your recordings" the same way. The rules held throughout —
+  nothing leaked — but the wrong screen rendered, and the denials underneath are
+  what reached Sentry (`session` at a staff URL, `myAssignments`). Staff and
+  student screen sets are now registered separately, with a linking config each,
+  so the other population's path matches nothing and falls back to their own home.
+  Adding a screen to both arms puts it back within reach of both.
+
+- 2026-08-13 — **A denial to an account that cannot read anything is not a
+  defect.** Signing out does not unsubscribe first: Firestore re-issues every
+  live listen the moment the credential drops and the server refuses them, while
+  React is still unmounting the screens that own them. The last thing a student
+  does before leaving therefore raised a permission denial from their own home —
+  which is where the Sign out button is. The auth session now publishes whether
+  the account can read anything at all, set in the same tick the credential
+  changes, and `permission-denied` in that state is logged and marked expected
+  rather than bannered and reported. Deliberately narrow: a denial to a
+  signed-in, ACTIVE user is the interesting kind and still reports, which the
+  e2e proves by still failing on all three real denials with the guard in place.
+
+- 2026-08-13 — **An absent document is not a readable one.** Firestore rules see
+  `resource == null` for a document that does not exist, so any arm dereferencing
+  `resource.data` is an evaluation ERROR and the read is REFUSED — never answered
+  "no such document". The manager's student page asked "is this student in this
+  course of mine?" as a document get, and the honest answer is usually no, so it
+  drew a permission denial per non-matching course: a live-data error banner over
+  the page and a Sentry event per row. It now asks as a list constrained to that
+  one course and that one student, which returns nothing for an absent enrollment
+  and still costs the single class `get()` the rule can afford. The rules are
+  unchanged: the trap is documented on `listeningProgress` and `completions`,
+  which allow the missing-document read because there is nothing there to leak.
+  `/enrollments` gets no such allowance — whether the document exists IS the
+  private fact, and a manager who could read the absent ones could probe any
+  student against any course, with the denial itself as the yes.
+
+- 2026-08-13 — **A listener error reports OUR message, not Firestore's.** Every
+  live subscription in the app fed Sentry the raw `FirebaseError`, so all of them
+  collapsed into one issue titled "Missing or insufficient permissions" over a
+  stack of minified SDK internals naming no screen and no collection — an issue
+  that cannot be acted on without guessing which of two dozen subscriptions
+  produced it. The label was already in the on-screen banner and only in a tag;
+  it is now the title.
+
 - 2026-08-12 — **Every route carries an id, and the browser Back button works**
   (v0.3.0). React Navigation only touches browser history when a `linking`
   config is present; there was none, so the whole app sat in one history entry
@@ -415,6 +476,43 @@ and commit messages, and renaming them would strand every one of those.
   reports nothing is worse than none.
 
 ## Verification log
+
+- 2026-08-13 — **Both Sentry denials reproduced from their URLs, then fixed.**
+  The events carried `source` tags (`session`, `myAssignments`) and request URLs
+  (`/courses/<id>/sessions/<id>` and `/`). Driving those exact URLs under the
+  wrong role reproduced both labels verbatim: a student signing in on the staff
+  session URL logged `session listener permission-denied` and rendered the staff
+  screen; a manager on `/my-recordings` logged `myAssignments` and rendered the
+  student one. After the role split, both land on their own home with no denial.
+  Mutation-tested: reverting `App.tsx` alone turns all four role-boundary checks
+  plus the global live-data check red, and does so **with the expected-denial
+  guard in place** — which is the proof that the guard suppresses only the
+  sessions that cannot read, not real denials.
+  The `/` event is the one piece that is reasoned rather than reproduced: a
+  student's own assignments query is permitted, so a denial there means the token
+  had already lost its claims, and the Sign out button is on that very screen.
+  The sign-out race does not reproduce on a fast local machine — React unmounts
+  before the server's refusal returns — so the guard for it is argued from the
+  URL and label, not demonstrated.
+
+- 2026-08-13 — **The e2e now counts refused subscriptions, not just errors.**
+  `reportListenerError` logs a console WARNING, and the harness only collected
+  console ERRORS — so three separate denials shipped while the suite stayed
+  green. Each renders as an ordinary empty state, and the banner sits above the
+  fold on screens the checks never read. Every page now feeds a run-wide list and
+  the suite fails on any unmarked entry.
+
+- 2026-08-13 — **The absent-enrollment denial, mutation-tested at both layers.**
+  Rules: a new `rules.structure.test.ts` case asserts a manager's get on an
+  ABSENT enrollment fails while the equivalent one-course-one-student list
+  succeeds; opening the rule with `resource == null && isStaff()` turned it red,
+  and restoring it green. E2E: the existing manager check ("a student in none of
+  their courses says so") passed **both before and after the fix** — a refused
+  read and a genuine absence both leave the row unrendered, so the visible
+  outcome was identical and the denial was invisible to it. The added assertion
+  is the absence of the live-data banner, and reverting the two client files
+  turned exactly that check red with everything else still green. That pair is
+  why this shipped in v0.3.0 and why it cannot ship again.
 
 - 2026-07-22 — **Phase 5 proven in PRODUCTION (multi-role).** Temp admin + two
   managers (each scoped to one class) + two students, deleted after: publish

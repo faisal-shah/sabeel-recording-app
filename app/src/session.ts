@@ -11,6 +11,7 @@ import {
 } from '@sabeel/shared';
 import { googleSignOut } from './auth/google';
 import { auth, db } from './firebase';
+import { setLiveDataSession } from './liveQuery';
 
 export type Profile =
   | { kind: 'staff'; doc: StaffUserDoc }
@@ -82,6 +83,12 @@ export function useSession(): Session {
       unsubDoc = null;
       stopPoll();
       latest.current = { profile: null };
+      // FIRST, before anything awaits. Firestore reacts to the same credential
+      // change by re-issuing every live listen, and the refusals come back while
+      // the screens holding them are still mounted; this is what marks those
+      // denials expected rather than reporting them. Publishing it here means it
+      // is set in the same tick the credential drops.
+      setLiveDataSession(false);
 
       if (!user) {
         setSession({ phase: 'signedOut' });
@@ -101,6 +108,11 @@ export function useSession(): Session {
       const publish = (profile: Profile | null, claims: TokenClaims) => {
         if (cancelled) return;
         latest.current = { profile };
+        // A gated account — pending, disabled, or not yet provisioned — is
+        // denied by every rule, so denials while it is in that state say
+        // nothing. Being disabled mid-session is the case that matters: the
+        // claim flips under a screen that is still subscribed.
+        setLiveDataSession(isReady(claims, profile));
         setSession({ phase: 'signedIn', user, profile, claims });
         if (isReady(claims, profile)) stopPoll();
         else if (!pollTimer) pollTimer = setInterval(poll, 3000);

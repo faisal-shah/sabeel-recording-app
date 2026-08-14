@@ -96,6 +96,18 @@ const activeAssignments = async () =>
 const browser = await chromium.launch();
 const consoleErrors = [];
 
+/**
+ * Every live subscription that was ever refused, across every page in the run.
+ *
+ * `reportListenerError` emits `console.WARN`, so none of this reached
+ * `consoleErrors` — three separate denials shipped in v0.3.0 while this suite
+ * stayed green, because each one renders as an ordinary empty state and the
+ * banner sits above the fold on screens the checks never read. A denial is
+ * never correct in a flow the app itself drives, so collect them globally and
+ * fail the run on any.
+ */
+const listenerDenials = [];
+
 async function newSession() {
   const ctx = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -104,6 +116,10 @@ async function newSession() {
   const page = await ctx.newPage();
   page.on('console', (m) => {
     if (m.type() === 'error') consoleErrors.push(m.text());
+    // Denials the app marks expected (a session ending) are excluded by design.
+    if (m.type() === 'warning' && / listener\b/.test(m.text()) && !/expected/.test(m.text())) {
+      listenerDenials.push(m.text());
+    }
   });
   page.on('pageerror', (e) => consoleErrors.push(String(e)));
   await page.goto(WEB, { waitUntil: 'domcontentloaded' });
@@ -821,8 +837,8 @@ await admin.waitForTimeout(2500);
 
 // The MANAGER's view of the same page is a DIFFERENT query shape, and the one
 // that can fail closed: they may not query a student's enrollments across
-// courses, so the screen walks the courses they manage and reads one enrollment
-// document each. A denial here is an empty section, not an error — so assert the
+// courses, so the screen walks the courses they manage and asks about one course
+// at a time. A denial here is an empty section, not an error — so assert the
 // course actually appears.
 await goHome(mgr);
 await tap(mgr, 'nav-students');
@@ -848,6 +864,12 @@ await shot(mgr, '20c-student-page-manager');
 // read and renders nothing when it does not match, so without an explicit empty
 // state the heading stood over a blank space. Needs a student with no enrolment
 // at all — one merely REMOVED from a course keeps an inactive enrolment row.
+//
+// This is also the ONLY place the app asks about an enrollment that does not
+// exist, and the outcome check below is not enough on its own: a refused read
+// and a genuine "not enrolled" both leave the row unrendered, so the empty state
+// appeared either way while every non-matching course fired a permission denial
+// into the banner and into Sentry. Assert the absence of the banner too.
 await goHome(admin);
 await tap(admin, 'nav-students');
 await admin.getByTestId('student-name').fill('Zayd Noor');
@@ -859,9 +881,14 @@ await goHome(mgr);
 await tap(mgr, 'nav-students');
 await tap(mgr, 'student-open-zayd@example.com');
 await mgr.waitForTimeout(3500);
+const mgrNoMatch = (await mgr.locator('body').innerText()).toLowerCase();
 check(
   'a student in none of their courses says so, rather than showing a bare heading',
-  (await mgr.locator('body').innerText()).toLowerCase().includes('is not in any of the courses you manage'),
+  mgrNoMatch.includes('is not in any of the courses you manage'),
+);
+check(
+  'and answers it without a permission denial — an absent enrollment is asked as a query, never a get',
+  !mgrNoMatch.includes('live data error'),
 );
 
 // ------------------------------------------------- roster removal confirms --
@@ -887,6 +914,80 @@ check(
   afterRemove === stillEnrolled - 1,
   `${stillEnrolled} → ${afterRemove}`,
 );
+
+console.log('\nUp to the course');
+// The header's Back arrow returns where you CAME FROM, which two screens into a
+// course is the list you came through. The course name in the subtitle is the
+// way to the course itself — and from a screen opened by URL there is nothing
+// below it in the stack to go back to at all, so this is the only way out.
+await openHikam(admin);
+await tap(admin, 'nav-sessions');
+await tap(admin, 'session-open-Session 1');
+const sessionUrl = admin.url();
+// Named per screen, not one shared id: react-navigation keeps the screen below
+// mounted, so a bare `up-to-course` matches the one on Sessions as well.
+await tap(admin, 'up-to-course-from-session');
+await admin.waitForTimeout(2500);
+const onCourse = (page) => {
+  const p = new URL(page.url()).pathname;
+  return /^\/courses\/[^/]+$/.test(p) ? p : `NOT the course page: ${p}`;
+};
+check(
+  'the course name on a session leads to the course',
+  onCourse(admin).startsWith('/courses/'),
+  onCourse(admin),
+);
+
+// The case that has no Back at all: a session opened straight from its URL has
+// nothing beneath it in the stack, so the header draws no back arrow. That is
+// the whole reason this link exists rather than leaning on Back.
+await admin.goto(sessionUrl, { waitUntil: 'domcontentloaded' });
+await admin.waitForTimeout(3500);
+await tap(admin, 'up-to-course-from-session');
+await admin.waitForTimeout(2500);
+check(
+  '…including from a session opened cold by URL, which has no Back',
+  onCourse(admin).startsWith('/courses/'),
+  onCourse(admin),
+);
+
+await openHikam(admin);
+await tap(admin, 'nav-attendance');
+await tap(admin, 'up-to-course-from-attendance');
+await admin.waitForTimeout(2500);
+check('and the same from the attendance report', onCourse(admin).startsWith('/courses/'), onCourse(admin));
+
+console.log('\nRole boundaries');
+// A URL is an ADDRESS, so a signed-in student can ask for a staff screen and a
+// manager for a student one. Nobody types these — a browser tab outlives the
+// person signed into it, so a shared device restores the last URL under the next
+// account. While one navigator held every screen, both populations got the
+// other's screen fully rendered, every query beneath it denied.
+//
+// The rules held, so the check is not about a leak: it is that the WRONG SCREEN
+// rendered at all, and that the denials underneath it are what reached Sentry.
+const staffSession = (await readCollection('sessions'))[0];
+const staffPath =
+  `${WEB}courses/${staffSession.fields.courseId.stringValue}` +
+  `/sessions/${staffSession.name.split('/').pop()}`;
+
+await student.goto(staffPath, { waitUntil: 'domcontentloaded' });
+await student.waitForTimeout(3500);
+const stuOnStaffUrl = (await student.locator('body').innerText()).toLowerCase();
+check(
+  'a student asking for a staff URL gets their OWN home, not the staff screen',
+  stuOnStaffUrl.includes('your listening') && !stuOnStaffUrl.includes('due for absentees'),
+);
+check('…so nothing on it is denied', !stuOnStaffUrl.includes('live data error'));
+
+await mgr.goto(`${WEB}my-recordings`, { waitUntil: 'domcontentloaded' });
+await mgr.waitForTimeout(3500);
+const mgrOnStudentUrl = (await mgr.locator('body').innerText()).toLowerCase();
+check(
+  'a manager asking for a student URL gets their own home too',
+  mgrOnStudentUrl.includes('recording library') && !mgrOnStudentUrl.includes('your recordings'),
+);
+check('…so nothing on it is denied', !mgrOnStudentUrl.includes('live data error'));
 
 // -------------------------------------------------------------------- audit --
 // The auditedCall wrapper writes one entry per staff mutation — this whole run
@@ -918,6 +1019,13 @@ const cohortEntry = audit.find((e) => e.fields.action?.stringValue === 'createCo
 check(
   'a cohort-level entry is course-less (null courseId → admin-only)',
   !!cohortEntry && cohortEntry.fields.courseId?.nullValue !== undefined,
+);
+
+console.log('\nLive data');
+check(
+  'not one live subscription was refused in the entire walkthrough',
+  listenerDenials.length === 0,
+  [...new Set(listenerDenials)].join(' | '),
 );
 
 // ------------------------------------------------------------------ result --

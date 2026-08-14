@@ -203,7 +203,7 @@ export function useRoster(courseId: string | null): EnrollmentRow[] {
  * their arm resolves a course get() per row, so this query denies the moment the
  * student is in a course they do not run, and blows the per-query
  * document-access cap even when they run them all. A manager who needs this
- * inverts the loop — see StudentDetailScreen.
+ * inverts the loop — see useEnrollmentIn and StudentDetailScreen.
  */
 export function useStudentEnrollments(uid: string | null): EnrollmentRow[] {
   return useLiveQuery<EnrollmentRow[]>(
@@ -216,6 +216,52 @@ export function useStudentEnrollments(uid: string | null): EnrollmentRow[] {
       label: 'studentEnrollments',
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as EnrollmentDoc) })),
       empty: [],
+    },
+  );
+}
+
+/**
+ * Is this one student in this one course? The manager's only legal way to ask.
+ *
+ * A QUERY, not a document get, and the difference is the whole point. The
+ * enrollments rule's manager arm reads `resource.data.courseId`, and `resource`
+ * is NULL for a document that does not exist — dereferencing it is a rules
+ * evaluation error, so an absent enrollment comes back REFUSED rather than
+ * "no such document". "Not enrolled" is the answer this asks for most of the
+ * time, so a get here means a permission denial on nearly every row: a live-data
+ * error banner and a Sentry event each time a manager opens a student's page.
+ * The same trap is already spelled out on listeningProgress and completions in
+ * firestore.rules; enrollments has no such get-the-missing-doc allowance because
+ * whether a document exists there is itself the private fact.
+ *
+ * A list never evaluates against a null resource — absent rows simply do not come
+ * back. Both equality filters are load-bearing: `courseId` is what constrains the
+ * rule (every returned row resolves the SAME course get(), one access call
+ * whatever the roster size), and `studentUid` is what keeps the answer to a
+ * single row. Equality-only filters need no composite index.
+ */
+export function useEnrollmentIn(
+  studentUid: string,
+  courseId: string,
+): { value: EnrollmentRow | null; resolved: boolean } {
+  return useLiveQuery<{ value: EnrollmentRow | null; resolved: boolean }>(
+    () =>
+      query(
+        collection(db, COLLECTIONS.enrollments),
+        where('courseId', '==', courseId),
+        where('studentUid', '==', studentUid),
+      ),
+    [courseId, studentUid],
+    {
+      label: 'studentEnrollment',
+      map: (snap) => {
+        const d = snap.docs[0];
+        return { value: d ? { id: d.id, ...(d.data() as EnrollmentDoc) } : null, resolved: true };
+      },
+      // A listener error leaves this unresolved, deliberately: "we could not find
+      // out" is not "they are not enrolled", and the app-wide live-data banner is
+      // already saying the truer thing.
+      empty: { value: null, resolved: false },
     },
   );
 }

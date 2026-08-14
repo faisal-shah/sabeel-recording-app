@@ -15,6 +15,7 @@ import { Button, Empty, Notice, Screen } from '../components/ui';
 import { db } from '../firebase';
 import { signOut } from '../session';
 import { useListenerError } from '../liveQuery';
+import { captureError } from '../sentry';
 import { useMyAssignments, useMyCompletions } from '../completion';
 import { drainCompletionOutbox } from '../completionOutbox';
 import type { CourseRow } from '../structure';
@@ -157,11 +158,41 @@ function TaskCard({ row, onOpen }: { row: TaskRow; onOpen: () => void }) {
 }
 
 /**
+ * Read one document, treating a refusal as an answer.
+ *
+ * `permission-denied` is not a failure here: a student may read a recording only
+ * while it is PUBLISHED, so an assignment pointing at one staff have just
+ * unpublished comes back refused rather than absent. That is the same "it is not
+ * available to you" the missing-document branch already handles, so it skips the
+ * row the same way.
+ *
+ * Anything else rethrows on purpose. An offline or failed read must never be
+ * mistaken for an empty syllabus — the caller keeps its last good list instead
+ * of publishing a short one.
+ */
+async function readIfPermitted(collectionPath: string, id: string) {
+  try {
+    const snap = await getDoc(doc(db, collectionPath, id));
+    return snap.exists() ? snap : null;
+  } catch (e) {
+    if ((e as { code?: string }).code === 'permission-denied') return null;
+    throw e;
+  }
+}
+
+/**
  * Resolve each assignment's recording and course for display and navigation.
  *
  * A plain get per id (not a live subscription): titles and course names change
  * rarely, and the accountability state that DOES change — assignment and
  * completion — is already live. Deduplicated and cached across renders.
+ *
+ * Every read is individually survivable. When one throw could abandon the loop,
+ * a single unpublished recording emptied the ENTIRE screen: the rejection escaped
+ * before setResolved ran, so no assignment resolved and the student read
+ * "Nothing required right now". The fan-out deactivates those assignments a few
+ * seconds later, which cleared the screen up again and made the whole thing look
+ * like nothing had happened.
  */
 function useResolvedRecordings(
   recordingIds: string[],
@@ -177,19 +208,26 @@ function useResolvedRecordings(
     void (async () => {
       const courseCache = new Map<string, CourseRow | null>();
       const out = new Map<string, { recording: RecordingRow; cls: CourseRow }>();
-      for (const id of ids) {
-        const recSnap = await getDoc(doc(db, COLLECTIONS.recordings, id));
-        if (!recSnap.exists()) continue;
-        const recording = { id: recSnap.id, ...(recSnap.data() as RecordingDoc) };
-        if (!courseCache.has(recording.courseId)) {
-          const cSnap = await getDoc(doc(db, COLLECTIONS.courses, recording.courseId));
-          courseCache.set(
-            recording.courseId,
-            cSnap.exists() ? { id: cSnap.id, ...(cSnap.data() as CourseDoc) } : null,
-          );
+      try {
+        for (const id of ids) {
+          const recSnap = await readIfPermitted(COLLECTIONS.recordings, id);
+          if (!recSnap) continue;
+          const recording = { id: recSnap.id, ...(recSnap.data() as RecordingDoc) };
+          if (!courseCache.has(recording.courseId)) {
+            const cSnap = await readIfPermitted(COLLECTIONS.courses, recording.courseId);
+            courseCache.set(
+              recording.courseId,
+              cSnap ? { id: cSnap.id, ...(cSnap.data() as CourseDoc) } : null,
+            );
+          }
+          const cls = courseCache.get(recording.courseId);
+          if (cls) out.set(id, { recording, cls });
         }
-        const cls = courseCache.get(recording.courseId);
-        if (cls) out.set(id, { recording, cls });
+      } catch (e) {
+        // Keep the last good list rather than showing a short one, and say so
+        // off-device — this used to be an unhandled rejection nobody could see.
+        captureError(e, { source: 'resolveAssignedRecordings' });
+        return;
       }
       if (!cancelled) setResolved(out);
     })();

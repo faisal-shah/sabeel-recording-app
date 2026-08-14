@@ -5,6 +5,7 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import {
   NavigationContainer,
   type LinkingOptions,
+  type PathConfigMap,
   type NavigationProp,
   type RouteProp,
   useNavigation,
@@ -62,35 +63,75 @@ type Nav = NavigationProp<RootStackParamList>;
  * stack, and enabling it there would mean an `expo-linking` dependency and a
  * scheme to register for no benefit.
  */
-const linking: LinkingOptions<RootStackParamList> = {
-  enabled: Platform.OS === 'web',
-  prefixes: Platform.OS === 'web' && typeof window !== 'undefined' ? [window.location.origin] : [],
-  // Nested under the resource they belong to, so a URL reads as a place:
-  // /courses/<id>/sessions/<id> rather than a flat list of screen names.
-  config: {
-    screens: {
-      Home: '',
-      Staff: 'staff',
-      Students: 'students',
-      StudentDetail: 'students/:studentUid',
-      Cohorts: 'cohorts',
-      Courses: 'cohorts/:cohortId',
-      CourseDetail: 'courses/:courseId',
-      CourseAttendance: 'courses/:courseId/attendance',
-      Sessions: 'courses/:courseId/sessions',
-      SessionDetail: 'courses/:courseId/sessions/:sessionId',
-      StudentLedger: 'courses/:courseId/students/:studentUid',
-      RecordingLedger: 'recordings/:recordingId/progress',
-      ZoomImport: 'sessions/:sessionId/import',
-      Player: 'play/:recordingId',
-      Library: 'library',
-      Audit: 'audit',
-      MyCourses: 'my-courses',
-      MyRecordings: 'my-recordings',
-      Tokens: 'tokens',
-    },
-  },
-};
+const SHARED_PATHS = {
+  Home: '',
+  // Staff listen too — from the library and from a session's recording.
+  Player: 'play/:recordingId',
+} as const;
+
+/** Everything only staff may reach. "My courses" is one of them: it is the
+ *  courses a MANAGER is assigned, not anything a student has. */
+const STAFF_PATHS = {
+  ...SHARED_PATHS,
+  Staff: 'staff',
+  Students: 'students',
+  StudentDetail: 'students/:studentUid',
+  Cohorts: 'cohorts',
+  Courses: 'cohorts/:cohortId',
+  CourseDetail: 'courses/:courseId',
+  CourseAttendance: 'courses/:courseId/attendance',
+  Sessions: 'courses/:courseId/sessions',
+  SessionDetail: 'courses/:courseId/sessions/:sessionId',
+  StudentLedger: 'courses/:courseId/students/:studentUid',
+  RecordingLedger: 'recordings/:recordingId/progress',
+  ZoomImport: 'sessions/:sessionId/import',
+  Library: 'library',
+  Audit: 'audit',
+  MyCourses: 'my-courses',
+  Tokens: 'tokens',
+} as const;
+
+const STUDENT_PATHS = {
+  ...SHARED_PATHS,
+  MyRecordings: 'my-recordings',
+} as const;
+
+/**
+ * A URL is an ADDRESS, so the two populations cannot share one route table.
+ *
+ * Before any of these had paths, registering every screen for every role was
+ * harmless: a screen was reachable only if the UI offered it, and neither home
+ * offers the other's. Giving each screen a path made all of them reachable by
+ * anyone signed in — and a browser tab remembers where it was, so the ordinary
+ * way to arrive is not a typed URL but a SHARED DEVICE: staff finish on a
+ * session page, sign out, a student signs in, and React Navigation restores the
+ * path. The student got the staff screen fully rendered — the roster form, the
+ * controls — with every query denied underneath, and vice versa a manager landed
+ * on the student's "Your recordings". Rules held, so nothing leaked; what
+ * shipped was a screen nobody should see and a permission denial per listener on
+ * it (Sentry: `myAssignments`, `session`).
+ *
+ * Registering only what the role may use is what makes that unreachable. A path
+ * belonging to the other population then matches no screen, and the container
+ * falls back to the initial route — their own home, which is the right answer.
+ */
+function buildLinking(
+  screens: PathConfigMap<RootStackParamList>,
+): LinkingOptions<RootStackParamList> {
+  return {
+    enabled: Platform.OS === 'web',
+    prefixes:
+      Platform.OS === 'web' && typeof window !== 'undefined' ? [window.location.origin] : [],
+    // Nested under the resource they belong to, so a URL reads as a place:
+    // /courses/<id>/sessions/<id> rather than a flat list of screen names.
+    config: { screens },
+  };
+}
+
+// Built once, not per render: NavigationContainer treats `linking` as an input
+// to its history effects, and a fresh object every render re-runs them.
+const STAFF_LINKING = buildLinking(STAFF_PATHS);
+const STUDENT_LINKING = buildLinking(STUDENT_PATHS);
 
 /** Otherwise the browser tab reads the route name — "CourseDetail". */
 const documentTitle = {
@@ -186,8 +227,13 @@ export default function App() {
       headerless = false;
       const role = claims.role as Role;
       const isAdmin = role === 'admin';
+      const isStudent = role === 'student';
       content = (
-        <NavigationContainer theme={navTheme} linking={linking} documentTitle={documentTitle}>
+        <NavigationContainer
+          theme={navTheme}
+          linking={isStudent ? STUDENT_LINKING : STAFF_LINKING}
+          documentTitle={documentTitle}
+        >
           <Stack.Navigator screenOptions={{ headerTintColor: t.text.primary }}>
             {/* Every screen inside the navigator keeps its header: it carries the
                 back affordance on pushed screens, and on Home it is what provides
@@ -195,61 +241,76 @@ export default function App() {
             <Stack.Screen name="Home" options={{ title: 'Class Recordings' }}>
               {() => <Landing name={profile.doc.displayName} role={role} uid={user.uid} />}
             </Stack.Screen>
-            <Stack.Screen name="Staff" options={{ title: 'Staff' }}>
-              {() => <StaffScreen selfUid={user.uid} />}
-            </Stack.Screen>
-            <Stack.Screen name="Students" options={{ title: 'Students' }}>
-              {() => <Students isAdmin={isAdmin} uid={user.uid} />}
-            </Stack.Screen>
-            <Stack.Screen name="StudentDetail" options={{ title: 'Student' }}>
-              {() => <StudentDetail isAdmin={isAdmin} uid={user.uid} />}
-            </Stack.Screen>
-            <Stack.Screen name="Cohorts" options={{ title: 'Cohorts' }}>
-              {() => <Cohorts />}
-            </Stack.Screen>
-            {/* Titled for what the screen IS — one cohort: its settings and the
-                courses inside it. The route keeps its name until the id-param
-                conversion renames routes wholesale. */}
-            <Stack.Screen name="Courses" options={{ title: 'Cohort' }}>
-              {() => <Courses />}
-            </Stack.Screen>
-            <Stack.Screen name="CourseDetail" options={{ title: 'Course' }}>
-              {() => <CourseDetail isAdmin={isAdmin} />}
-            </Stack.Screen>
-            <Stack.Screen name="CourseAttendance" options={{ title: 'Attendance' }}>
-              {() => <CourseAttendance />}
-            </Stack.Screen>
-            <Stack.Screen name="Sessions" options={{ title: 'Sessions' }}>
-              {() => <Sessions />}
-            </Stack.Screen>
-            <Stack.Screen name="SessionDetail" options={{ title: 'Session' }}>
-              {() => <SessionDetail isAdmin={isAdmin} />}
-            </Stack.Screen>
-            <Stack.Screen name="RecordingLedger" options={{ title: 'Listening progress' }}>
-              {() => <RecordingLedger />}
-            </Stack.Screen>
-            <Stack.Screen name="StudentLedger" options={{ title: 'Student progress' }}>
-              {() => <StudentLedger />}
-            </Stack.Screen>
-            <Stack.Screen name="Library" options={{ title: 'Library' }}>
-              {() => <Library uid={user.uid} isAdmin={isAdmin} />}
-            </Stack.Screen>
-            <Stack.Screen name="ZoomImport" options={{ title: 'Import from Zoom' }}>
-              {() => <ZoomImport />}
-            </Stack.Screen>
-            <Stack.Screen name="Audit" options={{ title: 'Audit' }}>
-              {() => <Audit />}
-            </Stack.Screen>
-            <Stack.Screen name="MyCourses" options={{ title: 'My courses' }}>
-              {() => <MyCourses uid={user.uid} />}
-            </Stack.Screen>
-            <Stack.Screen name="MyRecordings" options={{ title: 'Recordings' }}>
-              {() => <MyRecordings uid={user.uid} />}
-            </Stack.Screen>
+            {/* THE ROLE SPLIT IS THE BOUNDARY, not a tidy-up. A screen registered
+                here is addressable by URL, and a browser tab outlives the person
+                signed into it — see the note on the path tables above. Adding a
+                screen to both arms puts it back within reach of both populations. */}
+            {isStudent ? (
+              <Stack.Screen name="MyRecordings" options={{ title: 'Recordings' }}>
+                {() => <MyRecordings uid={user.uid} />}
+              </Stack.Screen>
+            ) : (
+              <>
+                <Stack.Screen name="Staff" options={{ title: 'Staff' }}>
+                  {() => <StaffScreen selfUid={user.uid} />}
+                </Stack.Screen>
+                <Stack.Screen name="Students" options={{ title: 'Students' }}>
+                  {() => <Students isAdmin={isAdmin} uid={user.uid} />}
+                </Stack.Screen>
+                <Stack.Screen name="StudentDetail" options={{ title: 'Student' }}>
+                  {() => <StudentDetail isAdmin={isAdmin} uid={user.uid} />}
+                </Stack.Screen>
+                <Stack.Screen name="Cohorts" options={{ title: 'Cohorts' }}>
+                  {() => <Cohorts />}
+                </Stack.Screen>
+                {/* Titled for what the screen IS — one cohort: its settings and the
+                    courses inside it. The route keeps its name until the id-param
+                    conversion renames routes wholesale. */}
+                <Stack.Screen name="Courses" options={{ title: 'Cohort' }}>
+                  {() => <Courses />}
+                </Stack.Screen>
+                <Stack.Screen name="CourseDetail" options={{ title: 'Course' }}>
+                  {() => <CourseDetail isAdmin={isAdmin} />}
+                </Stack.Screen>
+                <Stack.Screen name="CourseAttendance" options={{ title: 'Attendance' }}>
+                  {() => <CourseAttendance />}
+                </Stack.Screen>
+                <Stack.Screen name="Sessions" options={{ title: 'Sessions' }}>
+                  {() => <Sessions />}
+                </Stack.Screen>
+                <Stack.Screen name="SessionDetail" options={{ title: 'Session' }}>
+                  {() => <SessionDetail isAdmin={isAdmin} />}
+                </Stack.Screen>
+                <Stack.Screen name="RecordingLedger" options={{ title: 'Listening progress' }}>
+                  {() => <RecordingLedger />}
+                </Stack.Screen>
+                <Stack.Screen name="StudentLedger" options={{ title: 'Student progress' }}>
+                  {() => <StudentLedger />}
+                </Stack.Screen>
+                <Stack.Screen name="Library" options={{ title: 'Library' }}>
+                  {() => <Library uid={user.uid} isAdmin={isAdmin} />}
+                </Stack.Screen>
+                <Stack.Screen name="ZoomImport" options={{ title: 'Import from Zoom' }}>
+                  {() => <ZoomImport />}
+                </Stack.Screen>
+                <Stack.Screen name="Audit" options={{ title: 'Audit' }}>
+                  {() => <Audit />}
+                </Stack.Screen>
+                {/* The courses a MANAGER is assigned — staff, despite the name. */}
+                <Stack.Screen name="MyCourses" options={{ title: 'My courses' }}>
+                  {() => <MyCourses uid={user.uid} />}
+                </Stack.Screen>
+                <Stack.Screen
+                  name="Tokens"
+                  component={TokensScreen}
+                  options={{ title: 'Design tokens' }}
+                />
+              </>
+            )}
+            {/* Both: staff open the player from the library and from a session. */}
             <Stack.Screen name="Player" options={{ title: 'Listen' }}>
-              {() => <Play studentUid={role === 'student' ? user.uid : null} />}
+              {() => <Play studentUid={isStudent ? user.uid : null} />}
             </Stack.Screen>
-            <Stack.Screen name="Tokens" component={TokensScreen} options={{ title: 'Design tokens' }} />
           </Stack.Navigator>
         </NavigationContainer>
       );
@@ -363,6 +424,9 @@ function CourseAttendance() {
     <CourseAttendanceScreen
       key={courseId}
       cls={cls.value}
+      // navigate, not goBack: a screen opened straight from its URL has nothing
+      // beneath it, and the course is a destination in its own right either way.
+      onOpenCourse={() => navigation.navigate('CourseDetail', { courseId })}
       onOpenSession={(sessionId) => navigation.navigate('SessionDetail', { sessionId, courseId })}
       onOpenStudent={(studentUid) => navigation.navigate('StudentLedger', { studentUid, courseId })}
     />
@@ -379,6 +443,7 @@ function Sessions() {
       key={courseId}
       courseId={courseId}
       courseName={cls.value.name}
+      onOpenCourse={() => navigation.navigate('CourseDetail', { courseId })}
       onOpenSession={(session) =>
         navigation.navigate('SessionDetail', { sessionId: session.id, courseId })
       }
@@ -397,6 +462,7 @@ function SessionDetail({ isAdmin }: { isAdmin: boolean }) {
       sessionId={sessionId}
       cls={cls.value}
       isAdmin={isAdmin}
+      onOpenCourse={() => navigation.navigate('CourseDetail', { courseId })}
       onOpenLedger={(recording) =>
         navigation.navigate('RecordingLedger', { recordingId: recording.id })
       }

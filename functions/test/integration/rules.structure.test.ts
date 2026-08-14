@@ -276,6 +276,33 @@ describe('enrollments', () => {
     );
   });
 
+  /**
+   * THE ABSENT DOCUMENT IS THE COMMON CASE, and it does not behave like the
+   * present one. `resource` is null when the document does not exist, so the
+   * manager arm's `resource.data.courseId` is an evaluation ERROR, and the read
+   * is refused — not answered "no such document". A manager asking "is this
+   * student in this class of mine?" is asking about an absent document most of
+   * the time, so this is the shape the student page hits constantly.
+   *
+   * The list below is the same question asked affordably: one course, one
+   * student, at most one row, and every row that comes back resolves the same
+   * class get(). It is what the screen must issue instead.
+   */
+  it('refuse a manager a get on an ABSENT enrollment, but allow the equivalent list', async () => {
+    await assertFails(
+      getDoc(doc(mine(), COLLECTIONS.enrollments, enrollmentId(STU_B, CLASS_MINE))),
+    );
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(mine(), COLLECTIONS.enrollments),
+          where('courseId', '==', CLASS_MINE),
+          where('studentUid', '==', STU_B),
+        ),
+      ),
+    );
+  });
+
   it('are write-denied to everyone', async () => {
     await assertFails(
       updateDoc(doc(admin(), COLLECTIONS.enrollments, enrollmentId(STU_A, CLASS_MINE)), {

@@ -1,6 +1,6 @@
 # Sabeel Class Recordings — User Manual
 
-*For app version 0.3.0 · August 2026*
+*For app version 0.3.1 · August 2026*
 
 Welcome! This guide explains everything the Sabeel Class Recordings app can do —
 from listening to your first class to taking attendance and tracking who has
@@ -244,6 +244,12 @@ A **session** is one class meeting. Create one for each meeting — give it a
 title, its date, and an optional due date for absentees. Each session card shows
 at a glance whether **attendance** has been taken and whether a **recording** has
 been added, so you can see what's still outstanding.
+
+The **course name under the heading is a link** — on the sessions list, on a
+session, and on the attendance report. Tap it to go straight back to the course.
+The back arrow takes you one step back the way you came; this takes you to the
+course itself, however many steps in you are, and it works even when you have
+opened a session from a link somebody sent you.
 
 Open a session to work with it:
 

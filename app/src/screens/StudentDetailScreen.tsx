@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { doc } from 'firebase/firestore';
-import { COLLECTIONS, enrollmentId, type EnrollmentDoc } from '@sabeel/shared';
 import {
   Button,
   Card,
@@ -11,12 +9,11 @@ import {
   SectionTitle,
   StatusChip,
 } from '../components/ui';
-import { db } from '../firebase';
-import { useLiveDocState } from '../liveQuery';
 import { resendPasswordSetup, setStudentAccess, useStudentState } from '../students';
 import {
   useAllCourses,
   useCohortName,
+  useEnrollmentIn,
   useMyCourses,
   useStudentEnrollments,
   type CourseRow,
@@ -30,7 +27,7 @@ import {
  * "this student's courses" that a manager may run: the enrollments rule resolves
  * a course get() per row, so a cross-course studentUid query denies as soon as
  * the student is in a class they do not run. Inverting the loop — start from the
- * courses they manage, then read one enrollment document each — is both the only
+ * courses they manage, then ask about one course at a time — is both the only
  * legal shape AND the right product answer, since a manager is scoped class by
  * class and a partial list that read as complete would be worse than an honest
  * one. The heading says which they are looking at.
@@ -257,17 +254,11 @@ function ManagedCourseRow({
   onOpenCourse: (cls: CourseRow) => void;
   onAnswered: (courseId: string, enrolled: boolean) => void;
 }) {
-  // A document read, not `where('__name__','==')`: the latter is a LIST, and the
-  // manager arm is affordable per-document but not per-row across courses.
-  const enrollment = useLiveDocState<EnrollmentDoc | null>(
-    () => doc(db, COLLECTIONS.enrollments, enrollmentId(studentUid, course.id)),
-    [studentUid, course.id],
-    {
-      label: 'studentEnrollment',
-      map: (snap) => snap.data() as EnrollmentDoc,
-      empty: null,
-    },
-  );
+  // Scoped to one course, so the rule resolves one class get() however big the
+  // roster — and asked as a LIST, because the answer is usually "no such
+  // enrollment" and the rule refuses that read outright when it is a get. See
+  // useEnrollmentIn.
+  const enrollment = useEnrollmentIn(studentUid, course.id);
   const { resolved } = enrollment;
   const enrolled = !!enrollment.value;
   useEffect(() => {

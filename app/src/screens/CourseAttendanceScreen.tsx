@@ -21,10 +21,12 @@ type Tab = 'sessions' | 'students';
  */
 export function CourseAttendanceScreen({
   cls,
+  onOpenCourse,
   onOpenSession,
   onOpenStudent,
 }: {
   cls: CourseRow;
+  onOpenCourse: () => void;
   onOpenSession: (sessionId: string) => void;
   onOpenStudent: (studentUid: string) => void;
 }) {
@@ -78,7 +80,11 @@ export function CourseAttendanceScreen({
   };
 
   return (
-    <Screen title="Attendance" subtitle={`${cls.name} · ${report.sessionsWithAttendance} of ${report.totalSessions} sessions taken`}>
+    <Screen
+      title="Attendance"
+      parent={{ label: cls.name, testID: 'up-to-course-from-attendance', onPress: onOpenCourse }}
+      subtitle={`${report.sessionsWithAttendance} of ${report.totalSessions} sessions taken`}
+    >
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
 
       <View style={styles.toggleRow}>

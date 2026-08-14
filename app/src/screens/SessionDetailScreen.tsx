@@ -62,6 +62,7 @@ export function SessionDetailScreen({
   sessionId,
   cls,
   isAdmin,
+  onOpenCourse,
   onOpenLedger,
   onPlay,
   onImportZoom,
@@ -69,6 +70,7 @@ export function SessionDetailScreen({
   sessionId: string;
   cls: { id: string; name: string };
   isAdmin: boolean;
+  onOpenCourse: () => void;
   onOpenLedger: (recording: RecordingRow) => void;
   onPlay: (recording: RecordingRow, session: SessionRow) => void;
   onImportZoom: (session: SessionRow) => void;
@@ -82,7 +84,7 @@ export function SessionDetailScreen({
   // a spinner that never resolves.
   if (!session) {
     return (
-      <Screen subtitle={cls.name}>
+      <Screen parent={{ label: cls.name, testID: 'up-to-course-from-session', onPress: onOpenCourse }}>
         <Empty>
           {sessionState.resolved
             ? 'That session is not available. It may have been removed.'
@@ -93,7 +95,11 @@ export function SessionDetailScreen({
   }
 
   return (
-    <Screen title={session.title} subtitle={`${cls.name} · ${session.date}`}>
+    <Screen
+      title={session.title}
+      parent={{ label: cls.name, testID: 'up-to-course-from-session', onPress: onOpenCourse }}
+      subtitle={session.date}
+    >
       <SessionHeader session={session} isAdmin={isAdmin} />
       <AttendanceSection session={session} />
       <RecordingSection
