@@ -1,6 +1,6 @@
 # Sabeel Class Recordings — User Manual
 
-*For app version 0.4.0 · August 2026*
+*For app version 0.4.1 · August 2026*
 
 Welcome! This guide explains everything the Sabeel Class Recordings app can do —
 from listening to your first class to taking attendance and tracking who has

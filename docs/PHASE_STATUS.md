@@ -36,6 +36,16 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-08-15 — **The notification switches are switches, not the word "On".**
+  They shipped in 0.4.0 as a label reading On/Off, which states the value without
+  affording the change — nothing about it says "tap me", and the row it sits in
+  gives no hint either. Built as two Views and a `translateX` rather than React
+  Native's `Switch`: on react-native-web that renders a browser control whose
+  track and thumb colours are only partly reachable from JS, so it arrives in
+  system blue — and this app has a fixed palette with an ESLint rule against
+  stray colours precisely so that cannot happen. The whole row is the target,
+  because a 52pt pill is a poor one on a phone.
+
 - 2026-08-15 — **0.4.0, not 0.3.2.** The middle number, because this is the one
   release so far that takes something away: a student who was marked absent
   could open a recording yesterday and cannot today. Patch numbering would have

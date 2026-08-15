@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import {
   NOTIFICATION_DESCRIPTION,
   NOTIFICATION_LABEL,
@@ -8,10 +8,10 @@ import {
   prefEnabled,
   type NotificationKind,
 } from '@sabeel/shared';
-import { Card, Notice, Screen, SectionTitle } from '../components/ui';
+import { Card, Notice, Screen, SectionTitle, SwitchRow } from '../components/ui';
 import { useListenerError } from '../liveQuery';
 import { registerThisDevice, setNotificationPref, useNotificationPrefs } from '../notifications';
-import { getTheme, spacing } from '../theme';
+import { getTheme } from '../theme';
 
 const t = getTheme();
 
@@ -73,8 +73,10 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
       <Card>
         {kinds.map((kind, i) => (
           <View key={kind} style={i > 0 ? styles.divided : undefined}>
-            <Toggle
-              kind={kind}
+            <SwitchRow
+              testID={`notify-${kind}`}
+              label={NOTIFICATION_LABEL[kind]}
+              description={NOTIFICATION_DESCRIPTION[kind]}
               on={prefEnabled(prefs, kind)}
               onChange={(next) => toggle(kind, next)}
             />
@@ -85,43 +87,6 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
   );
 }
 
-function Toggle({
-  kind,
-  on,
-  onChange,
-}: {
-  kind: NotificationKind;
-  on: boolean;
-  onChange: (next: boolean) => void;
-}) {
-  return (
-    <Pressable
-      testID={`notify-${kind}`}
-      accessibilityRole="switch"
-      // aria-checked, not accessibilityState: react-native-web has no mapping
-      // for the latter and renders nothing at all, so a test would assert on an
-      // attribute that never appears.
-      aria-checked={on}
-      accessibilityLabel={NOTIFICATION_LABEL[kind]}
-      onPress={() => onChange(!on)}
-      style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
-    >
-      <View style={styles.rowMain}>
-        <Text style={styles.label}>{NOTIFICATION_LABEL[kind]}</Text>
-        <Text style={styles.description}>{NOTIFICATION_DESCRIPTION[kind]}</Text>
-      </View>
-      <Text style={[styles.state, on ? styles.stateOn : null]}>{on ? 'On' : 'Off'}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing(2) },
-  divided: { borderTopWidth: 1, borderTopColor: t.border.subtle, marginTop: spacing(2) },
-  pressed: { opacity: 0.85 },
-  rowMain: { flex: 1, paddingRight: spacing(3) },
-  label: { fontSize: 15, fontWeight: '600', color: t.text.primary },
-  description: { fontSize: 13, color: t.text.secondary, marginTop: spacing(1) },
-  state: { fontSize: 14, fontWeight: '700', color: t.text.secondary },
-  stateOn: { color: t.feedback.success },
+  divided: { borderTopWidth: 1, borderTopColor: t.border.subtle },
 });

@@ -565,6 +565,63 @@ export function Collapsible({
   );
 }
 
+/**
+ * A labelled on/off row — the settings control.
+ *
+ * NOT React Native's `Switch`. On react-native-web that renders a browser
+ * control whose track and thumb colours are only partly reachable from JS, so it
+ * arrives on screen in system blue — and this app has a fixed palette and an
+ * ESLint rule against stray colours precisely so that cannot happen. Two Views
+ * and a transform give the same affordance, identical on both surfaces, in
+ * brand colours.
+ *
+ * The WHOLE ROW is the target, not just the switch: a 52pt pill is a poor tap
+ * target on a phone, and everyone expects the label to work.
+ *
+ * `aria-checked`, not `accessibilityState`: react-native-web has no mapping for
+ * accessibilityState, so it reaches the DOM as nothing at all and the control
+ * announces no state. RN supports the aria props natively (same fix as the
+ * manager checkbox in CourseDetailScreen).
+ */
+export function SwitchRow({
+  label,
+  description,
+  on,
+  onChange,
+  testID,
+}: {
+  label: string;
+  description?: string;
+  on: boolean;
+  onChange: (next: boolean) => void;
+  testID?: string;
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="switch"
+      aria-checked={on}
+      accessibilityLabel={label}
+      onPress={() => onChange(!on)}
+      style={({ pressed }) => [styles.switchRow, pressed ? styles.switchRowPressed : null]}
+    >
+      <View style={styles.switchText}>
+        <Text style={styles.switchLabel}>{label}</Text>
+        {description ? <Text style={styles.switchDescription}>{description}</Text> : null}
+      </View>
+      {/* Decorative: the Pressable above owns the role and the state, so the
+          track must not announce itself a second time. */}
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={[styles.track, on ? styles.trackOn : null]}
+      >
+        <View style={[styles.knob, on ? styles.knobOn : null]} />
+      </View>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   canvas: { flex: 1, backgroundColor: t.bg.canvas },
   content: {
@@ -588,6 +645,40 @@ const styles = StyleSheet.create({
     marginTop: spacing(4),
     marginBottom: spacing(2),
   },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing(3),
+    gap: spacing(4),
+  },
+  switchRowPressed: { opacity: 0.7 },
+  switchText: { flex: 1 },
+  switchLabel: { fontSize: 15, fontWeight: '600', color: t.text.primary },
+  switchDescription: { fontSize: 13, color: t.text.secondary, marginTop: spacing(1) },
+  track: {
+    width: 52,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: t.bg.inset,
+    borderWidth: 1,
+    borderColor: t.border.strong,
+    padding: 3,
+    justifyContent: 'center',
+  },
+  // Raspberry on, recessed ivory off — the same pair the app uses everywhere for
+  // selected vs not, so "on" needs no legend.
+  trackOn: { backgroundColor: t.accent.base, borderColor: t.accent.base },
+  knob: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: t.bg.raised,
+    // translateX rather than alignSelf: alignSelf jumps, and on web this
+    // transitions for free.
+    transform: [{ translateX: 0 }],
+  },
+  knobOn: { transform: [{ translateX: 20 }] },
+
   // Reads as a SectionTitle that happens to be tappable, so a closed section
   // still looks like part of the page rather than a stray button.
   collapseHead: {
