@@ -1026,7 +1026,12 @@ await student.waitForTimeout(3500);
 const stuOnStaffUrl = (await student.locator('body').innerText()).toLowerCase();
 check(
   'a student asking for a staff URL gets their OWN home, not the staff screen',
-  stuOnStaffUrl.includes('your listening') && !stuOnStaffUrl.includes('listen by'),
+  // The negative has to name something ONLY SessionDetailScreen renders. It was
+  // "listen by" for a while, which the student's own home also prints on every
+  // open task — so the check passed on the accident that this student's one
+  // grant was already complete, and any open assignment added above here would
+  // have failed it for a reason unrelated to routing.
+  stuOnStaffUrl.includes('your listening') && !stuOnStaffUrl.includes('excused students listen by'),
 );
 check('…so nothing on it is denied', !stuOnStaffUrl.includes('live data error'));
 

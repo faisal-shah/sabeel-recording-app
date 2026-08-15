@@ -26,15 +26,30 @@ export const pushPlatform = 'android' as const;
 /** Android will not display a notification that has no channel to land in. */
 const CHANNEL_ID = 'default';
 
-let cached: string | null | undefined;
+/**
+ * Only a SUCCESSFUL token is remembered. Caching the null too made every failure
+ * permanent for the life of the process: someone who declined the Android prompt
+ * and then enabled notifications in system settings stayed "unavailable" until
+ * the app was killed.
+ */
+let cached: string | null = null;
 
-export async function devicePushToken(): Promise<string | null> {
-  if (cached !== undefined) return cached;
-  cached = await resolveToken();
+/**
+ * This device's push token, or null if it cannot have one.
+ *
+ * `prompt` decides whether someone who has not been asked yet IS asked. The
+ * settings screen passes true — a user gesture, and the one moment a person has
+ * plainly asked about notifications. Sign-out passes false: it must never raise
+ * the permission dialog on the way out, and someone who never granted permission
+ * has no registration to drop.
+ */
+export async function devicePushToken(prompt: boolean): Promise<string | null> {
+  if (cached) return cached;
+  cached = await resolveToken(prompt);
   return cached;
 }
 
-async function resolveToken(): Promise<string | null> {
+async function resolveToken(prompt: boolean): Promise<string | null> {
   try {
     // Android 13+ requires the runtime permission. The manifest declaration is
     // already there for the lock-screen media controls (see player.ts), so this
@@ -42,7 +57,7 @@ async function resolveToken(): Promise<string | null> {
     // gesture, rather than on launch.
     const existing = await getPermissionsAsync();
     const granted =
-      existing.granted || (await requestPermissionsAsync()).granted;
+      existing.granted || (prompt ? (await requestPermissionsAsync()).granted : false);
     if (!granted) return null;
 
     // Created before the first message arrives, not after: a notification

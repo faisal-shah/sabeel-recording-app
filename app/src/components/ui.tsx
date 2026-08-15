@@ -722,7 +722,11 @@ const styles = StyleSheet.create({
   // pulls the eye harder than the live control next to it.
   btnDisabled: { backgroundColor: t.bg.inset },
   btnDisabledText: { color: t.text.muted },
-  btnText: { fontSize: 15, fontWeight: '600' },
+  // textAlign, not just the container's alignItems: that centres the text BOX,
+  // and a label short enough to fit on one line looks centred either way. The
+  // moment it wraps ("Submit / attendance") the second line hangs left inside a
+  // box that is itself centred, which reads as a mistake.
+  btnText: { fontSize: 15, fontWeight: '600', textAlign: 'center' },
   btnPrimaryText: { color: t.accent.onAccent },
   btnSecondaryText: { color: t.text.primary },
   field: { marginTop: spacing(3) },

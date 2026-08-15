@@ -362,12 +362,19 @@ service cloud.firestore {
              ['recordingReady', 'lastDay', 'attendanceMissing', 'updatedAt']);
       allow delete: if false;
 
-      // Keyed BY the token, so registering the same device twice is a no-op and
-      // the send path can delete the exact row that failed without a query.
-      // No update: a token is added or removed, never edited into another one.
+      // Keyed BY the token, so the send path can delete the exact row that
+      // failed without a query.
+      //
+      // Re-registering the same device is a no-op in INTENT only — it rewrites
+      // the row with a fresh registeredAt, which Firestore evaluates as an
+      // UPDATE, not a create. Denying updates outright therefore denied the
+      // second visit to the notification settings, and the screen reported a
+      // registered, working device as unable to receive push. What stays
+      // forbidden is editing a row into a DIFFERENT token, which is what the
+      // id-must-match check refuses on both arms.
       match /devices/{token} {
-        allow get, list, create, delete: if isMine();
-        allow update: if false;
+        allow get, list, delete: if isMine();
+        allow create, update: if isMine() && request.resource.data.token == token;
       }
 
       // Server-only, both ways. This is the idempotency marker the send path

@@ -184,6 +184,24 @@ describe('recordingReady', () => {
     expect(await notifyRecordingReady(db(), grant('s1', 'r1'))).toBe(true);
   });
 
+  it('does not spend the one delivery on a student with no device yet', async () => {
+    // The marker is the whole of "once", so claiming it for someone unreachable
+    // would mean they are never told about this recording — registering a device
+    // an hour later would find the notification already marked as sent.
+    await seedRecording('r1', 'sess1', 'published');
+    expect(await notifyRecordingReady(db(), grant('s1', 'r1'))).toBe(false);
+    const claimed = await db()
+      .collection(COLLECTIONS.notifications)
+      .doc('s1')
+      .collection('sent')
+      .get();
+    expect(claimed.empty).toBe(true);
+
+    await withDevice('s1');
+    expect(await notifyRecordingReady(db(), grant('s1', 'r1'))).toBe(true);
+    expect(outbox).toHaveLength(1);
+  });
+
   it('prunes a token the transport rejects, and keeps the rest', async () => {
     await withDevice('s1', 'tok-dead');
     await withDevice('s1', 'tok-live');

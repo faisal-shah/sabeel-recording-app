@@ -9,11 +9,25 @@ import { getTheme, spacing } from '../theme';
 const t = getTheme();
 
 /**
+ * The deadline to prefill for a meeting on `date`, floored at today.
+ *
+ * Back-entering a meeting from a fortnight ago is a normal flow, and
+ * `date + DEFAULT_DUE_DAYS` alone would silently prefill a deadline the server
+ * refuses — leaving the Create button enabled and the error unexplained. Today is
+ * the earliest date that can be written, and it is still the last on-time day.
+ */
+function dueFor(date: string): string {
+  const proposed = addDays(date, DEFAULT_DUE_DAYS);
+  const today = todayInZone(INSTITUTE_TIMEZONE);
+  return proposed < today ? today : proposed;
+}
+
+/**
  * Staff: the sessions (dated meetings) of one course.
  *
  * A session is the organizing unit — attendance lives on it, and its recording
  * (0..1) hangs off it. Create a session for a meeting, take attendance, and add
- * the recording; absentees are then assigned it automatically.
+ * the recording; whoever was excused is then granted it automatically.
  */
 export function SessionsScreen({
   courseId,
@@ -32,14 +46,12 @@ export function SessionsScreen({
   // Prefilled from the meeting date and kept in step with it until staff edit it
   // themselves. It cannot be blank: the due date is the day access closes, so an
   // empty one would mean a recording that never closes.
-  const [dueDate, setDueDate] = useState(() =>
-    addDays(todayInZone(INSTITUTE_TIMEZONE), DEFAULT_DUE_DAYS),
-  );
+  const [dueDate, setDueDate] = useState(() => dueFor(todayInZone(INSTITUTE_TIMEZONE)));
   const [dueEdited, setDueEdited] = useState(false);
 
   const changeDate = (next: string) => {
     setDate(next);
-    if (!dueEdited && next) setDueDate(addDays(next, DEFAULT_DUE_DAYS));
+    if (!dueEdited && next) setDueDate(dueFor(next));
   };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +70,7 @@ export function SessionsScreen({
         });
         setTitle('');
         setDueEdited(false);
-        setDueDate(addDays(date, DEFAULT_DUE_DAYS));
+        setDueDate(dueFor(date));
       } catch (e) {
         setError((e as Error).message);
       } finally {

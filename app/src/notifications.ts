@@ -60,7 +60,9 @@ export async function setNotificationPref(
  * document rather than leaking a duplicate every time.
  */
 export async function registerThisDevice(uid: string): Promise<string | null> {
-  const token = await devicePushToken();
+  // The one call that may prompt: opening the notification settings is a user
+  // gesture, which is the only kind of moment a browser will honour one in.
+  const token = await devicePushToken(true);
   if (!token) return null;
   const row: DeviceTokenDoc = {
     token,
@@ -77,9 +79,15 @@ export async function registerThisDevice(uid: string): Promise<string | null> {
  * Called on sign-out: a shared device that kept its registration would deliver
  * one student's "a recording is ready" to whoever signed in next, which is both
  * a privacy leak and the most confusing possible notification.
+ *
+ * Resolves the token SILENTLY. A device that already has permission still hands
+ * one over — including one registered in an earlier run of the app, which is
+ * exactly the leak this exists to close — but a person who never granted it is
+ * not asked mid-sign-out, and no service worker is registered and waited on to
+ * unregister something that was never registered.
  */
 export async function unregisterThisDevice(uid: string): Promise<void> {
-  const token = await devicePushToken();
+  const token = await devicePushToken(false);
   if (!token) return;
   await deleteDoc(doc(db, COLLECTIONS.notifications, uid, 'devices', token));
 }

@@ -17,22 +17,47 @@ const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const ATTENDANCE: AttendanceStatus[] = ['present', 'absent', 'excused'];
 
 /**
- * A session's due date is the day the excused lose access, so it is required and
- * can never be WRITTEN in the past. It may only BECOME past by the passage of
- * time — which is how a recording closes — but nothing may create a deadline
- * that has already gone, because that is an obligation born unfulfillable.
+ * A session's due date is the day the excused lose access, so it is required:
+ * a blank one would mean permanent access, the most permissive setting reachable
+ * by leaving a field alone.
+ */
+function validateDueDateShape(value: unknown): string {
+  if (typeof value !== 'string' || !DATE_ONLY.test(value)) {
+    throw new HttpsError('invalid-argument', 'A due date is required, as YYYY-MM-DD.');
+  }
+  return value;
+}
+
+/**
+ * A deadline may only BECOME past by the passage of time — which is how a
+ * recording closes — but nothing may WRITE one that has already gone, because
+ * that is an obligation born unfulfillable.
  *
  * `today` is a parameter rather than a hidden `Date.now()` so the validators
  * stay pure and testable at the day boundary, same discipline as `@sabeel/shared`.
  */
 function validateDueDate(value: unknown, today: string): string {
-  if (typeof value !== 'string' || !DATE_ONLY.test(value)) {
-    throw new HttpsError('invalid-argument', 'A due date is required, as YYYY-MM-DD.');
-  }
-  if (value < today) {
+  const dueDate = validateDueDateShape(value);
+  if (dueDate < today) {
     throw new HttpsError('invalid-argument', 'A due date cannot be in the past.');
   }
-  return value;
+  return dueDate;
+}
+
+/**
+ * The same rule for an EDIT, which needs the stored value to apply it.
+ *
+ * The session editor sends all four fields on every save, so an unchanged
+ * deadline arrives on the wire exactly like a new one. Judging the payload alone
+ * would make a session whose date has passed uneditable in every other respect —
+ * a typo in the title could only be fixed by also moving the deadline forward,
+ * silently reopening access for everyone excused. Only a MOVE into the past is
+ * refused; resending what is already stored is a no-op.
+ */
+export function validateDueDateChange(next: string, current: string, today: string): void {
+  if (next !== current && next < today) {
+    throw new HttpsError('invalid-argument', 'A due date cannot be in the past.');
+  }
 }
 
 // ---------------------------------------------------------------- create --
@@ -106,10 +131,11 @@ export interface UpdateSessionInput {
   notes?: string;
 }
 
-export function validateUpdateSession(
-  data: unknown,
-  today: string = todayInZone(INSTITUTE_TIMEZONE),
-): UpdateSessionInput {
+/**
+ * Shape only. The past-date rule needs the STORED due date to tell an edit from
+ * a resend, so it lives in the callable as `validateDueDateChange`.
+ */
+export function validateUpdateSession(data: unknown): UpdateSessionInput {
   const d = data as Partial<UpdateSessionInput> | null;
   if (typeof d?.sessionId !== 'string' || !d.sessionId) {
     throw new HttpsError('invalid-argument', 'sessionId is required.');
@@ -127,9 +153,7 @@ export function validateUpdateSession(
     out.title = title;
   }
   if (d.dueDate !== undefined) {
-    // Moving the deadline FORWARD is the documented way to reopen a session that
-    // has closed, so this is the recovery valve as well as a validator.
-    out.dueDate = validateDueDate(d.dueDate, today);
+    out.dueDate = validateDueDateShape(d.dueDate);
   }
   if (d.notes !== undefined) {
     if (typeof d.notes !== 'string') throw new HttpsError('invalid-argument', 'notes must be text.');
@@ -148,6 +172,11 @@ export const updateSession = auditedCall('updateSession', async (req, audit) => 
   const session = snap.data() as SessionDoc;
   await requireCourseScope(req, session.courseId);
   audit.courseId = session.courseId;
+  if (input.dueDate !== undefined) {
+    // Moving the deadline FORWARD is the documented way to reopen a session that
+    // has closed, so this is the recovery valve as well as a validator.
+    validateDueDateChange(input.dueDate, session.dueDate, todayInZone(INSTITUTE_TIMEZONE));
+  }
   const { sessionId: _id, ...fields } = input;
   // A dueDate edit re-flows to obligations via the onSessionWritten trigger.
   await ref.update({ ...fields, updatedAt: Date.now() });
@@ -171,6 +200,26 @@ export const updateSession = auditedCall('updateSession', async (req, audit) => 
 // ------------------------------------------------------------- attendance --
 
 /**
+ * Does this submission excuse anyone who is not already excused?
+ *
+ * The distinction the past-due guard turns on, and the reason it is a comparison
+ * rather than a scan. The attendance screen rebuilds the WHOLE map for every
+ * active roster member on every submit, so a session that excused five students
+ * resends all five excusals when staff correct a sixth student to present.
+ * Looking only at the payload would read that as five new excusals and refuse
+ * the correction, leaving the attendance of every closed session permanently
+ * uncorrectable.
+ */
+export function addsExcusal(
+  submitted: Record<string, unknown>,
+  stored: Record<string, AttendanceStatus>,
+): boolean {
+  return Object.entries(submitted).some(
+    ([studentUid, status]) => status === 'excused' && stored[studentUid] !== 'excused',
+  );
+}
+
+/**
  * Submit attendance for a session (the explicit-submit step).
  *
  * Filtered to the ACTIVE roster so the snapshot only contains real, current
@@ -180,11 +229,14 @@ export const updateSession = auditedCall('updateSession', async (req, audit) => 
  * trigger then reconciles the excused → obligations, and projects everyone's
  * mark onto their own attendanceRecords row.
  *
- * Refuses to mark anyone EXCUSED once the due date has passed: an excused mark
+ * Refuses to NEWLY excuse anyone once the due date has passed: an excused mark
  * is the access grant, and granting access that expired yesterday produces a
- * recording nobody can open and a ledger row nobody can clear. Correcting an old
- * session to present/absent still works, so the attendance report stays
- * correctable; to excuse someone late, move the session's due date first.
+ * recording nobody can open and a ledger row nobody can clear. Measured against
+ * the stored attendance, not the payload, because the screen rebuilds the whole
+ * map on every submit — judging the payload alone would freeze the attendance of
+ * every closed session that excused anybody. Correcting an old session still
+ * works in every direction except adding a new excusal; to do that, move the
+ * session's due date first.
  */
 export const submitAttendance = auditedCall('submitAttendance', async (req, audit) => {
   const d = req.data as { sessionId?: unknown; attendance?: unknown };
@@ -210,11 +262,10 @@ export const submitAttendance = auditedCall('submitAttendance', async (req, audi
   audit.courseId = session.courseId;
   audit.targets = { sessionId: d.sessionId };
 
-  const excusing = Object.values(raw).some((s) => s === 'excused');
-  if (excusing && session.dueDate < todayInZone(INSTITUTE_TIMEZONE)) {
+  if (addsExcusal(raw, session.attendance) && session.dueDate < todayInZone(INSTITUTE_TIMEZONE)) {
     throw new HttpsError(
       'failed-precondition',
-      "This session's due date has passed. Move it before excusing anyone.",
+      "This session's due date has passed. Move it before excusing anyone new.",
     );
   }
 

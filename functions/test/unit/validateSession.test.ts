@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { validateCreateSession, validateUpdateSession } from '../../src/sessions';
+import {
+  addsExcusal,
+  validateCreateSession,
+  validateDueDateChange,
+  validateUpdateSession,
+} from '../../src/sessions';
 
 /**
  * The due date is the day the excused lose access, so the validators enforce one
@@ -46,29 +51,84 @@ describe('validateCreateSession', () => {
 
 describe('validateUpdateSession', () => {
   it('leaves the due date alone when it is not being changed', () => {
-    const out = validateUpdateSession({ sessionId: 's1', title: 'Renamed' }, TODAY);
+    const out = validateUpdateSession({ sessionId: 's1', title: 'Renamed' });
     expect(out).toEqual({ sessionId: 's1', title: 'Renamed' });
   });
 
-  it('accepts moving the deadline forward — the documented way to reopen a session', () => {
-    expect(validateUpdateSession({ sessionId: 's1', dueDate: '2026-09-01' }, TODAY).dueDate).toBe(
+  it('accepts a well-formed due date — whether it is in the past is not its question', () => {
+    expect(validateUpdateSession({ sessionId: 's1', dueDate: '2026-09-01' }).dueDate).toBe(
       '2026-09-01',
     );
   });
 
-  it('refuses moving the deadline into the past', () => {
-    expect(() => validateUpdateSession({ sessionId: 's1', dueDate: '2026-07-24' }, TODAY)).toThrow(
-      /cannot be in the past/,
-    );
-  });
-
   it('refuses clearing the due date', () => {
-    expect(() => validateUpdateSession({ sessionId: 's1', dueDate: null }, TODAY)).toThrow(
+    expect(() => validateUpdateSession({ sessionId: 's1', dueDate: null })).toThrow(
       /due date is required/,
     );
   });
 
+  it('refuses a malformed due date', () => {
+    expect(() => validateUpdateSession({ sessionId: 's1', dueDate: 'next week' })).toThrow(
+      /YYYY-MM-DD/,
+    );
+  });
+
   it('refuses an update that changes nothing', () => {
-    expect(() => validateUpdateSession({ sessionId: 's1' }, TODAY)).toThrow(/Nothing to change/);
+    expect(() => validateUpdateSession({ sessionId: 's1' })).toThrow(/Nothing to change/);
+  });
+});
+
+describe('validateDueDateChange', () => {
+  it('accepts moving the deadline forward — the documented way to reopen a session', () => {
+    expect(() => validateDueDateChange('2026-09-01', '2026-08-01', TODAY)).not.toThrow();
+  });
+
+  it('refuses moving the deadline into the past', () => {
+    expect(() => validateDueDateChange('2026-07-24', '2026-08-01', TODAY)).toThrow(
+      /cannot be in the past/,
+    );
+  });
+
+  it('accepts a past due date that is UNCHANGED', () => {
+    // The session editor resends all four fields on every save, so this is the
+    // ordinary case of fixing a typo on a session whose deadline has gone. Judged
+    // as a write rather than a resend, no closed session could be edited at all
+    // without also reopening access for everyone excused.
+    expect(() => validateDueDateChange('2026-07-01', '2026-07-01', TODAY)).not.toThrow();
+  });
+
+  it('accepts today — the last on-time day is still writable', () => {
+    expect(() => validateDueDateChange(TODAY, '2026-08-01', TODAY)).not.toThrow();
+  });
+});
+
+describe('addsExcusal', () => {
+  // What the past-due guard actually asks. An excused mark IS the access grant,
+  // so a new one after the deadline would grant access that expired yesterday —
+  // but resending the excusals already on the session must stay free, or no
+  // closed session's attendance could ever be corrected.
+  const stored = { a: 'excused', b: 'present', c: 'absent' } as const;
+
+  it('is true for a student being excused for the first time', () => {
+    expect(addsExcusal({ ...stored, b: 'excused' }, { ...stored })).toBe(true);
+  });
+
+  it('is false when the whole stored map is resent unchanged', () => {
+    expect(addsExcusal({ ...stored }, { ...stored })).toBe(false);
+  });
+
+  it('is false when correcting one student while others stay excused', () => {
+    // The screen submits every active roster member every time, so the four
+    // untouched excusals ride along with the one real change.
+    expect(addsExcusal({ ...stored, c: 'present' }, { ...stored })).toBe(false);
+  });
+
+  it('is false when an excusal is being REMOVED', () => {
+    expect(addsExcusal({ ...stored, a: 'absent' }, { ...stored })).toBe(false);
+  });
+
+  it('is true on a first submit, where nothing is stored yet', () => {
+    expect(addsExcusal({ a: 'excused' }, {})).toBe(true);
+    expect(addsExcusal({ a: 'present', b: 'absent' }, {})).toBe(false);
   });
 });

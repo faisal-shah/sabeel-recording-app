@@ -5,6 +5,7 @@ import {
   isOverdue,
   ledgerBucket,
   todayInZone,
+  type DueBucket,
 } from '@sabeel/shared';
 import { Button, Empty, Field, Notice, Screen, SectionTitle } from '../components/ui';
 import {
@@ -42,7 +43,7 @@ export function RecordingLedgerScreen({
   const today = todayInZone(INSTITUTE_TIMEZONE);
   // Reached from the cross-cohort library, where the course name alone is ambiguous.
   const cohortName = useCohortName()(cls.cohortId);
-  const { accountable, attendees, absentees, otherListeners, rollup } = useRecordingLedger(
+  const { accountable, attendees, absentees, lapsed, otherListeners, rollup } = useRecordingLedger(
     recording,
     session,
     today,
@@ -126,8 +127,13 @@ export function RecordingLedgerScreen({
 
       {rows.length === 0 ? (
         <Empty>
-          {filter === 'all'
-            ? 'No one was excused from this session, so nobody has been granted this recording.'
+          {/* An empty accountable list is answered before the filter is: with
+              nobody granted the recording at all, "everyone has completed this"
+              would be congratulating staff on nothing having happened. */}
+          {accountable.length === 0
+            ? lapsed.length > 0
+              ? 'Nobody holds this recording now — every grant from this session has lapsed. See below.'
+              : 'No one was excused from this session, so nobody has been granted this recording.'
             : filter === 'missed'
               ? 'Nobody missed the deadline — nice.'
               : 'Everyone required has completed this — nice.'}
@@ -168,6 +174,20 @@ export function RecordingLedgerScreen({
             someone catch up, mark them excused on the session and submit again.
           </Notice>
           {absentees.map((r) => (
+            <ListenerRow key={r.studentUid} row={r} />
+          ))}
+        </>
+      ) : null}
+
+      {lapsed.length > 0 ? (
+        <>
+          <SectionTitle>Excused, access closed ({lapsed.length})</SectionTitle>
+          <Notice tone="info">
+            Excused at the session, but their grant is no longer active — they were unenrolled from
+            the class, or this recording was unpublished. Nothing is required of them, and they
+            can&apos;t open it. Re-enrolling or republishing restores the grant.
+          </Notice>
+          {lapsed.map((r) => (
             <ListenerRow key={r.studentUid} row={r} />
           ))}
         </>
@@ -323,9 +343,12 @@ function statusLabel(r: RequiredRow, today: string): string {
   return 'Not complete';
 }
 
-function statusStyle(bucket: string) {
+// Typed as DueBucket, not string: this branched on a removed union member for a
+// while and rendered every Missed row amber, which a `string` parameter cannot
+// catch and this one would have.
+function statusStyle(bucket: DueBucket) {
   if (bucket === 'done') return styles.ok;
-  if (bucket === 'overdue') return styles.bad;
+  if (bucket === 'missed') return styles.bad;
   return styles.warn;
 }
 

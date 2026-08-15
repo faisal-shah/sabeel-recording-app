@@ -54,9 +54,10 @@ const STATUS_LABEL: Record<AttendanceStatus, string> = {
 /**
  * Staff: one session — attendance and its recording.
  *
- * Attendance is the point: mark who was present, submit, and the absent + excused
- * are assigned the recording. Present students are exempt (they can still listen;
- * their progress shows in the ledger but they are never overdue).
+ * Attendance is the point: mark who was there, submit, and the EXCUSED are
+ * assigned the recording. That one document is both the access grant and the
+ * requirement, so present and absent students are granted nothing and cannot
+ * open it. "Everyone must listen" is said by excusing everyone.
  */
 export function SessionDetailScreen({
   sessionId,
@@ -274,8 +275,8 @@ function AttendanceSection({ session }: { session: SessionRow }) {
           {activeUids.length === 0
             ? 'Enrol students in this course first — attendance is taken from its roster.'
             : session.attendanceSubmittedAt
-              ? 'Submitted. Absent and excused students are assigned the recording; present students are exempt.'
-              : 'Everyone starts as Present — change the ones who missed, then submit. Nothing is assigned until you do.'}
+              ? 'Submitted. Excused students are assigned the recording and can open it until the listen-by date; present and absent students are not.'
+              : 'Everyone starts as Present — mark who was away, and excuse whoever should listen to the recording. Only excusing grants access, and nothing is granted until you submit.'}
         </Text>
         {activeUids.length === 0 ? (
           <Empty>No students enrolled in this course yet.</Empty>

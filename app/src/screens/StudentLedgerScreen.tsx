@@ -10,7 +10,10 @@ import type { CourseRow } from '../structure';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
-type Filter = 'all' | 'notComplete' | 'overdue';
+// "Missed", never "overdue": once the deadline passes access has closed, so the
+// work is not still outstanding. The word matches the recording ledger, the
+// course detail, the student's own home and the CSV export.
+type Filter = 'all' | 'notComplete' | 'missed';
 
 /** One student's required listening in one course. */
 export function StudentLedgerScreen({
@@ -32,13 +35,13 @@ export function StudentLedgerScreen({
   const rows = useMemo(() => {
     const withTitle = items.map((it) => ({ ...it, title: titleById.get(it.recordingId) ?? it.recordingId }));
     if (filter === 'notComplete') return withTitle.filter((r) => !r.completed);
-    if (filter === 'overdue') return withTitle.filter((r) => !r.completed && isOverdue(r.dueDate, today));
+    if (filter === 'missed') return withTitle.filter((r) => !r.completed && isOverdue(r.dueDate, today));
     return withTitle;
   }, [items, titleById, filter, today]);
 
   const exportRows = () => {
     const header = ['Recording', 'Status', 'Due', 'Override reason'];
-    const body = rows.map((r) => [r.title, statusLabel(r, today), r.dueDate ?? '', r.overrideReason ?? '']);
+    const body = rows.map((r) => [r.title, statusLabel(r, today), r.dueDate, r.overrideReason ?? '']);
     void exportCsv(`${cls.name} - ${studentName} ledger.csv`, [header, ...body]);
   };
 
@@ -46,7 +49,7 @@ export function StudentLedgerScreen({
     <Screen title={studentName} subtitle={`${cls.name} · required listening`}>
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       <View style={styles.chips}>
-        {(['all', 'notComplete', 'overdue'] as Filter[]).map((f) => (
+        {(['all', 'notComplete', 'missed'] as Filter[]).map((f) => (
           <Pressable
             key={f}
             testID={`student-filter-${f}`}
@@ -54,7 +57,7 @@ export function StudentLedgerScreen({
             style={[styles.chip, filter === f ? styles.chipOn : null]}
           >
             <Text style={[styles.chipText, filter === f ? styles.chipTextOn : null]}>
-              {f === 'notComplete' ? 'Not complete' : f === 'overdue' ? 'Overdue' : 'All'}
+              {f === 'notComplete' ? 'Not complete' : f === 'missed' ? 'Missed' : 'All'}
             </Text>
           </Pressable>
         ))}
@@ -81,8 +84,8 @@ export function StudentLedgerScreen({
 
 function statusLabel(r: StudentLedgerItem, today: string): string {
   if (r.completed) return r.source === 'override' ? 'Complete (override)' : 'Complete';
-  if (isOverdue(r.dueDate, today)) return 'Overdue';
-  return r.dueDate ? `Due ${r.dueDate}` : 'No due date';
+  if (isOverdue(r.dueDate, today)) return 'Missed';
+  return `Due ${r.dueDate}`;
 }
 function styleFor(r: StudentLedgerItem, today: string) {
   if (r.completed) return styles.ok;

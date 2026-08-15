@@ -63,6 +63,26 @@ export async function notifyRecordingReady(
 }
 
 /**
+ * One recipient's failure must not cost everyone else theirs.
+ *
+ * `notifyOnce` rethrows anything that is not "already claimed", which is right
+ * for the trigger — it retries. A SWEEP is different: it is not retried, and both
+ * sweeps are once-a-day-or-never. `lastDay` in particular has no second chance,
+ * because tomorrow the deadline has passed and the query no longer matches, so
+ * one transient error a third of the way through a batch would silently cost
+ * every student after it their only reminder. Logged, not swallowed silently:
+ * the run keeps going and the failure is still in the logs.
+ */
+async function attempt(what: string, send: () => Promise<boolean>): Promise<boolean> {
+  try {
+    return await send();
+  } catch (e) {
+    console.error(`notify ${what} failed`, e);
+    return false;
+  }
+}
+
+/**
  * Everyone whose grant closes at the end of `today` and who has not finished it.
  *
  * Deliberately the morning OF the due date, not the day after: after it the
@@ -92,12 +112,9 @@ export async function notifyLastDay(db: Firestore, today: string): Promise<numbe
     ).data() as RecordingDoc | undefined;
     if (!rec || rec.status !== 'published') continue;
 
-    const ok = await notifyOnce(
-      db,
-      a.studentUid,
-      'lastDay',
-      a.recordingId,
-      lastDayMessage(await nameOf(a.courseId), rec.title, a.dueDate),
+    const message = lastDayMessage(await nameOf(a.courseId), rec.title, a.dueDate);
+    const ok = await attempt(`lastDay ${a.studentUid} ${a.recordingId}`, () =>
+      notifyOnce(db, a.studentUid, 'lastDay', a.recordingId, message),
     );
     if (ok) sent++;
   }
@@ -143,7 +160,10 @@ export async function notifyAttendanceMissing(
 
     const message = attendanceMissingMessage(await nameOf(s.courseId), s.title, s.date);
     for (const uid of course.managerUids) {
-      if (await notifyOnce(db, uid, 'attendanceMissing', doc.id, message)) sent++;
+      const ok = await attempt(`attendanceMissing ${uid} ${doc.id}`, () =>
+        notifyOnce(db, uid, 'attendanceMissing', doc.id, message),
+      );
+      if (ok) sent++;
     }
   }
   return sent;

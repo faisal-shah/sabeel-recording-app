@@ -13,9 +13,11 @@ import {
  *
  * Obligations are attendance-driven: a student owes a session's recording iff the
  * recording is published, attendance has been submitted, and they were marked
- * absent or excused. This module reconciles the `assignments` collection to that
- * truth. All of it runs in the Admin SDK, so it bypasses security rules —
- * assignments are server-owned and `firestore.rules` denies every client write.
+ * EXCUSED. That one document is both the access grant and the requirement, so
+ * present and absent students are granted nothing. This module reconciles the
+ * `assignments` collection to that truth. All of it runs in the Admin SDK, so it
+ * bypasses security rules — assignments are server-owned and `firestore.rules`
+ * denies every client write.
  *
  * Firestore batches cap at 500 writes; a course roster is far smaller, but the
  * helpers chunk at 400 so a pathologically large roster cannot throw.
@@ -96,11 +98,11 @@ async function deactivateAssignmentsForRecording(
  * Reconcile a session's recording obligations to its attendance.
  *
  * The single decision point, shared by the recording trigger and the session
- * (attendance) trigger. Target = absent ∪ excused from the submitted attendance,
- * but only once the recording is published AND attendance has been submitted;
- * otherwise nobody is accountable. `dueDate` follows the session, so a due-date
- * edit re-flows here. Idempotent — deterministic ids plus a deactivate of the
- * complement — so it is safe on every write.
+ * (attendance) trigger. Target = the EXCUSED in the submitted attendance, and
+ * only once the recording is published AND attendance has been submitted;
+ * otherwise nobody is accountable and nobody may open it. `dueDate` follows the
+ * session, so a due-date edit re-flows here. Idempotent — deterministic ids plus
+ * a deactivate of the complement — so it is safe on every write.
  */
 export async function reconcileSessionAssignments(
   db: Firestore,

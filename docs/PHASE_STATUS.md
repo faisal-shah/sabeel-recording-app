@@ -36,6 +36,46 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-08-15 — **A due date is judged as a CHANGE, not as a value.** The session
+  editor sends all four fields on every save, so an unchanged deadline arrives on
+  the wire exactly like a new one — and a validator that only asked "is this in
+  the past?" made every closed session uneditable in every other respect. Fixing
+  a typo in a title would have required moving the deadline forward, silently
+  reopening access for everyone excused. `validateUpdateSession` now checks shape
+  alone and the callable compares against what is stored, which is the only place
+  that comparison can be made. The same shape of mistake, one layer down: the
+  past-due guard on attendance measured the SUBMITTED map, but the attendance
+  screen rebuilds the whole roster on every submit, so correcting one student
+  resent every existing excusal and was refused as five new ones. It now compares
+  against `session.attendance` and refuses only a genuinely new excusal.
+
+- 2026-08-15 — **The marker is claimed once there is somewhere to send.** The
+  claim still precedes the send (below), but it now follows the device read: a
+  student who has not opened the settings screen has no token, and claiming for
+  them spends the one delivery that notification will ever get — registering a
+  device an hour later would find it already marked sent. A failed `create` is
+  only treated as "someone else won" for ALREADY_EXISTS; anything else rethrows,
+  because an unavailable Firestore is not proof the message was delivered.
+
+- 2026-08-15 — **Re-registering a device is an UPDATE, so the rules allow one.**
+  The row is keyed by the token and the client writes a fresh `registeredAt`,
+  which Firestore evaluates as an update, not a create. `allow update: if false`
+  therefore denied every visit to the notification settings after the first, and
+  the screen reported a registered, working device as unable to receive push.
+  What is actually forbidden is editing a row into a DIFFERENT token, so both
+  arms now require `request.resource.data.token == token`.
+
+- 2026-08-15 — **A push token is cached only when it succeeds, and sign-out never
+  prompts.** Caching the null too made every failure permanent for the process:
+  a service worker that lost the activation race, or permission granted a moment
+  later in system settings, left the screen saying "this device can't receive
+  notifications" until an app restart. And `devicePushToken` now takes an
+  explicit `prompt` — the settings screen passes true (a user gesture, the only
+  kind a browser honours), sign-out passes false, so signing out cannot raise a
+  permission dialog or wait ten seconds on a service worker for a person who
+  never asked about notifications. A device that already has permission still
+  hands its token over, which is what closes the shared-device leak.
+
 - 2026-08-15 — **The notification switches are switches, not the word "On".**
   They shipped in 0.4.0 as a label reading On/Off, which states the value without
   affording the change — nothing about it says "tap me", and the row it sits in
@@ -74,11 +114,14 @@ and commit messages, and renaming them would strand every one of those.
   can double-fire: trigger delivery is at-least-once, and the morning sweep runs
   whether or not yesterday's finished.
 
-- 2026-08-15 — **Dead tokens are pruned; failed ones are not.** Only the FCM
-  codes that mean "this token will never work again" delete a registration.
-  Pruning on any failure would unregister working devices during an outage, and
-  the only symptom would be notifications quietly stopping — indistinguishable
-  from a person having turned them off.
+- 2026-08-15 — **Dead tokens are pruned; failed ones are not.** Only the two FCM
+  codes specific to a token — `registration-token-not-registered` and
+  `invalid-registration-token` — delete a registration. Pruning on any failure
+  would unregister working devices during an outage, and the only symptom would
+  be notifications quietly stopping, indistinguishable from a person having
+  turned them off. `invalid-argument` looks like it belongs and does not: FCM
+  returns it for a malformed MESSAGE as well, so one bad title would come back
+  against every entry in a batch and unregister every recipient at once.
 
 - 2026-08-15 — **`expo-notifications` needed no prebuild.** The worry was real —
   its config plugin does not run in a bare workflow, and `android/` is committed

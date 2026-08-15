@@ -1,6 +1,6 @@
 # Sabeel Class Recordings — User Manual
 
-*For app version 0.4.1 · August 2026*
+*For app version 0.4.2 · August 2026*
 
 Welcome! This guide explains everything the Sabeel Class Recordings app can do —
 from listening to your first class to taking attendance and tracking who has
@@ -285,9 +285,12 @@ so you can see what's still outstanding.
 
 **The "Listen by" date is required, and it matters more than it looks.** It is
 the day the recording *closes* to the students you excused — after it, they can
-no longer play it. It fills in automatically as a week after the meeting; change
-it to whatever suits. You can't set it in the past, and you can move it forward
-later to reopen a session for someone who needs longer.
+no longer play it. It fills in automatically as a week after the meeting (or
+today, if the meeting was long enough ago that a week later has already been and
+gone); change it to whatever suits. You can't *move* it into the past, and you
+can move it forward later to reopen a session for someone who needs longer.
+Everything else about a closed session stays editable — fix a title or a date on
+a session whose Listen by date has passed and the date simply stays as it is.
 
 The **course name under the heading is a link** — on the sessions list, on a
 session, and on the attendance report. Tap it to go straight back to the course.
@@ -320,9 +323,11 @@ So **Mark all excused** is the one-tap shortcut for "everyone must listen to thi
 one." And if someone genuinely needs to catch up on a class you marked them
 absent for, just change their mark to Excused and submit again.
 
-One limit worth knowing: you can't excuse anyone for a session whose Listen by
-date has already passed — it would hand them something they could never open.
-Move the date forward first, then excuse them.
+One limit worth knowing: you can't excuse anyone *new* for a session whose Listen
+by date has already passed — it would hand them something they could never open.
+Move the date forward first, then excuse them. Correcting a closed session in
+every other way still works, including changing someone from excused to present
+or absent, so the attendance record never becomes uncorrectable.
 
 **Add the recording.** In the same screen, **Upload audio…** or import it from
 Zoom. It's **audio only** — up to 300 MB, though a two-hour class is normally
@@ -377,7 +382,7 @@ exactly where things stand. Up top, four counts: **accountable** (the students
 you excused, the only ones who can open it), **complete**, **incomplete**, and
 **missed**.
 
-The screen has four parts:
+The screen has five parts:
 
 - **The accountable list** — the students you excused, each with how much they've
   listened, when they last listened, and their status: **Complete**,
@@ -389,6 +394,10 @@ The screen has four parts:
 - **Absent** — marked absent rather than excused, so it was never opened to them.
   To let one of them catch up, mark them **Excused** on the session and submit
   again.
+- **Excused, access closed** — students you excused whose access has since been
+  withdrawn, because they were unenrolled from the class or the recording was
+  unpublished. Nothing is required of them and they can't open it; re-enrolling
+  them or republishing restores it.
 - **Also listened** — listening from someone who no longer holds the recording,
   for example a student you excused, who listened, and whom you then corrected to
   present. Kept as history.

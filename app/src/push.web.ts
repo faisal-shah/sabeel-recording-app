@@ -27,15 +27,31 @@ import { VAPID_PUBLIC_KEY } from './firebase-config';
 
 export const pushPlatform = 'web' as const;
 
-let cached: string | null | undefined;
+/**
+ * Only a SUCCESSFUL token is remembered. Caching the null too made every failure
+ * permanent for the life of the tab: a service worker that lost the activation
+ * race by a second, or permission granted in browser settings a moment later,
+ * left the settings screen saying "this device can't receive notifications" with
+ * no way back but a reload.
+ */
+let cached: string | null = null;
 
-export async function devicePushToken(): Promise<string | null> {
-  if (cached !== undefined) return cached;
-  cached = await resolveToken();
+/**
+ * This device's push token, or null if it cannot have one.
+ *
+ * `prompt` decides whether someone who has not been asked yet IS asked. The
+ * settings screen passes true — a user gesture, and the one moment a person has
+ * plainly asked about notifications. Sign-out passes false: it must never raise
+ * a permission dialog on the way out, and someone who never granted permission
+ * has no registration to drop.
+ */
+export async function devicePushToken(prompt: boolean): Promise<string | null> {
+  if (cached) return cached;
+  cached = await resolveToken(prompt);
   return cached;
 }
 
-async function resolveToken(): Promise<string | null> {
+async function resolveToken(prompt: boolean): Promise<string | null> {
   if (!VAPID_PUBLIC_KEY) return null;
   if (typeof window === 'undefined' || !('Notification' in window)) return null;
   if (!(await isSupported().catch(() => false))) return null;
@@ -43,9 +59,11 @@ async function resolveToken(): Promise<string | null> {
   // Permission is requested here rather than on load: browsers ignore — and
   // Chrome permanently blocks — a prompt that did not follow a user gesture.
   const permission =
-    Notification.permission === 'default'
+    Notification.permission === 'default' && prompt
       ? await Notification.requestPermission()
       : Notification.permission;
+  // Returning before touching the service worker matters as much as the prompt:
+  // an un-permitted caller must not pay the registration wait below either.
   if (permission !== 'granted') return null;
 
   try {

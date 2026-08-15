@@ -27,13 +27,21 @@ import { send } from './messaging';
  *     durable marker a student would be told twice about the same recording. The
  *     marker is written BEFORE the send, and a create that loses the race is
  *     what stops the second delivery — checking first and writing after would
- *     leave a window two invocations can both pass through.
+ *     leave a window two invocations can both pass through. It is claimed only
+ *     once there is somewhere to send: claiming it for a person with no
+ *     registered device would spend the one delivery on nobody, permanently.
+ *     And only ALREADY_EXISTS means "someone else claimed it" — any other create
+ *     failure is rethrown, so the trigger retries rather than reporting a
+ *     success that dropped the message.
  *  3. **Dead tokens are pruned, transient failures are not.** Deleting on any
  *     failure would unregister working devices during an outage, and the only
  *     symptom would be notifications quietly stopping.
  *
  * Returns whether anything was actually sent, which is what the tests assert on.
  */
+
+/** gRPC ALREADY_EXISTS — the one create failure that means "someone else won". */
+const ALREADY_EXISTS = 6;
 export async function notifyOnce(
   db: Firestore,
   uid: string,
@@ -46,6 +54,14 @@ export async function notifyOnce(
   const prefs = (await person.get()).data() as NotificationPrefsDoc | undefined;
   if (!prefEnabled(prefs, kind)) return false;
 
+  // Devices first. Someone who has never opened the settings screen has none,
+  // and claiming the marker for them would burn the single delivery this
+  // notification ever gets — registering a device an hour later would then hear
+  // nothing about a recording already published.
+  const devices = await person.collection('devices').get();
+  const tokens = devices.docs.map((d) => (d.data() as DeviceTokenDoc).token);
+  if (tokens.length === 0) return false;
+
   // Claim the send. `create` fails if the document exists, which is exactly the
   // "someone already did this" answer, and it is atomic — so two concurrent
   // invocations cannot both win.
@@ -53,13 +69,14 @@ export async function notifyOnce(
   const record: SentNotificationDoc = { kind, targetId, at: Date.now() };
   try {
     await marker.create(record);
-  } catch {
-    return false; // already claimed
+  } catch (e) {
+    const code = (e as { code?: number | string }).code;
+    if (code === ALREADY_EXISTS || code === 'already-exists') return false;
+    // Unavailable, deadline exceeded, a permission problem: none of them is
+    // proof this was already sent. Swallowing them here would drop the message
+    // and report success, so there is nothing left to retry.
+    throw e;
   }
-
-  const devices = await person.collection('devices').get();
-  const tokens = devices.docs.map((d) => (d.data() as DeviceTokenDoc).token);
-  if (tokens.length === 0) return false;
 
   const { stale } = await send(tokens, message);
   for (const token of stale) {

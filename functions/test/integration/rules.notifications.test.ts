@@ -131,6 +131,19 @@ describe('device tokens', () => {
     );
   });
 
+  it('lets a device RE-register — the second visit to the settings screen', async () => {
+    // The row already exists, so this is an UPDATE, not a create. Denying it made
+    // the settings screen report a registered, working device as unable to
+    // receive push, every time after the first.
+    await assertSucceeds(
+      setDoc(doc(student().firestore(), COLLECTIONS.notifications, STUDENT, 'devices', 'tok-a'), {
+        token: 'tok-a',
+        platform: 'web',
+        registeredAt: 99,
+      }),
+    );
+  });
+
   it('does NOT let anyone read or plant a token on someone else', async () => {
     const db = other().firestore();
     await assertFails(getDocs(collection(db, COLLECTIONS.notifications, STUDENT, 'devices')));
@@ -144,9 +157,18 @@ describe('device tokens', () => {
   });
 
   it('does NOT let a token be edited into another one', async () => {
+    // The id is the token, so a row whose `token` field says otherwise is a
+    // registration pointing at a device this document does not name.
     await assertFails(
       updateDoc(doc(student().firestore(), COLLECTIONS.notifications, STUDENT, 'devices', 'tok-a'), {
         token: 'tok-c',
+      }),
+    );
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.notifications, STUDENT, 'devices', 'tok-d'), {
+        token: 'tok-e',
+        platform: 'web',
+        registeredAt: 1,
       }),
     );
   });

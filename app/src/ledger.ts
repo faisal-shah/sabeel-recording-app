@@ -106,6 +106,11 @@ export interface RecordingLedger {
   /** Absent without being excused: nothing required, and no access. Listed so a
    *  ledger still accounts for the whole submitted roster. */
   absentees: LedgerRow[];
+  /** Excused at the session but holding no active grant — unenrolled from the
+   *  class, or the recording was unpublished. Both deactivate every assignment
+   *  while the attendance marks stay, so without this group they would appear in
+   *  no section at all. */
+  lapsed: LedgerRow[];
   /** Listened without holding a current grant — e.g. excused, listened, then
    *  corrected to present. Evidence, not accountability. */
   otherListeners: LedgerRow[];
@@ -115,9 +120,11 @@ export interface RecordingLedger {
 /**
  * The recording ledger: the granted roster joined with completion, override, and
  * listening progress, split against the session's attendance into the excused
- * (who owe it), the present and the absent (who do not, and cannot open it).
- * All reads are `recordingId ==`, so the staff rules accept them class-scoped;
- * the join and the counts are pure.
+ * (who owe it), the present and the absent (who do not, and cannot open it), and
+ * the excused whose grant has since lapsed. Every uid the session recorded lands
+ * in exactly one group, which is what lets the screen claim to account for the
+ * whole submitted roster. All reads are `recordingId ==`, so the staff rules
+ * accept them class-scoped; the join and the counts are pure.
  */
 export function useRecordingLedger(
   recording: RecordingRow,
@@ -201,14 +208,22 @@ export function useRecordingLedger(
       // there is no longer a second attendance status to order within.
       .sort((x, y) => Number(x.completed) - Number(y.completed) || x.name.localeCompare(y.name));
 
-    const { present, absent } = attendanceGroups(status);
+    const { present, absent, excused } = attendanceGroups(status);
     const byName = (x: LedgerRow, y: LedgerRow) => x.name.localeCompare(y.name);
     const attendees = present.map((uid) => row(uid, null, 'present')).sort(byName);
     const absentees = absent.map((uid) => row(uid, null, 'absent')).sort(byName);
+    // Excused, but the grant that came with it is no longer active. `accountable`
+    // reads only ACTIVE assignments, so unenrolling a student or unpublishing the
+    // recording drops them out of it while the session still says they were
+    // excused — and they belong to neither present nor absent.
+    const lapsed = excused
+      .filter((uid) => !assignments.has(uid))
+      .map((uid) => row(uid, null, 'excused'))
+      .sort(byName);
 
     // Anyone with real listening/completion who holds no current grant and is
     // not in the snapshot — e.g. excused and listening, then corrected out.
-    const known = new Set<string>([...assignments.keys(), ...present, ...absent]);
+    const known = new Set<string>([...assignments.keys(), ...present, ...absent, ...excused]);
     const otherUids = new Set<string>();
     for (const [uid, c] of completions.entries()) if (c.completed && !known.has(uid)) otherUids.add(uid);
     for (const uid of progress.keys()) if (!known.has(uid)) otherUids.add(uid);
@@ -218,6 +233,7 @@ export function useRecordingLedger(
       accountable,
       attendees,
       absentees,
+      lapsed,
       otherListeners,
       rollup: rollup(
         accountable.map((r) => ({ completed: r.completed, dueDate: r.dueDate })),

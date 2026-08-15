@@ -30,12 +30,21 @@ export type Sender = (tokens: string[], message: PushMessage) => Promise<SendOut
  * Anything else — a quota error, a transient unavailable — must NOT delete the
  * token: pruning on a temporary failure would silently unregister a working
  * device and the only symptom would be notifications quietly stopping.
+ *
+ * `messaging/invalid-argument` is deliberately NOT here, though it looks like it
+ * belongs: FCM also returns it for a malformed MESSAGE, so one bad title would
+ * come back against every entry in the batch and prune every recipient's tokens
+ * at once. Only these two are specific to the token.
  */
 const DEAD_TOKEN_CODES = new Set([
   'messaging/registration-token-not-registered',
   'messaging/invalid-registration-token',
-  'messaging/invalid-argument',
 ]);
+
+/** Whether a per-token failure code justifies deleting that registration. */
+export function isDeadToken(code: string | undefined): boolean {
+  return !!code && DEAD_TOKEN_CODES.has(code);
+}
 
 export const fcmSender: Sender = async (tokens, message) => {
   if (tokens.length === 0) return { stale: [], sent: 0 };
@@ -48,8 +57,9 @@ export const fcmSender: Sender = async (tokens, message) => {
   });
   const stale: string[] = [];
   res.responses.forEach((r, i) => {
-    const code = (r.error as { code?: string } | undefined)?.code;
-    if (!r.success && code && DEAD_TOKEN_CODES.has(code)) stale.push(tokens[i]);
+    if (!r.success && isDeadToken((r.error as { code?: string } | undefined)?.code)) {
+      stale.push(tokens[i]);
+    }
   });
   return { stale, sent: res.successCount };
 };
