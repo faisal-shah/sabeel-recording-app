@@ -36,6 +36,26 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-08-15 — **v0.4.2 shipped to every surface.** A code review of
+  `d428fdd..24f3a3c` — the excused-only policy, notifications, the attendance
+  projection, the required due date — turned up fifteen findings, all fixed in
+  one release. The three that were live defects rather than tidying: a closed
+  session could not be edited or have its attendance corrected at all; the
+  notification idempotency marker could be spent on a student with no device,
+  costing them that message permanently; and re-registering a device was denied
+  by the rules, so the settings screen called a working device unusable. Nothing
+  here changes policy — every fix restores what the docs already claimed.
+  Deployed indexes → rules → storage → functions → hosting, APKs to both release
+  homes, download page and manual PDF refreshed.
+
+- 2026-08-15 — **A sweep swallows one recipient's failure; a trigger does not.**
+  `notifyOnce` rethrows anything that is not "already claimed", which is right
+  for `onAssignmentWritten` because it retries. The morning sweep is not retried
+  and `lastDay` has no second chance — tomorrow the deadline has passed and the
+  query no longer matches — so an error a third of the way through a batch would
+  cost every student after it their only reminder. The sweeps catch per
+  recipient and log; the trigger still throws.
+
 - 2026-08-15 — **A due date is judged as a CHANGE, not as a value.** The session
   editor sends all four fields on every save, so an unchanged deadline arrives on
   the wire exactly like a new one — and a validator that only asked "is this in
