@@ -5,7 +5,8 @@
  * stack is browser history now, so goBack() would work too.
  *
  * Model: Cohort → Course → Session → Recording. Recordings and attendance live
- * on a session; obligations are attendance-driven (absent∪excused catch up).
+ * on a session; being marked EXCUSED is what opens a recording to a student and
+ * requires them to listen, until the session's Listen by date.
  */
 import { chromium } from 'playwright';
 
@@ -60,9 +61,11 @@ await stu.waitForTimeout(2500);
 await pair(stu, '03-player');
 await home(stu);
 await sawText(stu, 'Your listening', 15000);
-await tap(stu, 'nav-myrecordings');
+await tap(stu, 'student-classes');
+await stu.getByTestId('myclass-Hikam Foundations').waitFor({ timeout: 20000 });
+await tap(stu, 'myclass-Hikam Foundations');
 await stu.waitForTimeout(3000);
-await pair(stu, '04-browse-all');
+await pair(stu, '04-attendance-record');
 await stu.context().close();
 
 console.log('Admin / staff');

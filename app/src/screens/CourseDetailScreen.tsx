@@ -128,10 +128,10 @@ export function CourseDetailScreen({
         <Text style={styles.ledgerLine}>
           <Text style={styles.ledgerNum}>{ledger.rollup.incomplete}</Text> incomplete
           {'   '}
-          <Text style={[styles.ledgerNum, ledger.rollup.overdue > 0 ? styles.overdueNum : null]}>
-            {ledger.rollup.overdue}
+          <Text style={[styles.ledgerNum, ledger.rollup.missed > 0 ? styles.missedNum : null]}>
+            {ledger.rollup.missed}
           </Text>{' '}
-          overdue{'   '}of {ledger.rollup.total} required
+          missed{'   '}of {ledger.rollup.total} required
         </Text>
         <Button testID="nav-audit" label="Audit history" variant="secondary" onPress={onOpenAudit} />
       </Card>
@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
   managerLede: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(2), lineHeight: 19 },
   ledgerLine: { fontSize: 15, color: t.text.secondary, marginBottom: spacing(3) },
   ledgerNum: { fontSize: 18, fontWeight: '700', color: t.text.primary },
-  overdueNum: { color: t.feedback.danger },
+  missedNum: { color: t.feedback.danger },
   meta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing(2) },
   pickRow: {
     flexDirection: 'row',

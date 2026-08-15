@@ -6,7 +6,9 @@ import {
   COLLECTIONS,
   EMULATOR_PROJECT_ID,
   assignmentId,
+  attendanceRecordId,
   type AssignmentDoc,
+  type AttendanceRecordDoc,
   type AttendanceStatus,
   type RecordingDoc,
   type SessionDoc,
@@ -19,6 +21,7 @@ import {
   reconcileSessionAssignments,
   deactivateStudentAssignmentsInCourse,
 } from '../../src/assignmentsFanout';
+import { reconcileAttendanceRecords } from '../../src/attendanceMirror';
 
 beforeAll(() => {
   if (getApps().length === 0) initializeApp({ projectId: EMULATOR_PROJECT_ID });
@@ -36,6 +39,7 @@ async function clearAll() {
     COLLECTIONS.sessions,
     COLLECTIONS.recordings,
     COLLECTIONS.assignments,
+    COLLECTIONS.attendanceRecords,
   ]) {
     const snap = await db().collection(c).get();
     await Promise.all(snap.docs.map((d) => d.ref.delete()));
@@ -60,7 +64,7 @@ async function seedStudent(uid: string) {
 async function seedSession(
   id: string,
   fields: {
-    dueDate?: string | null;
+    dueDate?: string;
     attendance: Record<string, AttendanceStatus>;
     submitted: boolean;
     recordingId?: string | null;
@@ -71,7 +75,7 @@ async function seedSession(
     cohortId,
     date: '2026-07-06',
     title: id,
-    dueDate: fields.dueDate ?? null,
+    dueDate: fields.dueDate ?? '2026-08-01',
     notes: '',
     recordingId: fields.recordingId ?? null,
     attendance: fields.attendance,
@@ -149,7 +153,7 @@ beforeEach(async () => {
 });
 
 describe('reconcileSessionAssignments', () => {
-  it('assigns absent AND excused, exempts present', async () => {
+  it('grants the EXCUSED alone — present and absent get nothing', async () => {
     await seedSession('sess', {
       dueDate: '2026-08-01',
       attendance: { s1: 'absent', s2: 'present', s3: 'excused' },
@@ -158,15 +162,17 @@ describe('reconcileSessionAssignments', () => {
     await seedRecording('r1', 'sess', 'published');
     await reconcile('sess');
 
-    expect(await getAssignment('s1', 'r1')).toMatchObject({ active: true, dueDate: '2026-08-01' });
-    expect(await getAssignment('s3', 'r1')).toMatchObject({ active: true }); // excused still catches up
-    expect(await getAssignment('s2', 'r1')).toBeUndefined(); // present is exempt
-    expect(await countActive('r1')).toBe(2);
+    expect(await getAssignment('s3', 'r1')).toMatchObject({ active: true, dueDate: '2026-08-01' });
+    // An unexcused absence opens nothing: the student missed the class and has
+    // no claim on the recording. This is the whole policy change in one line.
+    expect(await getAssignment('s1', 'r1')).toBeUndefined();
+    expect(await getAssignment('s2', 'r1')).toBeUndefined();
+    expect(await countActive('r1')).toBe(1);
   });
 
   it('assigns nobody until BOTH published and attendance submitted', async () => {
     // Published recording, attendance not yet submitted.
-    await seedSession('sess', { attendance: { s1: 'absent' }, submitted: false });
+    await seedSession('sess', { attendance: { s1: 'excused' }, submitted: false });
     await seedRecording('r1', 'sess', 'published');
     await reconcile('sess');
     expect(await countActive('r1')).toBe(0);
@@ -177,33 +183,50 @@ describe('reconcileSessionAssignments', () => {
     expect(await getAssignment('s1', 'r1')).toMatchObject({ active: true });
 
     // A draft recording assigns nobody even with attendance submitted.
-    await seedSession('sess2', { attendance: { s2: 'absent' }, submitted: true });
+    await seedSession('sess2', { attendance: { s2: 'excused' }, submitted: true });
     await seedRecording('r2', 'sess2', 'draft');
     await reconcile('sess2');
     expect(await countActive('r2')).toBe(0);
   });
 
-  it('re-submitting attendance flips present<->absent and keeps history', async () => {
-    await seedSession('sess', { attendance: { s1: 'absent', s2: 'absent' }, submitted: true });
+  it('re-submitting attendance withdraws a grant and keeps the history', async () => {
+    await seedSession('sess', { attendance: { s1: 'excused', s2: 'excused' }, submitted: true });
     await seedRecording('r1', 'sess', 'published');
     await reconcile('sess');
     expect(await countActive('r1')).toBe(2);
 
-    // s2 was actually present after all.
+    // s2 was actually present after all — the grant goes, the row stays.
     await db()
       .collection(COLLECTIONS.sessions)
       .doc('sess')
-      .update({ attendance: { s1: 'absent', s2: 'present' } });
+      .update({ attendance: { s1: 'excused', s2: 'present' } });
     await reconcile('sess');
     expect(await getAssignment('s1', 'r1')).toMatchObject({ active: true });
     expect((await getAssignment('s2', 'r1'))?.active).toBe(false); // deactivated, row kept
     expect(await countActive('r1')).toBe(1);
   });
 
+  it('correcting excused to ABSENT withdraws the grant too', async () => {
+    // Worth its own case: under the old rule absent kept the obligation, so this
+    // is the assertion that would have silently kept passing.
+    await seedSession('sess', { attendance: { s1: 'excused' }, submitted: true });
+    await seedRecording('r1', 'sess', 'published');
+    await reconcile('sess');
+    expect(await countActive('r1')).toBe(1);
+
+    await db()
+      .collection(COLLECTIONS.sessions)
+      .doc('sess')
+      .update({ attendance: { s1: 'absent' } });
+    await reconcile('sess');
+    expect((await getAssignment('s1', 'r1'))?.active).toBe(false);
+    expect(await countActive('r1')).toBe(0);
+  });
+
   it('a student not in the attendance snapshot is never assigned (enrollment-onward)', async () => {
     // s3 is enrolled but was NOT marked (e.g. enrolled after this session).
     await seedSession('sess', {
-      attendance: { s1: 'absent', s2: 'absent' },
+      attendance: { s1: 'excused', s2: 'excused' },
       submitted: true,
     });
     await seedRecording('r1', 'sess', 'published');
@@ -213,7 +236,7 @@ describe('reconcileSessionAssignments', () => {
   });
 
   it('unpublishing deactivates the obligations but keeps the rows', async () => {
-    await seedSession('sess', { attendance: { s1: 'absent', s2: 'absent' }, submitted: true });
+    await seedSession('sess', { attendance: { s1: 'excused', s2: 'excused' }, submitted: true });
     await seedRecording('r1', 'sess', 'published');
     await reconcile('sess');
     expect(await countActive('r1')).toBe(2);
@@ -227,7 +250,7 @@ describe('reconcileSessionAssignments', () => {
   it('a due-date edit re-flows to the assignments', async () => {
     await seedSession('sess', {
       dueDate: '2026-08-01',
-      attendance: { s1: 'absent' },
+      attendance: { s1: 'excused' },
       submitted: true,
     });
     await seedRecording('r1', 'sess', 'published');
@@ -242,7 +265,7 @@ describe('reconcileSessionAssignments', () => {
 
 describe('unenrolment', () => {
   it('deactivates a student obligations in the course, keeping history', async () => {
-    await seedSession('sess', { attendance: { s1: 'absent', s2: 'absent' }, submitted: true });
+    await seedSession('sess', { attendance: { s1: 'excused', s2: 'excused' }, submitted: true });
     await seedRecording('r1', 'sess', 'published');
     await reconcile('sess');
     expect(await countActive('r1')).toBe(2);
@@ -250,5 +273,92 @@ describe('unenrolment', () => {
     await deactivateStudentAssignmentsInCourse(db(), courseId, 's1');
     expect((await getAssignment('s1', 'r1'))?.active).toBe(false);
     expect((await getAssignment('s2', 'r1'))?.active).toBe(true);
+  });
+});
+
+describe('reconcileAttendanceRecords — the student-visible projection', () => {
+  const mirror = async (uid: string, sessionId: string) =>
+    (
+      await db()
+        .collection(COLLECTIONS.attendanceRecords)
+        .doc(attendanceRecordId(uid, sessionId))
+        .get()
+    ).data() as AttendanceRecordDoc | undefined;
+
+  const project = async (sessionId: string) => {
+    const session = (await db().collection(COLLECTIONS.sessions).doc(sessionId).get()).data() as
+      | SessionDoc
+      | undefined;
+    await reconcileAttendanceRecords(db(), sessionId, session);
+  };
+
+  it('projects EVERY mark, not just the granted ones', async () => {
+    // A student needs to see that they were marked present just as much as
+    // excused — the whole point of the screen is their own record.
+    await seedSession('sess', {
+      attendance: { s1: 'present', s2: 'absent', s3: 'excused' },
+      submitted: true,
+    });
+    await project('sess');
+
+    expect(await mirror('s1', 'sess')).toMatchObject({ status: 'present', courseId });
+    expect(await mirror('s2', 'sess')).toMatchObject({ status: 'absent' });
+    expect(await mirror('s3', 'sess')).toMatchObject({ status: 'excused' });
+  });
+
+  it('denormalises the date and title, because students cannot read the session', async () => {
+    await seedSession('sess', { attendance: { s1: 'present' }, submitted: true });
+    await project('sess');
+    expect(await mirror('s1', 'sess')).toMatchObject({
+      date: '2026-07-06',
+      title: 'sess',
+      submittedAt: 1,
+    });
+  });
+
+  it('projects nothing until attendance is SUBMITTED', async () => {
+    // Marks being edited are not a record yet; the same gate the fan-out uses.
+    await seedSession('sess', { attendance: { s1: 'excused' }, submitted: false });
+    await project('sess');
+    expect(await mirror('s1', 'sess')).toBeUndefined();
+
+    await db().collection(COLLECTIONS.sessions).doc('sess').update({ attendanceSubmittedAt: 1 });
+    await project('sess');
+    expect(await mirror('s1', 'sess')).toMatchObject({ status: 'excused' });
+  });
+
+  it('follows a correction, and DELETES a row dropped from the snapshot', async () => {
+    await seedSession('sess', { attendance: { s1: 'excused', s2: 'present' }, submitted: true });
+    await project('sess');
+    expect(await mirror('s2', 'sess')).toMatchObject({ status: 'present' });
+
+    await db()
+      .collection(COLLECTIONS.sessions)
+      .doc('sess')
+      .update({ attendance: { s1: 'present' } });
+    await project('sess');
+    expect(await mirror('s1', 'sess')).toMatchObject({ status: 'present' });
+    // Unlike an assignment, a mark carries no history worth keeping once the
+    // session says it never happened — a stale row would contradict the report.
+    expect(await mirror('s2', 'sess')).toBeUndefined();
+  });
+
+  it('drops every row when the session is deleted', async () => {
+    await seedSession('sess', { attendance: { s1: 'excused' }, submitted: true });
+    await project('sess');
+    await db().collection(COLLECTIONS.sessions).doc('sess').delete();
+    await project('sess');
+    expect(await mirror('s1', 'sess')).toBeUndefined();
+  });
+
+  it('is idempotent — running twice changes nothing', async () => {
+    await seedSession('sess', { attendance: { s1: 'excused', s2: 'absent' }, submitted: true });
+    await project('sess');
+    await project('sess');
+    const all = await db()
+      .collection(COLLECTIONS.attendanceRecords)
+      .where('sessionId', '==', 'sess')
+      .get();
+    expect(all.size).toBe(2);
   });
 });

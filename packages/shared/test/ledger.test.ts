@@ -25,9 +25,9 @@ describe('attendanceReport', () => {
       ],
       rosterUids: ['a', 'b', 'c'],
       assignments: [
-        { studentUid: 'a', completed: false, dueDate: '2026-07-01' }, // overdue
+        { studentUid: 'a', completed: false, dueDate: '2026-07-01' }, // missed
         { studentUid: 'b', completed: true, dueDate: '2026-07-01' }, // done
-        { studentUid: 'c', completed: false, dueDate: '2026-08-01' }, // pending, not overdue
+        { studentUid: 'c', completed: false, dueDate: '2026-08-01' }, // still open
       ],
       today: '2026-07-15',
     });
@@ -49,12 +49,12 @@ describe('attendanceReport', () => {
     expect(c).toMatchObject({ present: 0, absent: 0, excused: 1, notMarked: 1 });
   });
 
-  it('catch-up grouped from active assignments, overdue at the day boundary', () => {
+  it('catch-up grouped from active assignments, missed at the day boundary', () => {
     const r = report();
     const byUid = Object.fromEntries(r.students.map((s) => [s.studentUid, s]));
-    expect(byUid.a).toMatchObject({ assigned: 1, completed: 0, overdue: 1 });
-    expect(byUid.b).toMatchObject({ assigned: 1, completed: 1, overdue: 0 });
-    expect(byUid.c).toMatchObject({ assigned: 1, completed: 0, overdue: 0 });
+    expect(byUid.a).toMatchObject({ assigned: 1, completed: 0, missed: 1 });
+    expect(byUid.b).toMatchObject({ assigned: 1, completed: 1, missed: 0 });
+    expect(byUid.c).toMatchObject({ assigned: 1, completed: 0, missed: 0 });
   });
 });
 
@@ -67,8 +67,8 @@ describe('attendance split', () => {
     e: 'absent',
   };
 
-  it('accountable = absent ∪ excused; present are exempt', () => {
-    expect(accountableUids(roster).sort()).toEqual(['b', 'c', 'e']);
+  it('granted = excused alone; present and absent get nothing', () => {
+    expect(accountableUids(roster).sort()).toEqual(['c']);
   });
 
   it('groups the roster into present / absent / excused', () => {
@@ -79,7 +79,7 @@ describe('attendance split', () => {
     });
   });
 
-  it('an empty roster yields empty groups and no accountable', () => {
+  it('an empty roster yields empty groups and grants nobody', () => {
     expect(attendanceGroups({})).toEqual({ present: [], absent: [], excused: [] });
     expect(accountableUids({})).toEqual([]);
   });
@@ -111,39 +111,37 @@ describe('effectiveCompletion', () => {
 
 describe('rollup', () => {
   const TODAY = '2026-07-25';
-  it('counts complete / incomplete / overdue with overdue ⊂ incomplete', () => {
+  it('counts complete / incomplete / missed with missed ⊂ incomplete', () => {
     const items = [
-      { completed: true, dueDate: '2020-01-01' }, // complete (never overdue though past)
-      { completed: false, dueDate: '2026-07-24' }, // overdue
-      { completed: false, dueDate: '2026-07-30' }, // incomplete, not overdue
-      { completed: false, dueDate: null }, // incomplete, no due → never overdue
-      { completed: true, dueDate: null }, // complete
+      { completed: true, dueDate: '2020-01-01' }, // complete (never missed though past)
+      { completed: false, dueDate: '2026-07-24' }, // missed
+      { completed: false, dueDate: '2026-07-30' }, // incomplete, still open
     ];
-    expect(rollup(items, TODAY)).toEqual({ total: 5, complete: 2, incomplete: 3, overdue: 1 });
+    expect(rollup(items, TODAY)).toEqual({ total: 3, complete: 1, incomplete: 2, missed: 1 });
   });
 
-  it('a completed item is never overdue, however far past due', () => {
+  it('a completed item is never missed, however far past due', () => {
     expect(rollup([{ completed: true, dueDate: '2000-01-01' }], TODAY)).toEqual({
       total: 1,
       complete: 1,
       incomplete: 0,
-      overdue: 0,
+      missed: 0,
     });
   });
 
-  it('due today is not yet overdue', () => {
-    expect(rollup([{ completed: false, dueDate: '2026-07-25' }], TODAY).overdue).toBe(0);
+  it('due today is not yet missed', () => {
+    expect(rollup([{ completed: false, dueDate: '2026-07-25' }], TODAY).missed).toBe(0);
   });
 
   it('empties to zeros', () => {
-    expect(rollup([], TODAY)).toEqual({ total: 0, complete: 0, incomplete: 0, overdue: 0 });
+    expect(rollup([], TODAY)).toEqual({ total: 0, complete: 0, incomplete: 0, missed: 0 });
   });
 });
 
 describe('ledgerBucket', () => {
   it('reuses the home classification', () => {
-    expect(ledgerBucket('2026-07-24', false, '2026-07-25')).toBe('overdue');
+    expect(ledgerBucket('2026-07-24', false, '2026-07-25')).toBe('missed');
     expect(ledgerBucket('2026-07-24', true, '2026-07-25')).toBe('done');
-    expect(ledgerBucket(null, false, '2026-07-25')).toBe('noDue');
+    expect(ledgerBucket('2026-08-30', false, '2026-07-25')).toBe('upcoming');
   });
 });

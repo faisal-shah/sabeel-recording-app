@@ -3,11 +3,14 @@ import { reportedCall } from './reported';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
+  INSTITUTE_TIMEZONE,
+  assignmentId,
   canPlayFromCourse,
-  enrollmentId,
+  hasRecordingAccess,
   isStaffRole,
+  todayInZone,
+  type AssignmentDoc,
   type CourseDoc,
-  type EnrollmentDoc,
   type RecordingDoc,
   type TokenClaims,
 } from '@sabeel/shared';
@@ -15,7 +18,8 @@ import { signedPlaybackUrl } from './mediaUrl';
 
 export type PlaybackDenial =
   | 'not-published'
-  | 'not-enrolled'
+  | 'not-assigned'
+  | 'past-due'
   | 'class-listening-off'
   | 'not-your-class'
   | 'no-audio';
@@ -25,15 +29,21 @@ export type PlaybackDenial =
  *
  * Pure, so every branch is unit-testable without an emulator or a signing
  * service. `playbackDenial` returning null means allowed.
+ *
+ * A student's whole entitlement is their assignment: it exists because they were
+ * marked excused, and it is in date until the session's due date. Enrolment is
+ * not consulted, because it cannot add anything an assignment does not already
+ * prove — unenrolling deactivates them (`deactivateStudentAssignmentsInCourse`).
  */
 export function playbackDenial(input: {
   claims: TokenClaims;
   recording: Pick<RecordingDoc, 'status' | 'audioPath'>;
   cls: Pick<CourseDoc, 'effectiveActive' | 'archivedAccess' | 'managerUids'>;
   uid: string;
-  enrollmentActive: boolean;
+  assignment: Pick<AssignmentDoc, 'active' | 'dueDate'> | null;
+  today: string;
 }): PlaybackDenial | null {
-  const { claims, recording, cls, uid, enrollmentActive } = input;
+  const { claims, recording, cls, uid, assignment, today } = input;
   if (!recording.audioPath) return 'no-audio';
 
   if (isStaffRole(claims.role)) {
@@ -43,13 +53,13 @@ export function playbackDenial(input: {
     return cls.managerUids.includes(uid) ? null : 'not-your-class';
   }
 
-  // Students: only published recordings, only their own class, and only while
-  // that class still allows listening.
+  // Students: only published recordings, only ones granted to them, and only
+  // until the deadline they were given.
   if (recording.status !== 'published') return 'not-published';
-  if (!enrollmentActive) return 'not-enrolled';
-  // The archived-access rule from Phase 1 finally does some work: an archived
-  // class is still VISIBLE to a student, but playback is off unless staff
-  // deliberately kept it on.
+  if (!assignment || !assignment.active) return 'not-assigned';
+  if (!hasRecordingAccess(assignment, today)) return 'past-due';
+  // The archived-access rule from Phase 1 still does its work on top: an
+  // archived class turns listening off unless staff deliberately kept it on.
   if (!canPlayFromCourse(cls)) return 'class-listening-off';
   return null;
 }
@@ -57,7 +67,8 @@ export function playbackDenial(input: {
 const MESSAGES: Record<PlaybackDenial, string> = {
   'no-audio': 'That recording has no audio yet.',
   'not-published': 'That recording is not published.',
-  'not-enrolled': 'You are not enrolled in that class.',
+  'not-assigned': 'That recording was not assigned to you.',
+  'past-due': 'The due date for this recording has passed.',
   'class-listening-off': 'This class is archived and listening has been turned off.',
   'not-your-class': 'You are not assigned to that class.',
 };
@@ -86,12 +97,9 @@ export const getPlaybackUrl = reportedCall(async (req) => {
     if (!recSnap.exists) throw new HttpsError('not-found', 'No such recording.');
     const recording = recSnap.data() as RecordingDoc;
 
-    const [clsSnap, enrSnap] = await Promise.all([
+    const [clsSnap, asgSnap] = await Promise.all([
       db.collection(COLLECTIONS.courses).doc(recording.courseId).get(),
-      db
-        .collection(COLLECTIONS.enrollments)
-        .doc(enrollmentId(req.auth.uid, recording.courseId))
-        .get(),
+      db.collection(COLLECTIONS.assignments).doc(assignmentId(req.auth.uid, recordingId)).get(),
     ]);
     if (!clsSnap.exists) throw new HttpsError('not-found', 'No such class.');
 
@@ -100,7 +108,8 @@ export const getPlaybackUrl = reportedCall(async (req) => {
       recording,
       cls: clsSnap.data() as CourseDoc,
       uid: req.auth.uid,
-      enrollmentActive: enrSnap.exists && (enrSnap.data() as EnrollmentDoc).active,
+      assignment: asgSnap.exists ? (asgSnap.data() as AssignmentDoc) : null,
+      today: todayInZone(INSTITUTE_TIMEZONE),
     });
     if (denial) throw new HttpsError('permission-denied', MESSAGES[denial]);
 

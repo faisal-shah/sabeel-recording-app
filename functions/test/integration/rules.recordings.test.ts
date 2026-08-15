@@ -11,6 +11,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import {
   COLLECTIONS,
   EMULATOR_PROJECT_ID,
+  assignmentId,
   audioStoragePath,
   enrollmentId,
 } from '@sabeel/shared';
@@ -48,6 +49,10 @@ const OUTSIDER = 'stu2';
 const CLASS_MINE = 'classMine';
 const CLASS_THEIRS = 'classTheirs';
 const PUBLISHED = 'recPublished';
+/** Published in the student's own course, but they were never excused for it. */
+const UNGRANTED = 'recUngranted';
+/** Published, but their grant was withdrawn (corrected to present, unpublished…). */
+const WITHDRAWN = 'recWithdrawn';
 const DRAFT = 'recDraft';
 const THEIR_REC = 'recTheirs';
 
@@ -75,7 +80,6 @@ beforeEach(async () => {
         status,
         source: 'manual',
         recordedAt: 1,
-        dueDate: null,
         notes: '',
         audioPath: audioStoragePath(id),
         durationSec: 60,
@@ -84,12 +88,31 @@ beforeEach(async () => {
         createdBy: ADMIN,
         updatedAt: 1,
       });
+    // The grant. A student reads a recording through this document and nothing
+    // else, so every student-read case below is really a case about one of these.
+    const grant = (recordingId: string, active: boolean) =>
+      setDoc(doc(db, COLLECTIONS.assignments, assignmentId(STUDENT, recordingId)), {
+        studentUid: STUDENT,
+        recordingId,
+        sessionId: 's1',
+        courseId: CLASS_MINE,
+        cohortId: 'c1',
+        dueDate: '2099-01-01',
+        active,
+        assignedAt: 1,
+        assignedBy: 'system',
+      });
     await Promise.all([
       cls(CLASS_MINE, [MINE]),
       cls(CLASS_THEIRS, [THEIRS]),
       rec(PUBLISHED, CLASS_MINE, 'published'),
+      rec(UNGRANTED, CLASS_MINE, 'published'),
+      rec(WITHDRAWN, CLASS_MINE, 'published'),
       rec(DRAFT, CLASS_MINE, 'draft'),
       rec(THEIR_REC, CLASS_THEIRS, 'published'),
+      grant(PUBLISHED, true),
+      grant(WITHDRAWN, false),
+      grant(DRAFT, true),
       setDoc(doc(db, COLLECTIONS.enrollments, enrollmentId(STUDENT, CLASS_MINE)), {
         studentUid: STUDENT,
         courseId: CLASS_MINE,
@@ -143,13 +166,26 @@ describe('recordings: staff reads', () => {
 });
 
 describe('recordings: student reads', () => {
-  it('let an enrolled student read a published recording', async () => {
+  it('let a student read a published recording they were granted', async () => {
     await assertSucceeds(getDoc(doc(student().firestore(), COLLECTIONS.recordings, PUBLISHED)));
   });
 
-  it('do NOT let a student read an unpublished one in their own class', async () => {
+  it('do NOT let an enrolled student read one they were never granted', async () => {
+    // Same course, same active enrolment, published — and still refused. This is
+    // the whole policy in one assertion: being in the class opens nothing, only
+    // being excused does.
+    await assertFails(getDoc(doc(student().firestore(), COLLECTIONS.recordings, UNGRANTED)));
+  });
+
+  it('do NOT let a student read one whose grant was withdrawn', async () => {
+    // active:false — corrected to present, unpublished, or unenrolled. The row
+    // survives for the ledger; the access does not.
+    await assertFails(getDoc(doc(student().firestore(), COLLECTIONS.recordings, WITHDRAWN)));
+  });
+
+  it('do NOT let a student read an unpublished one even WITH a grant', async () => {
     // Drafts are staff working material; a student seeing one would be looking
-    // at a recording nobody has checked yet.
+    // at a recording nobody has checked yet. Both conditions must hold.
     await assertFails(getDoc(doc(student().firestore(), COLLECTIONS.recordings, DRAFT)));
   });
 
@@ -158,9 +194,12 @@ describe('recordings: student reads', () => {
     await assertFails(getDoc(doc(outsider().firestore(), COLLECTIONS.recordings, PUBLISHED)));
   });
 
-  it('require a student\'s list to be constrained to their class', async () => {
+  it('deny a student ANY list of recordings, however constrained', async () => {
+    // The student arm is get-only on purpose: resolving a grant per row would
+    // cost two document-access calls each and blow the per-query cap. Students
+    // list their own assignments — which needs no reads — and get from there.
     await assertFails(getDocs(collection(student().firestore(), COLLECTIONS.recordings)));
-    await assertSucceeds(
+    await assertFails(
       getDocs(
         query(
           collection(student().firestore(), COLLECTIONS.recordings),

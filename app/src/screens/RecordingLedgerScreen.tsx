@@ -12,6 +12,7 @@ import {
   clearCompletionOverride,
   useRecordingLedger,
   type LedgerRow,
+  type RequiredRow,
 } from '../ledger';
 import { exportCsv } from '../exportCsv';
 import { useListenerError } from '../liveQuery';
@@ -21,7 +22,7 @@ import type { RecordingRow } from '../recordings';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
-type Filter = 'all' | 'notComplete' | 'overdue';
+type Filter = 'all' | 'notComplete' | 'missed';
 
 /**
  * Recording ledger: the accountable roster for one recording, action-first.
@@ -41,7 +42,7 @@ export function RecordingLedgerScreen({
   const today = todayInZone(INSTITUTE_TIMEZONE);
   // Reached from the cross-cohort library, where the course name alone is ambiguous.
   const cohortName = useCohortName()(cls.cohortId);
-  const { accountable, attendees, otherListeners, rollup } = useRecordingLedger(
+  const { accountable, attendees, absentees, otherListeners, rollup } = useRecordingLedger(
     recording,
     session,
     today,
@@ -95,11 +96,11 @@ export function RecordingLedgerScreen({
         <Stat label="Accountable" value={rollup.total} />
         <Stat label="Complete" value={rollup.complete} tone="success" />
         <Stat label="Incomplete" value={rollup.incomplete} />
-        <Stat label="Overdue" value={rollup.overdue} tone={rollup.overdue > 0 ? 'danger' : undefined} />
+        <Stat label="Missed" value={rollup.missed} tone={rollup.missed > 0 ? 'danger' : undefined} />
       </View>
 
       <View style={styles.chips}>
-        {(['notComplete', 'overdue', 'all'] as Filter[]).map((f) => (
+        {(['notComplete', 'missed', 'all'] as Filter[]).map((f) => (
           <Pressable
             key={f}
             testID={`ledger-filter-${f}`}
@@ -109,7 +110,7 @@ export function RecordingLedgerScreen({
             style={[styles.chip, filter === f ? styles.chipOn : null]}
           >
             <Text style={[styles.chipText, filter === f ? styles.chipTextOn : null]}>
-              {f === 'notComplete' ? 'Not complete' : f === 'overdue' ? 'Overdue' : 'All'}
+              {f === 'notComplete' ? 'Not complete' : f === 'missed' ? 'Missed' : 'All'}
             </Text>
           </Pressable>
         ))}
@@ -126,10 +127,10 @@ export function RecordingLedgerScreen({
       {rows.length === 0 ? (
         <Empty>
           {filter === 'all'
-            ? 'No one is accountable for this recording yet.'
-            : filter === 'overdue'
-              ? 'No one is overdue — nice.'
-              : 'Everyone accountable has completed this — nice.'}
+            ? 'No one was excused from this session, so nobody has been granted this recording.'
+            : filter === 'missed'
+              ? 'Nobody missed the deadline — nice.'
+              : 'Everyone required has completed this — nice.'}
         </Empty>
       ) : (
         rows.map((r) => (
@@ -144,14 +145,14 @@ export function RecordingLedgerScreen({
         ))
       )}
 
-      <SectionTitle>Attendees ({attendees.length})</SectionTitle>
+      <SectionTitle>Present ({attendees.length})</SectionTitle>
       {attendees.length === 0 ? (
         <Empty>No one was marked present at this session.</Empty>
       ) : (
         <>
           <Notice tone="info">
-            Present at the session, so the recording is not required for them. Listening is shown for
-            reference — they are never overdue.
+            They were at the session, so this recording is neither required for them nor open to
+            them.
           </Notice>
           {attendees.map((r) => (
             <ListenerRow key={r.studentUid} row={r} />
@@ -159,12 +160,25 @@ export function RecordingLedgerScreen({
         </>
       )}
 
+      {absentees.length > 0 ? (
+        <>
+          <SectionTitle>Absent ({absentees.length})</SectionTitle>
+          <Notice tone="info">
+            Marked absent rather than excused, so the recording was not opened to them. To let
+            someone catch up, mark them excused on the session and submit again.
+          </Notice>
+          {absentees.map((r) => (
+            <ListenerRow key={r.studentUid} row={r} />
+          ))}
+        </>
+      ) : null}
+
       {otherListeners.length > 0 ? (
         <>
           <SectionTitle>Also listened ({otherListeners.length})</SectionTitle>
           <Notice tone="info">
-            Listened without being accountable or a recorded attendee — for example, enrolled after
-            attendance was taken. Kept as history; does not count toward accountability.
+            Listening from someone who holds no current grant — for example, excused and listening,
+            then corrected to present. Kept as history; does not count toward accountability.
           </Notice>
           {otherListeners.map((r) => (
             <ListenerRow key={r.studentUid} row={r} />
@@ -175,7 +189,7 @@ export function RecordingLedgerScreen({
   );
 }
 
-/** A read-only listening row — attendees and other listeners, no accountability. */
+/** A read-only row — present, absent, and other listeners; no accountability. */
 function ListenerRow({ row: r }: { row: LedgerRow }) {
   return (
     <View style={styles.row}>
@@ -200,7 +214,7 @@ function LedgerRowCard({
   busy,
   onRun,
 }: {
-  row: LedgerRow;
+  row: RequiredRow;
   recordingId: string;
   today: string;
   busy: string | null;
@@ -214,10 +228,7 @@ function LedgerRowCard({
     <View style={styles.row}>
       <View style={styles.rowHead}>
         <View style={{ flex: 1 }}>
-          <View style={styles.nameRow}>
-            <Text style={styles.name}>{r.name}</Text>
-            {r.attendance === 'excused' ? <Text style={styles.excused}>Excused</Text> : null}
-          </View>
+          <Text style={styles.name}>{r.name}</Text>
           <Text style={styles.sub}>
             {Math.round(r.listenedPct * 100)}% listened
             {r.lastListened ? ` · last ${fmtDate(r.lastListened)}` : ''}
@@ -306,10 +317,10 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: 'su
   );
 }
 
-function statusLabel(r: LedgerRow, today: string): string {
+function statusLabel(r: RequiredRow, today: string): string {
   if (r.completed) return r.source === 'override' ? 'Complete (override)' : 'Complete';
-  if (isOverdue(r.dueDate, today)) return 'Overdue';
-  return r.dueDate ? 'Not complete' : 'Not complete · no due';
+  if (isOverdue(r.dueDate, today)) return 'Missed';
+  return 'Not complete';
 }
 
 function statusStyle(bucket: string) {
@@ -351,19 +362,7 @@ const styles = StyleSheet.create({
     borderColor: t.border.subtle,
   },
   rowHead: { flexDirection: 'row', alignItems: 'flex-start' },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), flexWrap: 'wrap' },
   name: { fontSize: 16, fontWeight: '600', color: t.text.primary },
-  excused: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: t.accent.goldText,
-    borderWidth: 1,
-    borderColor: t.border.strong,
-    borderRadius: 999,
-    paddingHorizontal: spacing(2),
-    paddingVertical: 1,
-    overflow: 'hidden',
-  },
   sub: { fontSize: 13, color: t.text.secondary, marginTop: spacing(1) },
   override: { fontSize: 13, color: t.text.accent, marginTop: spacing(1) },
   status: { fontSize: 13, fontWeight: '700' },

@@ -27,12 +27,82 @@ and commit messages, and renaming them would strand every one of those.
 | 5d | CSV export + polish | **complete** (2026-07-22) |
 | 4 | Assignments, progress, completion | not started |
 | 5 | Staff ledger, reporting, audit | not started |
+| A | Excused-only access, with a deadline | **complete** (2026-08-14) |
+| B | The student's own attendance record | **complete** (2026-08-14) |
 | 6 | Zoom import *(gated on credentials)* | not started |
 | 7 | Notifications | not started |
 | 8 | Admin backend stats | not started |
 | 9 | Deploy, manual, release | not started |
 
 ## Decision log
+
+- 2026-08-14 — **Being excused is the whole of a student's entitlement**
+  (Faisal's decision). Enrolment used to open every published recording in a
+  course, and `absent ∪ excused` created the obligation on top. Now one
+  `assignments` document does both jobs and only the EXCUSED get one: present
+  needs nothing, absent is an unexcused miss and opens nothing. The brief's
+  "access and accountability are separate" principle is retired by decision, not
+  by drift — it is named in the brief and in CLAUDE.md so nobody re-splits them
+  later. Practical consequences worth knowing: "everyone must listen" is now said
+  by excusing everyone (the bulk button changed to match, because "Mark all
+  absent" would have quietly done the opposite of what it promised); and the
+  browse-all-recordings screen was deleted, because a student's list of what they
+  MAY hear and what they MUST hear became the same list.
+
+- 2026-08-14 — **The deadline is enforced at the audio, never in the rules.**
+  Access closes when the session's due date passes. Rules would have to compare
+  `request.time` against a `YYYY-MM-DD` string in `America/Chicago` — a second
+  implementation of the maths in `@sabeel/shared`, free to drift, and the exact
+  duplication the project rejected when it chose to STORE `effectiveActive`
+  rather than derive it in rules. So `firestore.rules` gates a recording's
+  metadata on an active grant, and `getPlaybackUrl` gates the audio on the date.
+  The split is visible in the product: a missed recording is still listed, with
+  the date it closed, and cannot be played. The 12-hour signed URL still means a
+  student who pressed play on the due date finishes their session — the same
+  accepted consequence already documented for unenrolment.
+
+- 2026-08-14 — **A grant does NOT go inactive when its deadline passes.**
+  Tempting, and wrong: `active:false` is what the ledger reads to count who was
+  required to listen, so expiring the flag would erase the record of everyone who
+  missed something. Expiry is a function of the date instead
+  (`hasRecordingAccess`), which also means it needs no scheduled job to happen.
+  Completion is checked BEFORE the deadline, so someone who listened in time is
+  never later recast as having missed it.
+
+- 2026-08-14 — **A student's own attendance mark needs its own document.**
+  Attendance is a map on the session, and `/sessions` is staff-only because the
+  map holds the whole roster. Firestore security is per-document: there is no
+  rule that reveals one key of a map to the student it belongs to, and no query
+  can ask "sessions where attendance[myUid] exists". So `submitAttendance` is
+  projected onto `attendanceRecords/{uid}_{sessionId}` by the same trigger that
+  reconciles the grants, reading stored truth rather than the event payload so it
+  converges however the writes interleave. The session stays canonical; date and
+  title are denormalised for the same reason the recording already denormalises
+  them — the reader cannot open the session they came from.
+
+- 2026-08-14 — **A due date is required, and is never written in the past.** It
+  is the day access closes, so a blank one would mean permanent access — the most
+  permissive setting in the product reachable by leaving a field alone. It
+  prefills to the session date plus 7 days. One invariant covers three callables:
+  `createSession` and `updateSession` refuse a past date, and `submitAttendance`
+  refuses to mark anyone EXCUSED once the deadline has gone, so nothing is ever
+  born expired. Publishing onto a past-due session is refused for the same
+  reason. Deliberately narrow: correcting an old session to present/absent still
+  works, so the attendance report stays correctable.
+
+- 2026-08-14 — **"Missed", not "overdue", once access has closed.** Overdue
+  implies the work is still doable and it no longer is. One word for one state,
+  in the student's list, the staff ledger and the CSV headers alike.
+
+- 2026-08-14 — **The emulator suite was testing yesterday's triggers.** The
+  Functions emulator loads the BUILT bundle (`functions/lib`, per `main`), and
+  nothing in `scripts/test-emulator.sh` built it — so trigger behaviour under
+  test was whatever was last compiled, while the test bodies ran fresh source
+  through vitest. It passed either way, which is what made it invisible; it
+  surfaced only because the excused-only fan-out was live in `src` and the
+  emulator kept assigning absentees from a two-day-old `lib`. The script now
+  builds first. Any change to a Firestore trigger before this date was verified
+  against a bundle nobody checked.
 
 - 2026-08-13 — **The course name in a header is the way back to the course**
   (Faisal's request). Sessions, one session, and the attendance report all
@@ -476,6 +546,37 @@ and commit messages, and renaming them would strand every one of those.
   reports nothing is worse than none.
 
 ## Verification log
+
+- 2026-08-14 — **Both new rule arms mutation-tested.** Opening the recordings
+  student arm to any published recording turned four assertions red — the two
+  new ones (never granted; grant withdrawn), the cross-course one, and the
+  get-only list denial — proving the arm, not the ambient enrolment check, is
+  what refuses. Opening `attendanceRecords` to any signed-in user turned five
+  red, including a student reading a classmate's mark and a student dropping the
+  `studentUid` filter to read the class. Restored, both files green: 34 tests.
+
+- 2026-08-14 — **The policy proven through the real triggers, end to end.** In
+  `npm run test:e2e`: marking the late student ABSENT grants them nothing (the
+  same action that used to create an obligation), then marking them EXCUSED
+  grants them, via the deployed `onSessionWritten`. The student's own mark
+  renders on their class page — out of a session document they can never read,
+  so it can only have come from the projection.
+
+- 2026-08-14 — **The deadline proven at the boundary, not just in the UI.** A
+  past due date planted out of band (no callable will write one) flows through
+  the real trigger to every grant; `getPlaybackUrl` then answers
+  `403 PERMISSION_DENIED "The due date for this recording has passed."` — asserted
+  against the callable directly rather than through the screen, because the
+  screen refuses first and would hide a server that had quietly stopped checking.
+  A recording completed in time stays Completed rather than being recast.
+
+- 2026-08-14 — **The screenshot caught what the exit code could not.** With every
+  check green, `24-past-due-player.png` showed the player still drawing a full
+  transport — play, skip, speed, scrubber — over a recording the server had
+  already refused, and the line "Available to listen until 2020-01-01" for a date
+  two years gone. Both fixed: the player now gates on the deadline the same way
+  it gates on an archived course, and states the closure. Correct logic survives
+  right up until you look at the rendered screen.
 
 - 2026-08-13 — **Both Sentry denials reproduced from their URLs, then fixed.**
   The events carried `source` tags (`session`, `myAssignments`) and request URLs

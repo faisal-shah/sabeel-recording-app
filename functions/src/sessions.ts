@@ -2,6 +2,8 @@ import { HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
+  INSTITUTE_TIMEZONE,
+  todayInZone,
   type AttendanceStatus,
   type CourseDoc,
   type EnrollmentDoc,
@@ -14,17 +16,39 @@ import { applyDeleteRecording } from './recordings';
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const ATTENDANCE: AttendanceStatus[] = ['present', 'absent', 'excused'];
 
+/**
+ * A session's due date is the day the excused lose access, so it is required and
+ * can never be WRITTEN in the past. It may only BECOME past by the passage of
+ * time — which is how a recording closes — but nothing may create a deadline
+ * that has already gone, because that is an obligation born unfulfillable.
+ *
+ * `today` is a parameter rather than a hidden `Date.now()` so the validators
+ * stay pure and testable at the day boundary, same discipline as `@sabeel/shared`.
+ */
+function validateDueDate(value: unknown, today: string): string {
+  if (typeof value !== 'string' || !DATE_ONLY.test(value)) {
+    throw new HttpsError('invalid-argument', 'A due date is required, as YYYY-MM-DD.');
+  }
+  if (value < today) {
+    throw new HttpsError('invalid-argument', 'A due date cannot be in the past.');
+  }
+  return value;
+}
+
 // ---------------------------------------------------------------- create --
 
 export interface CreateSessionInput {
   courseId: string;
   date: string;
   title: string;
-  dueDate: string | null;
+  dueDate: string;
   notes: string;
 }
 
-function validateCreateSession(data: unknown): CreateSessionInput {
+export function validateCreateSession(
+  data: unknown,
+  today: string = todayInZone(INSTITUTE_TIMEZONE),
+): CreateSessionInput {
   const d = data as Partial<CreateSessionInput> | null;
   if (typeof d?.courseId !== 'string' || !d.courseId) {
     throw new HttpsError('invalid-argument', 'courseId is required.');
@@ -35,11 +59,9 @@ function validateCreateSession(data: unknown): CreateSessionInput {
   const title = typeof d.title === 'string' ? d.title.trim() : '';
   if (!title) throw new HttpsError('invalid-argument', 'A title is required.');
   if (title.length > 200) throw new HttpsError('invalid-argument', 'That title is too long.');
-  if (d.dueDate != null && (typeof d.dueDate !== 'string' || !DATE_ONLY.test(d.dueDate))) {
-    throw new HttpsError('invalid-argument', 'dueDate must be YYYY-MM-DD or null.');
-  }
+  const dueDate = validateDueDate(d.dueDate, today);
   const notes = typeof d.notes === 'string' ? d.notes : '';
-  return { courseId: d.courseId, date: d.date, title, dueDate: d.dueDate ?? null, notes };
+  return { courseId: d.courseId, date: d.date, title, dueDate, notes };
 }
 
 export async function createSessionRecord(callerUid: string, input: CreateSessionInput) {
@@ -80,11 +102,14 @@ export interface UpdateSessionInput {
   sessionId: string;
   date?: string;
   title?: string;
-  dueDate?: string | null;
+  dueDate?: string;
   notes?: string;
 }
 
-function validateUpdateSession(data: unknown): UpdateSessionInput {
+export function validateUpdateSession(
+  data: unknown,
+  today: string = todayInZone(INSTITUTE_TIMEZONE),
+): UpdateSessionInput {
   const d = data as Partial<UpdateSessionInput> | null;
   if (typeof d?.sessionId !== 'string' || !d.sessionId) {
     throw new HttpsError('invalid-argument', 'sessionId is required.');
@@ -102,10 +127,9 @@ function validateUpdateSession(data: unknown): UpdateSessionInput {
     out.title = title;
   }
   if (d.dueDate !== undefined) {
-    if (d.dueDate !== null && (typeof d.dueDate !== 'string' || !DATE_ONLY.test(d.dueDate))) {
-      throw new HttpsError('invalid-argument', 'dueDate must be YYYY-MM-DD or null.');
-    }
-    out.dueDate = d.dueDate;
+    // Moving the deadline FORWARD is the documented way to reopen a session that
+    // has closed, so this is the recovery valve as well as a validator.
+    out.dueDate = validateDueDate(d.dueDate, today);
   }
   if (d.notes !== undefined) {
     if (typeof d.notes !== 'string') throw new HttpsError('invalid-argument', 'notes must be text.');
@@ -151,9 +175,16 @@ export const updateSession = auditedCall('updateSession', async (req, audit) => 
  *
  * Filtered to the ACTIVE roster so the snapshot only contains real, current
  * members — a student enrolled after this is simply absent from the map and
- * never assigned (accountability starts at enrollment). Setting
- * `attendanceSubmittedAt` is what unlocks assignment; the onSessionWritten
- * trigger then reconciles absent+excused → obligations.
+ * never granted anything (accountability starts at enrollment). Setting
+ * `attendanceSubmittedAt` is what unlocks the grant; the onSessionWritten
+ * trigger then reconciles the excused → obligations, and projects everyone's
+ * mark onto their own attendanceRecords row.
+ *
+ * Refuses to mark anyone EXCUSED once the due date has passed: an excused mark
+ * is the access grant, and granting access that expired yesterday produces a
+ * recording nobody can open and a ledger row nobody can clear. Correcting an old
+ * session to present/absent still works, so the attendance report stays
+ * correctable; to excuse someone late, move the session's due date first.
  */
 export const submitAttendance = auditedCall('submitAttendance', async (req, audit) => {
   const d = req.data as { sessionId?: unknown; attendance?: unknown };
@@ -178,6 +209,14 @@ export const submitAttendance = auditedCall('submitAttendance', async (req, audi
   const uid = await requireCourseScope(req, session.courseId);
   audit.courseId = session.courseId;
   audit.targets = { sessionId: d.sessionId };
+
+  const excusing = Object.values(raw).some((s) => s === 'excused');
+  if (excusing && session.dueDate < todayInZone(INSTITUTE_TIMEZONE)) {
+    throw new HttpsError(
+      'failed-precondition',
+      "This session's due date has passed. Move it before excusing anyone.",
+    );
+  }
 
   // Keep only active-enrolled students — the snapshot is the roster at submit time.
   const rosterSnap = await db

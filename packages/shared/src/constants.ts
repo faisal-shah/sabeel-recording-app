@@ -16,6 +16,10 @@ export const INSTITUTE_TIMEZONE = 'America/Chicago';
  *  days. From the brief's § Student home ordering. */
 export const DUE_SOON_DAYS = 7;
 
+/** How long after a session an excused student has to listen, by default. Staff
+ *  can change it per session; it only prefills the field, and cannot be blank. */
+export const DEFAULT_DUE_DAYS = 7;
+
 /**
  * Project id used against the emulator suite.
  *

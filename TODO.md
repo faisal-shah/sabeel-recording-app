@@ -184,14 +184,22 @@ One small deferral, not blocking: **source-map upload** (needs a Sentry auth
 token + a `prebuild`), so release stack traces are minified until then; the
 errors still report.
 
-### 1. Reword the password-reset email
+### 1. Nothing for the excused-only change
+
+It needs no console work. The one data step, `scripts/migrate-excused-only.mjs`,
+runs from the repo between the functions and hosting deploys — see
+`docs/DEPLOY.md`. Worth knowing before it runs: it drops active obligations from
+175 to roughly 49 on the current data, because being marked *absent* no longer
+grants anything. Nothing is deleted; the rows stay for the ledger.
+
+### 2. Reword the password-reset email
 
 Authentication → **Templates → Password reset**. Students receive it for an
 account they have never had a password on, so the default "reset your password"
 wording reads as though something has gone wrong. "Set your password for Sabeel
 Class Recordings" or similar.
 
-### ✅ 2. Android app registered — DONE (2026-07-23)
+### ✅ 3. Android app registered — DONE (2026-07-23)
 
 Faisal registered the Android app (`com.sabeelinstitute.classrecordings`) with the
 debug SHA-1 `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` and
@@ -205,7 +213,7 @@ Release. Staff Google sign-in on-device should now work; students already did.
 Still for a PUBLIC release (Phase 9): a dedicated **release keystore** (the APK is
 currently debug-signed) and **its** SHA-1 registered.
 
-### 3. Not blocking anything
+### 4. Not blocking anything
 
 - ✅ **Institute timezone** — set to `America/Chicago` (Houston) in Phase 4.
 - **App Check**: Play Integrity (Android) + reCAPTCHA Enterprise (web), plus

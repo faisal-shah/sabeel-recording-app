@@ -4,10 +4,12 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import {
   COLLECTIONS,
+  INSTITUTE_TIMEZONE,
   audioStoragePath,
   canTransition,
   isEmptyDraft,
   publishBlockers,
+  todayInZone,
   type RecordingDoc,
   type RecordingSource,
   type RecordingStatus,
@@ -217,6 +219,19 @@ export async function applyRecordingStatus(input: SetStatusInput) {
     const blockers = publishBlockers({ ...current, status: current.status });
     if (blockers.length > 0) {
       throw new HttpsError('failed-precondition', `Not ready to publish: ${blockers.join(', ')}.`);
+    }
+    // Publishing onto a session whose deadline has gone would grant the excused
+    // a recording that closed before it existed — an obligation nobody can
+    // fulfil and a ledger row nobody can clear. The deadline lives on the
+    // session, so it is checked here rather than in the pure publishBlockers.
+    const session = (
+      await db.collection(COLLECTIONS.sessions).doc(current.sessionId).get()
+    ).data() as SessionDoc | undefined;
+    if (session && session.dueDate < todayInZone(INSTITUTE_TIMEZONE)) {
+      throw new HttpsError(
+        'failed-precondition',
+        "This session's due date has passed. Move it before publishing, or nobody will be able to listen.",
+      );
     }
   }
 

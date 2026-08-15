@@ -25,14 +25,18 @@ import { getTheme, spacing } from '../theme';
 const t = getTheme();
 
 /**
- * The student's task-ordered home (brief § Student home ordering).
+ * The student's task-ordered home.
  *
- * Shows only REQUIRED listening — recordings with an active assignment — grouped
- * Overdue → Due soon → Upcoming → No due date → Completed. Accessible-but-not-
- * required recordings live in the course archive ("Browse all recordings"),
- * never here. The obligation's OWN due date is authoritative (a catch-up may
- * differ from the recording's), so bucketing reads the assignment, not the
- * recording.
+ * Every recording a student can reach is here, because a recording is granted by
+ * being excused and that grant is exactly what makes it required. So this is at
+ * once the to-do list and the whole of what they may listen to — there is no
+ * separate browsable archive, and nothing to show that is "available but not
+ * required".
+ *
+ * Grouped Missed → Due soon → Upcoming → Completed. A missed row is kept rather
+ * than hidden: access closed, and a student is owed the record of what closed
+ * and when. The grant's OWN due date is authoritative, so bucketing reads the
+ * assignment, not the recording.
  */
 export function StudentHomeScreen({
   uid,
@@ -40,7 +44,7 @@ export function StudentHomeScreen({
   onBrowse,
 }: {
   uid: string;
-  onOpen: (recording: RecordingRow, cls: CourseRow) => void;
+  onOpen: (recording: RecordingRow, cls: CourseRow, dueDate: string) => void;
   onBrowse: () => void;
 }) {
   const listenerError = useListenerError();
@@ -77,43 +81,51 @@ export function StudentHomeScreen({
       .sort(
         (a, b) =>
           bucketRank(a.bucket) - bucketRank(b.bucket) ||
-          compareDue(a.dueDate, b.dueDate) ||
+          a.dueDate.localeCompare(b.dueDate) ||
           a.recording.title.localeCompare(b.recording.title),
       );
   }, [assignments, resolved, completions, today]);
 
   const groups: { bucket: DueBucket; label: string; rows: TaskRow[] }[] = [
-    { bucket: 'overdue', label: 'Overdue', rows: [] },
+    { bucket: 'missed', label: 'Missed', rows: [] },
     { bucket: 'dueSoon', label: 'Due soon', rows: [] },
     { bucket: 'upcoming', label: 'Upcoming', rows: [] },
-    { bucket: 'noDue', label: 'No due date', rows: [] },
     { bucket: 'done', label: 'Completed', rows: [] },
   ];
   for (const row of rows) groups.find((g) => g.bucket === row.bucket)?.rows.push(row);
 
   return (
-    <Screen title="Your listening" subtitle="Required recordings, most urgent first">
+    <Screen title="Your listening" subtitle="Recordings you were excused from, most urgent first">
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
 
       {rows.length === 0 ? (
-        <Empty>Nothing required right now. New recordings will appear here.</Empty>
+        <Empty>Nothing to listen to right now. New recordings will appear here.</Empty>
       ) : (
         groups
           .filter((g) => g.rows.length > 0)
           .map((g) => (
             <View key={g.bucket} style={styles.group}>
-              <Text style={[styles.groupLabel, g.bucket === 'overdue' ? styles.overdueLabel : null]}>
+              <Text style={[styles.groupLabel, g.bucket === 'missed' ? styles.missedLabel : null]}>
                 {g.label}
               </Text>
               {g.rows.map((row) => (
-                <TaskCard key={row.key} row={row} onOpen={() => onOpen(row.recording, row.cls)} />
+                <TaskCard
+                  key={row.key}
+                  row={row}
+                  onOpen={() => onOpen(row.recording, row.cls, row.dueDate)}
+                />
               ))}
             </View>
           ))
       )}
 
       <View style={styles.footer}>
-        <Button testID="nav-myrecordings" label="Browse all recordings" variant="secondary" onPress={onBrowse} />
+        <Button
+          testID="student-classes"
+          label="My classes"
+          variant="secondary"
+          onPress={onBrowse}
+        />
         <Button testID="sign-out" label="Sign out" variant="secondary" onPress={() => void signOut()} />
       </View>
     </Screen>
@@ -124,13 +136,48 @@ interface TaskRow {
   key: string;
   recording: RecordingRow;
   cls: CourseRow;
-  dueDate: string | null;
+  dueDate: string;
   bucket: DueBucket;
   pending: boolean;
 }
 
+/**
+ * A missed card is deliberately not a button. The server refuses to mint a URL
+ * past the due date, so opening it could only produce an error — and a card that
+ * looks tappable and then refuses reads as a fault in the app rather than a
+ * deadline the student missed.
+ */
 function TaskCard({ row, onOpen }: { row: TaskRow; onOpen: () => void }) {
   const done = row.bucket === 'done';
+  const missed = row.bucket === 'missed';
+  const body = (
+    <>
+      <View style={styles.cardMain}>
+        <Text style={[styles.title, done || missed ? styles.titleDone : null]}>
+          {row.recording.title}
+        </Text>
+        <Text style={styles.course}>{row.cls.name}</Text>
+      </View>
+      <View style={styles.cardMeta}>
+        {row.pending ? <Text style={styles.pending}>Pending sync</Text> : null}
+        {done ? (
+          <Text style={styles.doneChip}>Completed</Text>
+        ) : (
+          <Text style={[styles.due, missed ? styles.missed : null]}>
+            {missed ? `Closed ${row.dueDate}` : `Listen by ${row.dueDate}`}
+          </Text>
+        )}
+      </View>
+    </>
+  );
+
+  if (missed) {
+    return (
+      <View testID={`task-${row.recording.title}`} style={[styles.card, styles.cardMissed]}>
+        {body}
+      </View>
+    );
+  }
   return (
     <Pressable
       testID={`task-${row.recording.title}`}
@@ -139,20 +186,7 @@ function TaskCard({ row, onOpen }: { row: TaskRow; onOpen: () => void }) {
       onPress={onOpen}
       style={({ pressed }) => [styles.card, pressed ? styles.pressed : null]}
     >
-      <View style={styles.cardMain}>
-        <Text style={[styles.title, done ? styles.titleDone : null]}>{row.recording.title}</Text>
-        <Text style={styles.course}>{row.cls.name}</Text>
-      </View>
-      <View style={styles.cardMeta}>
-        {row.pending ? <Text style={styles.pending}>Pending sync</Text> : null}
-        {done ? (
-          <Text style={styles.doneChip}>Completed</Text>
-        ) : (
-          <Text style={[styles.due, row.bucket === 'overdue' ? styles.overdue : null]}>
-            {row.dueDate ? `Due ${row.dueDate}` : 'No due date'}
-          </Text>
-        )}
-      </View>
+      {body}
     </Pressable>
   );
 }
@@ -239,14 +273,6 @@ function useResolvedRecordings(
   return resolved;
 }
 
-/** Nulls (no due date) sort after real dates within their own bucket. */
-function compareDue(a: string | null, b: string | null): number {
-  if (a === b) return 0;
-  if (a === null) return 1;
-  if (b === null) return -1;
-  return a < b ? -1 : 1;
-}
-
 const styles = StyleSheet.create({
   group: { marginBottom: spacing(5) },
   groupLabel: {
@@ -257,7 +283,7 @@ const styles = StyleSheet.create({
     color: t.text.secondary,
     marginBottom: spacing(2),
   },
-  overdueLabel: { color: t.feedback.danger },
+  missedLabel: { color: t.feedback.danger },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -269,13 +295,14 @@ const styles = StyleSheet.create({
     borderColor: t.border.subtle,
   },
   pressed: { opacity: 0.85 },
+  cardMissed: { backgroundColor: t.bg.inset },
   cardMain: { flex: 1, paddingRight: spacing(3) },
   title: { fontSize: 16, fontWeight: '600', color: t.text.primary },
   titleDone: { color: t.text.secondary },
   course: { fontSize: 13, color: t.text.secondary, marginTop: spacing(1) },
   cardMeta: { alignItems: 'flex-end' },
   due: { fontSize: 13, color: t.text.secondary, fontVariant: ['tabular-nums'] },
-  overdue: { color: t.feedback.danger, fontWeight: '600' },
+  missed: { color: t.feedback.danger, fontWeight: '600' },
   doneChip: { fontSize: 13, color: t.feedback.success, fontWeight: '600' },
   pending: { fontSize: 12, color: t.feedback.warning, fontWeight: '600', marginBottom: spacing(1) },
   footer: { marginTop: spacing(4), gap: spacing(2) },

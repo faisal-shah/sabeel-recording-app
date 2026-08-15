@@ -141,22 +141,62 @@ service cloud.firestore {
     // ---- Recordings ----
     match /recordings/{recordingId} {
       // Same discipline as /courses and /enrollments: the admin arm reads no
-      // documents, and the other arms depend on resource.data, which is what
-      // forces a caller's query to be constrained. Ordering keeps the
-      // read-free arms first.
-      //
-      // The staff arm resolves a course lookup PER ROW, so it is affordable only
-      // for a query constrained to one courseId — which every staff recordings
-      // list is. A student's arm costs no reads at all.
+      // documents, and the staff arm depends on resource.data, which is what
+      // forces a staff query to be constrained. That arm resolves a course
+      // lookup PER ROW, so it is affordable only for a query constrained to one
+      // courseId — which every staff recordings list is.
       allow get, list: if isAdmin()
-        || (isStudent()
-            && resource.data.status == 'published'
-            && exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + resource.data.courseId)))
         || (isStaff() && request.auth.uid in
             get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.managerUids);
 
+      // A student reads a recording only through their own ASSIGNMENT — the
+      // document created because they were marked excused. Enrolment grants
+      // nothing on its own: a student who attended, or who was absent without
+      // being excused, has no assignment and therefore no recording.
+      //
+      // GET ONLY, deliberately. The assignment path is built from the PATH
+      // SEGMENT recordingId plus their own uid, so on a get it costs a fixed two
+      // calls; on a LIST it would cost two PER ROW and blow the per-query
+      // document-access cap. Students have no reason to list recordings — they
+      // list their own assignments, which needs no reads at all, and get each
+      // recording from that.
+      //
+      // The exists() is load-bearing, not defensive: get() on a document that
+      // does not exist yields a null resource, and dereferencing it is an
+      // evaluation ERROR, which refuses the read rather than answering it. The
+      // usual case here IS absence, so without the guard every student would
+      // trip an error instead of a clean denial.
+      allow get: if isStudent()
+        && resource.data.status == 'published'
+        && exists(/databases/$(database)/documents/assignments/$(request.auth.uid + '_' + recordingId))
+        && get(/databases/$(database)/documents/assignments/$(request.auth.uid + '_' + recordingId)).data.active == true;
+
       // Every mutation goes through a callable that re-checks course scope and
       // the lifecycle state machine.
+      allow write: if false;
+    }
+
+    // ---- Attendance records ----
+    // Document id is `${studentUid}_${sessionId}`. Each student's own copy of
+    // their mark for one session, projected server-side from the session's
+    // attendance map.
+    //
+    // It exists because Firestore security is per-document: there is no rule
+    // that shows a student their own key of `session.attendance` and hides the
+    // rest of the roster, so the only way to answer "was I marked present?" is a
+    // document that says so and nothing else. The session stays canonical and
+    // staff-only; this is derived from it and never written by a client.
+    //
+    // Read shape follows /assignments exactly: a student lists their own
+    // (constrained by studentUid), an admin reads with no document lookups, a
+    // manager resolves one course get() per row so their query must be scoped to
+    // a course.
+    match /attendanceRecords/{recordId} {
+      allow get, list: if (isStudent() && resource.data.studentUid == request.auth.uid)
+        || isAdmin()
+        || (isStaff() && request.auth.uid in
+            get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.managerUids);
+
       allow write: if false;
     }
 
@@ -211,12 +251,15 @@ service cloud.firestore {
     }
 
     // ---- Assignments ----
-    // Document id is `${studentUid}_${recordingId}`. The obligation itself:
-    // written ONLY by the server (the fan-out trigger and the callables), so
-    // every client write is denied. Reads follow the same read-free-arm-first,
-    // resource.data-constrained discipline as /enrollments — a student lists
-    // their own (constrained by studentUid), a manager reads their courses'
-    // (one class get() per row, affordable only for a query scoped to a class).
+    // Document id is `${studentUid}_${recordingId}`. The grant itself — both the
+    // permission to play a recording and the obligation to. Written ONLY by the
+    // server (the fan-out trigger and the callables), so every client write is
+    // denied; /recordings above reads it to decide whether a student may see a
+    // recording at all, which is why a client-writable one would hand out
+    // access. Reads follow the same read-free-arm-first, resource.data-
+    // constrained discipline as /enrollments — a student lists their own
+    // (constrained by studentUid), a manager reads their courses' (one class
+    // get() per row, affordable only for a query scoped to a class).
     match /assignments/{assignmentId} {
       allow get, list: if (isStudent() && resource.data.studentUid == request.auth.uid)
         || isAdmin()

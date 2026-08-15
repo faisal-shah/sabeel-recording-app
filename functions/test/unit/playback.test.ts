@@ -6,6 +6,9 @@ const activeCourse = { effectiveActive: true, archivedAccess: false, managerUids
 const archivedClosed = { effectiveActive: false, archivedAccess: false, managerUids: ['mgr'] };
 const archivedOpen = { effectiveActive: false, archivedAccess: true, managerUids: ['mgr'] };
 const published = { status: 'published' as const, audioPath: 'recordings/r/audio.m4a' };
+const TODAY = '2026-07-25';
+/** Excused, deadline still ahead — the only shape that opens a recording. */
+const granted = { active: true, dueDate: '2026-07-30' };
 
 const ask = (over: Partial<Parameters<typeof playbackDenial>[0]>) =>
   playbackDenial({
@@ -13,12 +16,13 @@ const ask = (over: Partial<Parameters<typeof playbackDenial>[0]>) =>
     recording: published,
     cls: activeCourse,
     uid: 'stu',
-    enrollmentActive: true,
+    assignment: granted,
+    today: TODAY,
     ...over,
   });
 
 describe('students', () => {
-  it('may play a published recording in a class they are enrolled in', () => {
+  it('may play a published recording they were excused from, before the deadline', () => {
     expect(ask({})).toBeNull();
   });
 
@@ -28,8 +32,20 @@ describe('students', () => {
     }
   });
 
-  it('may not play without an active enrolment', () => {
-    expect(ask({ enrollmentActive: false })).toBe('not-enrolled');
+  it('may not play a recording they were never granted', () => {
+    // Present and absent students have no assignment at all: enrolment on its
+    // own opens nothing.
+    expect(ask({ assignment: null })).toBe('not-assigned');
+  });
+
+  it('may not play once the grant has been withdrawn', () => {
+    // Corrected to present, unpublished, or unenrolled — all set active:false.
+    expect(ask({ assignment: { ...granted, active: false } })).toBe('not-assigned');
+  });
+
+  it('may play right up to the end of the due date, and not after', () => {
+    expect(ask({ assignment: { active: true, dueDate: TODAY } })).toBeNull();
+    expect(ask({ assignment: { active: true, dueDate: '2026-07-24' } })).toBe('past-due');
   });
 
   it('may not play from an archived class with listening turned off', () => {
@@ -56,6 +72,14 @@ describe('staff', () => {
     for (const status of ['draft', 'published', 'unpublished', 'needsAttention'] as const) {
       expect(ask({ claims: manager, uid: 'mgr', recording: { ...published, status } })).toBeNull();
     }
+  });
+
+  it('do not gate staff on an assignment or a deadline', () => {
+    // Staff are never excused from anything, so they never have an assignment.
+    // Gating them on one would lock every manager out of their own recordings.
+    expect(
+      ask({ claims: manager, uid: 'mgr', assignment: null, today: '2099-01-01' }),
+    ).toBeNull();
   });
 
   it('do not let a manager play a class they are not assigned to', () => {

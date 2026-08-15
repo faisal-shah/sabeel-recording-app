@@ -18,9 +18,15 @@ export const COLLECTIONS = {
   enrollments: 'enrollments',
   /** One dated meeting of a course: attendance + optional recording. */
   sessions: 'sessions',
+  /** Each student's own copy of their attendance mark for one session. A
+   *  server-written projection of the session's attendance map, which students
+   *  cannot read: Firestore has no field-level security, so the only way to
+   *  show a student their own mark is to give them a document holding it. */
+  attendanceRecords: 'attendanceRecords',
   /** Recording asset, media + lifecycle, linked to a session. */
   recordings: 'recordings',
-  /** Required-listening obligations (absentees of a session's recording). */
+  /** Required-listening obligations, and the ONLY thing granting a student
+   *  access to a recording (the excused of a session, until the due date). */
   assignments: 'assignments',
   /** Playback progress, listened percent, last listened, sync metadata. */
   listeningProgress: 'listeningProgress',

@@ -59,11 +59,6 @@ const shapes = [
     'recordings — staff library for a class',
     () => db.collection('recordings').where('courseId', '==', ID).orderBy('createdAt', 'desc'),
   ],
-  [
-    'recordings — published, for a student',
-    () =>
-      db.collection('recordings').where('courseId', '==', ID).where('status', '==', 'published'),
-  ],
   ['enrollments — a class roster', () => db.collection('enrollments').where('courseId', '==', ID)],
   [
     "enrollments — a student's courses",
@@ -96,16 +91,22 @@ const shapes = [
     () => db.collection('assignments').where('recordingId', '==', ID).where('active', '==', true),
   ],
   [
-    "assignments — a recording's publish rows (due-date edit)",
-    () => db.collection('assignments').where('recordingId', '==', ID).where('source', '==', 'publish'),
-  ],
-  [
     "assignments — a student's rows in a class (unenrol)",
     () => db.collection('assignments').where('studentUid', '==', ID).where('courseId', '==', ID),
   ],
   [
     'enrollments — active roster (fan-out)',
     () => db.collection('enrollments').where('courseId', '==', ID).where('active', '==', true),
+  ],
+  // ---- attendanceRecords: the student's own marks ----
+  [
+    "attendanceRecords — a student's marks in one class",
+    () =>
+      db.collection('attendanceRecords').where('studentUid', '==', ID).where('courseId', '==', ID),
+  ],
+  [
+    "attendanceRecords — a session's rows (mirror reconcile)",
+    () => db.collection('attendanceRecords').where('sessionId', '==', ID),
   ],
   [
     "completions — a student's own (home join)",

@@ -3,8 +3,10 @@ import {
   assignmentId,
   bucketRank,
   completionId,
+  addDays,
   daysUntilDue,
   dueBucket,
+  hasRecordingAccess,
   isOverdue,
   todayInZone,
   type DueBucket,
@@ -44,6 +46,21 @@ describe('daysUntilDue', () => {
   });
 });
 
+describe('addDays', () => {
+  it('shifts a civil date forward', () => {
+    expect(addDays('2026-07-25', 7)).toBe('2026-08-01');
+  });
+  it('crosses a month and a year end', () => {
+    expect(addDays('2026-12-28', 7)).toBe('2027-01-04');
+  });
+  it('is exact across a DST boundary (US DST ends 2026-11-01)', () => {
+    expect(addDays('2026-10-29', 7)).toBe('2026-11-05');
+  });
+  it('round-trips with daysUntilDue', () => {
+    expect(daysUntilDue(addDays('2026-07-25', 7), '2026-07-25')).toBe(7);
+  });
+});
+
 describe('isOverdue — the due date is the LAST on-time day', () => {
   it('is not overdue on the due date itself', () => {
     expect(isOverdue('2026-07-25', '2026-07-25')).toBe(false);
@@ -54,8 +71,22 @@ describe('isOverdue — the due date is the LAST on-time day', () => {
   it('is not overdue before the due date', () => {
     expect(isOverdue('2026-07-25', '2026-07-20')).toBe(false);
   });
-  it('a no-due assignment is never overdue', () => {
-    expect(isOverdue(null, '2999-01-01')).toBe(false);
+});
+
+describe('hasRecordingAccess — the whole of a student access decision', () => {
+  const OPEN = { active: true, dueDate: '2026-07-25' };
+
+  it('opens up to and including the due date', () => {
+    expect(hasRecordingAccess(OPEN, '2026-07-01')).toBe(true);
+    expect(hasRecordingAccess(OPEN, '2026-07-25')).toBe(true);
+  });
+
+  it('closes the day after the due date', () => {
+    expect(hasRecordingAccess(OPEN, '2026-07-26')).toBe(false);
+  });
+
+  it('an inactive grant is closed however far ahead of the due date', () => {
+    expect(hasRecordingAccess({ active: false, dueDate: '2999-01-01' }, '2026-07-25')).toBe(false);
   });
 });
 
@@ -64,18 +95,13 @@ describe('dueBucket', () => {
 
   it('completed wins over any due state', () => {
     expect(dueBucket({ dueDate: '2026-01-01', completed: true }, TODAY)).toBe('done');
-    expect(dueBucket({ dueDate: null, completed: true }, TODAY)).toBe('done');
   });
 
-  it('no due date, incomplete → noDue', () => {
-    expect(dueBucket({ dueDate: null, completed: false }, TODAY)).toBe('noDue');
+  it('past due, incomplete → missed', () => {
+    expect(dueBucket({ dueDate: '2026-07-24', completed: false }, TODAY)).toBe('missed');
   });
 
-  it('past due, incomplete → overdue', () => {
-    expect(dueBucket({ dueDate: '2026-07-24', completed: false }, TODAY)).toBe('overdue');
-  });
-
-  it('due today counts as dueSoon, not overdue', () => {
+  it('due today counts as dueSoon, not missed', () => {
     expect(dueBucket({ dueDate: '2026-07-25', completed: false }, TODAY)).toBe('dueSoon');
   });
 
@@ -89,8 +115,8 @@ describe('dueBucket', () => {
 });
 
 describe('bucketRank orders the home', () => {
-  it('overdue first, done last', () => {
-    const order: DueBucket[] = ['overdue', 'dueSoon', 'upcoming', 'noDue', 'done'];
+  it('missed first, done last', () => {
+    const order: DueBucket[] = ['missed', 'dueSoon', 'upcoming', 'done'];
     const ranks = order.map(bucketRank);
     expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
     expect(new Set(ranks).size).toBe(order.length);

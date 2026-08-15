@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { INSTITUTE_TIMEZONE, todayInZone } from '@sabeel/shared';
+import { DEFAULT_DUE_DAYS, INSTITUTE_TIMEZONE, addDays, todayInZone } from '@sabeel/shared';
 import { Button, Card, Empty, Field, Notice, Screen, SectionTitle } from '../components/ui';
 import { DateField } from '../components/DateField';
 import { createSession, useCourseSessions, type SessionRow } from '../sessions';
@@ -29,7 +29,18 @@ export function SessionsScreen({
   const sessions = useCourseSessions(courseId);
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(todayInZone(INSTITUTE_TIMEZONE));
-  const [dueDate, setDueDate] = useState('');
+  // Prefilled from the meeting date and kept in step with it until staff edit it
+  // themselves. It cannot be blank: the due date is the day access closes, so an
+  // empty one would mean a recording that never closes.
+  const [dueDate, setDueDate] = useState(() =>
+    addDays(todayInZone(INSTITUTE_TIMEZONE), DEFAULT_DUE_DAYS),
+  );
+  const [dueEdited, setDueEdited] = useState(false);
+
+  const changeDate = (next: string) => {
+    setDate(next);
+    if (!dueEdited && next) setDueDate(addDays(next, DEFAULT_DUE_DAYS));
+  };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,11 +53,12 @@ export function SessionsScreen({
           courseId,
           date,
           title: title.trim(),
-          dueDate: dueDate.trim() ? dueDate.trim() : null,
+          dueDate: dueDate.trim(),
           notes: '',
         });
         setTitle('');
-        setDueDate('');
+        setDueEdited(false);
+        setDueDate(addDays(date, DEFAULT_DUE_DAYS));
       } catch (e) {
         setError((e as Error).message);
       } finally {
@@ -68,13 +80,20 @@ export function SessionsScreen({
           autoCapitalize="words"
           placeholder="Session 1 — Introduction"
         />
-        <DateField label="Date of the meeting" value={date} onChange={setDate} />
-        <DateField label="Due date for absentees (optional)" value={dueDate} onChange={setDueDate} />
+        <DateField label="Date of the meeting" value={date} onChange={changeDate} />
+        <DateField
+          label="Listen by"
+          value={dueDate}
+          onChange={(v) => {
+            setDueEdited(true);
+            setDueDate(v);
+          }}
+        />
         <Button
           testID="session-create"
           label="Create session"
           busy={busy}
-          disabled={!title.trim() || !date}
+          disabled={!title.trim() || !date || !dueDate}
           onPress={add}
         />
       </Card>

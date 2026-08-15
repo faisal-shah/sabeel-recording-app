@@ -8,9 +8,9 @@ The app is not a general LMS. It is a focused platform for class recordings, req
 
 ## Product principles
 
-- **Adult learner tone:** respectful and direct. Use language such as required listening, due, overdue, completed, and pending sync. Avoid childish, punitive, or shaming language.
+- **Adult learner tone:** respectful and direct. Use language such as required listening, listen by, missed, completed, and pending sync. Say **missed** rather than overdue once access has closed — overdue implies the work is still doable. Avoid childish, punitive, or shaming language.
 - **Action first, full data second:** default views should show what needs attention. Complete sortable list views are still available for students and staff when they need full visibility.
-- **Access and accountability are separate:** class membership controls access to class recordings. Assignment controls whether a recording is required listening in the accountability ledger.
+- **Being excused is the entitlement:** a recording opens to exactly the students marked excused for its session, and closes to them when the due date passes. The same fact makes it required listening. Access and accountability were separate principles until 2026-08-14; they are now deliberately one.
 - **Audio first:** the first release is audio-only. Do not expose Zoom video playback in the MVP.
 - **Professional UX:** the app should feel polished, calm, and easy to use for every role. Avoid a wall of recordings as content grows.
 - **Sabeel visual system:** use the Sabeel Institute light theme and brand palette through semantic design tokens. Do not introduce a dark mode.
@@ -66,10 +66,11 @@ Cohort/Semester -> Course -> Session -> Recording
 
 ### Attendance
 
-- Attendance is taken **per session**, in-app, by staff: each enrolled student is marked **present**, **absent**, or **excused**, with an explicit **submit** step. Until attendance is submitted, nobody is assigned even if a recording is published.
-- The submitted attendance is a **snapshot**: it drives who is accountable for that session's recording, and it is what makes accountability start at enrollment (a student not enrolled when attendance was taken is simply not in the snapshot).
-- `present` exempts a student from the recording (they were there). `absent` and `excused` both make the recording required listening; they differ only for attendance reporting. "Everyone must listen" is expressed by marking everyone absent.
-- Attendance is staff-read only. Students never read a session or its attendance — they only ever see their own obligation.
+- Attendance is taken **per session**, in-app, by staff: each enrolled student is marked **present**, **absent**, or **excused**, with an explicit **submit** step. Until attendance is submitted, nobody is granted anything even if a recording is published.
+- The submitted attendance is a **snapshot**: it decides who may hear that session's recording, and it is what makes accountability start at enrollment (a student not enrolled when attendance was taken is simply not in the snapshot).
+- **`excused` is the only mark that gives a student anything.** It opens the recording *and* makes listening required, until the session's due date. `present` needs nothing; `absent` is an unexcused miss and opens nothing. "Everyone must listen" is expressed by marking everyone **excused**.
+- Staff cannot excuse anyone for a session whose due date has already passed — that would create an obligation nobody can meet. To let someone catch up late, move the session's due date forward first.
+- Attendance is staff-read only in the sense that nobody sees the roster's marks but staff. Each student sees **their own** mark, on their own class page, from a server-written projection — Firestore has no field-level security, so there is no way to reveal one key of the session's map and hide the rest.
 
 ### Archived course access
 
@@ -77,7 +78,7 @@ Cohort/Semester -> Course -> Session -> Recording
 - When a course is archived, the default setting is to turn off student access to recordings.
 - Staff can explicitly keep archived course recordings available.
 - If access is off, students can still see the course/history, but playback is disabled with a clear message.
-- When a course is archived, active overdue reminders and active accountability counts stop. Final ledger history remains available for reporting and audit.
+- When a course is archived, active reminders and active accountability counts stop. Final ledger history remains available for reporting and audit.
 
 ## Recording ingestion
 
@@ -156,53 +157,53 @@ Permanent deletion of recordings, students, courses, or ledger history is Admin-
 
 ### Core rule
 
-Course membership grants access to all recordings in that course. **Attendance** creates required listening in the accountability ledger: assignment is attendance-driven.
+**By default no student can open any recording.** The students marked **excused** for a session are granted its recording, and that same grant is what makes listening to it required. Students marked **present** or **absent** are granted nothing: enrolment on its own opens no audio at all.
 
-For a session, the students marked **absent** or **excused** are assigned its recording (it is required listening — they missed the content). Students marked **present** are exempt; they may still listen and their listening is shown to staff, but they are never overdue or flagged incomplete. Assignment happens once the recording is **published** AND attendance has been **submitted**; changing either — publishing, unpublishing, or re-submitting a corrected attendance — reconciles the obligations, deactivating an assignment (while keeping its completion/progress history) if a student is no longer accountable.
+The grant appears once the recording is **published** AND attendance has been **submitted**, and changing either — publishing, unpublishing, or re-submitting a corrected attendance — reconciles it, deactivating a grant (while keeping its completion/progress history) if a student is no longer excused.
 
-There is no separate "assign to everyone" action and no per-recording roster fan-out. "Everyone must listen" is expressed by marking everyone absent for that session.
+The grant **closes when the session's due date passes**. It is not deleted: the row stays active so the ledger still records who was required to listen and did not, and the student still sees it, marked **Missed** with the date it closed. Staff reopen it by moving the session's due date forward.
+
+There is no separate "assign to everyone" action and no per-recording roster fan-out. "Everyone must listen" is expressed by marking everyone **excused** for that session.
 
 ### Late enrollment
 
-Late-registered students can view all recordings in the course.
+Accountability starts at enrollment: a student is only ever granted sessions whose attendance was taken **after** they enrolled (they are in that session's snapshot). A student enrolled after a session's attendance was submitted is never retroactively granted it. To let a late enrollee catch up on an earlier session, staff re-take that session's attendance and mark them **excused** — re-submitting reconciles and grants them. If that session's due date has already passed, staff move it forward first.
 
-Accountability starts at enrollment: a student is only ever accountable for sessions whose attendance was taken **after** they enrolled (they are in that session's snapshot). A student enrolled after a session's attendance was submitted is never retroactively assigned it. To make a late enrollee accountable for an earlier session, staff re-take that session's attendance and mark them absent — re-submitting reconciles and assigns them.
-
-Older accessible recordings that a student is not accountable for appear in the course archive as not required/not assigned. They do not appear in the student's required-listening home list.
-
-Students can listen to and mark accessible unassigned recordings complete. Staff can see this history, but it does not count as required accountability or overdue work.
+There is no course archive to browse: a student's list of what they may listen to *is* their list of what they must listen to, because one fact produces both.
 
 ### Due dates
 
-- Assignments can have a due date or no due date.
-- Due dates are date-only, not date-and-time.
-- No-due assignments are still required.
-- No-due assignments appear under **No due date**.
-- No-due assignments never become overdue and do not generate overdue notifications.
+- **Every session has a due date. It is required, and it is the day access closes.** A blank one would mean permanent access — the most permissive setting reachable by leaving a field alone.
+- It prefills to the session date plus 7 days and staff can change it.
+- Due dates are date-only, not date-and-time, in the institute timezone.
+- The due date is the last on-time day: a recording due the 25th is open all through the 25th and closes on the 26th.
+- A due date may **become** past by the passage of time, but nothing ever writes one that has already gone. Publishing a recording onto a session whose deadline has passed is refused, as is excusing anyone for it.
+- A student who has already pressed play keeps that playback session: a signed URL lives up to 12 hours from minting. Individual URLs cannot be revoked, which is a documented and accepted property of the design.
 
 ## Student experience
 
 ### Student home
 
-Student home is task-oriented, not a complete recording archive.
+Student home is the whole of what a student may listen to, ordered by urgency — because being granted a recording and being required to listen to it are now the same fact, there is nothing accessible-but-optional to separate out.
 
 Priority order:
 
-1. Overdue
+1. Missed
 2. Due soon
-3. No due date
+3. Upcoming
 4. Completed/recent history
 
 Due soon means incomplete recordings due within the next 7 days.
 
-Students also have complete sortable list views relevant to them, but those are secondary to the default action view.
+A **Missed** card stays on the list rather than disappearing: a student is owed the record of what closed and when. It is not a play target — the server refuses to mint a URL past the deadline, and a card that looks tappable and then errors reads as a fault in the app rather than a deadline missed.
 
 ### Class views
 
-- Active classes appear by default.
-- Archived/inactive classes are available through history/archive according to access settings.
-- Students can browse class recordings, including older recordings they can access but that are not assigned.
-- Unassigned accessible recordings should be labeled clearly as not required/not assigned.
+Students have a page per class showing **their own attendance record**: a tally of present / absent / excused, then every session they were marked in, with their own mark and its date. An excused row also says that a recording was required and whether they have listened to it.
+
+- It is a record, not a second way to play: listening happens on the home screen, which is the one place a recording is opened.
+- Sessions whose attendance was taken before the student enrolled are simply not in their record.
+- No student ever sees another student's mark, or the roster's.
 
 ### Playback
 
@@ -227,6 +228,7 @@ Completion is student-attested. Playback progress is audit evidence.
 
 - Students manually mark a recording complete.
 - The app blocks completion if the student has never played the recording.
+- A recording completed **in time** is never recast as missed, however far past its due date the ledger is read.
 - There is no required listened-percentage threshold.
 - The ledger shows listened percent, last listened, completion time, and pending sync state.
 - Students can see their own full accountability details.
@@ -299,10 +301,10 @@ The ledger should help staff find action items without inspecting every student 
 
 ### Primary views
 
-1. **Recording ledger:** split by the session's attendance — the **accountable** set (absent + excused, with the excused flagged) shown with completion/overdue, and the **attendees** (present) shown with their listening but never overdue or required. A residual "also listened" catches anyone who listened without being accountable or a recorded attendee.
+1. **Recording ledger:** split by the session's attendance — the **excused**, shown with completion and missed state; the **present** and the **absent**, neither required nor able to open it, listed so the ledger still accounts for the whole submitted roster. A residual "also listened" catches listening from someone who holds no current grant (excused, listened, then corrected to present).
 2. **Student ledger:** all assigned recordings for a student, filterable by course and status.
-3. **Course-level views:** grouped by cohort/course with incomplete and overdue counts.
-4. **Attendance report:** per course, a toggle between a by-session summary (present/absent/excused counts, un-taken sessions flagged) and a by-student summary (attendance tallies + catch-up status: of the sessions each student missed, how many recordings are complete/overdue). CSV export per cut.
+3. **Course-level views:** grouped by cohort/course with incomplete and missed counts.
+4. **Attendance report:** per course, a toggle between a by-session summary (present/absent/excused counts, un-taken sessions flagged) and a by-student summary (attendance tallies + catch-up status: of the sessions each student was excused from, how many recordings are complete/missed). CSV export per cut.
 
 ### Recording ledger fields
 
@@ -314,7 +316,7 @@ The ledger should help staff find action items without inspecting every student 
 - Pending sync where relevant
 - Override status/reason where relevant
 
-Default staff workflow should make it easy to filter to not complete or overdue students.
+Default staff workflow should make it easy to filter to not complete or missed students.
 
 ### Staff overrides
 
@@ -332,17 +334,13 @@ Exports should reflect the same filters used on screen.
 
 ## Notifications
 
-Student push notifications are first-class scope.
+Push notifications are first-class scope for students and staff alike. Three messages, no more:
 
-Default notification behavior:
+1. **Student — a recording is ready for you.** Fires once when a student is excused and the recording is published. Under the excused-only policy this is also "you now have access", so without it a student has no way to know a recording appeared.
+2. **Student — last day to listen.** On the morning of the due date, if not yet complete. There is no day-after reminder: once the deadline passes there is no action left to take, so a message could only say "you missed it".
+3. **Staff — attendance still not taken.** A session whose date has passed with attendance never submitted. Load-bearing under this policy: no attendance means nobody is granted anything, so an un-taken sheet silently locks a whole class out of a published recording.
 
-- Notify when a recording is assigned.
-- If overdue, notify the next day.
-- Continue daily overdue reminders until the student marks complete.
-
-Students can turn all recording notifications on or off. Notifications are a convenience for students, not the accountability mechanism.
-
-Staff do not need push/email notifications initially. Staff rely on in-app dashboard counts, filters, and ledger views.
+Each has its own on/off switch, per person, defaulting on. Notifications are a convenience, not the accountability mechanism.
 
 ## Data policy and audit history
 
@@ -361,17 +359,16 @@ Staff do not need push/email notifications initially. Staff rely on in-app dashb
 - Gamification.
 - External audio file downloads.
 - Video playback.
-- Staff push/email notifications.
+- Email notifications of any kind (push only).
 
 ## Feature checklist
 
 ### Student
 
 - Email/password login.
-- View active classes.
-- View archived/history classes according to access settings.
-- See required listening grouped by overdue, due soon, no due date, and recent/completed.
-- Browse accessible class recordings.
+- View the classes they are enrolled in.
+- See required listening grouped by missed, due soon, upcoming, and recent/completed.
+- See their own attendance record for each class.
 - Stream audio.
 - Download audio inside the app for offline listening.
 - Manage downloaded recordings and see storage usage.
@@ -449,10 +446,11 @@ This is not the final schema. It captures the product objects that need first-cl
 | `students` | Student identity, active/disabled state, and profile fields. |
 | `cohorts` | Cohort/semester records and archive state. |
 | `courses` | Courses (the subject) inside cohorts, archive state, and archived-access setting. |
-| `sessions` | One dated meeting of a course: attendance (present/absent/excused snapshot + submitted marker), date, title, due date, notes, and its 0..1 `recordingId`. Staff-read only. |
+| `sessions` | One dated meeting of a course: attendance (present/absent/excused snapshot + submitted marker), date, title, required due date, notes, and its 0..1 `recordingId`. Staff-read only. |
+| `attendanceRecords` | Each student's own copy of their mark for one session, keyed `{studentUid}_{sessionId}`. A server-written projection of the session's map — the only way a student can be shown their own mark, since Firestore security is per-document. |
 | `enrollments` | Student membership in courses over time. |
 | `recordings` | Recording asset for a session (`sessionId`), status, source (`manual`/`zoom`), audio path/duration/size, and the denormalised student-facing title/notes/date. |
-| `assignments` | Required-listening obligations, one per accountable (absent/excused) student × recording, reconciled from the session's attendance. `active:false` retains history. |
+| `assignments` | The grant: one per **excused** student × recording, reconciled from the session's attendance. Both the permission to play and the obligation to listen. `active:false` retains history; the due date closes it without deleting it. |
 | `listeningProgress` | Playback progress, listened percent, last listened, and device/sync metadata. |
 | `completions` / `completionEvents` | Student completion state doc and the append-only event log; `completionOverrides` holds staff overrides (server-only). |
 | `notifications` | Student notification preferences and sent notification records. |

@@ -109,30 +109,30 @@ export function enrollmentId(studentUid: string, courseId: string): string {
 /**
  * A student's attendance for one session.
  *
- * `present` exempts them from the recording (they were there). `absent` and
- * `excused` both make the recording required listening — they missed the
- * content either way — and differ only for attendance reporting.
+ * `excused` is the ONLY status that gives a student anything. It grants access
+ * to the session's recording AND makes listening to it required, until the
+ * session's due date. `present` needs nothing (they were there) and `absent` is
+ * an unexcused miss — neither can open the recording. Staff say "everyone must
+ * listen" by excusing everyone.
  */
 export type AttendanceStatus = 'present' | 'absent' | 'excused';
 
-/** The two statuses that make a student accountable for the session's recording. */
-export function isAccountableAttendance(s: AttendanceStatus): boolean {
-  return s === 'absent' || s === 'excused';
-}
-
 /**
- * The uids from a session's attendance who must catch up (absent or excused) —
- * the assignment target. Students not in the map (e.g. enrolled after attendance
- * was taken) are intentionally excluded: accountability starts at enrollment.
+ * The uids a session's recording is granted to: the excused.
+ *
+ * This is the assignment target, and because an assignment is now also the
+ * access grant, it is the whole of who may ever play that recording. Students
+ * not in the map (e.g. enrolled after attendance was taken) are intentionally
+ * excluded: accountability starts at enrollment.
  */
 export function accountableUids(attendance: Record<string, AttendanceStatus>): string[] {
   return Object.entries(attendance)
-    .filter(([, s]) => isAccountableAttendance(s))
+    .filter(([, s]) => s === 'excused')
     .map(([uid]) => uid);
 }
 
-/** A session's roster split by status. `absent ∪ excused` is the accountable set;
- *  `present` are the attendees (may still listen, never overdue). */
+/** A session's roster split by status. `excused` is the granted set; `present`
+ *  and `absent` get nothing, and differ only for attendance reporting. */
 export interface AttendanceGroups {
   present: string[];
   absent: string[];
@@ -154,10 +154,13 @@ export function attendanceGroups(attendance: Record<string, AttendanceStatus>): 
  * `attendance` is the submitted roster SNAPSHOT (present/absent/excused per
  * student). It is what makes obligations attendance-driven AND what implements
  * "accountable from enrollment onward": a student who was not enrolled when
- * attendance was taken is simply not in the map, so is never assigned this
+ * attendance was taken is simply not in the map, so is never granted this
  * session's recording. `attendanceSubmittedAt` is the explicit submit — until it
- * is set, nobody is assigned even if a recording is published. Staff-read only;
- * students never read a session or its attendance.
+ * is set, nobody is granted anything even if a recording is published.
+ *
+ * Staff-read only; students never read a session or its attendance. Each
+ * student's own mark is projected onto an `attendanceRecords` document instead,
+ * because Firestore cannot hide one key of a map from one reader.
  */
 export interface SessionDoc {
   courseId: string;
@@ -165,9 +168,13 @@ export interface SessionDoc {
   /** The meeting date, date-only `YYYY-MM-DD` in the institute timezone. */
   date: string;
   title: string;
-  /** Date-only `YYYY-MM-DD` due date for absentees, or null ("required, never
-   *  overdue"). Manual per session. */
-  dueDate: string | null;
+  /**
+   * Date-only `YYYY-MM-DD` — the day the excused must have listened BY, and the
+   * day their access closes. Required, never null: a blank deadline would mean
+   * permanent access, which is the most permissive setting reachable by leaving
+   * a field alone. Never written with a date already in the past.
+   */
+  dueDate: string;
   /** Shared with everyone who can access the recording — not private staff notes. */
   notes: string;
   /** The session's recording, if one has been added yet. */
@@ -180,4 +187,39 @@ export interface SessionDoc {
   createdAt: number;
   createdBy: string;
   updatedAt: number;
+}
+
+/**
+ * One student's own copy of their attendance mark for one session.
+ *
+ * A server-written projection of `SessionDoc.attendance`, and the only way a
+ * student can be shown their own mark: Firestore security is per-document, so
+ * there is no rule that reveals one key of the session's map and hides the rest.
+ * The session remains canonical; this is reconciled from it, never the reverse.
+ *
+ * `date` and `title` are denormalised for the same reason the recording
+ * denormalises them — the reader cannot open the session they came from. There
+ * is deliberately no `dueDate` or `recordingId` here: the student's own
+ * `assignments` row already carries both, and joining on `sessionId` costs
+ * nothing.
+ *
+ * Document id is `${studentUid}_${sessionId}`, so reconciling is idempotent and
+ * a student's query is `where('studentUid','==',uid)`.
+ */
+export interface AttendanceRecordDoc {
+  studentUid: string;
+  sessionId: string;
+  courseId: string;
+  cohortId: string;
+  /** The meeting date, denormalised from the session. */
+  date: string;
+  /** The session title, denormalised from the session. */
+  title: string;
+  status: AttendanceStatus;
+  /** The session's `attendanceSubmittedAt` this row was projected from. */
+  submittedAt: number;
+}
+
+export function attendanceRecordId(studentUid: string, sessionId: string): string {
+  return `${studentUid}_${sessionId}`;
 }

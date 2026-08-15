@@ -31,7 +31,8 @@ import { StudentLedgerScreen } from './src/screens/StudentLedgerScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { ZoomImportScreen } from './src/screens/ZoomImportScreen';
 import { AuditScreen } from './src/screens/AuditScreen';
-import { MyRecordingsScreen } from './src/screens/MyRecordingsScreen';
+import { StudentAttendanceScreen } from './src/screens/StudentAttendanceScreen';
+import { StudentCoursesScreen } from './src/screens/StudentCoursesScreen';
 import { StudentHomeScreen } from './src/screens/StudentHomeScreen';
 import { PlayerScreen } from './src/screens/PlayerScreen';
 import { MyCoursesScreen } from './src/screens/MyCoursesScreen';
@@ -93,7 +94,8 @@ const STAFF_PATHS = {
 
 const STUDENT_PATHS = {
   ...SHARED_PATHS,
-  MyRecordings: 'my-recordings',
+  MyClasses: 'my-classes',
+  MyClassRecord: 'my-classes/:courseId',
 } as const;
 
 /**
@@ -246,9 +248,14 @@ export default function App() {
                 signed into it — see the note on the path tables above. Adding a
                 screen to both arms puts it back within reach of both populations. */}
             {isStudent ? (
-              <Stack.Screen name="MyRecordings" options={{ title: 'Recordings' }}>
-                {() => <MyRecordings uid={user.uid} />}
-              </Stack.Screen>
+              <>
+                <Stack.Screen name="MyClasses" options={{ title: 'Your classes' }}>
+                  {() => <MyClasses uid={user.uid} />}
+                </Stack.Screen>
+                <Stack.Screen name="MyClassRecord" options={{ title: 'Attendance' }}>
+                  {() => <MyClassRecord uid={user.uid} />}
+                </Stack.Screen>
+              </>
             ) : (
               <>
                 <Stack.Screen name="Staff" options={{ title: 'Staff' }}>
@@ -338,8 +345,12 @@ function Landing({ name, role, uid }: { name: string; role: Role; uid: string })
     return (
       <StudentHomeScreen
         uid={uid}
-        onOpen={(recording) => navigation.navigate('Player', { recordingId: recording.id })}
-        onBrowse={() => navigation.navigate('MyRecordings')}
+        // The student's OWN deadline, not the session's: it is the day their
+        // access closes, so the player has to be able to say so.
+        onOpen={(recording, _cls, dueDate) =>
+          navigation.navigate('Player', { recordingId: recording.id, dueDate })
+        }
+        onBrowse={() => navigation.navigate('MyClasses')}
       />
     );
   }
@@ -474,14 +485,22 @@ function SessionDetail({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
-function MyRecordings({ uid }: { uid: string }) {
+function MyClasses({ uid }: { uid: string }) {
   const navigation = useNavigation<Nav>();
   return (
-    <MyRecordingsScreen
+    <StudentCoursesScreen
       uid={uid}
-      onOpen={(recording) => navigation.navigate('Player', { recordingId: recording.id })}
+      onOpen={(courseId) => navigation.navigate('MyClassRecord', { courseId })}
     />
   );
+}
+
+function MyClassRecord({ uid }: { uid: string }) {
+  const { courseId } = useRoute<RouteProp<RootStackParamList, 'MyClassRecord'>>().params;
+  const cls = useCourseState(courseId);
+  const gate = resolve(cls, 'course');
+  if (gate || !cls.value) return gate;
+  return <StudentAttendanceScreen uid={uid} cls={cls.value} />;
 }
 
 function Play({ studentUid }: { studentUid: string | null }) {

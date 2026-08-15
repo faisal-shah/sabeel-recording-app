@@ -21,18 +21,19 @@ a phone** and once **on a computer**, so you can recognize it wherever you are.
    video. They stream in the app; nothing is downloaded to fill up your phone,
    and each play link is freshly issued and expires, so recordings stay inside
    the app.
-2. **The app is mostly for catching up on a class you missed.** Staff take
-   **attendance** for each meeting. If you were **absent** (or **excused**), the
-   recording of that meeting becomes *required listening* for you and appears on
-   your home screen. If you were **present**, you're not on the hook — you may
-   still listen, but nothing is due.
+2. **The app is for catching up on a class you were excused from.** Staff take
+   **attendance** for each meeting. If they mark you **excused**, that meeting's
+   recording opens to you and becomes *required listening* — it appears on your
+   home screen with a date to listen by, and closes again after it. If you were
+   **present**, you don't need it. If you were **absent** without being excused,
+   it isn't opened to you. Being excused is the whole of it.
 3. **You mark your own listening complete.** The app saves your place and shows
    how much you've heard, but *you* decide when you're done — it is on your
    honor. (The one rule: you have to have pressed play at least once.)
 4. **Staff can see who has caught up.** For every recording there is a ledger:
-   of the students who missed the class, who has finished and who is overdue —
-   plus, for reference, which attendees listened anyway. Staff can export it and,
-   with a written reason, mark a completion on someone's behalf.
+   of the students who were excused, who has finished and who missed the date —
+   plus, for the record, who was present and who was absent. Staff can export it
+   and, with a written reason, mark a completion on someone's behalf.
 5. **Everything important is written down.** Approvals, overrides and edits are
    recorded in an audit history that admins can review.
 
@@ -67,23 +68,34 @@ don't need it.
 <figure class="wd"><img src="manual/img/02-student-home-desktop.png" alt="Student home on a computer"><figcaption>On a computer</figcaption></figure>
 </div>
 
-This is your home screen — **Your listening**, the recordings you need to catch
-up on because you missed the class, most urgent first. It's grouped so nothing
-slips past you:
+This is your home screen — **Your listening**. It holds every recording that has
+been opened to you, most urgent first.
 
-- **Overdue** — required listening whose due date has passed. Shown in red.
-- **Due soon** — required, with a due date still ahead.
+**A recording is opened to you when your teacher marks you *excused* for that
+class.** That is the whole rule. If you were there, you don't need it; if you
+missed a class without being excused, it isn't opened to you. So this one list is
+both what you *may* listen to and what you *need* to listen to — there is no
+separate archive to go hunting through.
+
+It's grouped so nothing slips past you:
+
+- **Missed** — the date to listen by has passed. Shown in red, with the date it
+  closed.
+- **Due soon** — the date to listen by is within the next week.
+- **Upcoming** — opened to you, with more time.
 - **Completed** — recordings you've already marked done.
 
-Each card shows the recording's title, which course it's from, and its due date
-(or **Completed**). Tap any card to open it and listen.
+Each card shows the recording's title, which class it's from, and **Listen by**
+its date. Tap any card to open it and listen.
 
-If a recording has *no* due date, it's still required, but it waits quietly here
-without nagging you — it will show without a date rather than as overdue.
+**Every recording has a closing date.** After it passes you can no longer play
+that recording — the card stays on your list marked *Missed*, so you can still
+see what it was, but the audio is closed. If you need it reopened, ask your
+teacher: they can move the date.
 
-You only ever see your *own* list here. Whether you were marked present, absent,
-or excused is between the teacher and the attendance sheet; all you see is what
-you need to listen to.
+One thing worth knowing: if you finish a recording and mark it complete *before*
+the date, it stays **Completed** forever. It is never turned into a "missed" the
+next day.
 
 ## 1.3 Listening to a recording
 
@@ -123,20 +135,27 @@ A few things worth knowing:
 - **Changed your mind?** You can open a completed recording again and listen
   more; marking complete isn't a locked door.
 
-## 1.5 Browsing all your recordings
+## 1.5 Your attendance record
 
 <div class="pair">
-<figure class="ph"><img src="manual/img/04-browse-all-phone.png" alt="Browse all recordings on a phone"><figcaption>On a phone</figcaption></figure>
-<figure class="wd"><img src="manual/img/04-browse-all-desktop.png" alt="Browse all recordings on a computer"><figcaption>On a computer</figcaption></figure>
+<figure class="ph"><img src="manual/img/04-attendance-record-phone.png" alt="Your attendance for a class on a phone"><figcaption>On a phone</figcaption></figure>
+<figure class="wd"><img src="manual/img/04-attendance-record-desktop.png" alt="Your attendance for a class on a computer"><figcaption>On a computer</figcaption></figure>
 </div>
 
-Your home screen shows what you *need* to catch up on. But being enrolled in a
-course opens **every** published recording in it to you — including the meetings
-you attended. Tap **Browse all recordings** to see them, grouped by course.
+Tap **My classes** at the bottom of your home screen to see the classes you're
+enrolled in, then tap one to see **your own attendance** for it.
 
-Use this to re-hear a session you were at, or to listen to something that isn't
-required but you'd like to review. Listening here is exactly the same — the same
-player, the same saved place.
+At the top is a tally — how many meetings you were **present** for, **absent**
+from, and **excused** from. Below it, every meeting your teacher recorded you in,
+newest first, with the date and your own mark.
+
+Where you were excused, the row also says that a recording was required and
+whether you've listened to it — so you can check your record without hunting
+through your listening list.
+
+Two things this page is not: it isn't a way to play anything (that's your home
+screen), and it never shows anyone else's attendance. You see your own marks and
+nobody else's.
 
 ## 1.6 Listening on a spotty connection
 
@@ -223,7 +242,7 @@ The **course page** is your dashboard for that course:
   recordings live (Section 2.4).
 - **Attendance report** summarizes attendance and catch-up across the whole
   course (Section 2.9).
-- The counts card — *incomplete / overdue of N required* — is the whole course's
+- The counts card — *incomplete / missed of N required* — is the whole course's
   catch-up at a glance, and links straight to the course **Audit history**.
 - **Settings** lets you rename the course, **archive** it when the term ends, and
   choose whether students may still listen to an archived course's recordings.
@@ -241,9 +260,15 @@ The **course page** is your dashboard for that course:
 </div>
 
 A **session** is one class meeting. Create one for each meeting — give it a
-title, its date, and an optional due date for absentees. Each session card shows
-at a glance whether **attendance** has been taken and whether a **recording** has
-been added, so you can see what's still outstanding.
+title, its date, and a **Listen by** date. Each session card shows at a glance
+whether **attendance** has been taken and whether a **recording** has been added,
+so you can see what's still outstanding.
+
+**The "Listen by" date is required, and it matters more than it looks.** It is
+the day the recording *closes* to the students you excused — after it, they can
+no longer play it. It fills in automatically as a week after the meeting; change
+it to whatever suits. You can't set it in the past, and you can move it forward
+later to reopen a session for someone who needs longer.
 
 The **course name under the heading is a link** — on the sessions list, on a
 session, and on the attendance report. Tap it to go straight back to the course.
@@ -260,14 +285,25 @@ Open a session to work with it:
 
 **Take attendance.** For each enrolled student, choose **Present**, **Absent**,
 or **Excused**, then tap **Submit attendance**. Everyone starts as *Present*, so
-often you only flip the few who missed; **Mark all absent** is a one-tap shortcut
-for the "everyone must listen to this one" case. You can re-submit a corrected
-attendance later and everything updates automatically.
+often you only flip the few who missed. You can re-submit a corrected attendance
+later and everything updates automatically.
 
-- **Present** students were there — the recording is not required for them.
-- **Absent** and **Excused** students missed the content, so the recording
-  becomes their required listening. (The two differ only in your reports;
-  excused students are still expected to catch up.)
+**Excusing a student is what gives them the recording.** It is the only mark that
+does:
+
+- **Present** — they were there. Nothing is required of them, and the recording
+  is not opened to them.
+- **Excused** — they missed it with your permission. The recording opens to them
+  and listening to it is required, until the Listen by date.
+- **Absent** — they missed it without being excused. Nothing is opened to them.
+
+So **Mark all excused** is the one-tap shortcut for "everyone must listen to this
+one." And if someone genuinely needs to catch up on a class you marked them
+absent for, just change their mark to Excused and submit again.
+
+One limit worth knowing: you can't excuse anyone for a session whose Listen by
+date has already passed — it would hand them something they could never open.
+Move the date forward first, then excuse them.
 
 **Add the recording.** In the same screen, **Upload audio…** or import it from
 Zoom. It's **audio only** — up to 300 MB, though a two-hour class is normally
@@ -279,8 +315,9 @@ Each recording moves through a few states:
 
 - **Draft** — added, not yet visible to students. You can replace its audio
   freely.
-- **Published** — live. Enrolled students can listen, and the absent/excused
-  students are now on the hook for it.
+- **Published** — live. The students you excused can now listen, and are on the
+  hook for it. Publishing is blocked if the session's Listen by date has already
+  passed, because nobody would be able to open it.
 - **Needs attention** — flagged for a problem (for example, a Zoom import that
   needs review). Publish is blocked until it has audio.
 
@@ -288,24 +325,26 @@ Each recording moves through a few states:
 
 Here's the rule that runs the whole ledger:
 
-> **A recording is required listening for the students who were marked absent or
-> excused for its session** — assigned automatically once the recording is
-> **published** and its attendance has been **submitted**.
+> **A recording opens to the students marked EXCUSED for its session, and to
+> nobody else** — automatically, once the recording is **published** and its
+> attendance has been **submitted**. The same fact makes listening required.
+> It closes again when the session's **Listen by** date passes.
 
 You never assign students one by one; the attendance sheet is the assignment. If
-you correct attendance — flip someone from present to absent, or the reverse —
-the obligations update to match, and any listening or completion already recorded
-is kept.
+you correct attendance — flip someone from excused to present, or the reverse —
+access and obligations update to match, and any listening or completion already
+recorded is kept.
 
-- **A due date is optional**, set on the session (or leave it blank). With one,
-  absentees see "due soon" then "overdue"; without one, it's required but never
-  overdue.
+- **Being enrolled opens nothing.** A student in the class who was present, or
+  absent without being excused, cannot play the recording at all.
+- **The Listen by date closes it.** After that day the student sees the recording
+  on their list marked *Missed*, with the date it closed, and can no longer play
+  it. Move the session's Listen by date forward to reopen it.
 - **A student who joins late** wasn't on the roster when earlier attendance was
-  taken, so they are **not** retroactively put on the hook for those older
-  sessions — accountability starts at enrollment. If you *do* want a latecomer to
-  catch up on an earlier session, open that session, mark them absent, and
-  re-submit attendance; they'll be assigned it.
-- **Unpublishing** a recording takes it back out of required listening.
+  taken, so they are **not** retroactively given those older sessions. If you
+  *do* want a latecomer to catch up on an earlier one, open that session, mark
+  them **Excused**, and re-submit attendance.
+- **Unpublishing** a recording closes it to everyone again.
 
 ## 2.6 The recording ledger — who has caught up
 
@@ -315,20 +354,25 @@ is kept.
 </div>
 
 Open a published recording's **Listening progress** (from its session) to see
-exactly where things stand. Up top, four counts: **accountable** (the students on
-the hook — those who were absent or excused), **complete**, **incomplete**, and
-**overdue**.
+exactly where things stand. Up top, four counts: **accountable** (the students
+you excused, the only ones who can open it), **complete**, **incomplete**, and
+**missed**.
 
-The screen has two parts:
+The screen has four parts:
 
-- **The accountable list** — absent and excused students (excused ones are
-  badged), each with how much they've listened, when they last listened, and
-  their status: **Complete**, **Incomplete**, or **Overdue**. The **filter
-  chips** — *Not complete / Overdue / All* — open on **Not complete**, so you land
-  on exactly the people who still need a nudge.
-- **Attendees** — the students who were *present*. They were there, so the
-  recording isn't required for them and they're never overdue; their listening is
-  shown for reference only, in case you want to see who revisited it.
+- **The accountable list** — the students you excused, each with how much they've
+  listened, when they last listened, and their status: **Complete**,
+  **Not complete**, or **Missed**. The **filter chips** — *Not complete / Missed
+  / All* — open on **Not complete**, so you land on exactly the people who still
+  need a nudge.
+- **Present** — the students who were there. The recording is neither required
+  for them nor open to them.
+- **Absent** — marked absent rather than excused, so it was never opened to them.
+  To let one of them catch up, mark them **Excused** on the session and submit
+  again.
+- **Also listened** — listening from someone who no longer holds the recording,
+  for example a student you excused, who listened, and whom you then corrected to
+  present. Kept as history.
 
 **Export CSV** downloads the accountable rows — the same rows, the same filter —
 as a spreadsheet, for records or a follow-up.
@@ -375,8 +419,8 @@ two ways — a toggle switches between them:
 - **By session** — every session with its present / absent / excused counts, and
   a clear flag on any meeting where attendance was never taken.
 - **By student** — each student's attendance across the course (chronic absentees
-  first), plus their **catch-up** status: of the recordings they're on the hook
-  for, how many are complete and how many overdue.
+  first), plus their **catch-up** status: of the recordings they were excused
+  from, how many are complete and how many they missed.
 
 Each view has its own **Export CSV**.
 
@@ -510,16 +554,16 @@ confirmation, and is audited. Reach for disable, unpublish, or archive first.
 | **Pick up where I left off** | Just reopen it — your place is saved automatically, on any device. |
 | **Slow down or speed up** | Tap **1×–2×** on the player. |
 | **Mark something done** | Press play once, then **Mark complete** at the bottom of the player. |
-| **Find a recording that isn't required** | Home → **Browse all recordings**, grouped by course. |
+| **See my attendance for a class** | Home → **My classes** → tap the class. |
 | **Set my student password** | Open the emailed link, or tap **Email me a password link** on sign-in. |
 | **Add a session** *(staff)* | Course → **Sessions** → title + date → **Create session**. |
 | **Take attendance** *(staff)* | Session → mark Present / Absent / Excused → **Submit attendance**. |
 | **Add a recording** *(staff)* | Open the session → **Upload audio…** (or import from Zoom). |
-| **Make a recording required** *(staff)* | **Publish** it — absent & excused students are assigned it automatically. |
-| **Set a deadline** *(staff)* | Session → **Edit session** → **Due date**. |
-| **See who's behind** *(staff)* | Session → **Listening progress** → **Not complete** / **Overdue**. |
+| **Open a recording to students** *(staff)* | Mark them **Excused**, then **Publish** — that is the whole of it. |
+| **Change the closing date** *(staff)* | Session → **Edit session** → **Listen by**. Moving it forward reopens a closed recording. |
+| **See who's behind** *(staff)* | Session → **Listening progress** → **Not complete** / **Missed**. |
 | **Give someone credit anyway** *(staff)* | Ledger → **Override** → reason (required) → **Mark complete**. |
-| **Make a latecomer catch up on an old session** *(staff)* | Open that session → mark them **Absent** → **Submit attendance**. |
+| **Make a latecomer catch up on an old session** *(staff)* | Open that session → mark them **Excused** → **Submit attendance**. (Move **Listen by** forward first if it has passed.) |
 | **See course attendance** *(staff)* | Course → **Attendance report** (toggle by session / by student). |
 | **Export for records** *(staff)* | Any ledger or the attendance report → **Export CSV**. |
 | **Approve a new teacher** *(admin)* | Home → **Staff** → **Approve as manager / admin**. |

@@ -9,10 +9,12 @@
  * every time.
  *
  * Model: Cohort → Course → Session → Recording. A session owns attendance
- * (present/absent/excused); absent∪excused are assigned the recording once it is
- * published AND attendance has been submitted. There is no "catch-up" concept —
- * accountability is attendance-driven, and a student enrolled after a session's
- * attendance snapshot is simply never assigned it (enrollment-onward).
+ * (present/absent/excused). Being marked EXCUSED is the whole of a student's
+ * entitlement: it grants the recording and requires listening to it, once the
+ * recording is published AND attendance has been submitted, and it lapses when
+ * the session's due date passes. Present and absent grant nothing. There is no
+ * "catch-up" concept — a student enrolled after a session's attendance snapshot
+ * is simply never in it (enrollment-onward).
  *
  * Prerequisites (see docs/DEV-TOOLING.md):
  *   firebase emulators:start --project demo-sabeel --only firestore,auth,storage,functions
@@ -92,6 +94,24 @@ async function readCollection(name) {
 
 const activeAssignments = async () =>
   (await readCollection('assignments')).filter((a) => a.fields.active?.booleanValue === true);
+
+/**
+ * Set one field on one document, out of band.
+ *
+ * Used to plant a due date already in the past, which no callable will do — the
+ * whole point of the validators is that a deadline can only BECOME past by the
+ * passage of time. The trigger still fires, so this exercises the real
+ * reconcile rather than faking its output.
+ */
+async function patchField(name, docId, field, value, type = 'stringValue') {
+  const url = `${FS_READ}/${name}/${docId}?updateMask.fieldPaths=${field}`;
+  const r = await fetch(url, {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { [field]: { [type]: value } } }),
+  });
+  if (!r.ok) throw new Error(`patch ${name}/${docId} failed: ${r.status} ${await r.text()}`);
+}
 
 const browser = await chromium.launch();
 const consoleErrors = [];
@@ -403,15 +423,15 @@ await admin.getByTestId('session-title').fill('Session 1');
 await tap(admin, 'session-create');
 await tap(admin, 'session-open-Session 1');
 
-// Take attendance: mark the enrolled student ABSENT (so the recording becomes
-// required listening for her) and submit. Nobody is assigned yet — there is no
-// published recording.
-await admin.getByTestId('att-Fatima Ahmed-absent').waitFor({ timeout: 15000 });
-await tap(admin, 'att-Fatima Ahmed-absent');
+// Take attendance: mark the enrolled student EXCUSED — the only mark that opens
+// a recording to a student — and submit. Nobody is granted anything yet: there
+// is no published recording.
+await admin.getByTestId('att-Fatima Ahmed-excused').waitFor({ timeout: 15000 });
+await tap(admin, 'att-Fatima Ahmed-excused');
 await tap(admin, 'att-submit');
 await admin.waitForTimeout(2000);
 check(
-  'submitting attendance before a recording exists assigns nobody',
+  'submitting attendance before a recording exists grants nobody',
   (await activeAssignments()).length === 0,
 );
 await shot(admin, '10-attendance');
@@ -432,7 +452,7 @@ check(
 check('the recording is linked to its session', !!rf.sessionId?.stringValue);
 
 // Publish it. The publish fan-out TRIGGER now sees a published recording AND a
-// submitted attendance, so it assigns the absent student. This is the one place
+// submitted attendance, so it grants the excused student. This is the one place
 // the real onRecordingWritten runs (the integration tests exercise the logic).
 await tap(admin, 'recording-published');
 await admin.waitForTimeout(2500);
@@ -446,7 +466,7 @@ for (let i = 0; i < 20 && assignments.length === 0; i++) {
   assignments = await activeAssignments();
 }
 check(
-  'publishing fans out an assignment to the ABSENT student (real trigger)',
+  'publishing fans out a grant to the EXCUSED student (real trigger)',
   assignments.length === 1,
   `${assignments.length} active assignment(s)`,
 );
@@ -545,23 +565,41 @@ const homeText = await student.locator('body').innerText();
 check('the student home moves the recording to Completed', /Completed/.test(homeText));
 await shot(student, '14-home-completed');
 
-// ------------------------------------------------ browse all (student read) --
-// This screen holds the course in a DOCUMENT listener, because a student is
+// ---------------------------------------- the student's own attendance record --
+// The class list holds each course in a DOCUMENT listener, because a student is
 // granted `get` on their course and never `list` — the list-shaped subscription
 // used on staff screens is denied here, and denial looks like an empty screen
 // plus a console warning, not a crash. So the course NAME rendering is the
-// assertion: it can only come from a document listener that the rules allowed.
-await tap(student, 'nav-myrecordings');
-await student.getByTestId('play-Session 1').waitFor({ timeout: 20000 });
+// assertion: it can only come from a document listener the rules allowed.
+await tap(student, 'student-classes');
+await student.getByTestId('myclass-Hikam Foundations').waitFor({ timeout: 20000 });
 // innerText returns RENDERED text, and SectionTitle uppercases via CSS — so this
 // compares case-insensitively rather than against the source string.
-const browseText = (await student.locator('body').innerText()).toLowerCase();
+const classesText = (await student.locator('body').innerText()).toLowerCase();
 check(
-  'a student can browse their course archive — the course doc listener is permitted',
-  browseText.includes('hikam foundations'),
+  'a student sees their own classes — the course doc listener is permitted',
+  classesText.includes('hikam foundations'),
 );
-check('the archive lists the published recording', browseText.includes('session 1'));
-await shot(student, '14b-browse-all');
+
+await tap(student, 'myclass-Hikam Foundations');
+await student.getByTestId('attendance-Session 1').waitFor({ timeout: 20000 });
+const recordText = await student.locator('body').innerText();
+// Their own mark, out of a session document they can never read: this can only
+// have come from the attendanceRecords projection the trigger wrote.
+check(
+  "the student sees their own attendance mark for the session",
+  /Excused/.test(recordText) && /Session 1/.test(recordText),
+);
+check(
+  'an excused row says a recording was required and that it is done',
+  /Recording required/.test(recordText) && /completed/i.test(recordText),
+);
+check(
+  'the tally counts the mark',
+  /1[\s\S]{0,40}EXCUSED/i.test(recordText),
+  recordText.replace(/\n+/g, ' | ').slice(0, 200),
+);
+await shot(student, '14b-attendance-record');
 
 // ---------------------------------------- enrollment-onward accountability --
 console.log('\nEnrollment-onward (no retroactive assignment)');
@@ -581,14 +619,26 @@ check(
   `${(await activeAssignments()).length} active assignment(s)`,
 );
 
-// To make the late student accountable, staff re-take attendance for the session
-// and mark them absent. Re-submitting reconciles via onSessionWritten, assigning
-// them the already-published recording — without disturbing Fatima's completion.
 await openHikam(admin);
 await tap(admin, 'nav-sessions');
 await tap(admin, 'session-open-Session 1');
+
+// First mark him ABSENT — an unexcused miss. Under the excused-only policy that
+// grants nothing at all, which is the whole change in one assertion: the same
+// action that used to create an obligation now creates none.
 await admin.getByTestId('att-Bilal Khan-absent').waitFor({ timeout: 15000 });
 await tap(admin, 'att-Bilal Khan-absent');
+await tap(admin, 'att-submit');
+await admin.waitForTimeout(3000);
+check(
+  'marking the late student ABSENT grants them nothing',
+  (await activeAssignments()).length === 1,
+  `${(await activeAssignments()).length} active assignment(s)`,
+);
+
+// Now excuse him. Re-submitting reconciles via onSessionWritten, granting him
+// the already-published recording — without disturbing Fatima's completion.
+await tap(admin, 'att-Bilal Khan-excused');
 await tap(admin, 'att-submit');
 let afterResubmit = [];
 for (let i = 0; i < 20 && afterResubmit.length < 2; i++) {
@@ -596,7 +646,7 @@ for (let i = 0; i < 20 && afterResubmit.length < 2; i++) {
   afterResubmit = await activeAssignments();
 }
 check(
-  're-submitting attendance with the late student absent assigns them (onSessionWritten)',
+  're-submitting attendance with the late student EXCUSED grants them (onSessionWritten)',
   afterResubmit.length === 2,
   `${afterResubmit.length} active assignment(s)`,
 );
@@ -976,18 +1026,110 @@ await student.waitForTimeout(3500);
 const stuOnStaffUrl = (await student.locator('body').innerText()).toLowerCase();
 check(
   'a student asking for a staff URL gets their OWN home, not the staff screen',
-  stuOnStaffUrl.includes('your listening') && !stuOnStaffUrl.includes('due for absentees'),
+  stuOnStaffUrl.includes('your listening') && !stuOnStaffUrl.includes('listen by'),
 );
 check('…so nothing on it is denied', !stuOnStaffUrl.includes('live data error'));
 
-await mgr.goto(`${WEB}my-recordings`, { waitUntil: 'domcontentloaded' });
+await mgr.goto(`${WEB}my-classes`, { waitUntil: 'domcontentloaded' });
 await mgr.waitForTimeout(3500);
 const mgrOnStudentUrl = (await mgr.locator('body').innerText()).toLowerCase();
 check(
   'a manager asking for a student URL gets their own home too',
-  mgrOnStudentUrl.includes('recording library') && !mgrOnStudentUrl.includes('your recordings'),
+  mgrOnStudentUrl.includes('recording library') && !mgrOnStudentUrl.includes('your attendance'),
 );
 check('…so nothing on it is denied', !mgrOnStudentUrl.includes('live data error'));
+
+// --------------------------------------------------- the deadline closes access --
+console.log('\nThe deadline');
+// Reactivate Hikam first (the archive-cascade block left it off). An archived
+// course refuses playback for its own reason, which would mask the one under
+// test — with it active, the DUE DATE is the only thing left standing between
+// the student and the audio.
+await openHikam(admin);
+await tap(admin, 'course-archive');
+await admin.waitForTimeout(2500);
+
+// Push Session 1's due date into the past, OUT OF BAND: no callable will write
+// one, because a deadline may only become past by the passage of time. The real
+// onSessionWritten trigger still fires, so the date flows down to the grants
+// exactly as it would on the morning after.
+const sessDoc = (await readCollection('sessions'))[0];
+await patchField('sessions', sessDoc.name.split('/').pop(), 'dueDate', '2020-01-01');
+await new Promise((r) => setTimeout(r, 5000));
+check(
+  'the past due date reaches every grant on the session',
+  (await activeAssignments()).every((a) => a.fields.dueDate?.stringValue === '2020-01-01'),
+);
+
+// Fatima completed hers in time, so it must NOT be recast as missed. Completion
+// is checked before the deadline — telling someone who did the work that they
+// missed it would be both wrong and the tone the brief rules out.
+await goHome(student);
+await student.getByTestId('task-Session 1').waitFor({ timeout: 20000 });
+const doneHome = await student.locator('body').innerText();
+// Case-insensitive: innerText returns RENDERED text, and the group label is
+// uppercased by CSS — so /Missed/ would silently never match and this would pass
+// for the wrong reason.
+check(
+  'a completed recording is never recast as missed, however far past due',
+  /completed/i.test(doneHome) && !/missed/i.test(doneHome),
+  doneHome.replace(/\n+/g, ' | ').slice(0, 200),
+);
+
+// THE BOUNDARY IS THE SERVER, not a hidden button — asserted against the real
+// callable rather than through the UI, because the screen now refuses first and
+// would hide a server that had quietly stopped checking.
+const recId = (await readCollection('recordings'))[0].name.split('/').pop();
+const stuToken = await (
+  await fetch(`${AUTH}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: 'fatima@example.com',
+      password: 'StudentPass123!',
+      returnSecureToken: true,
+    }),
+  })
+).json();
+const mint = await fetch(`${FN}/getPlaybackUrl`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${stuToken.idToken}` },
+  body: JSON.stringify({ data: { recordingId: recId } }),
+});
+const mintBody = await mint.text();
+check(
+  'getPlaybackUrl REFUSES a recording whose due date has passed',
+  mint.status >= 400 && /due date/i.test(mintBody),
+  `${mint.status} ${mintBody.slice(0, 160)}`,
+);
+
+// And the screen says so too, without drawing a transport nobody can use.
+await tap(student, 'task-Session 1');
+await sawText(student, 'This recording closed on 2020-01-01', 30000);
+check(
+  'the player states the closure and offers no transport',
+  (await student.getByTestId('player-play').count()) === 0,
+);
+await shot(student, '24-past-due-player');
+
+// Unmark it out of band, so the same grant is now incomplete AND past its
+// deadline — the completion control is behind the closed gate, deliberately.
+await patchField('completions', `${stuToken.localId}_${recId}`, 'completed', false, 'booleanValue');
+await goHome(student);
+await student.getByTestId('task-Session 1').waitFor({ timeout: 20000 });
+const missedHome = await student.locator('body').innerText();
+check(
+  'a grant past its due date reads as Missed, with the date it closed',
+  /missed/i.test(missedHome) && /Closed 2020-01-01/.test(missedHome),
+  missedHome.replace(/\n+/g, ' | ').slice(0, 220),
+);
+// Not a button: the server would refuse anyway, and a card that looks tappable
+// and then errors reads as a fault in the app rather than a deadline missed.
+check(
+  'a missed card is not offered as something to play',
+  (await student.getByRole('button', { name: 'Listen to Session 1' }).count()) === 0,
+);
+await shot(student, '25-missed');
 
 // -------------------------------------------------------------------- audit --
 // The auditedCall wrapper writes one entry per staff mutation — this whole run

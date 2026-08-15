@@ -120,6 +120,23 @@ firebase deploy --only functions        # add --force when functions were rename
 firebase deploy --only hosting
 ```
 
+### One-off: the excused-only migration (2026-08-14)
+
+The switch to excused-only access needs one data step, and it goes **after
+functions and before hosting**:
+
+```bash
+node scripts/migrate-excused-only.mjs --dry-run   # read the counts first
+node scripts/migrate-excused-only.mjs
+```
+
+It backfills the due dates that became required and then touches every session,
+letting the deployed `onSessionWritten` re-derive the grants and write each
+student's attendance projection. Running it against the OLD functions would
+faithfully re-create the very grants it exists to remove, and report success
+doing so — hence the position in the order. Hosting goes last so no student sees
+the new screens against un-migrated data.
+
 `storage:rules` errors with "Could not find rules for the following storage
 targets: rules" — the `storage` block in `firebase.json` is a single unnamed
 config, so the target is just `storage`. And a deploy that must delete functions

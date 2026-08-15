@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { canPlayFromCourse, listenedFraction } from '@sabeel/shared';
+import {
+  INSTITUTE_TIMEZONE,
+  canPlayFromCourse,
+  isOverdue,
+  listenedFraction,
+  todayInZone,
+} from '@sabeel/shared';
 import { Notice } from '../components/ui';
 import { Scrubber } from '../components/Scrubber';
 import { Transport } from '../components/Transport';
@@ -37,7 +43,13 @@ export function PlayerScreen({
   dueDate: string | null;
 }) {
   const listenerError = useListenerError();
-  const allowed = canPlayFromCourse(cls);
+  // Two independent reasons the audio may be shut: the course was archived with
+  // listening off, or this student's own deadline has passed. Either way the
+  // server refuses to mint a URL, so the transport must not be drawn — a play
+  // button that does nothing reads as a broken app rather than a closed door.
+  const closed =
+    studentUid !== null && dueDate !== null && isOverdue(dueDate, todayInZone(INSTITUTE_TIMEZONE));
+  const allowed = canPlayFromCourse(cls) && !closed;
   const { state, play, pause, seek, setRate } = usePlayback(
     recording.id,
     studentUid,
@@ -56,8 +68,9 @@ export function PlayerScreen({
       <ScrollView style={styles.canvas} contentContainerStyle={styles.content}>
         <Hero recording={recording} courseName={cls.name} cohortName={cohortName} />
         <Notice tone="info">
-          This course has been archived and listening has been turned off. Your listening
-          history is kept — ask your teacher if you need access again.
+          {closed
+            ? `This recording closed on ${dueDate}. Your listening record is kept — ask your teacher if you need it reopened.`
+            : 'This course has been archived and listening has been turned off. Your listening history is kept — ask your teacher if you need access again.'}
         </Notice>
       </ScrollView>
     );
@@ -157,11 +170,15 @@ export function PlayerScreen({
         </>
       ) : null}
 
+      {/* For a student the due date is not a nag, it is the day this recording
+          closes to them — so it is stated as an availability window rather than
+          a deadline. Staff previewing see the session's date plainly. */}
       {dueDate ? (
-        <Text style={styles.due}>Due {dueDate}</Text>
-      ) : (
-        <Text style={styles.due}>No due date</Text>
-      )}
+        <Text style={styles.due}>
+          {studentUid ? `Available to listen until ${dueDate}` : `Due ${dueDate}`}
+        </Text>
+      ) : null}
+
     </ScrollView>
   );
 }

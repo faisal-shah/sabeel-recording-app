@@ -65,7 +65,7 @@ export function CourseAttendanceScreen({
   };
 
   const exportStudents = () => {
-    const header = ['Student', 'Present', 'Absent', 'Excused', 'Not marked', 'Catch-up assigned', 'Completed', 'Overdue'];
+    const header = ['Student', 'Present', 'Absent', 'Excused', 'Not marked', 'Catch-up assigned', 'Completed', 'Missed'];
     const body = studentRows.map((s) => [
       nameOf(s.studentUid),
       `${s.present}`,
@@ -74,7 +74,7 @@ export function CourseAttendanceScreen({
       `${s.notMarked}`,
       `${s.assigned}`,
       `${s.completed}`,
-      `${s.overdue}`,
+      `${s.missed}`,
     ]);
     void exportCsv(`${cls.name} - attendance by student.csv`, [header, ...body]);
   };
@@ -165,7 +165,7 @@ export function CourseAttendanceScreen({
               {s.assigned > 0 ? (
                 <Text style={styles.catchup}>
                   Catch-up: {s.completed}/{s.assigned} complete
-                  {s.overdue > 0 ? <Text style={styles.overdue}>{`  ·  ${s.overdue} overdue`}</Text> : null}
+                  {s.missed > 0 ? <Text style={styles.missed}>{`  ·  ${s.missed} missed`}</Text> : null}
                 </Text>
               ) : (
                 <Text style={styles.hint}>Catch-up: nothing required</Text>
@@ -205,5 +205,5 @@ const styles = StyleSheet.create({
   excused: { color: t.accent.goldText, fontWeight: '600' },
   notTaken: { fontSize: 14, color: t.text.secondary, fontStyle: 'italic', marginTop: spacing(1) },
   catchup: { fontSize: 14, color: t.text.secondary, marginTop: spacing(2) },
-  overdue: { color: t.feedback.danger, fontWeight: '700' },
+  missed: { color: t.feedback.danger, fontWeight: '700' },
 });

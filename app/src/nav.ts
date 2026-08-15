@@ -35,9 +35,13 @@ export type RootStackParamList = {
   ZoomImport: { sessionId: string };
   /** Omit courseId for the admin's unscoped view; a manager passes their own. */
   Audit: { courseId?: string };
-  MyRecordings: undefined;
+  /** A student's own classes, and one class's attendance record. */
+  MyClasses: undefined;
+  MyClassRecord: { courseId: string };
   /** dueDate is passed by the caller: the session's for staff, the student's own
-   *  assignment for students, or absent when browsing something not assigned. */
+   *  grant for students. For a student it is the day access CLOSES, so the
+   *  player states it; omitted only when staff open a recording with no session
+   *  context to hand. */
   Player: { recordingId: string; dueDate?: string | null };
   MyCourses: undefined;
   Tokens: undefined;

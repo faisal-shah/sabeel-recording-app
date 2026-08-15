@@ -79,6 +79,7 @@ function useMapByStudent<T, V>(
 export interface LedgerRow {
   studentUid: string;
   name: string;
+  /** Null for everyone without a grant — attendees, absentees, other listeners. */
   dueDate: string | null;
   completed: boolean;
   source: 'override' | 'student' | 'none';
@@ -87,28 +88,36 @@ export interface LedgerRow {
   lastListened: number | null;
   completedAt: number | null;
   pending: boolean;
-  /** How the session recorded this student: 'absent'/'excused' for the accountable
-   *  set, 'present' for an attendee, null for someone outside the snapshot. */
+  /** How the session recorded this student: 'excused' for the accountable set,
+   *  'present'/'absent' for the rest of the roster, null for someone outside the
+   *  snapshot. */
   attendance: AttendanceStatus | null;
 }
 
+/** An accountable row always came from a grant, so it always has a deadline. */
+export type RequiredRow = LedgerRow & { dueDate: string };
+
 export interface RecordingLedger {
-  /** Students accountable for this recording (absent or excused → an active assignment). */
-  accountable: LedgerRow[];
-  /** Present at the session — exempt, never overdue, but their listening is shown. */
+  /** Excused, so granted the recording and required to listen — the only people
+   *  who can open it at all. */
+  accountable: RequiredRow[];
+  /** Present at the session: nothing required, and no access either. */
   attendees: LedgerRow[];
-  /** Listened without being accountable or a recorded attendee (e.g. a late
-   *  enrollee outside the snapshot) — evidence, not accountability. */
+  /** Absent without being excused: nothing required, and no access. Listed so a
+   *  ledger still accounts for the whole submitted roster. */
+  absentees: LedgerRow[];
+  /** Listened without holding a current grant — e.g. excused, listened, then
+   *  corrected to present. Evidence, not accountability. */
   otherListeners: LedgerRow[];
   rollup: LedgerRollup;
 }
 
 /**
- * The recording ledger: the accountable roster joined with completion,
- * override, and listening progress, split against the session's attendance into
- * the accountable (absent+excused) and the attendees (present). All reads are
- * `recordingId ==`, so the staff rules accept them class-scoped; the join and
- * the counts are pure.
+ * The recording ledger: the granted roster joined with completion, override, and
+ * listening progress, split against the session's attendance into the excused
+ * (who owe it), the present and the absent (who do not, and cannot open it).
+ * All reads are `recordingId ==`, so the staff rules accept them class-scoped;
+ * the join and the counts are pure.
  */
 export function useRecordingLedger(
   recording: RecordingRow,
@@ -184,25 +193,22 @@ export function useRecordingLedger(
     };
 
     const status = session.attendance;
-    const accountable = [...assignments.values()]
-      .map((a) => row(a.studentUid, a.dueDate, status[a.studentUid] ?? 'absent'))
-      // Not-yet-complete first, then absent before excused, then by name.
-      .sort(
-        (x, y) =>
-          Number(x.completed) - Number(y.completed) ||
-          Number(x.attendance === 'excused') - Number(y.attendance === 'excused') ||
-          x.name.localeCompare(y.name),
-      );
+    // Re-stating dueDate after the spread is what narrows the row to a
+    // RequiredRow: the grant it came from always carries one.
+    const accountable: RequiredRow[] = [...assignments.values()]
+      .map((a) => ({ ...row(a.studentUid, a.dueDate, status[a.studentUid] ?? 'excused'), dueDate: a.dueDate }))
+      // Not-yet-complete first, then by name. Every row here is excused, so
+      // there is no longer a second attendance status to order within.
+      .sort((x, y) => Number(x.completed) - Number(y.completed) || x.name.localeCompare(y.name));
 
-    const { present } = attendanceGroups(status);
-    // Attendees surface who has (and hasn't) listened, most listened first.
-    const attendees = present
-      .map((uid) => row(uid, null, 'present'))
-      .sort((x, y) => y.listenedPct - x.listenedPct || x.name.localeCompare(y.name));
+    const { present, absent } = attendanceGroups(status);
+    const byName = (x: LedgerRow, y: LedgerRow) => x.name.localeCompare(y.name);
+    const attendees = present.map((uid) => row(uid, null, 'present')).sort(byName);
+    const absentees = absent.map((uid) => row(uid, null, 'absent')).sort(byName);
 
-    // Anyone with real listening/completion who is neither accountable nor a
-    // recorded attendee — e.g. enrolled after the snapshot, or unenrolled.
-    const known = new Set<string>([...assignments.keys(), ...present]);
+    // Anyone with real listening/completion who holds no current grant and is
+    // not in the snapshot — e.g. excused and listening, then corrected out.
+    const known = new Set<string>([...assignments.keys(), ...present, ...absent]);
     const otherUids = new Set<string>();
     for (const [uid, c] of completions.entries()) if (c.completed && !known.has(uid)) otherUids.add(uid);
     for (const uid of progress.keys()) if (!known.has(uid)) otherUids.add(uid);
@@ -211,6 +217,7 @@ export function useRecordingLedger(
     return {
       accountable,
       attendees,
+      absentees,
       otherListeners,
       rollup: rollup(
         accountable.map((r) => ({ completed: r.completed, dueDate: r.dueDate })),
@@ -226,7 +233,7 @@ export interface CourseAssignmentItem {
   studentUid: string;
   recordingId: string;
   completed: boolean;
-  dueDate: string | null;
+  dueDate: string;
 }
 
 export interface CourseLedger {
@@ -328,7 +335,7 @@ export function useCourseAttendance(courseId: string | null, today: string): Att
 
 export interface StudentLedgerItem {
   recordingId: string;
-  dueDate: string | null;
+  dueDate: string;
   completed: boolean;
   source: 'override' | 'student' | 'none';
   overrideReason?: string;

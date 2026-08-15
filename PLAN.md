@@ -215,13 +215,19 @@ against the live account with Faisal present.
 
 - FCM on Android + web push. Tokens as a **subcollection**, unregistered on
   sign-out, pruned on send failure.
-- Triggers: assigned; overdue → next day; then daily until complete. No-due
-  assignments never notify. Student-controlled global on/off.
-- No staff notifications in v1.
+- Three messages, each with its own per-person switch, defaulting on:
+  student — a recording is ready for you (an assignment becomes active);
+  student — last day to listen (morning of the due date, if not complete);
+  staff — attendance still not taken (session date passed, never submitted).
+- No day-after reminder. Once the deadline passes access has closed, so the
+  message could only say "you missed it".
+- The repo's **first scheduled function**, at 07:00 in the institute timezone.
+  It reuses `isOverdue`/`todayInZone` rather than reimplementing the rollover.
 
-**Exit:** emulator-verified trigger logic and preference gating. Actual delivery
-to a real device is a Faisal verification step — the skill is explicit that
-"functions logged success" is not evidence of delivery.
+**Exit:** emulator-verified trigger logic and preference gating, with the FCM
+send behind a seam (there is no FCM emulator). Actual delivery to a real device
+is a Faisal verification step — the skill is explicit that "functions logged
+success" is not evidence of delivery.
 
 ### Phase 8 — Admin backend stats
 

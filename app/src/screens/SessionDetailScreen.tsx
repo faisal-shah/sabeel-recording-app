@@ -120,7 +120,7 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(session.title);
   const [date, setDate] = useState(session.date);
-  const [dueDate, setDueDate] = useState(session.dueDate ?? '');
+  const [dueDate, setDueDate] = useState(session.dueDate);
   const [notes, setNotes] = useState(session.notes);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -132,7 +132,7 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
   const openEditor = () => {
     setTitle(session.title);
     setDate(session.date);
-    setDueDate(session.dueDate ?? '');
+    setDueDate(session.dueDate);
     setNotes(session.notes);
     setEditing(true);
   };
@@ -157,7 +157,7 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
         {error ? <Notice tone="error">{error}</Notice> : null}
         <Field label="Title" value={title} onChangeText={setTitle} autoCapitalize="words" />
         <DateField label="Date" value={date} onChange={setDate} />
-        <DateField label="Due date for absentees (optional)" value={dueDate} onChange={setDueDate} />
+        <DateField label="Listen by" value={dueDate} onChange={setDueDate} />
         <Field label="Notes (everyone with access sees these)" value={notes} onChangeText={setNotes} />
         <Row>
           <Button
@@ -169,7 +169,7 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
                   sessionId: session.id,
                   title: title.trim(),
                   date,
-                  dueDate: dueDate.trim() ? dueDate.trim() : null,
+                  dueDate: dueDate.trim(),
                   notes,
                 }),
               )
@@ -184,9 +184,7 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
   return (
     <Card>
       {error ? <Notice tone="error">{error}</Notice> : null}
-      <Text style={styles.meta}>
-        Due for absentees: {session.dueDate ?? 'no due date'}
-      </Text>
+      <Text style={styles.meta}>Excused students listen by: {session.dueDate}</Text>
       {session.notes ? <Text style={styles.notes}>{session.notes}</Text> : null}
       <ConfirmDanger
         // A session with a recording is deleted by removing the recording first,
@@ -236,8 +234,12 @@ function AttendanceSection({ session }: { session: SessionRow }) {
     marks[uid] ?? session.attendance[uid] ?? 'present';
   const setStatus = (uid: string, s: AttendanceStatus) =>
     setMarks((m) => ({ ...m, [uid]: s }));
-  const markAllAbsent = () =>
-    setMarks(Object.fromEntries(activeUids.map((uid) => [uid, 'absent' as AttendanceStatus])));
+  // "Everyone must listen" is now said by EXCUSING everyone: excused is the only
+  // mark that opens a recording, so marking the room absent would grant nobody
+  // anything. The old "Mark all absent" did the opposite of what it promised
+  // once the policy changed.
+  const markAllExcused = () =>
+    setMarks(Object.fromEntries(activeUids.map((uid) => [uid, 'excused' as AttendanceStatus])));
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -303,7 +305,12 @@ function AttendanceSection({ session }: { session: SessionRow }) {
             ))}
             <Row>
               <Button testID="att-submit" label="Submit attendance" busy={busy} onPress={submit} />
-              <Button label="Mark all absent" variant="secondary" onPress={markAllAbsent} />
+              <Button
+                testID="att-mark-all-excused"
+                label="Mark all excused"
+                variant="secondary"
+                onPress={markAllExcused}
+              />
             </Row>
           </>
         )}

@@ -229,7 +229,10 @@ for (const c of courses) {
     const attendance = {};
     if (attendanceTaken) {
       for (const uid of enrolled) {
-        attendance[uid] = chance(0.78) ? 'present' : (chance(0.8) ? 'absent' : 'excused');
+        // Most were there; of the rest, most were excused (and so granted the
+        // recording) and a few were absent without being excused, who get
+        // nothing. Weighted this way so the demo has real required listening.
+        attendance[uid] = chance(0.78) ? 'present' : (chance(0.75) ? 'excused' : 'absent');
       }
       attendanceCount++;
     }

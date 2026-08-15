@@ -54,40 +54,38 @@ export interface LedgerRollup {
   total: number;
   complete: number;
   incomplete: number;
-  overdue: number;
+  missed: number;
 }
 
 /**
  * Tally a set of obligations by effective completion and due state.
  *
- * `incomplete` is everything not (effectively) complete; `overdue` is the subset
- * of those past their due date — so an overdue item is always also incomplete.
- * A completed item is never overdue, however far past its due date.
+ * `incomplete` is everything not (effectively) complete; `missed` is the subset
+ * of those past their due date — so a missed item is always also incomplete. A
+ * completed item is never missed, however far past its due date. Staff and
+ * students use the same word, and it says the truth: access closed, so nothing
+ * further will happen to that row on its own.
  */
 export function rollup(
-  items: { completed: boolean; dueDate: string | null }[],
+  items: { completed: boolean; dueDate: string }[],
   today: string,
 ): LedgerRollup {
   let complete = 0;
-  let overdue = 0;
+  let missed = 0;
   for (const it of items) {
     if (it.completed) complete++;
-    else if (isOverdue(it.dueDate, today)) overdue++;
+    else if (isOverdue(it.dueDate, today)) missed++;
   }
   return {
     total: items.length,
     complete,
     incomplete: items.length - complete,
-    overdue,
+    missed,
   };
 }
 
 /** The ledger row's status bucket, reusing the student-home classification. */
-export function ledgerBucket(
-  dueDate: string | null,
-  completed: boolean,
-  today: string,
-): DueBucket {
+export function ledgerBucket(dueDate: string, completed: boolean, today: string): DueBucket {
   return dueBucket({ dueDate, completed }, today);
 }
 
@@ -116,12 +114,12 @@ export interface StudentAttendanceRow {
   excused: number;
   /** Submitted sessions the student was not in the snapshot for (enrolled later). */
   notMarked: number;
-  /** Recordings the student is accountable for (active assignments in the course). */
+  /** Recordings the student was granted (active assignments in the course). */
   assigned: number;
   /** …of which effectively complete. */
   completed: number;
-  /** …of which incomplete and past due. */
-  overdue: number;
+  /** …of which incomplete and past due, so no longer openable. */
+  missed: number;
 }
 
 export interface AttendanceReport {
@@ -135,7 +133,7 @@ export interface AttendanceReport {
  * Aggregate a course's attendance.
  *
  * `sessions` are all the course's sessions; `rosterUids` the active enrollment;
- * `assignments` the active catch-up obligations (one per accountable
+ * `assignments` the active catch-up obligations (one per excused
  * student×recording) already reduced to their effective completion. Only
  * SUBMITTED sessions count toward a student's present/absent/excused tally — an
  * un-taken session marks nobody. Catch-up is grouped from the assignments, so it
@@ -150,7 +148,7 @@ export function attendanceReport(input: {
     attendanceSubmittedAt: number | null;
   }[];
   rosterUids: string[];
-  assignments: { studentUid: string; completed: boolean; dueDate: string | null }[];
+  assignments: { studentUid: string; completed: boolean; dueDate: string }[];
   today: string;
 }): AttendanceReport {
   const { sessions, rosterUids, assignments, today } = input;
@@ -173,12 +171,12 @@ export function attendanceReport(input: {
   const submitted = sessions.filter((s) => s.attendanceSubmittedAt !== null);
 
   // Catch-up grouped per student from the active assignments.
-  const catchUp = new Map<string, { assigned: number; completed: number; overdue: number }>();
+  const catchUp = new Map<string, { assigned: number; completed: number; missed: number }>();
   for (const a of assignments) {
-    const c = catchUp.get(a.studentUid) ?? { assigned: 0, completed: 0, overdue: 0 };
+    const c = catchUp.get(a.studentUid) ?? { assigned: 0, completed: 0, missed: 0 };
     c.assigned++;
     if (a.completed) c.completed++;
-    else if (isOverdue(a.dueDate, today)) c.overdue++;
+    else if (isOverdue(a.dueDate, today)) c.missed++;
     catchUp.set(a.studentUid, c);
   }
 
@@ -194,7 +192,7 @@ export function attendanceReport(input: {
       else if (st === 'excused') excused++;
       else notMarked++;
     }
-    const c = catchUp.get(uid) ?? { assigned: 0, completed: 0, overdue: 0 };
+    const c = catchUp.get(uid) ?? { assigned: 0, completed: 0, missed: 0 };
     return { studentUid: uid, present, absent, excused, notMarked, ...c };
   });
 

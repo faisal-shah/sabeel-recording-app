@@ -48,17 +48,21 @@ for (const s of students.slice(0,4)) await db.collection('enrollments').doc(`${s
 // ---- sessions + their recordings: attendance-driven ----
 const audio=readFileSync('e2e-shots/test-lecture.m4a');
 const uids=students.map(s=>s.uid);
-// Attendance snapshot: first `present` students present, the rest absent; any in
-// `excused` are excused (still accountable). Absent + excused get the recording.
-const attend=(present, {excused=[], absent=[]}={})=>Object.fromEntries(uids.map((u,i)=>{
-  if (excused.includes(u)) return [u,'excused'];
+// Attendance snapshot: the first `present` of `who` are present, the rest EXCUSED
+// — excused is the only mark that grants the recording, so a seed that defaulted
+// to absent would photograph every student screen empty. `absent` names the
+// unexcused, who get nothing and exist here to populate the ledger's own section.
+const attend=(present, {excused=[], absent=[], who=uids}={})=>Object.fromEntries(who.map((u,i)=>{
   if (absent.includes(u)) return [u,'absent'];
-  return [u, i<present?'present':'absent'];
+  if (excused.includes(u)) return [u,'excused'];
+  return [u, i<present?'present':'excused'];
 }));
 
-async function mkSession(courseId, sid, rid, title, { status='published', dueOffset=null, daysAgo=7, notes='', attendance=null, attention=null }={}){
+async function mkSession(courseId, sid, rid, title, { status='published', dueOffset=7, daysAgo=7, notes='', attendance=null, attention=null }={}){
   const date=iso(now-daysAgo*day);
-  const dueDate=dueOffset===null?null:iso(now+dueOffset*day);
+  // Never null: the due date is the day access closes, so a session cannot be
+  // without one.
+  const dueDate=iso(now+dueOffset*day);
   const hasAudio = status!=='draft';
   const path=`recordings/${rid}/audio.m4a`;
   if (hasAudio) await admin.storage().bucket().file(path).save(audio,{contentType:'audio/mp4'});
@@ -75,10 +79,10 @@ async function mkSession(courseId, sid, rid, title, { status='published', dueOff
     ...(status==='published'?{publishedAt:now-daysAgo*day}:{}),
     ...(attention?{attentionReason:attention}:{}),
   });
-  // Fan out obligations to absent+excused (only once published AND attendance taken).
+  // Fan out grants to the EXCUSED (only once published AND attendance taken).
   if (status==='published' && attendance){
     for (const [uid,st] of Object.entries(attendance)){
-      if (st==='absent'||st==='excused'){
+      if (st==='excused'){
         await db.collection('assignments').doc(`${uid}_${rid}`).set({ studentUid:uid, recordingId:rid, sessionId:sid, courseId, cohortId, dueDate, active:true, assignedAt:submitted, assignedBy:'system' });
       }
     }
@@ -86,13 +90,15 @@ async function mkSession(courseId, sid, rid, title, { status='published', dueOff
   return rid;
 }
 const H=courses.hikam.id;
-// Hikam: attendance taken, most present, a few absent/excused (assigned). Overdue ones.
-await mkSession(H,'g-s1','g-s1r','Session 1 — Introduction to the Hikam', {dueOffset:-14, daysAgo:21, attendance:attend(6, {excused:[uids[7]]})});
-// Fatima (uids[0], the demo student) missed sessions 2 and 3, so she has real
-// required listening on the student screenshots: s2 overdue, s3 due-soon (60%).
-await mkSession(H,'g-s2','g-s2r','Session 2 — Knowledge and Certainty', {dueOffset:-6, daysAgo:14, attendance:attend(4, {absent:[uids[0]]})});
-await mkSession(H,'g-s3','g-s3r','Session 3 — Patience in Hardship', {dueOffset:3, daysAgo:5, notes:'Focus on the section about gratitude in hardship — we will discuss it next week.', attendance:attend(5, {absent:[uids[0]]})});
-await mkSession(H,'g-s4','g-s4r','Session 4 — Sincerity of Intention', {dueOffset:null, daysAgo:2, attendance:attend(6)});
+// Hikam: attendance taken, most present, the rest excused (and so granted the
+// recording). One genuinely unexcused absence, for the ledger's Absent section.
+await mkSession(H,'g-s1','g-s1r','Session 1 — Introduction to the Hikam', {dueOffset:-14, daysAgo:21, attendance:attend(6, {absent:[uids[6]]})});
+// Fatima (uids[0], the demo student) was excused from sessions 2 and 3, so she
+// has real required listening on the student screenshots: s2 missed, s3 due-soon
+// (60% listened).
+await mkSession(H,'g-s2','g-s2r','Session 2 — Knowledge and Certainty', {dueOffset:-6, daysAgo:14, attendance:attend(4, {excused:[uids[0]]})});
+await mkSession(H,'g-s3','g-s3r','Session 3 — Patience in Hardship', {dueOffset:3, daysAgo:5, notes:'Focus on the section about gratitude in hardship — we will discuss it next week.', attendance:attend(5, {excused:[uids[0]]})});
+await mkSession(H,'g-s4','g-s4r','Session 4 — Sincerity of Intention', {dueOffset:5, daysAgo:2, attendance:attend(6)});
 // Session 5: recording published but attendance NOT taken yet — nobody assigned.
 await mkSession(H,'g-s5','g-s5r','Session 5 — Reliance and Trust', {status:'published', daysAgo:1, attendance:null});
 // Session 6: a Zoom import that needs review.
@@ -100,8 +106,11 @@ await mkSession(H,'g-s6','g-s6r','Session 6 — (import needs review)', {status:
 // Session 7: attendance taken TODAY, recording not added yet.
 await db.collection('sessions').doc('g-s7').set({ courseId:H, cohortId, date:iso(now), title:'Session 7 — Today (recording pending)', dueDate:iso(now+7*day), notes:'', recordingId:null, attendance:attend(5), attendanceSubmittedAt:now, archived:false, createdAt:now, createdBy:'seed', updatedAt:now });
 // Arabic I: two published sessions.
-await mkSession(courses.arabic.id,'g-a1','g-a1r','Lesson 1 — The Arabic Alphabet', {dueOffset:-2, daysAgo:9, attendance:attend(3)});
-await mkSession(courses.arabic.id,'g-a2','g-a2r','Lesson 2 — Short Vowels', {dueOffset:5, daysAgo:4, attendance:attend(2)});
+// Only the first four students are enrolled in Arabic, so its snapshot covers
+// only them — a mark for someone off the roster would be dropped on submit.
+const arabicUids=uids.slice(0,4);
+await mkSession(courses.arabic.id,'g-a1','g-a1r','Lesson 1 — The Arabic Alphabet', {dueOffset:-2, daysAgo:9, attendance:attend(3,{who:arabicUids})});
+await mkSession(courses.arabic.id,'g-a2','g-a2r','Lesson 2 — Short Vowels', {dueOffset:5, daysAgo:4, attendance:attend(2,{who:arabicUids})});
 
 // ---- completions / progress: a realistic mix over the accountable (absent) set ----
 async function complete(uid, rid, listenedFrac=1){
@@ -111,14 +120,14 @@ async function complete(uid, rid, listenedFrac=1){
 async function progressOnly(uid, rid, frac){
   await db.collection('listeningProgress').doc(`${uid}_${rid}`).set({ studentUid:uid, recordingId:rid, courseId:H, positionMs:720000*frac, listenedMs:720000*frac, updatedAt:now-3*day });
 }
-// s1 (recording g-s1r): absentees are 6 and 7 (7 excused). One caught up, one part-way.
-await complete(uids[6],'g-s1r');
-await progressOnly(uids[7],'g-s1r',0.4);
-// s2 (g-s2r): absentees are 4..7. Two completed, one part-way, one nothing (overdue).
+// s1 (g-s1r): 7 is excused, 6 was absent and gets nothing. The excused one caught up.
+await complete(uids[7],'g-s1r');
+// s2 (g-s2r): excused are 0 and 4..7. Two completed, one part-way, and Fatima
+// never started — so she is Missed, past the deadline.
 await complete(uids[4],'g-s2r'); await complete(uids[5],'g-s2r');
 await progressOnly(uids[6],'g-s2r',0.5);
-// s3 (g-s3r): absentees 5,6,7. One completed; plus an ATTENDEE who listened anyway
-// (present student 0) — shows in the ledger's attendee section, never overdue.
+// s3 (g-s3r): excused are 0 and 5..7. One completed; Fatima is 60% through,
+// still ahead of the deadline.
 await complete(uids[5],'g-s3r');
 await progressOnly(uids[0],'g-s3r',0.6);
 // One staff override with a reason (student 6 on s2r).

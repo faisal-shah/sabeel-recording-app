@@ -46,18 +46,37 @@ Key product invariants (do not silently change):
 - **Audio only.** No video playback, no video stored. This is the single biggest
   cost cliff in the product — a 2-hour Zoom MP4 is 15–70x an audio-only M4A, and
   it is what takes the project from $0/month to material spend.
-- **Access and accountability are separate.** Class membership controls *access*
-  to recordings; assignment controls whether a recording is *required listening*
-  in the ledger. Do not collapse these.
+- **Being marked EXCUSED is the whole of a student's entitlement.** One
+  `assignments` document both grants access to a recording and requires
+  listening to it, and it lapses when the session's due date passes. Enrolment
+  opens nothing on its own; `present` and `absent` open nothing at all. "Everyone
+  must listen" is said by excusing everyone. Access and accountability were
+  separate until 2026-08-14 and are now deliberately one fact — see the decision
+  log; do not re-split them.
+- **A session's due date is required, and is never written in the past.** It is
+  the day access closes, so a blank one would mean permanent access. It may
+  BECOME past by the passage of time — that is how a recording closes — but no
+  callable will write one that has already gone, and none will excuse a student
+  for a session whose deadline has passed. Nothing is ever born expired.
+- **The deadline is enforced at the AUDIO, not in the rules.** `firestore.rules`
+  gates a recording's metadata on an active assignment; `getPlaybackUrl` gates
+  the audio on the date. Comparing `request.time` to a `YYYY-MM-DD` string in the
+  institute timezone would be a second copy of the maths in `@sabeel/shared`,
+  free to drift.
+- **Students never read a session.** The attendance map holds the whole roster
+  and Firestore has no field-level security, so each student's own mark is
+  projected server-side onto `attendanceRecords/{uid}_{sessionId}`. The session
+  stays canonical; the projection is derived from it, never the reverse.
 - **Completion is student-attested.** Playback progress is audit evidence, not
   the gate. There is no listened-percentage threshold; the app only blocks
   completion if the student has never played the recording.
 - **Playback URLs expire.** A 12-hour V4 signed URL minted by a callable that has
-  already checked enrollment. Never `getDownloadURL()` — its download token never
+  already checked the student's grant. Never `getDownloadURL()` — its download token never
   expires, which is the one thing the threat model rules out. Never proxy audio
   through a Function: the 60-minute timeout kills a 2-hour session.
-- **Adult learner tone.** Required listening, due, overdue, completed, pending
-  sync. Never childish, punitive, or shaming language.
+- **Adult learner tone.** Required listening, listen by, missed, completed,
+  pending sync. "Missed" rather than "overdue" once access has closed: overdue
+  implies still doable. Never childish, punitive, or shaming language.
 - **Two auth populations.** Staff sign in with Google and must be on
   `oursabeel.com` *and* approved by an admin — the domain check is server-side,
   the client `hd` hint is UX only. Students use email/password accounts created

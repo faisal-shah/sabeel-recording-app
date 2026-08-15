@@ -12,16 +12,21 @@ import { DUE_SOON_DAYS } from './constants';
 // -------------------------------------------------------------- documents --
 
 /**
- * A required-listening obligation for one student and one recording.
+ * A student's grant on one recording: both the permission to play it and the
+ * obligation to.
  *
- * There is exactly one reason an obligation exists: the student was absent or
- * excused from the session and it has a published recording. So there is no
- * `source` — the reconcile from the session's attendance is the only writer.
+ * There is exactly one reason one exists: the student was marked EXCUSED for the
+ * session and it has a published recording. So there is no `source` — the
+ * reconcile from the session's attendance is the only writer.
  *
- * Document id is `${studentUid}_${recordingId}` — at most one obligation per
- * student per recording, which makes the reconcile idempotent. Written ONLY by
- * the server; clients read their own and never write. `dueDate` is denormalized
- * from the session so a student computes overdue with no extra read.
+ * This document is the whole of a student's access. `firestore.rules` gates the
+ * recording's metadata on it, and `getPlaybackUrl` gates the audio on it, so a
+ * student who is not excused cannot reach a recording by any route.
+ *
+ * Document id is `${studentUid}_${recordingId}` — at most one per student per
+ * recording, which makes the reconcile idempotent. Written ONLY by the server;
+ * clients read their own and never write. `dueDate` is denormalized from the
+ * session so a student sees their deadline with no extra read.
  */
 export interface AssignmentDoc {
   studentUid: string;
@@ -29,13 +34,17 @@ export interface AssignmentDoc {
   sessionId: string;
   courseId: string;
   cohortId: string;
-  /** Date-only `YYYY-MM-DD` in the institute timezone, or null ("required, but
-   *  never overdue" — a no-due assignment is still required listening). */
-  dueDate: string | null;
+  /** Date-only `YYYY-MM-DD` in the institute timezone. The last day the student
+   *  may listen: access closes after it. Never null — see `SessionDoc.dueDate`. */
+  dueDate: string;
   /**
-   * Accountability on/off without deleting history. Unpublish, marking the
-   * student present, and unenrolling all set this false; the row and its
+   * The grant on/off without deleting history. Unpublish, marking the student
+   * present or absent, and unenrolling all set this false; the row and its
    * completion history remain for audit.
+   *
+   * Note it does NOT go false when the due date passes: that would erase the
+   * ledger's record of who missed what. Expiry is a function of the date, not a
+   * stored flag — see `hasRecordingAccess`.
    */
   active: boolean;
   assignedAt: number;
@@ -44,6 +53,22 @@ export interface AssignmentDoc {
 
 export function assignmentId(studentUid: string, recordingId: string): string {
   return `${studentUid}_${recordingId}`;
+}
+
+/**
+ * May this student still open this recording?
+ *
+ * The single definition of access, shared by `getPlaybackUrl` and the student
+ * UI so the app never offers a play button the server will refuse. Deliberately
+ * NOT reimplemented in security rules: comparing `request.time` to a date-only
+ * string in the institute timezone would be a second copy of the maths below,
+ * free to drift. Rules gate the metadata on `active`; this gates the audio.
+ */
+export function hasRecordingAccess(
+  assignment: { active: boolean; dueDate: string },
+  today: string,
+): boolean {
+  return assignment.active && !isOverdue(assignment.dueDate, today);
 }
 
 /**
@@ -102,6 +127,17 @@ export function todayInZone(timeZone: string, now: number = Date.now()): string 
 }
 
 /**
+ * `date` shifted by whole calendar days, as `YYYY-MM-DD`.
+ *
+ * Parsed as UTC midnight for the same reason `daysUntilDue` is: this is civil
+ * date arithmetic, and DST never enters a count of calendar days. Used to
+ * prefill a session's due date from its meeting date.
+ */
+export function addDays(date: string, days: number): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
  * Whole calendar days from `today` until `dueDate` (negative once past).
  *
  * Both are date-only strings, so they are parsed as UTC midnight purely to
@@ -115,37 +151,37 @@ export function daysUntilDue(dueDate: string, today: string): number {
 }
 
 /**
- * Is this obligation overdue as of `today`?
+ * Has this due date passed as of `today`?
  *
  * The due date is the LAST on-time day: a recording due `2026-07-25` is still
- * "due" all through the 25th and becomes overdue on the 26th. No-due
- * assignments never become overdue.
+ * open all through the 25th and closes on the 26th.
  */
-export function isOverdue(dueDate: string | null, today: string): boolean {
-  return dueDate !== null && today > dueDate;
+export function isOverdue(dueDate: string, today: string): boolean {
+  return today > dueDate;
 }
 
 /**
  * Which section of the student home an obligation belongs in.
  *
  *  - `done`     — completed, regardless of due date (Completed / recent history).
- *  - `overdue`  — past its due date and not done.
+ *  - `missed`   — past its due date and not done. Access has closed, so this is
+ *                 a final state, not a late-but-still-doable one. Called
+ *                 "missed" rather than "overdue" for exactly that reason: staff
+ *                 and students should not read it as work still outstanding.
  *  - `dueSoon`  — due within the next `DUE_SOON_DAYS` days (incl. today), not done.
- *  - `upcoming` — has a due date further out than that, not done.
- *  - `noDue`    — required but with no due date, not done.
+ *  - `upcoming` — due further out than that, not done.
  *
- * `upcoming` is not one of the brief's four named sections but is the honest
- * home for a dated obligation that is neither soon nor overdue; the home orders
- * it right after `dueSoon`.
+ * `upcoming` is not one of the brief's named sections but is the honest home for
+ * an obligation that is neither soon nor missed; the home orders it after
+ * `dueSoon`.
  */
-export type DueBucket = 'overdue' | 'dueSoon' | 'upcoming' | 'noDue' | 'done';
+export type DueBucket = 'missed' | 'dueSoon' | 'upcoming' | 'done';
 
 const BUCKET_RANK: Record<DueBucket, number> = {
-  overdue: 0,
+  missed: 0,
   dueSoon: 1,
   upcoming: 2,
-  noDue: 3,
-  done: 4,
+  done: 3,
 };
 
 /** Sort key for the home list: lower sorts first. */
@@ -154,11 +190,10 @@ export function bucketRank(bucket: DueBucket): number {
 }
 
 export function dueBucket(
-  item: { dueDate: string | null; completed: boolean },
+  item: { dueDate: string; completed: boolean },
   today: string,
 ): DueBucket {
   if (item.completed) return 'done';
-  if (item.dueDate === null) return 'noDue';
-  if (isOverdue(item.dueDate, today)) return 'overdue';
+  if (isOverdue(item.dueDate, today)) return 'missed';
   return daysUntilDue(item.dueDate, today) <= DUE_SOON_DAYS ? 'dueSoon' : 'upcoming';
 }
