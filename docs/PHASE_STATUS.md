@@ -602,6 +602,16 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-08-15 — **v0.4.1: the switches, checked on both surfaces.** Web push was
+  confirmed working in Faisal's own browser first, which closed the last open
+  item from Phase 7. The switch itself was then looked at rather than reasoned
+  about, on web AND on the AVD — the repo's own rule that web is not evidence
+  about native applies squarely to a control built from a transform. Both states
+  render in brand colours on both, and tapping the row (not just the pill) moves
+  it. Live: sign-in reads `v0.4.1 · 505453c`, APK `versionName=0.4.1`
+  `versionCode=22` with no dev panel, published manual reads 0.4.1,
+  `smoke:prod` green.
+
 - 2026-08-15 — **v0.4.0 shipped, and the migration verified in production.**
   Deploy order held: indexes → rules → storage → functions → migration →
   hosting. The migration backfilled the one null due date, touched all 84
