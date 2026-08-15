@@ -1131,6 +1131,52 @@ check(
 );
 await shot(student, '25-missed');
 
+// ------------------------------------------------------------ notifications --
+console.log('\nNotifications');
+// The FIRST document either population may write. `students` and `staffUsers`
+// refuse self-writes because role and status ARE the security model there, so
+// this is the one place the rules have to let a client through — worth driving
+// end to end rather than trusting the rules test alone.
+await goHome(student);
+await tap(student, 'nav-notifications');
+await student.getByTestId('notify-lastDay').waitFor({ timeout: 20000 });
+const notifyText = await student.locator('body').innerText();
+check(
+  'a student sees their own two switches and not the staff one',
+  /A recording is ready for me/.test(notifyText) &&
+    /Last day to listen/.test(notifyText) &&
+    !/Attendance still not taken/.test(notifyText),
+);
+check(
+  'every switch starts ON — an absent document means nothing is turned off',
+  (await student.getByTestId('notify-lastDay').getAttribute('aria-checked')) === 'true',
+);
+
+await tap(student, 'notify-lastDay');
+await student.waitForTimeout(1500);
+const prefs = await readCollection('notifications');
+check(
+  'turning one off writes it, and leaves the other alone',
+  prefs.length === 1 &&
+    prefs[0].fields.lastDay?.booleanValue === false &&
+    prefs[0].fields.recordingReady === undefined,
+  JSON.stringify(prefs[0]?.fields ?? {}),
+);
+check(
+  'the switch reflects it without a reload',
+  (await student.getByTestId('notify-lastDay').getAttribute('aria-checked')) === 'false',
+);
+await shot(student, '26-notifications');
+
+await goHome(mgr);
+await tap(mgr, 'nav-notifications');
+await mgr.getByTestId('notify-attendanceMissing').waitFor({ timeout: 20000 });
+const mgrNotify = await mgr.locator('body').innerText();
+check(
+  'staff see the attendance reminder and not the student switches',
+  /Attendance still not taken/.test(mgrNotify) && !/Last day to listen/.test(mgrNotify),
+);
+
 // -------------------------------------------------------------------- audit --
 // The auditedCall wrapper writes one entry per staff mutation — this whole run
 // has performed many, through the real functions emulator. Assert the log is

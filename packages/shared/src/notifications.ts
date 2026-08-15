@@ -1,0 +1,149 @@
+/**
+ * Push notifications: the three messages, the per-person switches, and the
+ * copy.
+ *
+ * Everything here is PURE — no Firestore, no `admin.messaging()`, no clock — so
+ * the decision "should this person get this message, and what does it say?" is
+ * unit-testable. That matters more here than elsewhere: there is no FCM
+ * emulator, so delivery itself can only ever be verified on a real device, and
+ * anything that can be tested without one should be.
+ */
+
+/**
+ * The three messages, and deliberately no more.
+ *
+ *  - `recordingReady` — a student was excused and the recording is published.
+ *    Under the excused-only policy this is also "you now have access", so
+ *    without it a student has no way to learn a recording appeared.
+ *  - `lastDay` — the morning of the due date, if not yet complete. There is no
+ *    day-after reminder: once the deadline passes access has closed, so the
+ *    message could only say "you missed it", which is a scolding with no action
+ *    attached.
+ *  - `attendanceMissing` — staff, when a session's date has passed and
+ *    attendance was never submitted. Load-bearing under this policy: no
+ *    attendance means nobody is granted anything, so an un-taken sheet silently
+ *    locks a whole class out of a published recording.
+ */
+export type NotificationKind = 'recordingReady' | 'lastDay' | 'attendanceMissing';
+
+export const NOTIFICATION_KINDS: NotificationKind[] = [
+  'recordingReady',
+  'lastDay',
+  'attendanceMissing',
+];
+
+/** Which kinds each population can receive, for rendering the settings screen. */
+export const STUDENT_KINDS: NotificationKind[] = ['recordingReady', 'lastDay'];
+export const STAFF_KINDS: NotificationKind[] = ['attendanceMissing'];
+
+/**
+ * One person's switches. Document id is their uid; the only client-writable
+ * document either population has, so the rules allow exactly these keys.
+ *
+ * Every field is optional and absent means ON. A person who has never opened
+ * the settings screen has no document at all, and defaulting a missing document
+ * to "off" would mean nobody is ever notified until they go looking for a screen
+ * that exists to turn notifications off.
+ */
+export interface NotificationPrefsDoc {
+  recordingReady?: boolean;
+  lastDay?: boolean;
+  attendanceMissing?: boolean;
+  updatedAt?: number;
+}
+
+/** The keys a client may write. Mirrored in firestore.rules — keep them in step. */
+export const PREF_KEYS: string[] = [...NOTIFICATION_KINDS, 'updatedAt'];
+
+export function prefEnabled(
+  prefs: NotificationPrefsDoc | null | undefined,
+  kind: NotificationKind,
+): boolean {
+  return prefs?.[kind] !== false;
+}
+
+/**
+ * A registered device, at `notifications/{uid}/devices/{token}`.
+ *
+ * Keyed BY the token so re-registering the same device is a no-op rather than a
+ * slow leak of duplicates, and so a send failure can delete the exact row that
+ * failed without a query.
+ */
+export interface DeviceTokenDoc {
+  token: string;
+  platform: 'android' | 'web';
+  registeredAt: number;
+}
+
+/**
+ * Proof a message was already sent, at `notifications/{uid}/sent/{id}`.
+ *
+ * Trigger delivery is at-least-once, and the scheduled job runs every morning
+ * whether or not yesterday's run finished — so without this a student would be
+ * told twice about the same recording. Server-written; clients cannot read it,
+ * because it answers a question nobody in the app asks.
+ */
+export interface SentNotificationDoc {
+  kind: NotificationKind;
+  targetId: string;
+  at: number;
+}
+
+export function sentNotificationId(kind: NotificationKind, targetId: string): string {
+  return `${kind}_${targetId}`;
+}
+
+// -------------------------------------------------------------------- copy --
+
+export interface PushMessage {
+  title: string;
+  body: string;
+}
+
+/** Human labels for the settings screen. */
+export const NOTIFICATION_LABEL: Record<NotificationKind, string> = {
+  recordingReady: 'A recording is ready for me',
+  lastDay: 'Last day to listen',
+  attendanceMissing: 'Attendance still not taken',
+};
+
+export const NOTIFICATION_DESCRIPTION: Record<NotificationKind, string> = {
+  recordingReady: 'When a class you were excused from has a recording you can listen to.',
+  lastDay: 'On the morning of the day a recording closes, if you have not finished it.',
+  attendanceMissing:
+    'When a class meeting has passed and its attendance has not been submitted, so nobody can hear the recording yet.',
+};
+
+/**
+ * What each message says.
+ *
+ * The deadline is in every student message, because under this policy it is not
+ * a nag but the day the recording disappears. Tone is the brief's: direct, adult,
+ * never scolding — `check-text-sources` and the same review that governs screen
+ * copy apply here, and a notification is the one piece of text that arrives
+ * uninvited.
+ */
+export function recordingReadyMessage(courseName: string, title: string, dueDate: string): PushMessage {
+  return {
+    title: `${courseName}: a recording is ready`,
+    body: `${title} — you were excused, so it is yours to listen to until ${dueDate}.`,
+  };
+}
+
+export function lastDayMessage(courseName: string, title: string, dueDate: string): PushMessage {
+  return {
+    title: `${courseName}: last day to listen`,
+    body: `${title} closes at the end of ${dueDate}.`,
+  };
+}
+
+export function attendanceMissingMessage(
+  courseName: string,
+  title: string,
+  date: string,
+): PushMessage {
+  return {
+    title: `${courseName}: attendance not taken`,
+    body: `${title} met on ${date} and its attendance has not been submitted. Nobody can hear its recording until it is.`,
+  };
+}

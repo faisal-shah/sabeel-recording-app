@@ -12,6 +12,7 @@ import {
 import { googleSignOut } from './auth/google';
 import { auth, db } from './firebase';
 import { setLiveDataSession } from './liveQuery';
+import { unregisterThisDevice } from './notifications';
 
 export type Profile =
   | { kind: 'staff'; doc: StaffUserDoc }
@@ -23,6 +24,13 @@ export type Session =
   | { phase: 'signedIn'; user: User; profile: Profile | null; claims: TokenClaims };
 
 export async function signOut(): Promise<void> {
+  // Drop this device's push registration FIRST, while the credential still
+  // exists to authorize the delete. A shared device that kept its registration
+  // would deliver one student's "a recording is ready" to whoever signs in
+  // next — a leak, and the single most confusing notification the app could
+  // send. Best-effort: failing to unregister must never trap someone signed in.
+  const uid = auth.currentUser?.uid;
+  if (uid) await unregisterThisDevice(uid).catch(() => undefined);
   // Also clear the native Google session, or the next sign-in silently reuses
   // the same account with no way to switch users.
   await googleSignOut().catch(() => undefined);

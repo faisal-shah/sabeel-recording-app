@@ -30,11 +30,50 @@ and commit messages, and renaming them would strand every one of those.
 | A | Excused-only access, with a deadline | **complete** (2026-08-14) |
 | B | The student's own attendance record | **complete** (2026-08-14) |
 | 6 | Zoom import *(gated on credentials)* | not started |
-| 7 | Notifications | not started |
+| 7 | Notifications | **built, delivery unverified** (2026-08-15: logic + rules + settings green; needs a VAPID key and a real device) |
 | 8 | Admin backend stats | not started |
 | 9 | Deploy, manual, release | not started |
 
 ## Decision log
+
+- 2026-08-15 — **Three notifications, and deliberately no fourth.** A student is
+  told once when a recording opens to them, and once on the morning it closes;
+  staff are told when a session has met and its attendance was never submitted.
+  There is no day-after overdue reminder, which the brief originally asked for
+  daily: once the deadline passes the recording is gone, so the message could
+  only say "you missed it" — a scolding with no action attached, and the tone the
+  brief rules out. The staff one is not a convenience: under excused-only access
+  an un-taken sheet grants nobody anything, so a published recording sits there
+  openable by no one and nothing else in the app says so.
+
+- 2026-08-15 — **A missing preferences document means ON.** Every switch defaults
+  on, and someone who has never opened the settings screen has no document at
+  all. Defaulting the absent document to OFF would mean nobody is ever notified
+  until they visit a screen whose whole purpose is turning notifications off.
+
+- 2026-08-15 — **The idempotency marker is CLAIMED, not checked.** `create` on
+  `notifications/{uid}/sent/{kind}_{target}` fails if it exists, which is both
+  the "already sent" answer and an atomic one. Reading first and writing after
+  would leave a window two invocations could pass through — and both paths here
+  can double-fire: trigger delivery is at-least-once, and the morning sweep runs
+  whether or not yesterday's finished.
+
+- 2026-08-15 — **Dead tokens are pruned; failed ones are not.** Only the FCM
+  codes that mean "this token will never work again" delete a registration.
+  Pruning on any failure would unregister working devices during an outage, and
+  the only symptom would be notifications quietly stopping — indistinguishable
+  from a person having turned them off.
+
+- 2026-08-15 — **`expo-notifications` needed no prebuild.** The worry was real —
+  its config plugin does not run in a bare workflow, and `android/` is committed
+  — but the plugin only contributes a default icon and colour. The MODULE is
+  picked up by expo-modules autolinking at Gradle time, which the merged
+  manifest confirms: `ExpoFirebaseMessagingService` and Firebase's own
+  `FirebaseMessagingService` are both registered. The committed `android/` was
+  not touched. `getDevicePushTokenAsync` is used, never `getExpoPushTokenAsync`:
+  the latter returns an ExponentPushToken that only Expo's service understands,
+  and sending one to the Admin SDK fails with an invalid-token error that reads
+  like a misconfiguration and is not one.
 
 - 2026-08-14 — **Being excused is the whole of a student's entitlement**
   (Faisal's decision). Enrolment used to open every published recording in a
@@ -546,6 +585,33 @@ and commit messages, and renaming them would strand every one of those.
   reports nothing is worse than none.
 
 ## Verification log
+
+- 2026-08-15 — **The native push path proven on a device, short of delivery.**
+  The debug APK on `tb_emu`: the app launches with `expo-notifications` linked
+  and does not crash; opening **Notifications** raises the Android permission
+  prompt (from a user gesture, which is the only kind browsers and Android
+  respect); allowing it registers a real 142-character FCM token from Play
+  Services at `notifications/{uid}/devices/{token}` with `platform: android`;
+  and signing out deletes it, so a shared device cannot deliver one person's
+  notification to the next. What remains unproven is only the send itself, which
+  needs Cloud Messaging enabled on the real project.
+
+- 2026-08-15 — **Notifications verified everywhere except delivery.** 23 tests:
+  the `notifications` rules block mutation-tested (opening it turns all six
+  denial assertions red, including a student pre-claiming their own `sent`
+  marker to silence themselves), and 14 integration tests driving the three
+  messages with the FCM sender stubbed — sent once however many times the
+  reconcile runs, silent for an unpublished recording, silent for someone who
+  finished in time, silent about a course that has ended, and a dead token
+  pruned while a live one survives. The e2e drives the settings screen for both
+  populations. Delivery itself has no test anywhere: there is no FCM emulator,
+  and the transport is the one function a real device has to prove.
+
+- 2026-08-15 — **The web service worker reaches the export.** `app/public/`
+  is copied verbatim by `expo export`, confirmed against `dist-web` rather than
+  the dev server — Hosting serves a matching real file before the `**` →
+  `/index.html` rewrite, so it needs no rewrite exception, but a worker that
+  never shipped would fail exactly as silently as one that did.
 
 - 2026-08-14 — **Both new rule arms mutation-tested.** Opening the recordings
   student arm to any published recording turned four assertions red — the two

@@ -18,7 +18,9 @@ export function HomeScreen({
 }: {
   name: string;
   role: Role;
-  onOpen: (route: 'Staff' | 'Students' | 'Cohorts' | 'MyCourses' | 'Library' | 'Tokens') => void;
+  onOpen: (
+    route: 'Staff' | 'Students' | 'Cohorts' | 'MyCourses' | 'Library' | 'Tokens' | 'Notifications',
+  ) => void;
   /** Admin-only global audit view (managers reach a scoped one from a course). */
   onOpenAudit: () => void;
 }) {
@@ -60,6 +62,12 @@ export function HomeScreen({
         ) : null}
       </Card>
 
+      <Button
+        testID="nav-notifications"
+        label="Notifications"
+        variant="secondary"
+        onPress={() => onOpen('Notifications')}
+      />
       {IS_DEV ? (
         <Button label="Design tokens" variant="secondary" onPress={() => onOpen('Tokens')} />
       ) : null}

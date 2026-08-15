@@ -31,6 +31,7 @@ export {
 export { listZoomRecordings, importZoomRecording, retryZoomImport } from './zoomImport';
 export { getPlaybackUrl } from './playback';
 export { onRecordingWritten, onSessionWritten } from './assignmentsTrigger';
+export { onAssignmentWritten, onMorning } from './notifyTrigger';
 export { overrideCompletion, clearCompletionOverride } from './overrides';
 
 /**

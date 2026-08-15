@@ -168,6 +168,25 @@ sent." You don't have to do anything; it sorts itself out.
 Streaming the audio itself does need a connection, so for a long class on the go,
 a stable network (or Wi-Fi before you leave) is your friend.
 
+## 1.7 Notifications
+
+The app can send you two messages, and only two. Tap **Notifications** at the
+bottom of your home screen to turn either off:
+
+- **A recording is ready for me** — when a class you were excused from has a
+  recording you can listen to. Worth leaving on: it's the only way you'll know
+  one has appeared.
+- **Last day to listen** — on the morning of the day a recording closes, if you
+  haven't finished it.
+
+Both start switched on. There's deliberately no message *after* a recording
+closes: by then there'd be nothing you could do about it.
+
+Your choices follow you — they apply on every device you sign in on. If the
+screen says this device can't receive notifications, they're switched off for
+the app in your phone's own settings, or you're in a browser that doesn't
+support them.
+
 ---
 
 # Part 2 — For staff
@@ -484,6 +503,19 @@ sees every course.
 
 ---
 
+## 2.12 Notifications *(staff)*
+
+Tap **Notifications** on your home screen. Staff get one message:
+
+- **Attendance still not taken** — a couple of days after a class meeting whose
+  attendance you never submitted.
+
+It's more useful than it sounds. Until attendance is submitted nobody has been
+excused, so a recording you've already published is sitting there that not one
+student can open — and nothing else in the app tells you.
+
+---
+
 # Part 3 — For admins
 
 ## 3.1 Approving staff
@@ -566,6 +598,7 @@ confirmation, and is audited. Reach for disable, unpublish, or archive first.
 | **Make a latecomer catch up on an old session** *(staff)* | Open that session → mark them **Excused** → **Submit attendance**. (Move **Listen by** forward first if it has passed.) |
 | **See course attendance** *(staff)* | Course → **Attendance report** (toggle by session / by student). |
 | **Export for records** *(staff)* | Any ledger or the attendance report → **Export CSV**. |
+| **Turn a notification off** | Home → **Notifications** → tap the one you don't want. |
 | **Approve a new teacher** *(admin)* | Home → **Staff** → **Approve as manager / admin**. |
 | **Give a manager a course** *(admin)* | Course page → **Managers** → add them. |
 | **Create a student** *(admin)* | Home → **Students** → name + email → **Create account**. |

@@ -334,9 +334,54 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ---- Notifications ----
+    // Document id is the person's uid. Three things live under it, with three
+    // different owners, which is why they are separate subcollections rather
+    // than fields: the switches are theirs, the device tokens are theirs to add
+    // and remove, and the record of what was already sent is the server's alone.
+    match /notifications/{uid} {
+      function isMine() {
+        return isActive() && request.auth.uid == uid;
+      }
+
+      // Both populations write here — the first client-writable document staff
+      // have. `students` and `staffUsers` deliberately refuse self-writes
+      // because role and status ARE the security model; preferences are not
+      // privilege-adjacent, so they get their own document rather than a field
+      // on one whose every future field would need re-auditing.
+      allow get: if isMine();
+      // hasOnly on BOTH arms, and they cannot be merged: `resource` is null on a
+      // create, so diff() against it is an evaluation error rather than a
+      // denial. Whitelisting the keys is what stops this document quietly
+      // becoming a place to store anything.
+      allow create: if isMine()
+        && request.resource.data.keys().hasOnly(
+             ['recordingReady', 'lastDay', 'attendanceMissing', 'updatedAt']);
+      allow update: if isMine()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+             ['recordingReady', 'lastDay', 'attendanceMissing', 'updatedAt']);
+      allow delete: if false;
+
+      // Keyed BY the token, so registering the same device twice is a no-op and
+      // the send path can delete the exact row that failed without a query.
+      // No update: a token is added or removed, never edited into another one.
+      match /devices/{token} {
+        allow get, list, create, delete: if isMine();
+        allow update: if false;
+      }
+
+      // Server-only, both ways. This is the idempotency marker the send path
+      // claims before sending; a client that could create one would silence its
+      // own notifications, and a client that could read one learns nothing the
+      // app ever asks.
+      match /sent/{sentId} {
+        allow read, write: if false;
+      }
+    }
+
     // ---- Everything else ----
-    // Notifications and backend-stats collections stay denied until each is
-    // opened deliberately with its consumer.
+    // The backend-stats collection stays denied until it is opened deliberately
+    // with its consumer.
     match /{document=**} {
       allow read, write: if false;
     }

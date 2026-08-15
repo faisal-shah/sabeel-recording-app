@@ -37,6 +37,7 @@
         }
       ],
       "@sentry/react-native",
+      "expo-notifications",
       "expo-sharing",
       "@react-native-community/datetimepicker"
     ]

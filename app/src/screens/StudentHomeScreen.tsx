@@ -42,10 +42,12 @@ export function StudentHomeScreen({
   uid,
   onOpen,
   onBrowse,
+  onNotifications,
 }: {
   uid: string;
   onOpen: (recording: RecordingRow, cls: CourseRow, dueDate: string) => void;
   onBrowse: () => void;
+  onNotifications: () => void;
 }) {
   const listenerError = useListenerError();
   const assignments = useMyAssignments(uid);
@@ -125,6 +127,12 @@ export function StudentHomeScreen({
           label="My classes"
           variant="secondary"
           onPress={onBrowse}
+        />
+        <Button
+          testID="nav-notifications"
+          label="Notifications"
+          variant="secondary"
+          onPress={onNotifications}
         />
         <Button testID="sign-out" label="Sign out" variant="secondary" onPress={() => void signOut()} />
       </View>

@@ -7,5 +7,6 @@ export * from './recordings';
 export * from './assignments';
 export * from './audit';
 export * from './ledger';
+export * from './notifications';
 export * from './csv';
 export * from './zoom';

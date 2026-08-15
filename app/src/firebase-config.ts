@@ -37,3 +37,14 @@ export const firebaseConfig = {
  */
 export const WEB_CLIENT_ID =
   '977423479850-k1r54fn135p62fa165n8gfngbafssv5q.apps.googleusercontent.com';
+
+/**
+ * The WEB PUSH public key (VAPID), from Firebase console → Project settings →
+ * Cloud Messaging → Web configuration → "Generate key pair".
+ *
+ * Not a secret: the public half of the pair ships in every client bundle, which
+ * is what it is for. Empty until Faisal generates it, and an empty value is
+ * handled — `push.web.ts` returns no token and the settings screen says this
+ * device cannot receive push, rather than throwing on load.
+ */
+export const VAPID_PUBLIC_KEY = '';

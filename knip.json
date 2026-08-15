@@ -18,7 +18,8 @@
         "babel.config.js",
         "metro.config.js",
         "src/**/*.web.ts",
-        "src/**/*.web.tsx"
+        "src/**/*.web.tsx",
+        "public/firebase-messaging-sw.js"
       ],
       "project": [
         "**/*.{ts,tsx,js}"

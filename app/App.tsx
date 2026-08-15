@@ -31,6 +31,7 @@ import { StudentLedgerScreen } from './src/screens/StudentLedgerScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { ZoomImportScreen } from './src/screens/ZoomImportScreen';
 import { AuditScreen } from './src/screens/AuditScreen';
+import { NotificationsScreen } from './src/screens/NotificationsScreen';
 import { StudentAttendanceScreen } from './src/screens/StudentAttendanceScreen';
 import { StudentCoursesScreen } from './src/screens/StudentCoursesScreen';
 import { StudentHomeScreen } from './src/screens/StudentHomeScreen';
@@ -68,6 +69,9 @@ const SHARED_PATHS = {
   Home: '',
   // Staff listen too — from the library and from a session's recording.
   Player: 'play/:recordingId',
+  // Both populations get notifications, so both get the screen that turns them
+  // off. The switches it shows are role-dependent; the route is not.
+  Notifications: 'notifications',
 } as const;
 
 /** Everything only staff may reach. "My courses" is one of them: it is the
@@ -243,6 +247,9 @@ export default function App() {
             <Stack.Screen name="Home" options={{ title: 'Class Recordings' }}>
               {() => <Landing name={profile.doc.displayName} role={role} uid={user.uid} />}
             </Stack.Screen>
+            <Stack.Screen name="Notifications" options={{ title: 'Notifications' }}>
+              {() => <NotificationsScreen uid={user.uid} isStudent={isStudent} />}
+            </Stack.Screen>
             {/* THE ROLE SPLIT IS THE BOUNDARY, not a tidy-up. A screen registered
                 here is addressable by URL, and a browser tab outlives the person
                 signed into it — see the note on the path tables above. Adding a
@@ -351,6 +358,7 @@ function Landing({ name, role, uid }: { name: string; role: Role; uid: string })
           navigation.navigate('Player', { recordingId: recording.id, dueDate })
         }
         onBrowse={() => navigation.navigate('MyClasses')}
+        onNotifications={() => navigation.navigate('Notifications')}
       />
     );
   }

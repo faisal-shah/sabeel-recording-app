@@ -192,14 +192,36 @@ runs from the repo between the functions and hosting deploys — see
 175 to roughly 49 on the current data, because being marked *absent* no longer
 grants anything. Nothing is deleted; the rows stay for the ledger.
 
-### 2. Reword the password-reset email
+### 2. Notifications — two console steps, then a device
+
+The code is built and tested; nothing will actually be delivered until these.
+
+1. **Enable Cloud Messaging.** Google Cloud console → APIs & Services → enable
+   **`fcm.googleapis.com`** for `sabeel-class-recordings`. (Firebase console →
+   Project settings → Cloud Messaging will also offer it.)
+2. **Generate the Web Push key pair.** Firebase console → Project settings →
+   **Cloud Messaging** → Web configuration → **Generate key pair**. Paste the
+   public key into `VAPID_PUBLIC_KEY` in `app/src/firebase-config.ts` — it is
+   NOT a secret (it ships in the bundle, like the rest of that file), so send it
+   over normally.
+3. **Confirm delivery on a real device**, both Android and a desktop browser.
+   This is the only step no test can stand in for: there is no FCM emulator, and
+   "the function logged success" is not evidence a notification arrived. Sign in,
+   open **Notifications**, and check the screen does not say the device cannot
+   receive them — that message means the registration failed.
+
+Android needs nothing else: `expo-notifications` is autolinked, the existing
+`google-services.json` already carries the sender id, and `POST_NOTIFICATIONS`
+was already in the manifest for the lock-screen media controls.
+
+### 3. Reword the password-reset email
 
 Authentication → **Templates → Password reset**. Students receive it for an
 account they have never had a password on, so the default "reset your password"
 wording reads as though something has gone wrong. "Set your password for Sabeel
 Class Recordings" or similar.
 
-### ✅ 3. Android app registered — DONE (2026-07-23)
+### ✅ 4. Android app registered — DONE (2026-07-23)
 
 Faisal registered the Android app (`com.sabeelinstitute.classrecordings`) with the
 debug SHA-1 `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` and
@@ -213,7 +235,7 @@ Release. Staff Google sign-in on-device should now work; students already did.
 Still for a PUBLIC release (Phase 9): a dedicated **release keystore** (the APK is
 currently debug-signed) and **its** SHA-1 registered.
 
-### 4. Not blocking anything
+### 5. Not blocking anything
 
 - ✅ **Institute timezone** — set to `America/Chicago` (Houston) in Phase 4.
 - **App Check**: Play Integrity (Android) + reCAPTCHA Enterprise (web), plus

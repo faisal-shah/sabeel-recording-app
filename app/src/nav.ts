@@ -14,6 +14,8 @@
  */
 export type RootStackParamList = {
   Home: undefined;
+  /** Both populations have one; the switches shown depend on the role. */
+  Notifications: undefined;
   Staff: undefined;
   Students: undefined;
   /** The screen reads the student live, and their courses depend on who is

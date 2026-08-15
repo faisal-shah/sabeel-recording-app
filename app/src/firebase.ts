@@ -28,6 +28,11 @@ const app = initializeApp(
     : firebaseConfig,
 );
 
+// Exported for the web push seam, which needs the app instance to construct a
+// Messaging instance. Nothing else should reach for it — the initialised
+// services below are the intended surface.
+export { app };
+
 // initAuth is a platform seam: React Native has no default persistence in the
 // Firebase JS SDK and must be wired to AsyncStorage at init, before any
 // getAuth() call anywhere in the app.
