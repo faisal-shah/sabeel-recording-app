@@ -36,6 +36,21 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-08-15 — **Under the emulator, the send is suppressed at the source.**
+  `notify.integration` went flaky in CI: `notifyLastDay` returned 0 with nothing
+  in the log. The cause was not the test. The integration suite runs the FUNCTIONS
+  emulator, so writing an assignment fires the real `onAssignmentWritten` in a
+  SEPARATE PROCESS, which a test's `setSender` cannot reach — it called the real
+  FCM sender against a credential-less project, and whatever came back was read
+  as a verdict on real tokens, with device deletion as a possible outcome. A
+  live trigger deleting the device row a running test depends on surfaces three
+  tests later as a plain count mismatch. `messaging.ts` now picks its default
+  sender from `FUNCTIONS_EMULATOR`, so the emulated process sends nothing and
+  prunes nothing. Pinned in both directions by `senderSelection.test.ts`, because
+  both ways of getting it wrong are silent: suppressing in production stops every
+  notification with nothing failing. Mutation-tested — forcing either branch
+  turns two tests red.
+
 - 2026-08-15 — **v0.4.2 shipped to every surface.** A code review of
   `d428fdd..24f3a3c` — the excused-only policy, notifications, the attendance
   projection, the required due date — turned up fifteen findings, all fixed in

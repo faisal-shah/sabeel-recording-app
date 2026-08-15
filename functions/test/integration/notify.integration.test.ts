@@ -11,7 +11,7 @@ import {
   type RecordingDoc,
   type SessionDoc,
 } from '@sabeel/shared';
-import { setSender, fcmSender, type SendOutcome } from '../../src/messaging';
+import { setSender, resetSender, type SendOutcome } from '../../src/messaging';
 import { notifyAttendanceMissing, notifyLastDay, notifyRecordingReady } from '../../src/notifyJobs';
 
 /**
@@ -74,7 +74,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-  setSender(fcmSender);
+  resetSender();
 });
 
 async function withDevice(uid: string, token = `tok-${uid}`) {
