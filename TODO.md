@@ -192,27 +192,23 @@ runs from the repo between the functions and hosting deploys — see
 175 to roughly 49 on the current data, because being marked *absent* no longer
 grants anything. Nothing is deleted; the rows stay for the ledger.
 
-### 2. Notifications — two console steps, then a device
+### ✅ 2. Notifications — DONE except one browser check (2026-08-15)
 
-The code is built and tested; nothing will actually be delivered until these.
+Cloud Messaging was already on, you generated the Web Push key pair, and the
+public key is in `app/src/firebase-config.ts`.
 
-1. **Enable Cloud Messaging.** Google Cloud console → APIs & Services → enable
-   **`fcm.googleapis.com`** for `sabeel-class-recordings`. (Firebase console →
-   Project settings → Cloud Messaging will also offer it.)
-2. **Generate the Web Push key pair.** Firebase console → Project settings →
-   **Cloud Messaging** → Web configuration → **Generate key pair**. Paste the
-   public key into `VAPID_PUBLIC_KEY` in `app/src/firebase-config.ts` — it is
-   NOT a secret (it ships in the bundle, like the rest of that file), so send it
-   over normally.
-3. **Confirm delivery on a real device**, both Android and a desktop browser.
-   This is the only step no test can stand in for: there is no FCM emulator, and
-   "the function logged success" is not evidence a notification arrived. Sign in,
-   open **Notifications**, and check the screen does not say the device cannot
-   receive them — that message means the registration failed.
+**Android delivery is verified end to end**: the app registered an FCM token,
+the Admin SDK sent to it against the live project, and the notification appeared
+in the shade with the real copy. `npm run check:push` re-checks the send path
+any time (valid VAPID key + FCM authenticating us as this project).
 
-Android needs nothing else: `expo-notifications` is autolinked, the existing
-`google-services.json` already carries the sender id, and `POST_NOTIFICATIONS`
-was already in the manifest for the lock-screen media controls.
+Still yours, once the web build is deployed:
+
+- [ ] **Open the deployed site in a normal browser**, sign in, open
+      **Notifications**, and confirm the screen does NOT say the device cannot
+      receive them. Web push cannot be driven from here — Playwright's Chromium
+      has no FCM credentials and branded Chrome under it refuses — so this is
+      the one path with no automated check behind it.
 
 ### 3. Reword the password-reset email
 

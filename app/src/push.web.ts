@@ -49,7 +49,22 @@ async function resolveToken(): Promise<string | null> {
   if (permission !== 'granted') return null;
 
   try {
-    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    // `register()` resolves as soon as the script is FETCHED, not once a worker
+    // is running it. Handing that registration straight to getToken fails with
+    // "Subscription failed - no active Service Worker" — on a first-ever visit
+    // only, because every later load already has one activated. `ready` is the
+    // promise that waits for an active worker in this page's scope.
+    //
+    // Raced against a timeout because `ready` never REJECTS: a worker that fails
+    // to activate leaves it pending forever, and the settings screen would sit
+    // on "checking" with no notice and no error — the worst of the three
+    // outcomes, because it looks like it is still working.
+    const registration = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000)),
+    ]);
+    if (!registration) return null;
     return await getToken(getMessaging(app), {
       vapidKey: VAPID_PUBLIC_KEY,
       serviceWorkerRegistration: registration,

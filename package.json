@@ -2,7 +2,7 @@
   "name": "sabeel-class-recordings",
   "version": "0.0.0",
   "private": true,
-  "description": "Sabeel Class Recordings — Hikam Foundations class recordings with in-app listening and a staff accountability ledger (Android + web from one Expo codebase, Firebase backend)",
+  "description": "Sabeel Class Recordings \u2014 Hikam Foundations class recordings with in-app listening and a staff accountability ledger (Android + web from one Expo codebase, Firebase backend)",
   "workspaces": [
     "packages/*",
     "functions",
@@ -25,7 +25,8 @@
     "emulators:free": "bash scripts/free-emulator-ports.sh",
     "test:e2e": "node scripts/web-e2e.mjs",
     "smoke:prod": "node scripts/prod-smoke.mjs",
-    "check:queries": "node scripts/check-query-shapes.mjs"
+    "check:queries": "node scripts/check-query-shapes.mjs",
+    "check:push": "node scripts/check-push.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

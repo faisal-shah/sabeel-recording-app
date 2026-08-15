@@ -30,7 +30,7 @@ and commit messages, and renaming them would strand every one of those.
 | A | Excused-only access, with a deadline | **complete** (2026-08-14) |
 | B | The student's own attendance record | **complete** (2026-08-14) |
 | 6 | Zoom import *(gated on credentials)* | not started |
-| 7 | Notifications | **built, delivery unverified** (2026-08-15: logic + rules + settings green; needs a VAPID key and a real device) |
+| 7 | Notifications | **complete** (2026-08-15: delivered to an Android device end to end; web delivery still a browser check) |
 | 8 | Admin backend stats | not started |
 | 9 | Deploy, manual, release | not started |
 
@@ -585,6 +585,32 @@ and commit messages, and renaming them would strand every one of those.
   reports nothing is worse than none.
 
 ## Verification log
+
+- 2026-08-15 — **A real notification arrived on a real device.** With the VAPID
+  key in place, the app on `tb_emu` registered an FCM token, the Admin SDK sent
+  to it against the LIVE project, and the notification appeared in the Android
+  shade carrying the exact copy `recordingReadyMessage` produces. Admin SDK →
+  FCM → Play Services → notification shade, the whole chain, with nothing
+  stubbed. That is the step the plan said only a human could confirm.
+
+  `npm run check:push` keeps the repeatable half: it validates the VAPID key is
+  an uncompressed P-256 point and sends to a bogus token, whose
+  `registration-token-not-registered` proves FCM authenticated us as this
+  project — and pins `DEAD_TOKEN_CODES[0]` to a code FCM really returns rather
+  than one read off documentation. It cannot mint a browser token: Playwright's
+  Chromium ships without the Google API keys needed to reach FCM's push service,
+  and branded Chrome under Playwright refuses too. Web delivery stays a human
+  check.
+
+- 2026-08-15 — **Two bugs in the web push seam, found by trying it.** Neither
+  would have shown up in review. `serviceWorker.register()` resolves when the
+  script is FETCHED, not when a worker is running it, so handing that
+  registration to `getToken` fails with "Subscription failed - no active Service
+  Worker" — on a first-ever visit only, which is exactly the visit that matters
+  and the one no returning developer ever sees again. `serviceWorker.ready` is
+  the right promise, and it is now raced against a timeout, because `ready` never
+  REJECTS: a worker that fails to activate leaves it pending forever and the
+  settings screen would sit on "checking" with no notice and no error.
 
 - 2026-08-15 — **`check:queries` caught an index the emulator never would.** The
   morning sweep asks `sessions where attendanceSubmittedAt == null and

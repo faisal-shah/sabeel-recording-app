@@ -42,9 +42,13 @@ export const WEB_CLIENT_ID =
  * The WEB PUSH public key (VAPID), from Firebase console → Project settings →
  * Cloud Messaging → Web configuration → "Generate key pair".
  *
- * Not a secret: the public half of the pair ships in every client bundle, which
- * is what it is for. Empty until Faisal generates it, and an empty value is
- * handled — `push.web.ts` returns no token and the settings screen says this
- * device cannot receive push, rather than throwing on load.
+ * Not a secret, in the same way `apiKey` above is not: it is the PUBLIC half of
+ * the pair, and shipping it in every client bundle is precisely its job — the
+ * browser needs it to subscribe. The private half never leaves Google.
+ *
+ * An empty value is still handled: `push.web.ts` returns no token and the
+ * settings screen says the device cannot receive push, rather than throwing on
+ * load. That is the state a fresh clone of a different project would be in.
  */
-export const VAPID_PUBLIC_KEY = '';
+export const VAPID_PUBLIC_KEY =
+  'BCUDRuIrVz3izxyxeoTgq8bU8LZ0yDQ4OWEXQYhtjlswv-MIcdMk-b1TNiHbifsWzU7Ro9t9ZkKmZXplqGD-aRs';
