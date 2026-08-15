@@ -108,6 +108,19 @@ const shapes = [
     "attendanceRecords — a session's rows (mirror reconcile)",
     () => db.collection('attendanceRecords').where('sessionId', '==', ID),
   ],
+  // ---- Phase 7: the morning notification sweep (server-side) ----
+  [
+    'assignments — grants closing today (last-day reminder)',
+    () => db.collection('assignments').where('active', '==', true).where('dueDate', '==', ID),
+  ],
+  [
+    'sessions — met but never marked (attendance reminder)',
+    () =>
+      db
+        .collection('sessions')
+        .where('attendanceSubmittedAt', '==', null)
+        .where('date', '<=', ID),
+  ],
   [
     "completions — a student's own (home join)",
     () => db.collection('completions').where('studentUid', '==', ID),

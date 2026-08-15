@@ -586,6 +586,14 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-08-15 — **`check:queries` caught an index the emulator never would.** The
+  morning sweep asks `sessions where attendanceSubmittedAt == null and
+  date <= cutoff` — one equality and one inequality on different fields, which
+  needs a composite index. The emulator builds indexes on demand and answers it
+  happily; the scheduled function would have failed on its first real morning,
+  in a job nobody is watching at 07:00. Added and deployed, and the probe now
+  passes. This is the second time that script has paid for itself.
+
 - 2026-08-15 — **The native push path proven on a device, short of delivery.**
   The debug APK on `tb_emu`: the app launches with `expo-notifications` linked
   and does not crash; opening **Notifications** raises the Android permission
