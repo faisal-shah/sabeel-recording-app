@@ -592,6 +592,24 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-08-15 — **v0.4.0 shipped, and the migration verified in production.**
+  Deploy order held: indexes → rules → storage → functions → migration →
+  hosting. The migration backfilled the one null due date, touched all 84
+  sessions, and the deployed triggers re-derived everything: **175 active grants
+  became 43**, 133 rows kept as inactive history, and 1017 attendance
+  projections written where there were none. Audited afterwards rather than
+  trusted: all 43 surviving grants were checked against their session's
+  attendance map and every one names a student really marked `excused` — zero
+  exceptions — and no session is left with a null due date.
+
+  Live checks: the deployed bundle carries `5fac5af` and `0.4.0`, contains
+  "Notifications" and "My classes", contains "Browse all recordings" zero times,
+  has no emulator flag, serves `firebase-messaging-sw.js` at the origin root as
+  `text/javascript`, and returns `text/html` for a `.map`. `smoke:prod` green on
+  all seven. The release APK on `tb_emu` reads `versionName=0.4.0`,
+  `versionCode=21`, labels itself `v0.4.0 · 5fac5af`, and shows **no dev sign-in
+  panel** — which is what proves it is a production build.
+
 - 2026-08-15 — **A real notification arrived on a real device.** With the VAPID
   key in place, the app on `tb_emu` registered an FCM token, the Admin SDK sent
   to it against the LIVE project, and the notification appeared in the Android
