@@ -36,6 +36,12 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-08-15 — **0.4.0, not 0.3.2.** The middle number, because this is the one
+  release so far that takes something away: a student who was marked absent
+  could open a recording yesterday and cannot today. Patch numbering would have
+  filed the largest product change in the app's life alongside a banner-colour
+  fix.
+
 - 2026-08-15 — **Three notifications, and deliberately no fourth.** A student is
   told once when a recording opens to them, and once on the morning it closes;
   staff are told when a session has met and its attendance was never submitted.
