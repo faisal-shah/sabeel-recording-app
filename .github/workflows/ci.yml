@@ -1,11 +1,32 @@
 name: CI
 
+# `push` is restricted to main, deliberately. Unfiltered `push:` ran on every
+# push to every branch AND fired a second time for the same commit via
+# `pull_request:` — one change cost two full 8-minute jobs, and every WIP commit
+# on a feature branch cost another. The sweep is 5.6 of those 8 minutes.
+#
+# What this leaves: a branch with no PR runs nothing (you are running the sweep
+# locally anyway — that is what `npm run test:screens` is for); a PR runs once
+# per push; a merge to main runs once. The guarantee that matters — nothing
+# reaches main unswept — is unchanged.
 on:
   push:
+    branches: [main]
   pull_request:
+
+# Repeated pushes to the same PR supersede each other rather than stacking up.
+# Not on main: those runs are the record of what was actually verified there, and
+# cancelling one leaves a merged commit with no result.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-test:
+    # A draft PR is work in progress; mark it ready for review to spend CI on it.
+    # (On a push event `github.event.pull_request` is null, so this is true and
+    # main still runs.)
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

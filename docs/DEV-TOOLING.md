@@ -177,6 +177,14 @@ SWEEP_WIDTHS=320 npm run test:screens   # one width, for a tight loop
 SWEEP_FULL=1 npm run test:screens       # + iPhone SE / Pixel 7 / iPad Mini profiles
 ```
 
+**When CI runs it:** on pull requests, and on pushes to `main` — not on every
+push to every branch. A feature branch with no PR runs nothing, and a draft PR
+runs nothing until it is marked ready; repeated pushes to a PR cancel the
+superseded run. Measured on a GitHub runner: the sweep is **337s of an 8m12s
+job**, so leaving the old unfiltered `push:` in place cost two full jobs per
+change. Run it yourself with `npm run test:screens` while you work; CI is the
+backstop, not the loop.
+
 **Scale and cost, measured 2026-08-27:** 623 checks over 5 viewports x 34
 screens, **~5m25s wall clock** (two complete runs of this same 623-check workload: 325s, 326s) including the shared/functions build, Metro's cold
 bundle and emulator boot. That is what it adds to a CI run, and it is the reason

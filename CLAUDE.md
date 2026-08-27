@@ -137,7 +137,9 @@ Do not silently change any of these.
   not ahead of it. Suppressing knip to keep unused scaffolding would make the audit
   lie, and an audit that reports nothing is worse than no audit.
 - CI (GitHub Actions): lint + typecheck + knip + unit + emulator tests + the
-  layout sweep on every push. Keep it green. No deploys from CI.
+  layout sweep — on PRs and on pushes to `main`, **not** on every branch push.
+  The sweep is 5.6 of the 8 minutes, so run it locally while you work and let CI
+  be the backstop. Keep it green. No deploys from CI.
 - **If a suite fails, first ask whether it fails on stashed changes too.** A
   clean-HEAD repro means the cause is environmental — usually a leftover emulator
   (`npm run emulators:free`) — not your diff.
