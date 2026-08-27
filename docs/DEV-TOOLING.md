@@ -22,6 +22,35 @@ emulator — not your diff.
 | `npm run web:export -w @sabeel/app` | The web bundle that actually ships |
 | `scripts/emulator.sh headless` | Boots the `tb_emu` AVD with no window |
 
+## Setting up a machine
+
+Node 22+, **two** JDKs — 21 for the Firebase emulators (they are Java), 17 as
+the default `java` because the Android Gradle Plugin targets it — plus the
+Android SDK and the `tb_emu` AVD.
+
+Do not install these by hand. The `expo-firebase-stack` skill in
+`../agent-skills/` carries a bootstrap that installs the lot under `$HOME` with
+no root, and is idempotent:
+
+```sh
+../agent-skills/skills/expo-firebase-stack/tools/check-host.sh   # what is missing
+../agent-skills/skills/expo-firebase-stack/tools/bootstrap-linux.sh \
+    --jdk21-aliases SR --repo "$PWD"
+```
+
+`--jdk21-aliases SR` sets `SR_JDK21_HOME`, which
+`scripts/test-emulator.sh` reads to find JDK 21 without disturbing the Gradle
+default.
+
+**The Android emulator needs hardware virtualization, which a VM may not have.**
+`emulator -accel-check` is authoritative — `accel: 3` means no KVM, and if
+`/proc/cpuinfo` shows `hypervisor` with neither `vmx` nor `svm` then nested
+virtualization is off at the host and nothing inside the machine, root
+included, can enable it. The AVD still boots in software: measured at **805 s
+to boot and ~14 s per `screencap`**, so screenshot-based verification stops
+being practical while input events (~1.4 s) remain usable. **Builds are
+unaffected** — Gradle needs no KVM. `check-host.sh` gives the verdict.
+
 ## The ESLint rules that are not style
 
 Two rules encode real incidents and should not be relaxed:
