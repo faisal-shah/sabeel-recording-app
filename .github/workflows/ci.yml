@@ -47,8 +47,38 @@ jobs:
       - name: Emulator integration tests
         run: npm run test:emulator
 
+      # Chromium only — the sweep drives one browser and the other two are a
+      # minute of download each. `--with-deps` because a bare runner has none of
+      # the shared libraries headless Chromium links against.
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # The multi-width layout sweep: every screen of both populations at five
+      # widths straddling the content-column breakpoint, ASSERTED rather than
+      # merely screenshotted.
+      #
+      # It can be here — where `test:e2e` below cannot — because it starts its
+      # own emulator suite and its own web dev server and owns both for one run,
+      # instead of expecting a world somebody else built and then wiping it.
+      # `functions/test/unit/ciCoverage.test.ts` fails if this step is ever
+      # dropped, which is the only thing that keeps a suite from quietly
+      # becoming a file.
+      - name: Screens sweep (multi-width layout regression)
+        run: bash scripts/screens-e2e.sh
+
+      # Screens as the sweep saw them, for reading a failure without
+      # re-deriving it locally. Uploaded on failure only: a green run's shots
+      # are 100+ PNGs nobody opens.
+      - name: Upload sweep screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screens-sweep
+          path: shots/screens/
+          retention-days: 7
+
       # `npm run test:e2e` is deliberately NOT run here. It needs a live Metro
-      # dev server AND a long-running emulator suite, and it resets Firestore and
-      # Auth on every run — but `test:emulator` above frees those same ports, so
-      # the two cannot share a job. It is a local pre-commit check; see
-      # docs/DEV-TOOLING.md.
+      # dev server AND a long-running emulator suite that something else
+      # started, and it resets Firestore and Auth on every run — but
+      # `test:emulator` above frees those same ports, so the two cannot share a
+      # job. It is a local pre-commit check; see docs/DEV-TOOLING.md.

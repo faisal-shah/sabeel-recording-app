@@ -19,6 +19,7 @@ emulator — not your diff.
 | `npm run emulators:free` | Kills whatever is squatting on the emulator ports |
 | `npm run build` | Builds shared, then bundles functions with esbuild |
 | `npm run test:e2e` | Playwright walkthrough against the web dev server (see below) |
+| `npm run test:screens` | The multi-width layout sweep — starts its own emulators and dev server (see below) |
 | `npm run web:export -w @sabeel/app` | The web bundle that actually ships |
 | `scripts/emulator.sh headless` | Boots the `tb_emu` AVD with no window |
 
@@ -147,8 +148,137 @@ Two more things that cost time here:
   lands on Home only because `/` is the Home path.
 - **Text locators can resolve to hidden nodes.** React Navigation keeps the
   previous screen mounted, so `getByText('Managers')` can match a stale hidden
-  element and hang until timeout. Wait on `getByTestId` instead. `innerText()`
-  is safe for assertions because it returns only visible text.
+  element and hang until timeout. `innerText()` is safe for assertions because it
+  returns only visible text.
+
+  **`getByTestId` is not the cure, and this suite's helpers do not yet have it.**
+  A testID selector is plain CSS and matches inside a `display:none` subtree just
+  as happily; only `.filter({ visible: true })` actually excludes the screen
+  underneath. `tap()` and `sawText()` here take no visible filter, which is the
+  shape that fails the sibling time-tracker's equivalent suite about one run in
+  two. `scripts/screens-e2e.mjs` routes every locator through helpers that carry
+  the filter; porting the same two lines into `tap()`/`sawText()` is the fix, and
+  wants one full run of `npm run test:e2e` behind it before being trusted.
+
+## The screens sweep
+
+`npm run test:screens` (`scripts/screens-e2e.sh` → `scripts/screens-e2e.mjs`) is
+the layout regression harness: every screen of both populations at five widths,
+**asserted**, and it exits non-zero.
+
+**It needs nothing running.** The runner starts the emulator suite and its own
+Expo web dev server on port **8086** (not `test:e2e`'s 8083) and kills both on
+the way out. That is the whole reason it is in CI and `test:e2e` is not — it
+never touches a world somebody else built.
+
+```bash
+npm run test:screens                    # the CI set: 320, 390, 720, 1024, 1440
+SWEEP_WIDTHS=320 npm run test:screens   # one width, for a tight loop
+SWEEP_FULL=1 npm run test:screens       # + iPhone SE / Pixel 7 / iPad Mini profiles
+```
+
+**Scale and cost, measured 2026-08-27:** 623 checks over 5 viewports x 34
+screens, **~5m25s wall clock** (two complete runs of this same 623-check workload: 325s, 326s) including the shared/functions build, Metro's cold
+bundle and emulator boot. That is what it adds to a CI run, and it is the reason
+the widths are five deliberate ones rather than a comfortable-looking grid.
+
+Shots land in `shots/screens/` (gitignored); CI uploads them as an artifact when
+the sweep fails. **Look at them** — the sweep says a layout is not broken, never
+that it is good.
+
+- **The widths straddle `CONTENT_MAX_WIDTH`, which it READS from
+  `app/src/theme/index.ts`.** That constant is the app's whole responsive
+  behaviour — full-bleed below it, capped and centred at or above it — and a
+  sweep carrying its own copy would drift from the thing it checks. Change the
+  constant and the sweep follows.
+- **A screen with an editor open is a different screen.** The session editor, the
+  ledger's override and a roster removal each add rows that exist in no other
+  state, and 320px is where they run out of room. They are toured as their own
+  entries rather than trusted because the screen underneath them measured fine.
+- **The one absolute-width check: no fixed-format control squashed below its own
+  widget.** Everything else in the sweep is relative, so a control can sit inside
+  its container, overlap nothing, clip nothing, and still be too narrow to read.
+  Scoped to `date`/`time`/`number` inputs and `select` — controls whose content
+  **cannot be scrolled to**. A text field holding more than fits is ordinary and
+  flagging it would fire on every long email address in the app, which is how a
+  check gets deleted.
+
+  **Measured against the control's own min-content width, by cloning it.** The
+  obvious signal, `scrollWidth > clientWidth`, does not work and shipped an inert
+  check for one run: Chromium draws a date input's widget in a UA shadow root
+  with `overflow: hidden`, so a date field crushed from 166px to 38px reports
+  `scrollWidth === clientWidth` and looks healthy. It *does* work for `select`,
+  which is exactly enough plausibility to survive review. Min-content
+  discriminates for both — 0px when healthy, 128px short for that same field.
+- **The requested width is asserted, not assumed.** Every other check measures
+  the DOM against the DOM, which makes them internally consistent and silent
+  about *which* width they ran at — so a viewport option that failed to apply
+  would leave all 608 checks green, every screenshot mislabelled, and the
+  five-width claim hollow. One check per context, before the tour, naming both
+  `documentElement.clientWidth` and `window.innerWidth` if they diverge. It is
+  the file's own headline rule (a tour that cannot fail is a screenshot
+  generator) applied to the tour's premise rather than to its steps.
+- **Every screen is measured twice — at the top and scrolled to the end.**
+  Overlap is judged on what is visible, so a check that only ever looks at the
+  top of a page cannot see the bottom of a fourteen-row roster.
+- **Every locator says `.filter({ visible: true })`, and `.first()`/`.last()` are
+  not a substitute.** The stack keeps the screen underneath MOUNTED but hidden,
+  so a locator that does not say "visible" can resolve to a node on that screen —
+  one that will never become clickable. Playwright then retries for its whole
+  timeout against an element that cannot change, and the run dies at a step with
+  nothing wrong with it. `.first()`/`.last()` mean document order, not "the one
+  on screen". `getByRole` happens to be immune because role selectors skip
+  `display:none` subtrees the way a screen reader does; `getByTestId` is a plain
+  CSS attribute selector and is **not**. Diagnosed in the sibling time-tracker's
+  flow suite, at clean HEAD, failing about one run in two. **`web-e2e.mjs` still
+  carries this shape** — its `tap()` and `sawText()` helpers (lines 152–159) take
+  no visible filter; see the note under "The e2e harness" above.
+- **The header Back is an `<a>`, not a `<button>`.** `PlatformPressable` renders
+  `role="link"` when it has an `href`, and the navigator gives it one because
+  this app has a linking config. A query for buttons alone reports every pushed
+  screen as a dead end — a check failing on its own selector rather than on the
+  app.
+- **Seeding creates students WITHOUT a password, then sets one.** A `password`
+  provider *at creation* is what `onUserCreate` reads as a client-side sign-up,
+  and it deletes the account — so passing `password` to `createUser` silently
+  deletes every student moments after making them. `createStudent` makes a
+  password-less account for exactly this reason.
+- **The content column is measured against `clientWidth`, not the bounding rect
+  — a choice of property, not a guard.** `clientWidth` and
+  `getBoundingClientRect().width` cost the same to write, and the layout box is
+  simply what a layout question is about; do not "simplify" it away. Measured
+  2026-08-27: this headless Chromium uses OVERLAY scrollbars, inset **zero**, in
+  both scrollbar modes (`--disable-features=OverlayScrollbar` does not flip it —
+  don't burn time trying), so the naive form would pass identically here. Where a
+  classic scrollbar IS in effect the two checks fail in opposite directions:
+  centring gets a false positive, the sideways-bleed check a false NEGATIVE
+  hiding up to ~15px of real overflow. The false negative is the one that
+  matters, because it degrades quietly instead of going red.
+- **Targets under 44px are printed, never failed.** Informational: this app has
+  legitimate sub-44px controls (chips, tab pills), and a check that cries wolf
+  gets deleted.
+- **There is deliberately no "is any text truncated" check.** It fires on every
+  intentional `numberOfLines` clamp and would drown the real signal.
+
+**Port lookups in these scripts use `ss`, never `lsof`.** `lsof` is not on the
+default non-interactive PATH on this box, and a lookup that silences stderr then
+reports "no listener" for a missing binary — which silently disables both the
+stale-server kill and the cleanup trap. `free-emulator-ports.sh` set the
+convention; follow it.
+
+**Do not `exec` the emulator command, and do not add `INT TERM` to the trap.**
+`exec` replaces the shell so the EXIT trap never runs (that leaked a dev server
+on every run for a while, invisibly). And bash defers a *trapped* signal until
+the foreground command returns, so trapping TERM around a minutes-long command
+delays cleanup rather than ensuring it — measured at 406ms vs 2056ms. Node is the
+opposite case; there, explicit handlers are the fix.
+
+**A harness nobody has watched fail is not yet evidence.** The way this one was
+proven, and the way to re-prove it after changing what it checks: add
+`minWidth: 420` to the shared `card` style in `app/src/components/ui.tsx`, run
+`SWEEP_WIDTHS=320 npm run test:screens`, and confirm it goes red naming the
+screens and the exact controls carried past the right edge — 94/123 on
+2026-08-27, across all three tours — then revert.
 
 ## Rules tests: the trap in the test itself
 

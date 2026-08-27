@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# Runner for the multi-width screens sweep: emulators + an Expo web dev server,
+# both started here and both torn down on exit.
+#
+# THIS IS WHY THE SWEEP CAN BE IN CI AND `test:e2e` CANNOT. `npm run test:e2e`
+# expects a long-lived emulator suite and a dev server that somebody else
+# started, and it wipes Firestore and Auth out from under them. This script owns
+# both processes for the length of one run, seeds its own world under ids nobody
+# else uses, and deletes nothing — so it composes with a fresh CI runner instead
+# of fighting a developer's desk.
+#
+#   bash scripts/screens-e2e.sh                     # the CI set
+#   SWEEP_WIDTHS=320 bash scripts/screens-e2e.sh    # one width, for a tight loop
+#   SWEEP_FULL=1 bash scripts/screens-e2e.sh        # + real device profiles
+
+# The Firebase emulators need JDK 21+; the Android/Gradle build needs 17 as the
+# default `java`. Same resolution order as scripts/test-emulator.sh — keep them
+# in step.
+if [ -n "${SR_JDK21_HOME:-}" ]; then
+  export JAVA_HOME="$SR_JDK21_HOME"
+elif [ -d "$HOME/opt/jdk-21" ]; then
+  export JAVA_HOME="$HOME/opt/jdk-21"
+fi
+if [ -n "${JAVA_HOME:-}" ]; then
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
+
+# 8086, not the 8083 `test:e2e` uses. Two suites that grab the same port cannot
+# be run side by side, and the failure mode is not "port busy" — see the stale
+# server note below.
+WEB_PORT="${SWEEP_WEB_PORT:-8086}"
+export E2E_BASE="http://127.0.0.1:${WEB_PORT}/"
+
+bash scripts/free-emulator-ports.sh
+
+# The functions emulator loads the BUILT bundle (functions/lib, per `main`), not
+# the TypeScript — see the same note in test-emulator.sh. The sweep needs
+# `getPlaybackUrl` for the player screen and `onUserCreate` to provision the
+# staff accounts it signs in as, so a stale lib here is a screen that renders an
+# error instead of a layout.
+npm run build -w @sabeel/shared
+npm run build -w functions
+
+# Kill anything already on the web port. A LEFTOVER dev server is the nastiest
+# failure here: the new `expo start` cannot bind, exits quietly, and the
+# readiness poll below gets a cheerful 200 from the stale process — so the whole
+# sweep runs against OLD code and reports layout failures for a diff that never
+# reached the browser. Kill by port, never `pkill -f "expo start"`: that pattern
+# also matches the agent shell that spawned this and takes the caller with it.
+# Owners of a port, by port. `ss`, not `lsof`: lsof is NOT on the default
+# non-interactive PATH on this box, and both uses below silence stderr — so a
+# missing lsof is indistinguishable from "no listener", and BOTH the stale-server
+# kill and the cleanup trap become silent no-ops. That is the two safety
+# mechanisms in this script switching off with nothing to show for it. Measured:
+# `lsof -ti:8086 ... | wc -l` returns 0 without the toolchain env sourced while
+# a server is demonstrably bound. `scripts/free-emulator-ports.sh` already uses
+# `ss` for this; deviating from it was the mistake.
+pids_on_port() {
+  ss -lptn "sport = :$1" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | sort -u
+}
+
+for p in $(pids_on_port "$WEB_PORT"); do
+  echo "killing stale dev server on ${WEB_PORT} (pid $p)"
+  kill "$p" 2>/dev/null || true
+done
+sleep 2
+
+cleanup() {
+  [ -n "${WEB_PID:-}" ] && kill "$WEB_PID" 2>/dev/null || true
+  for p in $(pids_on_port "$WEB_PORT"); do
+    kill "$p" 2>/dev/null || true
+  done
+}
+# EXIT alone, and NOT `EXIT INT TERM` — which is the opposite of the usual
+# advice and was measured rather than reasoned. Bash defers a TRAPPED signal
+# until the current foreground command finishes, and the foreground command here
+# is `firebase emulators:exec`, which runs for minutes. Measured on this box with
+# a 2s foreground command: `EXIT` cleaned up at 406ms, `EXIT INT TERM` at 2056ms
+# — i.e. only once the foreground command ended. Untrapped, the shell dies at
+# once on the signal and bash still runs the EXIT trap, which is what we want.
+# (A Node harness is the reverse case: its handlers fire immediately, so there
+# the explicit signal handlers ARE the fix.)
+trap cleanup EXIT
+
+echo "Starting Expo web dev server on ${WEB_PORT}…"
+# The DEV server, not an export: `expo export` sets __DEV__ false, which
+# correctly strips the emulator dev sign-in row this sweep drives to reach any
+# authenticated screen at all. `--clear` because Metro will otherwise serve a
+# bundle built under different EXPO_PUBLIC_* values.
+( cd app && CI=1 EXPO_PUBLIC_USE_EMULATORS=1 \
+    npx expo start --web --port "$WEB_PORT" --clear >/tmp/expo-screens-e2e.log 2>&1 ) &
+WEB_PID=$!
+
+ready=""
+for _ in $(seq 1 120); do
+  if grep -qi "is being used by another process" /tmp/expo-screens-e2e.log 2>/dev/null; then
+    echo "Another process grabbed port ${WEB_PORT}; refusing to sweep stale code." >&2
+    exit 1
+  fi
+  if curl -sf -o /dev/null "http://127.0.0.1:${WEB_PORT}/"; then
+    ready=1
+    break
+  fi
+  sleep 2
+done
+if [ -z "$ready" ]; then
+  echo "Expo web dev server never became ready — see /tmp/expo-screens-e2e.log" >&2
+  tail -25 /tmp/expo-screens-e2e.log >&2 || true
+  exit 1
+fi
+
+# NOT `exec`, deliberately. `exec` replaces this shell with firebase, so the EXIT
+# trap above never runs and the dev server it started is orphaned — every run
+# leaking one, indefinitely, while the script advertises that it cleans up. The
+# leak self-heals only because the pre-run kill above catches the previous run's
+# straggler, which is what kept it invisible. `set -e` still propagates the exit
+# status, and now the trap actually fires. The reference implementation this was
+# modelled on has the same bug.
+firebase emulators:exec \
+  --project demo-sabeel \
+  --only firestore,auth,storage,functions \
+  "node scripts/screens-e2e.mjs"

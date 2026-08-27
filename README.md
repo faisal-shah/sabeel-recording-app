@@ -47,6 +47,10 @@ npm run test:emulator        # needs JDK 21
 # End-to-end (needs the emulators AND the web dev server running — see docs)
 npm run test:e2e
 
+# Layout sweep: every screen, both populations, five widths — starts its own
+# emulators and dev server, so it needs nothing running. Shots in shots/screens/.
+npm run test:screens
+
 # Web
 npm run web:export -w @sabeel/app
 

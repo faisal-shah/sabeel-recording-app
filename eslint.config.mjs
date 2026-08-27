@@ -28,9 +28,16 @@ export default tseslint.config(
       },
     },
     rules: {
+      // `args: 'all'`, not the default `after-used`. The default only reports a
+      // parameter when nothing AFTER it is used, so a dead argument threaded
+      // through the middle of a signature is invisible — which is exactly how
+      // `width` survived in scripts/screens-e2e.mjs, read by nothing, while the
+      // sibling repo's identical bug was caught purely because theirs happened
+      // to sit last. Zero violations when this was tightened (2026-08-27);
+      // prefix a deliberately-unused parameter with `_`.
       '@typescript-eslint/no-unused-vars': [
         'error',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+        { args: 'all', argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
     },
   },
@@ -40,6 +47,16 @@ export default tseslint.config(
       globals: {
         ...globals.browser,
       },
+    },
+  },
+  {
+    // The Playwright harnesses run in Node, but the callbacks they hand to
+    // `page.evaluate()` are serialised and executed INSIDE THE BROWSER, so
+    // `document`, `window` and `getComputedStyle` are legitimate in the same
+    // file as `process.env` and `node:fs`. Both global sets, deliberately.
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
     },
   },
   {

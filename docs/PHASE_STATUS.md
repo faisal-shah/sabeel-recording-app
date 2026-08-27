@@ -36,6 +36,155 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-08-27 — **Two defects in `web-e2e.mjs`, found while validating something
+  else, both fixed. 98/98.**
+
+  **A fixed-budget wait that asserted once.** The off-domain sign-in check slept
+  6000ms then read the page, so it had to cover sign-in, the auth trigger, the
+  delete and a re-render. Observed FAILING and PASSING on byte-identical code —
+  which is how it was attributed: a check returning both results from the same
+  bytes is evidence about the machine, not the app.
+
+  The obvious repair is wrong and worth recording as such. Polling for
+  `Emulator sign-in` — the assertion's own text — would pass instantly and test
+  nothing, because that text is on the SIGN-IN screen, which is where the check
+  starts. It is not a landmark; its RETURN is. The fix waits for the transition:
+  the dev row going hidden (we left sign-in), then visible again (the trigger
+  deleted the account). Both waits are tolerant so a timeout surfaces as the
+  assertion failing with the page's real text rather than an exception with none.
+
+  **A byte count pinned to one ffmpeg build's output.** `sizeBytes === '3049585'`
+  made the suite unrunnable anywhere ffmpeg is absent — `E2E_AUDIO` is offered as
+  the escape hatch 200 lines earlier and every substitute fixture failed here.
+  Now read from the fixture with `statSync`, which keeps the check strict (it
+  still proves the app recorded the real file, not a default) while the
+  documented escape hatch works. Duration moved to a shared `AUDIO_SECONDS`
+  constant used by both the generator and the assertion so they cannot drift, and
+  the error message now states a substitute must be that long AND live outside
+  `e2e-shots/`, which the suite wipes on startup.
+
+  Note the flake fix is justified structurally, not by the green run: the old
+  code passed sometimes too. What changed is that a fixed budget became a state
+  transition.
+
+- 2026-08-27 — **Two silent defects in the sweep's own runner, both found by
+  checking a guess.** Neither changed any output; both made a safety mechanism a
+  no-op while the script's comments claimed otherwise.
+
+  **`exec` kills the cleanup trap.** `scripts/screens-e2e.sh` declared
+  `trap cleanup EXIT` and then ended with `exec firebase emulators:exec …`.
+  `exec` replaces the shell, so the trap can never fire and every run orphaned
+  its Expo dev server — one was found 11m29s old after a run that reported
+  success. Invisible because the script also kills stale servers on the port at
+  startup, so the leak self-heals on the next run and only shows as a straggler
+  between them, which is exactly when another checkout wants the port. The
+  kanban reference this was modelled on has the same shape. Fixed by dropping
+  `exec`; `set -e` still propagates the status.
+
+  **The trap and the stale-server kill both depended on `lsof`, which is not on
+  the default non-interactive PATH here** — and both silenced stderr, so
+  "command not found" was indistinguishable from "no listener". Absent `lsof`,
+  the two mechanisms switch off with nothing to show. Switched to `ss`, which
+  `scripts/free-emulator-ports.sh` already used; deviating from that was the
+  original mistake.
+
+  **`trap cleanup EXIT INT TERM` would have made it worse, measured not
+  reasoned.** Bash defers a TRAPPED signal until the foreground command returns,
+  and the foreground command here runs for minutes. With a 2s command and a
+  SIGTERM at 300ms: `EXIT` cleaned up at 406ms, `EXIT INT TERM` at 2056ms. A
+  Node harness is the reverse — its handlers fire at once — so the same change is
+  right in one runtime and a leak in the other.
+
+  Verified with a three-point observation rather than one: port 8086 **before**
+  (0), **during** (bound — so there was something to clean up), and **after** (0).
+  A clear port on its own would have been equally true if the server never
+  started.
+
+- 2026-08-27 — **A squashed-control check, and the inert first version that
+  proved why sabotage is not optional.** The sweep's checks were all relative, so
+  nothing in it could see a control too narrow to use. Added one scoped to
+  fixed-format controls — `date`/`time`/`number` inputs and `select`, whose
+  content cannot be scrolled to — deliberately excluding text fields, where
+  overflow is ordinary and a check would fire constantly and be deleted.
+
+  **The first implementation could not fail.** It used `scrollWidth >
+  clientWidth`; the sabotage (this app's `<input type="date">` capped at 40px)
+  came back **125/125 green**. Chromium draws a date input's widget in a UA
+  shadow root with `overflow: hidden`, so scrollWidth never exceeds clientWidth
+  however badly it is crushed. The signal does work for `select`, which is what
+  made it plausible enough to write.
+
+  Rewritten to measure the control's own **min-content** width — clone it, let
+  the clone size to its content, read it back, discard. Same sabotage now gives
+  **122/125**, naming six controls across `sessions`, `session-editing` and
+  `zoom-import` (the last two of which nobody predicted had date fields).
+
+  The lesson is not about scrollbars or shadow DOM. A check written *because of*
+  a hard-won lesson is not thereby exempt from the lesson.
+
+- 2026-08-27 — **The sweep asserts its own premise, because 124 of 127 checks
+  passed at the wrong width.** Every geometric check in `screens-e2e.mjs`
+  measures the DOM against the DOM, which makes them internally consistent and
+  completely silent about WHICH width they ran at. The width came from a
+  Playwright viewport option and was believed: threaded runner → tour → visitor
+  through three layers and, after an earlier refactor, read by nothing at all.
+
+  Proved by setting the viewport to `w - 40` while still claiming `w`: the run
+  came back **124/127**, and the only three failures were the new check, once per
+  context. Everything else sailed through at 280px, correctly, against the wrong
+  reference. That is the file's own headline rule — a tour that cannot fail is a
+  screenshot generator — one level up, at the tour's premise rather than at its
+  steps.
+
+  `width` is now READ rather than threaded past: one check per context, placed
+  before the tour so a bad viewport fails in one honest line instead of after a
+  whole tour has been measured against it. Note ESLint could not have found the
+  dead parameter — `@typescript-eslint/no-unused-vars` defaults to
+  `args: 'after-used'`, so a parameter followed by used ones is never reported.
+  Found by a sibling repo hitting the same shape, not by tooling.
+
+- 2026-08-27 — **The sweep's first honest run found a real bug, at 320px only.**
+  The recording ledger's override editor laid its two actions out with a bespoke
+  `flexDirection: 'row'` and no wrap, so "Mark not complete" ran 27px off the
+  right edge of a 320px phone. Perfect at 390 and every width above — which is
+  the whole argument for straddling rather than sampling.
+
+  Fixed by using the shared `Row` instead of the local style. `Row` already
+  wraps, and its own comment says why: `rowItem` refuses to shrink, so a line
+  that does not quite fit must wrap rather than squeeze a button until its label
+  breaks mid-word. The bespoke style had quietly opted out of that rule. **When
+  a screen needs a line of buttons, use `Row`** — a local `flexDirection: 'row'`
+  is opting out of the app's only wrapping rule, usually without meaning to.
+
+  Only reachable with the editor OPEN, which is why the sweep tours open editors
+  as screens in their own right rather than trusting the screen underneath them.
+
+- 2026-08-27 — **The screens sweep landed, and was proven by breaking a layout.**
+  `scripts/screens-e2e.mjs` tours every screen of both populations at five widths
+  straddling `CONTENT_MAX_WIDTH`, which it reads out of `app/src/theme/index.ts`
+  rather than restating. **623 checks, 5 viewports x 34 screens, ~5m25s** — green, and re-run green
+  on the exact shipped bytes (sha recorded before and after).
+
+  It is only evidence because it was watched failing: `minWidth: 420` was added
+  to the shared `Card` style and the 320px run went **94/123**, naming 29
+  screens and the exact controls carried past the right edge — including four
+  that only the second, scrolled-to-the-end pass could see. Reverted and green
+  again. A harness nobody has watched fail is not yet evidence.
+
+  Three things cost real time and are worth not rediscovering. The header Back is
+  an `<a role="link">`, not a `<button>` — `PlatformPressable` renders a link
+  whenever it has an `href`, and the linking config gives it one — so a
+  button-only query reported every pushed screen in the app as a dead end. The
+  content column must be measured against `clientWidth`, not the bounding rect,
+  or a classic scrollbar makes a correctly centred column look 7px off. And
+  seeding a student with a password on `createUser` gives them a `password`
+  provider at creation, which `onUserCreate` reads as a self-signup and deletes —
+  the same failure the trigger's own comment records from production.
+
+  In CI where `test:e2e` cannot be, because it starts its own emulators and its
+  own dev server instead of expecting a world somebody else built.
+  `functions/test/unit/ciCoverage.test.ts` fails if the step is ever dropped.
+
 - 2026-08-15 — **Under the emulator, the send is suppressed at the source.**
   `notify.integration` went flaky in CI: `notifyLastDay` returned 0 with nothing
   in the log. The cause was not the test. The integration suite runs the FUNCTIONS

@@ -122,6 +122,10 @@ Do not silently change any of these.
 - Browser e2e: `npm run test:e2e`. Needs a live Metro dev server **and** the
   emulator suite already running, and it resets Firestore and Auth on every run —
   which is why it is a local pre-commit check and deliberately **not** in CI.
+- Layout sweep: `npm run test:screens`. Every screen of both populations at five
+  widths straddling the content-column cap, **asserted**, not just photographed.
+  It starts its own emulators and its own dev server, which is exactly why it
+  **is** in CI where `test:e2e` cannot be. `SWEEP_WIDTHS=320` for a tight loop.
 - Web: `npx expo start --web` in `app/`, or `npm run web:export -w @sabeel/app`
   for the bundle that actually ships.
 - Android: `scripts/emulator.sh headless` (AVD `tb_emu`), then `npx expo
@@ -132,8 +136,8 @@ Do not silently change any of these.
   dependencies — which is why infrastructure is added **with its first consumer**,
   not ahead of it. Suppressing knip to keep unused scaffolding would make the audit
   lie, and an audit that reports nothing is worse than no audit.
-- CI (GitHub Actions): lint + typecheck + knip + unit + emulator tests on every
-  push. Keep it green. No deploys from CI.
+- CI (GitHub Actions): lint + typecheck + knip + unit + emulator tests + the
+  layout sweep on every push. Keep it green. No deploys from CI.
 - **If a suite fails, first ask whether it fails on stashed changes too.** A
   clean-HEAD repro means the cause is environmental — usually a leftover emulator
   (`npm run emulators:free`) — not your diff.
@@ -154,11 +158,19 @@ right place to iterate on mobile layout. Reach for it on any change to a shared
 component, the theme, or a layout — it is faster and more repeatable than a human
 on an emulator.
 
-**The sibling kanban has the better version of this** — `screens-e2e.mjs`, every
-screen at five widths straddling the breakpoint, asserted rather than merely
-screenshotted. This repo has no multi-width sweep yet; porting it is the single
-highest-value testing improvement available here. Until then, resize deliberately
-rather than trusting one viewport.
+**`npm run test:screens` is the sweep, and it runs on every push.** Every screen
+of both populations at five widths straddling `CONTENT_MAX_WIDTH` — which it
+reads out of `app/src/theme/index.ts` rather than restating — asserting that the
+page never scrolls sideways, that nothing is clipped by the right edge, that no
+two same-layer controls overlap, that every pushed screen still has its Back, and
+that the content column caps and centres where it should. Targets under 44px are
+reported, never failed. Screens with an editor OPEN are toured as their own
+screens, because the rows a session editor or a ledger override adds exist in no
+other state and 320px is where they run out of room.
+
+It is not a substitute for looking: it says a layout is not broken, never that it
+is good. Read `shots/screens/` after a change to a shared component or the theme
+— CI uploads them on failure.
 
 ### The Android emulator is reserved for the seams a browser cannot reach
 

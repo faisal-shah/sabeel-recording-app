@@ -24,6 +24,7 @@
     "check:text": "node scripts/check-text-sources.mjs",
     "emulators:free": "bash scripts/free-emulator-ports.sh",
     "test:e2e": "node scripts/web-e2e.mjs",
+    "test:screens": "bash scripts/screens-e2e.sh",
     "smoke:prod": "node scripts/prod-smoke.mjs",
     "check:queries": "node scripts/check-query-shapes.mjs",
     "check:push": "node scripts/check-push.mjs"
