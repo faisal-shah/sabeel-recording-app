@@ -7,7 +7,7 @@ import {
   todayInZone,
   type DueBucket,
 } from '@sabeel/shared';
-import { Button, Empty, Field, Notice, Screen, SectionTitle } from '../components/ui';
+import { Button, Empty, Field, Notice, Row, Screen, SectionTitle } from '../components/ui';
 import {
   overrideCompletion,
   clearCompletionOverride,
@@ -270,7 +270,7 @@ function LedgerRowCard({
             onChangeText={setReason}
             placeholder="e.g. attended in person"
           />
-          <View style={styles.overrideButtons}>
+          <Row>
             <Button
               testID={`override-complete-${r.name}`}
               label="Mark complete"
@@ -296,7 +296,7 @@ function LedgerRowCard({
                 })
               }
             />
-          </View>
+          </Row>
           {r.source === 'override' ? (
             <Button
               testID={`override-remove-${r.name}`}
@@ -390,5 +390,4 @@ const styles = StyleSheet.create({
   override: { fontSize: 13, color: t.text.accent, marginTop: spacing(1) },
   status: { fontSize: 13, fontWeight: '700' },
   overrideForm: { marginTop: spacing(3), gap: spacing(2) },
-  overrideButtons: { flexDirection: 'row', gap: spacing(2) },
 });
