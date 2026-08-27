@@ -1,5 +1,5 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { getTheme, spacing, useTheme } from '../theme';
+import { CONTENT_MAX_WIDTH, getTheme, spacing, useTheme } from '../theme';
 
 const t = getTheme();
 
@@ -134,7 +134,7 @@ export function TokensScreen() {
 
 const styles = StyleSheet.create({
   canvas: { flex: 1, backgroundColor: t.bg.canvas },
-  content: { padding: spacing(5), paddingBottom: spacing(12), maxWidth: 720, width: '100%', alignSelf: 'center' },
+  content: { padding: spacing(5), paddingBottom: spacing(12), maxWidth: CONTENT_MAX_WIDTH, width: '100%', alignSelf: 'center' },
   h1: { fontSize: 28, fontWeight: '700', color: t.text.primary },
   lede: { fontSize: 15, color: t.text.secondary, marginTop: spacing(1), marginBottom: spacing(6) },
   section: { marginBottom: spacing(6) },

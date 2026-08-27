@@ -7,7 +7,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { getTheme, spacing } from '../theme';
+import { CONTENT_MAX_WIDTH, getTheme, spacing } from '../theme';
 import { useListenerError } from '../liveQuery';
 import { KbScroll } from './KbScroll';
 
@@ -627,7 +627,7 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing(5),
     paddingBottom: spacing(12),
-    maxWidth: 720,
+    maxWidth: CONTENT_MAX_WIDTH,
     width: '100%',
     alignSelf: 'center',
   },

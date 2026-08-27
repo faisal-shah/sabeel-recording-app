@@ -105,3 +105,17 @@ export function getTheme(): Theme {
 
 /** Spacing scale, in points — 4pt grid. */
 export const spacing = (n: number) => n * 4;
+
+/**
+ * The width the content column stops growing at.
+ *
+ * The one number this app's layout turns on. Below it a screen is full-bleed;
+ * at and above it the column caps here and centres, so the empty space lands on
+ * both sides instead of leaving lines too long to read. There is no second
+ * layout — no rail, no columns — which is why this is the whole breakpoint.
+ *
+ * `scripts/screens-e2e.mjs` READS THIS FILE for the number rather than keeping
+ * its own copy, and picks its viewport widths to straddle it. A constant
+ * restated in the test that checks it drifts from the thing it is testing.
+ */
+export const CONTENT_MAX_WIDTH = 720;
