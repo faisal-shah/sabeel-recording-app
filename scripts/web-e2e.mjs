@@ -32,7 +32,7 @@
  */
 import { chromium } from 'playwright';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 
 const WEB = process.env.E2E_WEB ?? 'http://127.0.0.1:8083/';
 const FN = 'http://127.0.0.1:5001/demo-sabeel/us-central1';
@@ -41,6 +41,9 @@ const FS_WIPE = 'http://127.0.0.1:8080/emulator/v1/projects/demo-sabeel/database
 const AUTH = 'http://127.0.0.1:9099';
 const SHOTS = 'e2e-shots';
 const AUDIO_FIXTURE = process.env.E2E_AUDIO ?? 'e2e-shots/test-lecture.m4a';
+/** The fixture's length, shared by the generator below and the metadata check,
+ *  so the two cannot drift. A substitute supplied via E2E_AUDIO must match it. */
+const AUDIO_SECONDS = 720;
 
 /**
  * A real 12-minute 32 kbps mono M4A — the shape of an actual class recording
@@ -54,12 +57,14 @@ function ensureAudioFixture() {
   if (existsSync(AUDIO_FIXTURE)) return;
   try {
     execFileSync('ffmpeg', [
-      '-f', 'lavfi', '-i', 'sine=frequency=220:duration=720,volume=0.3',
+      '-f', 'lavfi', '-i', `sine=frequency=220:duration=${AUDIO_SECONDS},volume=0.3`,
       '-c:a', 'aac', '-b:a', '32k', '-ac', '1', AUDIO_FIXTURE, '-y',
     ], { stdio: 'ignore' });
   } catch {
     throw new Error(
-      `Could not generate ${AUDIO_FIXTURE}. Install ffmpeg, or point E2E_AUDIO at an audio file.`,
+      `Could not generate ${AUDIO_FIXTURE}. Install ffmpeg, or point E2E_AUDIO at a ` +
+        `${AUDIO_SECONDS}-second audio file (it must live OUTSIDE ${SHOTS}/, which this ` +
+        'suite wipes on startup).',
     );
   }
 }
@@ -149,14 +154,37 @@ async function newSession() {
 
 /** Tap by testID. Text locators are unreliable here: react-navigation keeps the
  *  previous screen mounted, so a text match can resolve to a hidden node. */
+/**
+ * Tap by testID — the VISIBLE one.
+ *
+ * `.filter({ visible: true })` is load-bearing, not decoration. React Navigation
+ * keeps the screen you navigated away from MOUNTED, hidden with `display: none`,
+ * and its test ids stay queryable — `getByTestId` is a plain attribute selector,
+ * so unlike a role selector it matches straight into a hidden subtree. Without
+ * the filter a locator can resolve to a control on the screen UNDERNEATH, which
+ * will never become clickable; Playwright then retries for the full timeout and
+ * the run dies at a step with nothing wrong with it. The sibling time-tracker's
+ * equivalent suite was losing roughly one run in two to exactly this before it
+ * was named, at clean HEAD.
+ *
+ * Note this is a stronger claim than the older advice in docs/DEV-TOOLING.md,
+ * which said to prefer `getByTestId` over text locators. That does not help: a
+ * test id matches hidden nodes just as happily. Only the visible filter excludes
+ * the screen below.
+ */
 async function tap(page, testId, timeout = 20000) {
-  const el = page.getByTestId(testId);
+  const el = page.getByTestId(testId).filter({ visible: true }).first();
   await el.waitFor({ timeout });
   await el.click();
 }
 
+/** Same trap, same fix: `.first()` means document order, not "the one on screen". */
 const sawText = (page, text, timeout = 20000) =>
-  page.getByText(text, { exact: false }).first().waitFor({ timeout });
+  page
+    .getByText(text, { exact: false })
+    .filter({ visible: true })
+    .first()
+    .waitFor({ timeout });
 
 /** Home by URL. Since the linking config landed the stack IS browser history,
  *  so goBack() works too — this goes to `/`, which is the Home path. */
@@ -211,7 +239,29 @@ check('approving a pending manager un-gates THEIR session live', true);
 // An off-domain account must be deleted outright, not marked rejected.
 const outsider = await newSession();
 await tap(outsider, 'dev-signin-outsider');
-await outsider.waitForTimeout(6000);
+/**
+ * Wait for the TRANSITION, not for a duration.
+ *
+ * This used to sleep 6000ms and assert once, which made it load-sensitive: the
+ * budget has to cover sign-in, the auth trigger running, the delete, and the
+ * client re-rendering. Observed failing and passing on identical bytes, which is
+ * how it was found — a check that returns both results from the same code is
+ * evidence about the machine, not the app.
+ *
+ * The obvious repair — poll for 'Emulator sign-in' — does NOT work, and the
+ * reason is worth keeping: that text is on the SIGN-IN screen, which is where
+ * this starts. It is present before the click, so a wait for it succeeds
+ * instantly against the pre-click state and asserts nothing at all. It is not a
+ * landmark; its RETURN is.
+ *
+ * So: wait for the dev row to go (we left sign-in and are provisioning), then
+ * for it to come back (the trigger deleted the account and dropped us out).
+ * Both waits are tolerant, so a timeout surfaces as the assertion below failing
+ * with the page's actual text rather than as an exception with none.
+ */
+const outsiderDevRow = outsider.getByText('Emulator sign-in', { exact: false }).first();
+await outsiderDevRow.waitFor({ state: 'hidden', timeout: 30000 }).catch(() => {});
+await outsiderDevRow.waitFor({ state: 'visible', timeout: 30000 }).catch(() => {});
 check(
   'an off-domain sign-in is deleted and lands back at sign-in',
   (await outsider.locator('body').innerText()).includes('Emulator sign-in'),
@@ -444,10 +494,23 @@ await sawText(admin, 'published', 90000).catch(() => {}); // status chip appears
 await admin.waitForTimeout(1500);
 const recs = await readCollection('recordings');
 const rf = recs[0]?.fields ?? {};
+/*
+ * Sized against the file that was actually uploaded, not a literal.
+ *
+ * This asserted `sizeBytes === '3049585'` — the exact byte count of one ffmpeg
+ * build's output. That made the whole suite unrunnable anywhere ffmpeg is
+ * missing: E2E_AUDIO is offered as the escape hatch two hundred lines up, and
+ * any fixture you point it at fails here. Reading the fixture's own size keeps
+ * the check strict — it still proves the app recorded the REAL file rather than
+ * a default — while letting the documented escape hatch work.
+ */
+const fixtureBytes = statSync(AUDIO_FIXTURE).size;
 check(
   'duration and size are recorded from the real file',
-  rf.durationSec?.integerValue === '720' && rf.sizeBytes?.integerValue === '3049585',
-  `duration=${rf.durationSec?.integerValue} size=${rf.sizeBytes?.integerValue}`,
+  rf.durationSec?.integerValue === String(AUDIO_SECONDS) &&
+    rf.sizeBytes?.integerValue === String(fixtureBytes),
+  `duration=${rf.durationSec?.integerValue} (want ${AUDIO_SECONDS}) ` +
+    `size=${rf.sizeBytes?.integerValue} (fixture is ${fixtureBytes})`,
 );
 check('the recording is linked to its session', !!rf.sessionId?.stringValue);
 
@@ -747,7 +810,10 @@ check(
 
 // Both cuts of the report drill down, and land on the row that was tapped —
 // a report you cannot click through from is a dead end.
-const stuCard = admin.locator('[data-testid^="attendance-student-"]').first();
+const stuCard = admin
+  .locator('[data-testid^="attendance-student-"]')
+  .filter({ visible: true })
+  .first();
 const stuName = (await stuCard.innerText()).split('\n')[0].trim();
 await stuCard.click();
 await admin.waitForTimeout(2500);
@@ -761,7 +827,10 @@ check(
 await openHikam(admin);
 await tap(admin, 'nav-attendance');
 await admin.getByTestId('attendance-tab-sessions').waitFor({ timeout: 10000 });
-const sesCard = admin.locator('[data-testid^="attendance-session-"]').first();
+const sesCard = admin
+  .locator('[data-testid^="attendance-session-"]')
+  .filter({ visible: true })
+  .first();
 const sesName = (await sesCard.innerText()).split('\n')[0].trim();
 await sesCard.click();
 await admin.waitForTimeout(2500);
@@ -948,7 +1017,7 @@ await openHikam(admin);
 await tap(admin, 'roster-remove-bilal@example.com');
 await admin.getByTestId('roster-remove-confirm-bilal@example.com').waitFor({ timeout: 10000 });
 check('the roster × asks before removing', true);
-await admin.getByText('Cancel', { exact: false }).first().click();
+await admin.getByText('Cancel', { exact: false }).filter({ visible: true }).first().click();
 await admin.waitForTimeout(1500);
 const stillEnrolled = (await readCollection('enrollments')).filter(
   (e) => e.fields.active?.booleanValue === true,
