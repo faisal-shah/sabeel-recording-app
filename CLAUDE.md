@@ -136,10 +136,13 @@ Do not silently change any of these.
   dependencies — which is why infrastructure is added **with its first consumer**,
   not ahead of it. Suppressing knip to keep unused scaffolding would make the audit
   lie, and an audit that reports nothing is worse than no audit.
-- CI (GitHub Actions): lint + typecheck + knip + unit + emulator tests + the
-  layout sweep — on PRs and on pushes to `main`, **not** on every branch push.
-  The sweep is 5.6 of the 8 minutes, so run it locally while you work and let CI
-  be the backstop. Keep it green. No deploys from CI.
+- **CI is OFF** (2026-08-28, heavy development): `ci.yml` is `workflow_dispatch`
+  only. The job is 8m12s and duplicates the local loop, so run that instead —
+  `npm run lint && npm run typecheck && npm run knip && npm test &&
+  npm run test:emulator && npm run test:screens`. Trigger CI by hand before a
+  release or when something must hold on a clean machine
+  (`gh workflow run ci.yml --ref <branch>`); the trigger block to restore is at
+  the top of `ci.yml`. No deploys from CI.
 - **If a suite fails, first ask whether it fails on stashed changes too.** A
   clean-HEAD repro means the cause is environmental — usually a leftover emulator
   (`npm run emulators:free`) — not your diff.

@@ -177,13 +177,20 @@ SWEEP_WIDTHS=320 npm run test:screens   # one width, for a tight loop
 SWEEP_FULL=1 npm run test:screens       # + iPhone SE / Pixel 7 / iPad Mini profiles
 ```
 
-**When CI runs it:** on pull requests, and on pushes to `main` — not on every
-push to every branch. A feature branch with no PR runs nothing, and a draft PR
-runs nothing until it is marked ready; repeated pushes to a PR cancel the
-superseded run. Measured on a GitHub runner: the sweep is **337s of an 8m12s
-job**, so leaving the old unfiltered `push:` in place cost two full jobs per
-change. Run it yourself with `npm run test:screens` while you work; CI is the
-backstop, not the loop.
+**Automatic CI is OFF (2026-08-28) — run this locally.** `ci.yml` is
+`workflow_dispatch` only while the repo is in heavy development: the job is
+8m12s, of which this sweep is 337s, and it duplicates what you can run on the
+machine you are changing. The full local equivalent is
+
+```bash
+npm run lint && npm run typecheck && npm run knip && npm test \
+  && npm run test:emulator && npm run test:screens
+```
+
+Trigger the job by hand when it earns its time — before a release, or when
+something has to hold on a clean machine rather than this one:
+`gh workflow run ci.yml --ref <branch>`. The trigger block to restore is written
+out at the top of `ci.yml`.
 
 **Scale and cost, measured 2026-08-27:** 623 checks over 5 viewports x 34
 screens, **~5m25s wall clock** (two complete runs of this same 623-check workload: 325s, 326s) including the shared/functions build, Metro's cold
