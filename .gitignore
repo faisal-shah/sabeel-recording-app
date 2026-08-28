@@ -50,3 +50,6 @@ zoom-api-info.txt
 
 # Regenerated fixtures and scratch output (never committed)
 .tmp/
+
+# Metro transform cache, kept in-repo (see app/metro.config.js)
+app/.metro-cache/
