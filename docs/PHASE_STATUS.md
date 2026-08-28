@@ -36,6 +36,64 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-08-28 — **The recording ledger was denied for every manager, and the
+  suites were green throughout. Four defects fixed.**
+
+  Production Sentry (`sabeel-recording-web`) carried four
+  `Live data error (ledger*): permission-denied` events, one per listener, 71
+  seconds after a manager published a Zoom import. `useRecordingLedger` filtered
+  `assignments`, `completions`, `completionOverrides` and `listeningProgress` on
+  **`recordingId` alone**, on the reasoning — stated in a comment — that one
+  recording belongs to one class, so the reads are class-scoped. They are not.
+  **Firestore evaluates a `list` rule against the QUERY's constraints, not only
+  against the documents it would return**, and the staff arm of all four
+  collections resolves `get(/courses/$(resource.data.courseId))`. A query that
+  does not pin `courseId` leaves that path unresolvable and is refused outright.
+
+  Proven against the real rules on an isolated emulator: a manager listing
+  `recordingId ==` is denied on all four collections **even when the query
+  matches nothing**, which is what makes the failure total rather than
+  data-dependent; the same query with `courseId ==` added is allowed; and an
+  admin is allowed either way, because every one of these rules answers an admin
+  from a zero-read arm that touches no `resource.data`. So the bug was invisible
+  to the only person who could have reported it and total for everyone else.
+  The 10-call document-access budget was ruled out on the way: 30 rows resolving
+  the same `get()` path are served fine, so same-path results are cached.
+
+  Why nothing caught it: `rules.ledger.test.ts` only ever queried
+  `where('courseId','==',…)` — the shape the rules were **designed for**, never
+  the shape the app **sends** — and the `web-e2e` and screens sweeps drove the
+  ledger as an admin only. A rules suite that asserts the author's intent rather
+  than the caller's query proves the rule, not the product. Both suites now
+  carry the app's shape and a manager's pass over the ledger; the e2e was
+  mutation-tested by restoring the unscoped queries, which reproduced the exact
+  four Sentry labels and failed three checks.
+
+  Three more, all found in the same trace:
+
+  - **The listener-error banner outlived its screen.** `lastListenerError` was a
+    module-global cleared only by a later success from the same label. Nothing
+    else subscribes under `ledger*`, so the red message followed the manager onto
+    every screen afterwards — which is why the ledger denial was reported as
+    "the upload is broken", with a screenshot of the session screen. Errors are
+    now keyed by label and dropped when the subscription is torn down.
+  - **The Zoom import ran on the platform defaults.** 60 s and 256 MiB, with the
+    whole file streamed through the function; a two-hour class is 100-250 MB.
+    Now 540 s / 512 MiB, with the client's callable timeout raised to match —
+    raising one end alone just moves which side gives up.
+  - **A failed import could not be retried through the button that started it.**
+    The draft is created before the download, so a mid-transfer failure leaves
+    the dedupe key behind and the retry answered `alreadyExisted: true` —
+    reporting success for a recording holding no audio. It now finishes the
+    download when the existing draft has none and belongs to the same session.
+
+  Still open: a separate `courseRecordings` denial from a different account six
+  minutes earlier on `/library`. The query shape there is proven allowed for a
+  manager of an existing course, empty or not, so it is specific to one course
+  in that person's list. The label was identical for every course section, so
+  the event could not be chased; `useCourseRecordings` now tags its Sentry
+  events with the course id.
+
 - 2026-08-27 — **Two defects in `web-e2e.mjs`, found while validating something
   else, both fixed. 98/98.**
 

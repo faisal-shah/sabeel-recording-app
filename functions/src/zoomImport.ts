@@ -60,7 +60,24 @@ export async function applyImportZoomRecording(
     .where('zoomUuid', '==', input.meetingUuid)
     .limit(1)
     .get();
-  if (!dupe.empty) return { recordingId: dupe.docs[0].id, alreadyExisted: true };
+  if (!dupe.empty) {
+    const existing = dupe.docs[0];
+    const prior = existing.data() as RecordingDoc;
+    // A DRAFT WITH NO AUDIO IS NOT AN IMPORT THAT ALREADY HAPPENED. The draft is
+    // created before the download, so an attempt that died mid-transfer leaves
+    // one behind — and answering "already imported" to the retry reports success
+    // for a recording that plays nothing, which is exactly how staff end up
+    // publishing an empty one. Finish the job instead.
+    //
+    // Only for the session that asked: the dedupe is global on the meeting uuid,
+    // so a draft belonging to a DIFFERENT session is somebody else's import and
+    // still answers "already imported" rather than being quietly adopted here.
+    if (!prior.audioPath && prior.sessionId === input.sessionId) {
+      await applyRetryZoomImport(existing.id, client);
+      return { recordingId: existing.id, alreadyExisted: false };
+    }
+    return { recordingId: existing.id, alreadyExisted: true };
+  }
 
   // Re-read the meeting for a FRESH download URL + authoritative metadata.
   const { rec, downloadUrl } = await client.freshAudioFile(input.meetingUuid, input.fileId);
@@ -98,6 +115,17 @@ export async function applyRetryZoomImport(
 }
 
 // ---------------------------------------------------------------- callables --
+
+/**
+ * Moving a class recording is not a normal callable.
+ *
+ * The whole audio file is streamed through the function (Zoom → Storage), and a
+ * two-hour class is 100-250 MB. On the platform defaults — 60 s, 256 MiB — that
+ * is a coin flip, and the failure surfaces to staff as an upload that "did not
+ * work" the first time and worked the second. The client timeout is raised to
+ * match in app/src/zoom.ts; raising only one end just moves which side gives up.
+ */
+const IMPORT_RUNTIME = { timeoutSeconds: 540, memory: '512MiB' } as const;
 
 export const listZoomRecordings = reportedCall(async (req) => {
   requireStaff(req); // the central list is not class-specific
@@ -183,6 +211,7 @@ export const importZoomRecording = auditedCall(
     return res;
   },
   ZOOM_SECRETS,
+  IMPORT_RUNTIME,
 );
 
 export const retryZoomImport = auditedCall(
@@ -200,4 +229,5 @@ export const retryZoomImport = auditedCall(
     return applyRetryZoomImport(d.recordingId, zoomClient);
   },
   ZOOM_SECRETS,
+  IMPORT_RUNTIME,
 );

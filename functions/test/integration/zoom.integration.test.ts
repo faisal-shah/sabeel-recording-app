@@ -151,6 +151,38 @@ describe('applyImportZoomRecording', () => {
     expect(d.attentionReason).toMatch(/import failed/i);
     expect(await audioExists(snap.docs[0].id)).toBe(false);
   });
+
+  it('re-importing after a FAILED attempt finishes the download, not "already existed"', async () => {
+    // The draft is created before the transfer, so a failed import leaves the
+    // dedupe key behind. Answering "already imported" to the retry reported
+    // success for a recording holding no audio — the state staff then tried to
+    // publish and play. Idempotence is about not duplicating, not about
+    // declaring an unfinished job done.
+    await expect(
+      applyImportZoomRecording(
+        ADMIN,
+        { meetingUuid: 'uuid-1', fileId: 'file-1', sessionId },
+        fakeClient(REC, { fail: true }),
+      ),
+    ).rejects.toThrow(/import failed/i);
+
+    const retried = await applyImportZoomRecording(
+      ADMIN,
+      { meetingUuid: 'uuid-1', fileId: 'file-1', sessionId },
+      fakeClient(REC),
+    );
+    expect(retried.alreadyExisted).toBe(false);
+    expect(await countRecordings()).toBe(1);
+
+    const doc = await getFirestore()
+      .collection(COLLECTIONS.recordings)
+      .doc(retried.recordingId)
+      .get();
+    const rec = doc.data() as RecordingDoc;
+    expect(rec.status).toBe('draft');
+    expect(rec.audioPath).not.toBeNull();
+    expect(await audioExists(retried.recordingId)).toBe(true);
+  });
 });
 
 describe('applyRetryZoomImport', () => {
