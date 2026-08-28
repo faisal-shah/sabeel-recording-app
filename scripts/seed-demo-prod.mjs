@@ -26,7 +26,8 @@
  */
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { mkdirSync, statSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 const require = createRequire(new URL('../functions/package.json', import.meta.url));
 const admin = require('firebase-admin');
 
@@ -112,15 +113,40 @@ const SESSION_TITLES = {
 
 // ------------------------------------------------------------------ audio ---
 
-const AUDIO = '/tmp/demo-lecture.m4a';
+const DURATION_SEC = 720;
+
+/**
+ * Repo-local, and REGENERATED EVERY RUN. Both parts matter, because line ~206
+ * uploads this file to the LIVE bucket.
+ *
+ * It used to be `/tmp/demo-lecture.m4a`, cached by existence — so whatever
+ * happened to sit at that world-writable path got published to production, and
+ * three sibling checkouts on this machine all shared `/tmp`. Regenerating
+ * removes the cache-poisoning path entirely; ffmpeg takes about a second for a
+ * 12-minute 16 kbit/s mono tone.
+ */
+const AUDIO = resolve(import.meta.dirname, '..', '.tmp', 'demo-lecture.m4a');
+
 function ensureAudio() {
-  if (existsSync(AUDIO)) return;
+  mkdirSync(dirname(AUDIO), { recursive: true });
   // A 12-minute tone at a low bitrate: real, playable audio without shipping
   // hundreds of megabytes into the bucket for a dataset that gets wiped.
   execFileSync('ffmpeg', ['-f','lavfi','-i','sine=frequency=210:duration=720,volume=0.25',
     '-c:a','aac','-b:a','16k','-ac','1', AUDIO, '-y'], { stdio: 'ignore' });
+
+  // Look at what is about to be published, rather than trusting that ffmpeg did
+  // what was asked. A truncated or substituted file is otherwise indetectable
+  // until it is already in the production bucket.
+  const bytes = statSync(AUDIO).size;
+  if (bytes < 100_000 || bytes > 5_000_000) {
+    throw new Error(`fixture is ${bytes} bytes — not the expected 12-minute tone`);
+  }
+  const probed = Number(execFileSync('ffprobe', ['-v','error','-show_entries','format=duration',
+    '-of','default=noprint_wrappers=1:nokey=1', AUDIO], { encoding: 'utf8' }).trim());
+  if (!(Math.abs(probed - DURATION_SEC) < 2)) {
+    throw new Error(`fixture is ${probed}s, expected ${DURATION_SEC}s — refusing to upload`);
+  }
 }
-const DURATION_SEC = 720;
 
 // --------------------------------------------------------------- utilities --
 
