@@ -94,12 +94,13 @@ import { join, resolve } from 'node:path';
 const require = createRequire(new URL('../functions/package.json', import.meta.url));
 const admin = require('firebase-admin');
 import { EMULATOR_PORTS, WEB_PORTS } from './lib/ports.mjs';
+import { EMULATOR_PROJECT_ID, EMULATOR_STORAGE_BUCKET } from './lib/project.mjs';
 
 const BASE = process.env.E2E_BASE ?? `http://127.0.0.1:${WEB_PORTS.sweep}/`;
 const ROOT = resolve(import.meta.dirname, '..');
 const SHOTS = resolve(ROOT, 'shots', 'screens');
-const PROJECT = 'demo-sabeel';
-const BUCKET = `${PROJECT}.appspot.com`;
+const PROJECT = EMULATOR_PROJECT_ID;
+const BUCKET = EMULATOR_STORAGE_BUCKET;
 const FULL = process.env.SWEEP_FULL === '1';
 
 process.env.FIRESTORE_EMULATOR_HOST ??= `127.0.0.1:${EMULATOR_PORTS.firestore}`;

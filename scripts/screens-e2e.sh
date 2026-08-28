@@ -132,6 +132,6 @@ fi
 # status, and now the trap actually fires. The reference implementation this was
 # modelled on has the same bug.
 firebase emulators:exec \
-  --project demo-sabeel \
+  --project demo-sabeel-recordings \
   --only firestore,auth,storage,functions \
   "node scripts/screens-e2e.mjs"

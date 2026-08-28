@@ -17,7 +17,7 @@
  * is simply never in it (enrollment-onward).
  *
  * Prerequisites (see docs/DEV-TOOLING.md):
- *   firebase emulators:start --project demo-sabeel --only firestore,auth,storage,functions
+ *   firebase emulators:start --project demo-sabeel-recordings --only firestore,auth,storage,functions
  *   cd app && EXPO_PUBLIC_USE_EMULATORS=1 npx expo start --web --port 61111 --clear
  *
  * Then: npm run test:e2e
@@ -34,12 +34,13 @@ import { chromium } from 'playwright';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { EMULATOR_PORTS, WEB_PORTS } from './lib/ports.mjs';
+import { EMULATOR_PROJECT_ID } from './lib/project.mjs';
 
 const WEB = process.env.E2E_WEB ?? `http://127.0.0.1:${WEB_PORTS.e2e}/`;
-const FN = `http://127.0.0.1:${EMULATOR_PORTS.functions}/demo-sabeel/us-central1`;
+const FN = `http://127.0.0.1:${EMULATOR_PORTS.functions}/${EMULATOR_PROJECT_ID}/us-central1`;
 const FS = `http://127.0.0.1:${EMULATOR_PORTS.firestore}`;
-const FS_READ = `${FS}/v1/projects/demo-sabeel/databases/(default)/documents`;
-const FS_WIPE = `${FS}/emulator/v1/projects/demo-sabeel/databases/(default)/documents`;
+const FS_READ = `${FS}/v1/projects/${EMULATOR_PROJECT_ID}/databases/(default)/documents`;
+const FS_WIPE = `${FS}/emulator/v1/projects/${EMULATOR_PROJECT_ID}/databases/(default)/documents`;
 const AUTH = `http://127.0.0.1:${EMULATOR_PORTS.auth}`;
 const SHOTS = 'e2e-shots';
 const AUDIO_FIXTURE = process.env.E2E_AUDIO ?? 'e2e-shots/test-lecture.m4a';
@@ -85,7 +86,7 @@ function check(name, ok, detail = '') {
 async function reset() {
   for (const [what, url] of [
     ['firestore', FS_WIPE],
-    ['auth', `${AUTH}/emulator/v1/projects/demo-sabeel/accounts`],
+    ['auth', `${AUTH}/emulator/v1/projects/${EMULATOR_PROJECT_ID}/accounts`],
   ]) {
     const r = await fetch(url, { method: 'DELETE' });
     if (!r.ok) throw new Error(`could not clear ${what}: ${r.status}`);
@@ -446,7 +447,7 @@ await shot(admin, '08-roster');
 // The student sets a password from the emailed link and signs in. Redeemed
 // through the same endpoint the SDK's confirmPasswordReset() calls, so this
 // tests the real link rather than the emulator's own reset page markup.
-const oob = await (await fetch(`${AUTH}/emulator/v1/projects/demo-sabeel/oobCodes`)).json();
+const oob = await (await fetch(`${AUTH}/emulator/v1/projects/${EMULATOR_PROJECT_ID}/oobCodes`)).json();
 const reset0 = (oob.oobCodes ?? []).filter((c) => c.email === 'fatima@example.com').pop();
 const redeem = await fetch(
   `${AUTH}/identitytoolkit.googleapis.com/v1/accounts:resetPassword?key=fake-api-key`,

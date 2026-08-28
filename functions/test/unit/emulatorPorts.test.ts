@@ -58,6 +58,25 @@ function portsFromClient(): Record<string, number> {
   );
 }
 
+/** The emulator project id, from the shared constant the app and functions read. */
+function projectFromShared(): string {
+  const m = read('packages/shared/src/constants.ts').match(
+    /EMULATOR_PROJECT_ID\s*=\s*'([^']+)'/);
+  if (!m) throw new Error('EMULATOR_PROJECT_ID not found in packages/shared/src/constants.ts');
+  return m[1];
+}
+
+/** Every `--project` flag in the shell runners. */
+function projectsFromShell(): { file: string; value: string }[] {
+  const out: { file: string; value: string }[] = [];
+  for (const f of ['scripts/test-emulator.sh', 'scripts/screens-e2e.sh']) {
+    for (const m of read(f).matchAll(/--project\s+(\S+)/g)) {
+      out.push({ file: f, value: m[1] });
+    }
+  }
+  return out;
+}
+
 /** The scripts' copy. */
 async function portsFromScripts(): Promise<{
   emulator: Record<string, number>;
@@ -162,5 +181,42 @@ describe('emulator ports agree across every file that states them', () => {
   it('the sweep script and the sweep runner agree on the web port', async () => {
     const { web } = await portsFromScripts();
     expect(sweepWebPortFromShell(), 'screens-e2e.sh WEB_PORT vs WEB_PORTS.sweep').toBe(web.sweep);
+  });
+});
+
+
+/**
+ * The emulator project id, which is a diagnostic as much as a config value.
+ *
+ * A sibling repo on this machine used the same id, so `ps` showed two identical
+ * `--project` lines and there was no way to tell which checkout owned which
+ * emulator — the exact check that failed when one session killed another's.
+ *
+ * It is also load-bearing: `isEmulatorProject()` in `functions/src/env.ts`
+ * compares `GCLOUD_PROJECT` against the shared constant, and a mismatch makes
+ * the playback path mint a signed URL against the emulator, which fails without
+ * saying why. So the shell runners' `--project`, the shared constant and the
+ * scripts' copy must agree.
+ */
+describe('the emulator project id agrees everywhere it is stated', () => {
+  it('scripts/lib/project.mjs matches the shared constant', async () => {
+    const mod = await import(resolve(REPO, 'scripts/lib/project.mjs'));
+    expect(mod.EMULATOR_PROJECT_ID).toBe(projectFromShared());
+    expect(mod.EMULATOR_STORAGE_BUCKET).toBe(`${projectFromShared()}.appspot.com`);
+  });
+
+  it('every shell --project flag matches the shared constant', () => {
+    const shared = projectFromShared();
+    const flags = projectsFromShell();
+    expect(flags.length, 'no --project flags found — the parse is broken').toBeGreaterThan(0);
+    for (const { file, value } of flags) {
+      expect(value, `${file} passes --project ${value}`).toBe(shared);
+    }
+  });
+
+  it('is not the id a sibling checkout uses', () => {
+    // Distinctness is the whole point: a shared id makes `ps` useless for
+    // telling two running emulators apart.
+    expect(projectFromShared()).not.toBe('demo-sabeel');
   });
 });

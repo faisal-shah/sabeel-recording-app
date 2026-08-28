@@ -10,9 +10,10 @@
  */
 import { chromium } from 'playwright';
 import { EMULATOR_PORTS, WEB_PORTS } from './lib/ports.mjs';
+import { EMULATOR_PROJECT_ID } from './lib/project.mjs';
 
 const WEB = `http://127.0.0.1:${WEB_PORTS.e2e}/`;
-const FN = `http://127.0.0.1:${EMULATOR_PORTS.functions}/demo-sabeel/us-central1`;
+const FN = `http://127.0.0.1:${EMULATOR_PORTS.functions}/${EMULATOR_PROJECT_ID}/us-central1`;
 const DIR = 'docs/manual/img';
 const PHONE = { width: 390, height: 844 };
 const DESKTOP = { width: 1280, height: 900 };

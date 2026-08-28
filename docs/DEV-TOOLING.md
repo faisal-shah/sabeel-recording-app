@@ -152,7 +152,7 @@ audit lie, and an audit that reports nothing is worse than no audit.
 `npm run test:e2e` needs TWO things already running:
 
 ```bash
-firebase emulators:start --project demo-sabeel --only firestore,auth,storage,functions
+firebase emulators:start --project demo-sabeel-recordings --only firestore,auth,storage,functions
 cd app && EXPO_PUBLIC_USE_EMULATORS=1 npx expo start --web --port 61111 --clear
 ```
 

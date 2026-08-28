@@ -28,6 +28,6 @@ npm run build -w @sabeel/shared
 npm run build -w functions
 
 exec firebase emulators:exec \
-  --project demo-sabeel \
+  --project demo-sabeel-recordings \
   --only firestore,auth,storage,functions \
   "npm run test:integration -w functions"
