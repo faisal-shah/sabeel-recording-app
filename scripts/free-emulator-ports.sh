@@ -20,6 +20,44 @@ pids_on_port() {
   ss -lptn "sport = :$1" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | sort -u
 }
 
+# The leftovers that hold NO port, and so survive everything above.
+#
+# When a run is killed, the functions emulator's Node runtime workers can outlive
+# it and reparent to init at ~150 MB each. Every port check says the block is
+# clear, so the next run starts happily and leaks another batch. Measured after
+# three interrupted runs: twelve orphans, ~1.7 GB.
+#
+# The damage lands on a LATER run, which is what makes it so confusing: a long
+# browser suite dies partway with ERR_CONNECTION_REFUSED against its own dev
+# server, at a different screen each time, and the dev server's log ends with no
+# error at all. It reads as a bug in whatever you changed most recently. It cost
+# two failed sweeps and a wrong hypothesis on 2026-08-28.
+#
+# Matched by cwd, not by name: sibling checkouts on this machine run the exact
+# same binary, and killing theirs is the thing this whole port scheme exists to
+# stop. ppid==1 is what distinguishes an orphan from a worker belonging to a run
+# that is legitimately in progress right now.
+reap_orphaned_runtimes() {
+  local repo_functions orphans=()
+  repo_functions="$(cd "$(dirname "$0")/../functions" && pwd)"
+
+  # NOT pgrep: `pgrep -f firebase-tools` matches this script's own command line
+  # and the agent shell that spawned it — the exact trap documented at the top of
+  # this file (a shell exiting 144). Reading ps and filtering by ppid and cwd
+  # cannot match the caller by accident.
+  # shellcheck disable=SC2009
+  while read -r pid ppid _; do
+    [ "$ppid" = "1" ] || continue
+    case "$CALLER_PIDS" in *" $pid "*) continue ;; esac
+    [ "$(readlink "/proc/$pid/cwd" 2>/dev/null)" = "$repo_functions" ] || continue
+    orphans+=("$pid")
+  done < <(ps -eo pid,ppid,args --no-headers | grep '[f]irebase-tools')
+
+  [ ${#orphans[@]} -eq 0 ] && return 0
+  echo "reaping ${#orphans[@]} orphaned functions runtime(s): ${orphans[*]}"
+  kill "${orphans[@]}" 2>/dev/null || true
+}
+
 victims=()
 for p in "${PORTS[@]}"; do
   for pid in $(pids_on_port "$p"); do
@@ -31,6 +69,7 @@ done
 
 if [ ${#victims[@]} -eq 0 ]; then
   echo "emulator ports clear"
+  reap_orphaned_runtimes
   exit 0
 fi
 
@@ -53,3 +92,5 @@ for p in "${PORTS[@]}"; do
 done
 sleep 1
 echo "emulator ports clear"
+
+reap_orphaned_runtimes

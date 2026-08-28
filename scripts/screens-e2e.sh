@@ -85,6 +85,12 @@ cleanup() {
   for p in $(pids_on_port "$WEB_PORT"); do
     kill "$p" 2>/dev/null || true
   done
+  # Also on the way OUT, not just on the way in. A killed run leaves functions
+  # runtime workers that hold no port, so nothing notices them and the next run
+  # starts happily — then a later one dies partway with a connection refused
+  # against its own dev server. Sweeping here means an interrupted run cleans up
+  # after itself instead of taxing the next one.
+  bash "$(dirname "$0")/free-emulator-ports.sh" >/dev/null 2>&1 || true
 }
 # EXIT alone, and NOT `EXIT INT TERM` — which is the opposite of the usual
 # advice and was measured rather than reasoned. Bash defers a TRAPPED signal
