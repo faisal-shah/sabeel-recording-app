@@ -37,7 +37,13 @@ export async function signedPlaybackUrl(
   const expiresAt = Date.now() + ttlMs;
 
   if (isEmulatorProject()) {
-    const host = process.env.FIREBASE_STORAGE_EMULATOR_HOST ?? '127.0.0.1:9199';
+    // No fallback port: this branch only runs under the emulator suite, which
+    // always exports the var, and defaulting would aim at whatever is on that
+    // port — on this machine, potentially a sibling checkout's Storage.
+    const host = process.env.FIREBASE_STORAGE_EMULATOR_HOST;
+    if (!host) {
+      throw new Error('FIREBASE_STORAGE_EMULATOR_HOST is unset under an emulator project');
+    }
     const file = getStorage().bucket().file(path);
 
     // A plain `?alt=media` URL is RULES-GOVERNED, and storage.rules denies all

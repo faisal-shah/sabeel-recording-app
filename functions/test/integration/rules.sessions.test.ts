@@ -11,8 +11,23 @@ import { COLLECTIONS, EMULATOR_PROJECT_ID, enrollmentId } from '@sabeel/shared';
 
 let testEnv: RulesTestEnvironment;
 
-function hostPort(envValue: string | undefined, fallbackPort: number) {
-  const [host, port] = (envValue ?? `127.0.0.1:${fallbackPort}`).split(':');
+/**
+ * `host:port` from the emulator env var the CLI exports.
+ *
+ * NO fallback port, deliberately. `emulators:exec` always sets these
+ * (`firebase-tools/lib/emulator/env.js`), so an unset var means the suite is
+ * running outside the wrapper — and a hardcoded default does not rescue that,
+ * it points at whatever happens to be on that port. On a machine where three
+ * checkouts run emulators, that is a SIBLING's: it reads and writes happily and
+ * turns a rules suite green against the wrong database. Failing loudly is the
+ * only safe behaviour.
+ */
+function hostPort(envName: string) {
+  const value = process.env[envName];
+  if (!value) throw new Error(`${envName} is unset — run via npm run test:emulator`);
+  const [host, port] = value.split(':');
+  // Literal 127.0.0.1, never 'localhost': the emulators bind IPv4 only, while
+  // 'localhost' can resolve to IPv6 ::1 first and fail at connect.
   return { host: host || '127.0.0.1', port: Number(port) };
 }
 
@@ -20,7 +35,7 @@ beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: EMULATOR_PROJECT_ID,
     firestore: {
-      ...hostPort(process.env.FIRESTORE_EMULATOR_HOST, 8080),
+      ...hostPort('FIRESTORE_EMULATOR_HOST'),
       rules: readFileSync(new URL('../../../firestore.rules', import.meta.url), 'utf8'),
     },
   });

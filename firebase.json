@@ -58,19 +58,27 @@
   },
   "emulators": {
     "auth": {
-      "port": 9099
+      "port": 61102
     },
     "functions": {
-      "port": 5001
+      "port": 61103
     },
     "firestore": {
-      "port": 8080
+      "port": 61100,
+      "websocketPort": 61101
     },
     "storage": {
-      "port": 9199
+      "port": 61107
     },
     "ui": {
-      "enabled": true
+      "enabled": true,
+      "port": 61104
+    },
+    "hub": {
+      "port": 61105
+    },
+    "logging": {
+      "port": 61106
     },
     "singleProjectMode": true
   }

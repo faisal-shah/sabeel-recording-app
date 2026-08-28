@@ -18,7 +18,7 @@
  *
  * Prerequisites (see docs/DEV-TOOLING.md):
  *   firebase emulators:start --project demo-sabeel --only firestore,auth,storage,functions
- *   cd app && EXPO_PUBLIC_USE_EMULATORS=1 npx expo start --web --port 8083 --clear
+ *   cd app && EXPO_PUBLIC_USE_EMULATORS=1 npx expo start --web --port 61111 --clear
  *
  * Then: npm run test:e2e
  *

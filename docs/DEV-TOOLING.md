@@ -97,8 +97,38 @@ audit lie, and an audit that reports nothing is worse than no audit.
 - **JDK 21+ required.** `scripts/test-emulator.sh` resolves `SR_JDK21_HOME` →
   `~/opt/jdk-21` → whatever `java` is on PATH, so JDK 17 can stay the default for
   the Android/Gradle build.
+> **This checkout owns emulator ports 61100-61107** and web dev-server ports
+> 61110 (sweep) / 61111 (`test:e2e`). The sibling Sabeel repos own 61000+ and
+> 61200+. Three of them share this machine and all three used to pin
+> 8080/9099/5001/9199, so whichever suite started second killed the other's
+> Firestore. `61103` also reads as "this project, functions" at a glance — the
+> diagnostic that was missing when one session killed another's emulator after
+> misreading a truncated `ps` line.
+>
+> 61100+ specifically: the ephemeral range here is 32768-60999
+> (`/proc/sys/net/ipv4/ip_local_port_range`) so nothing above it is handed out at
+> random, and Firebase's own defaults top out at 9499
+> (`firebase-tools/lib/emulator/constants.js`) so the block cannot collide with
+> something the CLI picks for itself.
+>
+> Five files state these numbers and cannot share a representation —
+> `firebase.json`, `app/src/env.ts` (inlined into the bundle),
+> `scripts/lib/ports.mjs`, the `PORTS=(…)` array in `free-emulator-ports.sh` and
+> the `WEB_PORT` default in `screens-e2e.sh`.
+> `functions/test/unit/emulatorPorts.test.ts` asserts they agree, that every port
+> is inside the block, and that the kill list contains **nothing this checkout
+> does not own**. Never widen that array past the block.
+>
+> Two are easy to move wrongly: `firestore.websocketPort` is a **nested** key
+> defaulting to **9150** that is *not* derived from `firestore.port`, and left
+> unset it silently **increments** on collision rather than erroring; and
+> `ui`/`hub`/`logging` have `FIND_AVAILBLE_PORT_BY_DEFAULT = true`, so they drift
+> silently until pinned. Metro's **8081** is not in the scheme and cannot be —
+> the AVD reaches the host directly at `10.0.2.2:8081`, so concurrent *web* work
+> is fine and concurrent *native* work stays one session at a time.
+
 - **`free-emulator-ports.sh` runs first, every time.** A killed run leaves
-  emulators squatting on ports 4000/4400/4500/5001/8080/9099/9150/**9199**. The
+  emulators squatting on this checkout's ports, **61100-61107**. The
   next run then talks to a half-dead emulator that answers on the port but has no
   functions registered, so every callable 404s — and a 404 carries no CORS
   headers, so the browser reports "blocked by CORS policy" while the callable
@@ -109,7 +139,9 @@ audit lie, and an audit that reports nothing is worse than no audit.
   The script looks up owners by port instead. The same trap catches
   `pkill -f "expo start"` / `pkill -f "expo run"` — it matches the agent's own
   tool process and the command exits **144** as its shell is killed mid-run.
-  **Kill dev servers by port:** `lsof -ti tcp:8083 tcp:8081 | xargs -r kill`
+  **Kill dev servers by port:** `ss -lptn 'sport = :61111' | grep -oP 'pid=\K[0-9]+' | xargs -r kill`
+  (`lsof` is not on PATH in a non-interactive shell without the toolchain env
+  sourced, and a missing `lsof` turns a port guard into a silent no-op)
   (or `free-emulator-ports.sh` for the emulator suite).
 - **Waiting for the port is not waiting for readiness.** The functions emulator
   accepts connections before it has registered anything. Poll a known callable
@@ -121,7 +153,7 @@ audit lie, and an audit that reports nothing is worse than no audit.
 
 ```bash
 firebase emulators:start --project demo-sabeel --only firestore,auth,storage,functions
-cd app && EXPO_PUBLIC_USE_EMULATORS=1 npx expo start --web --port 8083 --clear
+cd app && EXPO_PUBLIC_USE_EMULATORS=1 npx expo start --web --port 61111 --clear
 ```
 
 **`npm run test:emulator` will kill that emulator suite.** It runs
@@ -167,7 +199,7 @@ the layout regression harness: every screen of both populations at five widths,
 **asserted**, and it exits non-zero.
 
 **It needs nothing running.** The runner starts the emulator suite and its own
-Expo web dev server on port **8086** (not `test:e2e`'s 8083) and kills both on
+Expo web dev server on port **61110** (not `test:e2e`'s 61111) and kills both on
 the way out. That is the whole reason it is in CI and `test:e2e` is not — it
 never touches a world somebody else built.
 

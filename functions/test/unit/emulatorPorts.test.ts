@@ -81,7 +81,32 @@ function sweepWebPortFromShell(): number {
   return Number(m[1]);
 }
 
+/**
+ * This checkout's block. Bases are 100 apart, one per repo on this machine.
+ *
+ * 61100+ because the ephemeral range here is 32768-60999
+ * (`/proc/sys/net/ipv4/ip_local_port_range`) so nothing above it is handed out
+ * at random, and Firebase's own defaults top out at 9499
+ * (`firebase-tools/lib/emulator/constants.js`) so the block collides with
+ * nothing the CLI would choose for itself.
+ */
+const BLOCK_START = 61100;
+const BLOCK_END = BLOCK_START + 99;
+
 describe('emulator ports agree across every file that states them', () => {
+  it('every port is inside this checkout\u2019s block', async () => {
+    const { emulator, web } = await portsFromScripts();
+    const all = { ...emulator, ...web };
+    expect(Object.keys(all).length).toBeGreaterThan(0);
+
+    for (const [service, port] of Object.entries(all)) {
+      expect(
+        port >= BLOCK_START && port <= BLOCK_END,
+        `${service}=${port} is outside ${BLOCK_START}-${BLOCK_END} — that is another checkout's territory`,
+      ).toBe(true);
+    }
+  });
+
   it('no two services claim the same port', async () => {
     const { emulator, web } = await portsFromScripts();
     expect(Object.keys(emulator).length).toBeGreaterThan(0);

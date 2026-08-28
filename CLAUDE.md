@@ -116,6 +116,13 @@ Do not silently change any of these.
 ## Dev & test loops
 
 - Unit: `npm test` (Vitest: shared + functions).
+- **This checkout owns emulator ports 61100-61107** and web dev-server ports
+  61110 (sweep) / 61111 (`test:e2e`); the sibling repos own 61000+ and 61200+.
+  Three projects share this machine and all three used to pin 8080/9099/5001/9199,
+  so whichever suite started second killed the other's Firestore. Five files state
+  the ports and `functions/test/unit/emulatorPorts.test.ts` asserts they agree and
+  that the kill list reaches no further. Never widen `free-emulator-ports.sh` past
+  this block. Details in `docs/DEV-TOOLING.md`.
 - Rules/integration: `npm run test:emulator` — Firestore, Auth **and Storage**
   rules. Needs JDK 21. Storage rules have no reference implementation in the
   sibling repos, so this job is what keeps them honest.
@@ -156,12 +163,13 @@ code-level check. Never claim a screen works because the code looks right.
 **A check that cannot fail is a screenshot generator.** A tour wrapped in a
 try/catch that logs and continues reports success either way.
 
-### The browser is the default surface for layout work
+### The browser is the default surface for verification
 
-`npm run test:e2e` drives the real web build, and a narrow browser window is the
-right place to iterate on mobile layout. Reach for it on any change to a shared
-component, the theme, or a layout — it is faster and more repeatable than a human
-on an emulator.
+**Prove a change on the web app unless it touches a seam a browser cannot
+reach.** `npm run test:e2e` drives the real web build and `npm run test:screens`
+sweeps every screen of both populations at five widths — between them they cover
+almost everything, and they are faster and far more repeatable than a human on an
+emulator. That is the default for layout, flows, rules, data and copy.
 
 **`npm run test:screens` is the sweep, and it runs on every push.** Every screen
 of both populations at five widths straddling `CONTENT_MAX_WIDTH` — which it
@@ -193,6 +201,21 @@ Not for routine layout work. Use it for:
 
 Plus **before a release**, and whenever Faisal asks. That pre-release pass is
 mandatory, not optional.
+
+**Check who owns the AVD before booting it.** There is one `tb_emu` on this
+machine and all three repos default to it, so a boot can walk into another
+session's run:
+
+```sh
+ps -eo pid,args --no-headers | grep "[q]emu-system"   # empty = no AVD running
+```
+
+Use that, not `adb devices` — `adb devices` *starts* a daemon as a side effect,
+and a live adb server does **not** mean an emulator is running. If one is already
+running it belongs to someone else: ask before killing it or starting a second.
+The box has 15 GiB of RAM and a 16 GiB swapfile, so a second AVD (~5 GB) will
+swap rather than be killed outright — and an AVD that is swapping is slower than
+the software renderer already is.
 
 **Why this is safe, and exactly where it is not.** react-native-web resolves
 flexbox through the browser's engine, so a narrow viewport tests *your layout

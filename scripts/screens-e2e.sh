@@ -28,10 +28,22 @@ if [ -n "${JAVA_HOME:-}" ]; then
   export PATH="$JAVA_HOME/bin:$PATH"
 fi
 
-# 8086, not the 8083 `test:e2e` uses. Two suites that grab the same port cannot
+# 61110, not the 61111 `test:e2e` uses. Two suites that grab the same port cannot
 # be run side by side, and the failure mode is not "port busy" — see the stale
 # server note below.
-WEB_PORT="${SWEEP_WEB_PORT:-8086}"
+WEB_PORT="${SWEEP_WEB_PORT:-61110}"
+
+# Repo-local, not /tmp. Three sibling checkouts share this machine and all three
+# used the same generic /tmp log names, so a concurrent run overwrote the log
+# this one is grepping for readiness — and the readiness grep below is what
+# decides whether the sweep proceeds against a stale server. `shots/` is
+# gitignored and is where this run's output already goes.
+# ABSOLUTE: the dev server is started from a subshell that cd's into app/,
+# while the readiness grep below runs from the repo root. A relative path
+# would mean two different files and a readiness check that never matches.
+WEB_LOG="$PWD/shots/expo-screens-e2e.log"
+mkdir -p "$(dirname "$WEB_LOG")"
+: > "$WEB_LOG"
 export E2E_BASE="http://127.0.0.1:${WEB_PORT}/"
 
 bash scripts/free-emulator-ports.sh
@@ -55,7 +67,7 @@ npm run build -w functions
 # missing lsof is indistinguishable from "no listener", and BOTH the stale-server
 # kill and the cleanup trap become silent no-ops. That is the two safety
 # mechanisms in this script switching off with nothing to show for it. Measured:
-# `lsof -ti:8086 ... | wc -l` returns 0 without the toolchain env sourced while
+# `lsof -ti:61110 ... | wc -l` returns 0 without the toolchain env sourced while
 # a server is demonstrably bound. `scripts/free-emulator-ports.sh` already uses
 # `ss` for this; deviating from it was the mistake.
 pids_on_port() {
@@ -91,12 +103,12 @@ echo "Starting Expo web dev server on ${WEB_PORT}…"
 # authenticated screen at all. `--clear` because Metro will otherwise serve a
 # bundle built under different EXPO_PUBLIC_* values.
 ( cd app && CI=1 EXPO_PUBLIC_USE_EMULATORS=1 \
-    npx expo start --web --port "$WEB_PORT" --clear >/tmp/expo-screens-e2e.log 2>&1 ) &
+    npx expo start --web --port "$WEB_PORT" --clear >"$WEB_LOG" 2>&1 ) &
 WEB_PID=$!
 
 ready=""
 for _ in $(seq 1 120); do
-  if grep -qi "is being used by another process" /tmp/expo-screens-e2e.log 2>/dev/null; then
+  if grep -qi "is being used by another process" "$WEB_LOG" 2>/dev/null; then
     echo "Another process grabbed port ${WEB_PORT}; refusing to sweep stale code." >&2
     exit 1
   fi
@@ -107,8 +119,8 @@ for _ in $(seq 1 120); do
   sleep 2
 done
 if [ -z "$ready" ]; then
-  echo "Expo web dev server never became ready — see /tmp/expo-screens-e2e.log" >&2
-  tail -25 /tmp/expo-screens-e2e.log >&2 || true
+  echo "Expo web dev server never became ready — see $WEB_LOG" >&2
+  tail -25 "$WEB_LOG" >&2 || true
   exit 1
 fi
 
