@@ -101,6 +101,8 @@ export function StudentHomeScreen({
     <Screen title="Your listening" subtitle="Recordings you were excused from, most urgent first">
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
 
+      {/* Top of the content, below the listener error only. Same place in all
+          three apps: first thing after anything that needs acting on today. */}
       <PushNudge uid={uid} />
 
       {rows.length === 0 ? (

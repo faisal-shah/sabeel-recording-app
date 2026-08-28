@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import {
   NOTIFICATION_DESCRIPTION,
   NOTIFICATION_LABEL,
@@ -122,9 +122,12 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
           {canOpenPushSettings ? (
             <Button label="Open settings" variant="secondary" onPress={openPushSettings} />
           ) : (
-            <Notice tone="info">
+            /* Plain text, not a second Notice: two stacked gold blocks in one
+               card read as two separate alerts. The siblings pair a line with a
+               lighter hint, and so does this. */
+            <Text style={styles.deviceHint}>
               Allow them in your browser&apos;s site settings, then reopen this screen.
-            </Notice>
+            </Text>
           )}
         </Card>
       ) : null}
@@ -152,5 +155,7 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
 }
 
 const styles = StyleSheet.create({
+  /** secondary, not muted: muted is the caption token and fails AA on this surface. */
+  deviceHint: { fontSize: 13, color: t.text.secondary },
   divided: { borderTopWidth: 1, borderTopColor: t.border.subtle },
 });

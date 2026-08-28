@@ -120,6 +120,44 @@ describe('devicePushToken(true) — the gesture path', () => {
  * site settings, so the screen must show instructions there rather than a
  * button that silently does nothing.
  */
+/**
+ * The SYNCHRONOUS half of the support check — the part that gates the prompt.
+ * Every other test hands it a fully capable browser, so without these a deleted
+ * capability check would pass the whole suite while letting the app call
+ * requestPermission on a browser that cannot do web push at all.
+ */
+describe('a browser missing a capability', () => {
+  it('asks nothing when PushManager is absent', async () => {
+    browser('default');
+    // @ts-expect-error deleting a global we installed for the test
+    delete globalThis.PushManager;
+    const { devicePushToken, pushPromptState } = await loadPush();
+    await expect(pushPromptState()).resolves.toBe('unsupported');
+    await expect(devicePushToken(true)).resolves.toBeNull();
+    expect(requestPermission).not.toHaveBeenCalled();
+  });
+
+  it('asks nothing when the browser has no Notification at all', async () => {
+    browser('default');
+    const asked = requestPermission;
+    // @ts-expect-error deleting a global we installed for the test
+    delete globalThis.Notification;
+    const { devicePushToken, pushPromptState } = await loadPush();
+    await expect(pushPromptState()).resolves.toBe('unsupported');
+    await expect(devicePushToken(true)).resolves.toBeNull();
+    expect(asked).not.toHaveBeenCalled();
+  });
+
+  it('asks nothing when there is no service worker', async () => {
+    browser('default');
+    Object.defineProperty(globalThis, 'navigator', { value: {}, configurable: true });
+    const { devicePushToken, pushPromptState } = await loadPush();
+    await expect(pushPromptState()).resolves.toBe('unsupported');
+    await expect(devicePushToken(true)).resolves.toBeNull();
+    expect(requestPermission).not.toHaveBeenCalled();
+  });
+});
+
 describe('opening settings', () => {
   it('is not possible from a browser', async () => {
     const { canOpenPushSettings } = await loadPush();

@@ -17,7 +17,8 @@ import { VAPID_PUBLIC_KEY } from './firebase-config';
  *  2. A **VAPID key pair**, generated in the console. The public half is not a
  *     secret and ships in the bundle; without it `getToken` throws.
  *  3. **Notification permission**, which only a user gesture may request. The
- *     settings screen asks, on a press; nothing here prompts on load.
+ *     home-screen nudge and the settings screen ask, both on a press; nothing
+ *     here prompts on load.
  *
  * Every failure returns null. A browser with notifications blocked, an
  * unsupported one, and a build with no VAPID key are all the same answer to the
@@ -95,28 +96,33 @@ export async function devicePushToken(prompt: boolean): Promise<string | null> {
 async function resolveToken(prompt: boolean): Promise<string | null> {
   if (!canRequestPush()) return null;
 
-  // NOTHING MAY BE AWAITED ABOVE THIS LINE.
-  //
-  // `Notification.requestPermission()` consumes transient activation in WebKit,
-  // and WebKit only honours it as the direct result of a click. An await in
-  // between is enough to lose that: `isSupported()` used to run here, and it
-  // awaits an IndexedDB `open()` that resolves from an `onsuccess` TASK, so the
-  // request landed a whole event-loop turn after the press. Safari then refused
-  // silently — no prompt, permission left at 'default', the site absent from
-  // both the allowed and the blocked list, which is the tell-tale symptom.
-  //
-  // An async function runs synchronously up to its first await, so starting the
-  // request here — and awaiting the promise below — keeps it inside the press.
-  const decision =
-    prompt && Notification.permission === 'default'
-      ? Notification.requestPermission()
-      : Promise.resolve(Notification.permission);
-
-  // Past the prompt, awaits are free again.
-  if ((await decision) !== 'granted') return null;
-  if (!(await isSupported().catch(() => false))) return null;
-
+  // Everything below is inside ONE try. Entering a try block is synchronous, so
+  // this still keeps the request inside the press, while making the function
+  // total — a synchronous throw here used to escape, and every caller treats
+  // this as "returns null on any failure".
   try {
+    // NOTHING MAY BE AWAITED ABOVE THIS LINE.
+    //
+    // `Notification.requestPermission()` consumes transient activation in
+    // WebKit, and WebKit only honours it as the direct result of a click. An
+    // await in between is enough to lose that: `isSupported()` used to run
+    // here, and it awaits an IndexedDB `open()` that resolves from an
+    // `onsuccess` TASK, so the request landed a whole event-loop turn after the
+    // press. Safari then refused silently — no prompt, permission left at
+    // 'default', the site absent from both the allowed and the blocked list,
+    // which is the tell-tale symptom.
+    //
+    // An async function runs synchronously up to its first await, so starting
+    // the request here — and awaiting the promise below — keeps it in the press.
+    const decision =
+      prompt && Notification.permission === 'default'
+        ? Notification.requestPermission()
+        : Promise.resolve(Notification.permission);
+
+    // Past the prompt, awaits are free again.
+    if ((await decision) !== 'granted') return null;
+    if (!(await isSupported().catch(() => false))) return null;
+
     await navigator.serviceWorker.register('/firebase-messaging-sw.js');
     // `register()` resolves as soon as the script is FETCHED, not once a worker
     // is running it. Handing that registration straight to getToken fails with

@@ -139,6 +139,36 @@ let fixedFormatSeen = 0;
  * Where a check can be phrased either way, `some` is free insurance.
  */
 let controlsSeen = 0;
+/**
+ * The notifications screen must always say SOMETHING about this device —
+ * exactly one of the four states, never none and never two.
+ *
+ * Deliberately browser-independent: headless Chromium reports permission as
+ * 'denied' and the full browser reports 'default', so asserting a particular
+ * message would only ever hold under one of them. What must hold under both is
+ * that the section exists at all. Without this the sweep merely photographs
+ * whatever renders, and the whole control could vanish with every check green.
+ */
+async function checkDeviceState(page, tag) {
+  const messages = [
+    'Notifications are not enabled on this device.',
+    'Notifications are enabled on this device.',
+    'Notifications are blocked for this app on this device.',
+    "This device can't show notifications.",
+  ];
+  const shown = [];
+  for (const m of messages) {
+    if (await page.getByText(m, { exact: false }).first().isVisible().catch(() => false)) {
+      shown.push(m);
+    }
+  }
+  check(
+    `${tag} / notifications says exactly one thing about this device`,
+    shown.length === 1,
+    `saw ${shown.length}: ${shown.join(' | ') || '(none)'}`,
+  );
+}
+
 function check(name, ok, detail = '') {
   results.push({ name, ok });
   // The detail describes the FAILURE, so it prints only when there is one.
@@ -1157,6 +1187,7 @@ async function tourStaff(page, tag) {
   });
   await visit('audit', () => tap(byId(page, 'nav-audit-global')));
   await visit('notifications', () => tap(byId(page, 'nav-notifications')));
+  await checkDeviceState(page, tag);
   await visit('tokens', () => tap(byName(page, 'Design tokens')));
 
   check(`${tag} reached every staff screen`, counter.seen === STAFF_SCREENS,
@@ -1216,6 +1247,7 @@ async function tourStudent(page, tag) {
   // are the only fixed-width row in the app.
   await visit('player', () => tap(byId(page, `task-${dueSoon.title}`)));
   await visit('notifications', () => tap(byId(page, 'nav-notifications')));
+  await checkDeviceState(page, tag);
 
   /*
    * NOT toured: the player with access closed. A missed card is deliberately

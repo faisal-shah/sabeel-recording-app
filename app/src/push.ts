@@ -51,7 +51,10 @@ let cached: string | null = null;
 export const canOpenPushSettings = true;
 
 export function openPushSettings(): void {
-  void Linking.openSettings();
+  // openSettings REJECTS when the platform cannot honour it, and a bare `void`
+  // would leave that unhandled. There is nothing useful to do about it: the
+  // screen has already said where the setting lives.
+  void Linking.openSettings().catch(() => undefined);
 }
 
 /**

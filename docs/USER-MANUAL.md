@@ -187,8 +187,9 @@ this device needs its permission as well. The app offers to set that up once, on
 your home screen after you sign in; you can also tap **Enable notifications** on
 this screen at any time. If it says they are blocked, use **Open settings** on a
 phone, or allow them from the site settings behind the icon in your browser's
-address bar. If it says this device can't show them at all, you're in a browser
-that doesn't support them.
+address bar. If it says this device can't show them at all, either the browser
+doesn't support them or setting them up didn't finish — try again from this
+screen, and if it keeps saying that, tell Faisal.
 
 ---
 

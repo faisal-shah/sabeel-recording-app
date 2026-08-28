@@ -32,6 +32,8 @@ export function HomeScreen({
 
   return (
     <Screen title={`Salaam, ${name}`} subtitle={roleLabel(role)}>
+      {/* Top of the content. Same place in all three apps: first thing after
+          anything that needs acting on today; this screen has no alert. */}
       <PushNudge uid={uid} />
 
       <SectionTitle>Manage</SectionTitle>

@@ -204,11 +204,20 @@ any time (valid VAPID key + FCM authenticating us as this project).
 
 Still yours, once the web build is deployed:
 
-- [ ] **Open the deployed site in a normal browser**, sign in, open
-      **Notifications**, and confirm the screen does NOT say the device cannot
-      receive them. Web push cannot be driven from here — Playwright's Chromium
-      has no FCM credentials and branded Chrome under it refuses — so this is
-      the one path with no automated check behind it.
+- [ ] **Open the deployed site in a normal browser** and sign in. A browser that
+      has never been asked now shows **Enable notifications** — on the home
+      screen and on the **Notifications** screen. That is the expected state, not
+      a fault: the app no longer asks on arrival, because a browser only honours
+      a permission request raised straight from a click.
+
+      Press it, allow it, and confirm the Notifications screen then reports the
+      device as enabled. Seeing "this device can't show notifications" AFTER
+      allowing is the real failure — it means permission was granted but no token
+      could be obtained.
+
+      Web push cannot be driven from here — Playwright's Chromium has no FCM
+      credentials and branded Chrome under it refuses — so this is the one path
+      with no automated check behind it.
 
 ### 3. Reword the password-reset email
 
