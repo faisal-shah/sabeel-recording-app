@@ -56,13 +56,18 @@ export async function setNotificationPref(
  * null is a normal outcome, not an error: the settings screen says so rather
  * than showing switches that could never fire.
  *
+ * `prompt` must be true ONLY from a press handler, and the call must be the
+ * first thing that handler does — see `resolveToken` in push.web.ts. Opening a
+ * screen is not a gesture: a `useEffect` runs in a later task than the tap that
+ * navigated there, so it carries no activation and Safari refuses it silently.
+ * That is exactly the bug this argument exists to prevent, so the mount path
+ * passes false and only registers a device that is already permitted.
+ *
  * Keyed BY the token, so signing in twice on the same device writes the same
  * document rather than leaking a duplicate every time.
  */
-export async function registerThisDevice(uid: string): Promise<string | null> {
-  // The one call that may prompt: opening the notification settings is a user
-  // gesture, which is the only kind of moment a browser will honour one in.
-  const token = await devicePushToken(true);
+export async function registerThisDevice(uid: string, prompt: boolean): Promise<string | null> {
+  const token = await devicePushToken(prompt);
   if (!token) return null;
   const row: DeviceTokenDoc = {
     token,

@@ -43,6 +43,23 @@ let cached: string | null = null;
  * the permission dialog on the way out, and someone who never granted permission
  * has no registration to drop.
  */
+/**
+ * What the settings screen should offer: ask, explain, or say nothing can be
+ * done here. Mirrors the web sibling; `canAskAgain` is Android's way of saying
+ * the prompt has been spent, which is the same dead end as a browser 'denied'.
+ */
+export async function pushPromptState(): Promise<
+  'granted' | 'denied' | 'default' | 'unsupported'
+> {
+  try {
+    const existing = await getPermissionsAsync();
+    if (existing.granted) return 'granted';
+    return existing.canAskAgain ? 'default' : 'denied';
+  } catch {
+    return 'unsupported';
+  }
+}
+
 export async function devicePushToken(prompt: boolean): Promise<string | null> {
   if (cached) return cached;
   cached = await resolveToken(prompt);

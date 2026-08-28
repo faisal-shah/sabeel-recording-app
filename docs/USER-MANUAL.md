@@ -182,10 +182,13 @@ bottom of your home screen to turn either off:
 Both start switched on. There's deliberately no message *after* a recording
 closes: by then there'd be nothing you could do about it.
 
-Your choices follow you — they apply on every device you sign in on. If the
-screen says this device can't receive notifications, they're switched off for
-the app in your phone's own settings, or you're in a browser that doesn't
-support them.
+Your choices follow you — they apply on every device you sign in on. Reaching
+this device needs its permission as well: if the screen offers **Turn on
+notifications**, tap it and say yes. If it says notifications are turned off,
+they have been blocked — for the app in your phone's own settings, or for the
+site in your browser — and only those settings can turn them back on. If it says
+this device can't show them at all, you're in a browser that doesn't support
+them.
 
 ---
 

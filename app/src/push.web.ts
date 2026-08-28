@@ -17,7 +17,7 @@ import { VAPID_PUBLIC_KEY } from './firebase-config';
  *  2. A **VAPID key pair**, generated in the console. The public half is not a
  *     secret and ships in the bundle; without it `getToken` throws.
  *  3. **Notification permission**, which only a user gesture may request. The
- *     settings screen asks; nothing here prompts on load.
+ *     settings screen asks, on a press; nothing here prompts on load.
  *
  * Every failure returns null. A browser with notifications blocked, an
  * unsupported one, and a build with no VAPID key are all the same answer to the
@@ -37,13 +37,45 @@ export const pushPlatform = 'web' as const;
 let cached: string | null = null;
 
 /**
+ * The checks that can be made WITHOUT awaiting anything.
+ *
+ * This is the synchronous half of `isSupported()`, split out because of the
+ * rule in `resolveToken`: nothing may be awaited before the permission request.
+ * The asynchronous half — `isSupported()`'s IndexedDB probe, which only catches
+ * Firefox private browsing and Safari in an iframe — runs after the prompt,
+ * where an await costs nothing.
+ */
+function canRequestPush(): boolean {
+  return (
+    !!VAPID_PUBLIC_KEY &&
+    typeof window !== 'undefined' &&
+    'Notification' in window &&
+    'serviceWorker' in navigator &&
+    'PushManager' in window
+  );
+}
+
+/**
+ * What the settings screen should offer: ask, explain, or say nothing can be
+ * done here. Read on mount, never in a press handler — it awaits.
+ */
+export async function pushPromptState(): Promise<
+  'granted' | 'denied' | 'default' | 'unsupported'
+> {
+  if (!canRequestPush()) return 'unsupported';
+  if (Notification.permission === 'granted') return 'granted';
+  if (Notification.permission === 'denied') return 'denied';
+  return (await isSupported().catch(() => false)) ? 'default' : 'unsupported';
+}
+
+/**
  * This device's push token, or null if it cannot have one.
  *
- * `prompt` decides whether someone who has not been asked yet IS asked. The
- * settings screen passes true — a user gesture, and the one moment a person has
- * plainly asked about notifications. Sign-out passes false: it must never raise
- * a permission dialog on the way out, and someone who never granted permission
- * has no registration to drop.
+ * `prompt` decides whether someone who has not been asked yet IS asked. Only a
+ * press handler may pass true — see `resolveToken` for why that is a hard
+ * requirement and not a preference. Everything else passes false: sign-out must
+ * never raise a permission dialog on the way out, and a screen opening must not
+ * either.
  */
 export async function devicePushToken(prompt: boolean): Promise<string | null> {
   if (cached) return cached;
@@ -52,19 +84,28 @@ export async function devicePushToken(prompt: boolean): Promise<string | null> {
 }
 
 async function resolveToken(prompt: boolean): Promise<string | null> {
-  if (!VAPID_PUBLIC_KEY) return null;
-  if (typeof window === 'undefined' || !('Notification' in window)) return null;
-  if (!(await isSupported().catch(() => false))) return null;
+  if (!canRequestPush()) return null;
 
-  // Permission is requested here rather than on load: browsers ignore — and
-  // Chrome permanently blocks — a prompt that did not follow a user gesture.
-  const permission =
-    Notification.permission === 'default' && prompt
-      ? await Notification.requestPermission()
-      : Notification.permission;
-  // Returning before touching the service worker matters as much as the prompt:
-  // an un-permitted caller must not pay the registration wait below either.
-  if (permission !== 'granted') return null;
+  // NOTHING MAY BE AWAITED ABOVE THIS LINE.
+  //
+  // `Notification.requestPermission()` consumes transient activation in WebKit,
+  // and WebKit only honours it as the direct result of a click. An await in
+  // between is enough to lose that: `isSupported()` used to run here, and it
+  // awaits an IndexedDB `open()` that resolves from an `onsuccess` TASK, so the
+  // request landed a whole event-loop turn after the press. Safari then refused
+  // silently — no prompt, permission left at 'default', the site absent from
+  // both the allowed and the blocked list, which is the tell-tale symptom.
+  //
+  // An async function runs synchronously up to its first await, so starting the
+  // request here — and awaiting the promise below — keeps it inside the press.
+  const decision =
+    prompt && Notification.permission === 'default'
+      ? Notification.requestPermission()
+      : Promise.resolve(Notification.permission);
+
+  // Past the prompt, awaits are free again.
+  if ((await decision) !== 'granted') return null;
+  if (!(await isSupported().catch(() => false))) return null;
 
   try {
     await navigator.serviceWorker.register('/firebase-messaging-sw.js');

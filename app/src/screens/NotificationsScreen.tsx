@@ -8,20 +8,26 @@ import {
   prefEnabled,
   type NotificationKind,
 } from '@sabeel/shared';
-import { Card, Notice, Screen, SectionTitle, SwitchRow } from '../components/ui';
+import { Button, Card, Notice, Screen, SectionTitle, SwitchRow } from '../components/ui';
 import { useListenerError } from '../liveQuery';
 import { registerThisDevice, setNotificationPref, useNotificationPrefs } from '../notifications';
+import { pushPromptState } from '../push';
 import { getTheme } from '../theme';
 
 const t = getTheme();
 
+type DeviceState = 'checking' | 'ready' | 'canAsk' | 'blocked' | 'unavailable';
+
 /**
  * One switch per message, for whichever population is looking.
  *
- * Registering this device happens HERE, on arrival, rather than at sign-in: the
- * permission prompt has to follow a user gesture (browsers block one that does
- * not, permanently), and opening the notification settings is the one moment a
- * person has plainly asked about notifications.
+ * Permission is asked on the BUTTON below, never on arrival. Opening a screen
+ * is not a user gesture: the effect that runs on mount is a later task than the
+ * tap that navigated here, so it carries no user activation, and Safari refuses
+ * a permission request that far from a click — silently, leaving permission at
+ * 'default' and the site in neither the allowed nor the blocked list. Mounting
+ * therefore only registers a device that is ALREADY permitted, which needs no
+ * gesture and keeps every working device working with no extra click.
  *
  * A device that cannot receive push says so rather than showing switches that
  * could never fire — an off switch and a switch with nothing behind it look
@@ -30,19 +36,48 @@ const t = getTheme();
 export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent: boolean }) {
   const listenerError = useListenerError();
   const prefs = useNotificationPrefs(uid);
-  const [device, setDevice] = useState<'checking' | 'ready' | 'unavailable'>('checking');
+  const [device, setDevice] = useState<DeviceState>('checking');
+  const [asking, setAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const token = await registerThisDevice(uid).catch(() => null);
+      const state = await pushPromptState();
+      if (cancelled) return;
+      if (state !== 'granted') {
+        setDevice(state === 'default' ? 'canAsk' : state === 'denied' ? 'blocked' : 'unavailable');
+        return;
+      }
+      // Already permitted: claim the token silently so a device that granted
+      // permission in an earlier visit keeps receiving without being asked
+      // again.
+      const token = await registerThisDevice(uid, false).catch(() => null);
       if (!cancelled) setDevice(token ? 'ready' : 'unavailable');
     })();
     return () => {
       cancelled = true;
     };
   }, [uid]);
+
+  // The permission request must be the FIRST thing this handler does — see
+  // resolveToken in push.web.ts. setAsking is synchronous, so it does not
+  // separate the press from the request; an await here would.
+  const turnOn = () => {
+    setAsking(true);
+    setError(null);
+    void (async () => {
+      const token = await registerThisDevice(uid, true).catch(() => null);
+      setAsking(false);
+      if (token) return setDevice('ready');
+      // A null is not necessarily a refusal — permission can be granted and the
+      // token still unobtainable — so re-read rather than assuming. It also
+      // keeps the button when an Android dialog was dismissed rather than
+      // refused, instead of sending someone to un-block what they never blocked.
+      const state = await pushPromptState();
+      setDevice(state === 'denied' ? 'blocked' : state === 'default' ? 'canAsk' : 'unavailable');
+    })();
+  };
 
   const kinds: NotificationKind[] = isStudent ? STUDENT_KINDS : STAFF_KINDS;
 
@@ -61,11 +96,34 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
 
+      {device === 'canAsk' ? (
+        <Card>
+          <Notice tone="info">
+            This device isn&apos;t set up to receive notifications yet. Your choices below are
+            saved either way — they apply on any device where you are signed in.
+          </Notice>
+          <Button
+            testID="enable-push"
+            label="Turn on notifications"
+            onPress={turnOn}
+            busy={asking}
+          />
+        </Card>
+      ) : null}
+
+      {device === 'blocked' ? (
+        <Notice tone="info">
+          Notifications are turned off for this app. Turn them back on where this device keeps
+          its permissions — your browser&apos;s site settings, or the system settings for the
+          app — then come back here. Your choices below are saved either way.
+        </Notice>
+      ) : null}
+
       {device === 'unavailable' ? (
         <Notice tone="info">
-          This device can&apos;t receive notifications — either they&apos;re turned off for this app
-          in your device settings, or this browser doesn&apos;t support them. Your choices below are
-          saved either way, and apply on any device where you are signed in.
+          This device can&apos;t receive notifications — this browser doesn&apos;t support them.
+          Your choices below are saved either way, and apply on any device where you are signed
+          in.
         </Notice>
       ) : null}
 
