@@ -24,3 +24,24 @@ export const IS_DEV = __DEV__;
 // then fails at connect, which surfaces as a CORS error ("no
 // Access-Control-Allow-Origin") because there is no response to carry headers.
 export const EMULATOR_HOST = Platform.OS === 'android' ? '10.0.2.2' : '127.0.0.1';
+
+/**
+ * The emulator ports this checkout owns.
+ *
+ * SOURCE LITERALS, never `EXPO_PUBLIC_*`. On a native debug build those come
+ * from the environment that started METRO, and one Metro serves every Sabeel
+ * project on this machine — an env-driven port would make the app's backend
+ * address a property of an unrelated process's environment. An env-with-default
+ * is worse still: it fails *toward* the collision, because an unset or mistyped
+ * var falls back to a shared default and silently connects to a sibling repo's
+ * emulator, which reads and writes happily.
+ *
+ * Kept in step with `firebase.json`, `scripts/lib/ports.mjs` and the shell
+ * sweeps by `functions/test/unit/emulatorPorts.test.ts`.
+ */
+export const EMULATOR_PORTS = {
+  auth: 9099,
+  firestore: 8080,
+  functions: 5001,
+  storage: 9199,
+};

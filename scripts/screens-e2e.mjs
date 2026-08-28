@@ -93,17 +93,18 @@ import { join, resolve } from 'node:path';
 
 const require = createRequire(new URL('../functions/package.json', import.meta.url));
 const admin = require('firebase-admin');
+import { EMULATOR_PORTS, WEB_PORTS } from './lib/ports.mjs';
 
-const BASE = process.env.E2E_BASE ?? 'http://127.0.0.1:8086/';
+const BASE = process.env.E2E_BASE ?? `http://127.0.0.1:${WEB_PORTS.sweep}/`;
 const ROOT = resolve(import.meta.dirname, '..');
 const SHOTS = resolve(ROOT, 'shots', 'screens');
 const PROJECT = 'demo-sabeel';
 const BUCKET = `${PROJECT}.appspot.com`;
 const FULL = process.env.SWEEP_FULL === '1';
 
-process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
-process.env.FIREBASE_AUTH_EMULATOR_HOST ??= '127.0.0.1:9099';
-process.env.FIREBASE_STORAGE_EMULATOR_HOST ??= '127.0.0.1:9199';
+process.env.FIRESTORE_EMULATOR_HOST ??= `127.0.0.1:${EMULATOR_PORTS.firestore}`;
+process.env.FIREBASE_AUTH_EMULATOR_HOST ??= `127.0.0.1:${EMULATOR_PORTS.auth}`;
+process.env.FIREBASE_STORAGE_EMULATOR_HOST ??= `127.0.0.1:${EMULATOR_PORTS.storage}`;
 process.env.GCLOUD_PROJECT = PROJECT;
 
 const results = [];

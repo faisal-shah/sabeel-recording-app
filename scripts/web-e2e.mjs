@@ -33,12 +33,14 @@
 import { chromium } from 'playwright';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { EMULATOR_PORTS, WEB_PORTS } from './lib/ports.mjs';
 
-const WEB = process.env.E2E_WEB ?? 'http://127.0.0.1:8083/';
-const FN = 'http://127.0.0.1:5001/demo-sabeel/us-central1';
-const FS_READ = 'http://127.0.0.1:8080/v1/projects/demo-sabeel/databases/(default)/documents';
-const FS_WIPE = 'http://127.0.0.1:8080/emulator/v1/projects/demo-sabeel/databases/(default)/documents';
-const AUTH = 'http://127.0.0.1:9099';
+const WEB = process.env.E2E_WEB ?? `http://127.0.0.1:${WEB_PORTS.e2e}/`;
+const FN = `http://127.0.0.1:${EMULATOR_PORTS.functions}/demo-sabeel/us-central1`;
+const FS = `http://127.0.0.1:${EMULATOR_PORTS.firestore}`;
+const FS_READ = `${FS}/v1/projects/demo-sabeel/databases/(default)/documents`;
+const FS_WIPE = `${FS}/emulator/v1/projects/demo-sabeel/databases/(default)/documents`;
+const AUTH = `http://127.0.0.1:${EMULATOR_PORTS.auth}`;
 const SHOTS = 'e2e-shots';
 const AUDIO_FIXTURE = process.env.E2E_AUDIO ?? 'e2e-shots/test-lecture.m4a';
 /** The fixture's length, shared by the generator below and the metadata check,

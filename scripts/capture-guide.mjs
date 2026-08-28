@@ -9,9 +9,10 @@
  * requires them to listen, until the session's Listen by date.
  */
 import { chromium } from 'playwright';
+import { EMULATOR_PORTS, WEB_PORTS } from './lib/ports.mjs';
 
-const WEB = 'http://127.0.0.1:8083/';
-const FN = 'http://127.0.0.1:5001/demo-sabeel/us-central1';
+const WEB = `http://127.0.0.1:${WEB_PORTS.e2e}/`;
+const FN = `http://127.0.0.1:${EMULATOR_PORTS.functions}/demo-sabeel/us-central1`;
 const DIR = 'docs/manual/img';
 const PHONE = { width: 390, height: 844 };
 const DESKTOP = { width: 1280, height: 900 };

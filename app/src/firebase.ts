@@ -7,7 +7,7 @@ import { EMULATOR_PROJECT_ID, EMULATOR_STORAGE_BUCKET, REGION } from '@sabeel/sh
 import { firebaseConfig } from './firebase-config';
 import { initAuth } from './authInit';
 import { initDb } from './firestoreInit';
-import { USE_EMULATORS, EMULATOR_HOST } from './env';
+import { USE_EMULATORS, EMULATOR_HOST, EMULATOR_PORTS } from './env';
 
 // Against the emulators, use the emulator's demo project id (what the emulator
 // suite and tests run as) so the app reads/writes the same namespace. The
@@ -45,8 +45,10 @@ export const functions = getFunctions(app, REGION);
 export const storage = getStorage(app);
 
 if (USE_EMULATORS) {
-  connectAuthEmulator(auth, `http://${EMULATOR_HOST}:9099`, { disableWarnings: true });
-  connectFirestoreEmulator(db, EMULATOR_HOST, 8080);
-  connectFunctionsEmulator(functions, EMULATOR_HOST, 5001);
-  connectStorageEmulator(storage, EMULATOR_HOST, 9199);
+  connectAuthEmulator(auth, `http://${EMULATOR_HOST}:${EMULATOR_PORTS.auth}`, {
+    disableWarnings: true,
+  });
+  connectFirestoreEmulator(db, EMULATOR_HOST, EMULATOR_PORTS.firestore);
+  connectFunctionsEmulator(functions, EMULATOR_HOST, EMULATOR_PORTS.functions);
+  connectStorageEmulator(storage, EMULATOR_HOST, EMULATOR_PORTS.storage);
 }
