@@ -1194,7 +1194,7 @@ async function tourStaff(page, tag) {
     `${counter.seen}/${STAFF_SCREENS}`);
 }
 
-const MANAGER_SCREENS = 5;
+const MANAGER_SCREENS = 7;
 
 /**
  * A manager sees the same screens with fewer rows AND fewer controls, which is a
@@ -1224,6 +1224,25 @@ async function tourManager(page, tag) {
     await tap(byId(page, 'nav-audit'));
   });
   await visit('library', () => tap(byId(page, 'nav-library')));
+  // The ledger, which a manager reads through a DIFFERENT rule arm than an
+  // admin: theirs resolves a course lookup from the row, so it is the only one
+  // that can fail closed — and it did, silently, as an empty roster. A denial
+  // renders as no rows at all, which is why this belongs in a sweep that
+  // asserts what is on screen and not only that a screenshot was taken.
+  const openSession = async () => {
+    await openCourse();
+    await tap(byId(page, 'nav-sessions'));
+    await tap(byId(page, `session-open-${missed.title}`));
+  };
+  await visit('recording-ledger', async () => {
+    await openSession();
+    await tap(byId(page, 'recording-ledger'));
+  });
+  await visit('ledger-override', async () => {
+    await openSession();
+    await tap(byId(page, 'recording-ledger'));
+    await tap(byId(page, `override-open-${STUDENT.name}`));
+  });
 
   check(`${tag} reached every manager screen`, counter.seen === MANAGER_SCREENS,
     `${counter.seen}/${MANAGER_SCREENS}`);

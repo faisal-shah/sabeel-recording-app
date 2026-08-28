@@ -36,6 +36,9 @@ export function useCourseRecordings(courseId: string | null): RecordingRow[] {
       label: 'courseRecordings',
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as RecordingDoc) })),
       empty: [],
+      // The library mounts one of these per course a manager teaches, so the
+      // label alone cannot say which course a denial came from. Carry the id.
+      context: { scope: courseId ?? 'none' },
     },
   );
 }

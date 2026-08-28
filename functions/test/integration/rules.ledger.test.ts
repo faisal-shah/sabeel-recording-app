@@ -116,6 +116,59 @@ describe('Phase 5 staff ledger reads', () => {
           getDocs(query(collection(mgrMine().firestore(), name), where('courseId', '==', CLASS_THEIRS))),
         );
       });
+
+      // ---- The shape the app actually sends -------------------------------
+      //
+      // Everything above asserts the rule's INTENT with `courseId ==`, which is
+      // the shape the rules were written for. That is not the same as the shape
+      // the app sends, and the gap shipped: the recording ledger read
+      // `recordingId ==` alone, and every one of its four listeners was denied
+      // for every manager on every recording while this suite stayed green.
+      //
+      // Firestore evaluates a `list` rule against the QUERY's constraints, not
+      // only against the documents it would return. The staff arm here resolves
+      // get(/courses/$(resource.data.courseId)), so a query that does not pin
+      // courseId leaves that path unresolvable and is refused outright — even
+      // when it matches nothing. Hence the empty-result case below: it is not a
+      // curiosity, it is the case that makes the denial independent of data and
+      // therefore total.
+      it('a manager CANNOT list by recordingId alone — the rule needs courseId', async () => {
+        await assertFails(
+          getDocs(query(collection(mgrMine().firestore(), name), where('recordingId', '==', REC))),
+        );
+      });
+
+      it('…not even when the query matches nothing', async () => {
+        await assertFails(
+          getDocs(
+            query(collection(mgrMine().firestore(), name), where('recordingId', '==', 'noSuchRecording')),
+          ),
+        );
+      });
+
+      it('a manager CAN list one recording within a class they run', async () => {
+        await assertSucceeds(
+          getDocs(
+            query(
+              collection(mgrMine().firestore(), name),
+              where('courseId', '==', CLASS_MINE),
+              where('recordingId', '==', REC),
+            ),
+          ),
+        );
+      });
+
+      it('…and an unmatched recording inside their own class is still fine', async () => {
+        await assertSucceeds(
+          getDocs(
+            query(
+              collection(mgrMine().firestore(), name),
+              where('courseId', '==', CLASS_MINE),
+              where('recordingId', '==', 'noSuchRecording'),
+            ),
+          ),
+        );
+      });
     });
   }
 });

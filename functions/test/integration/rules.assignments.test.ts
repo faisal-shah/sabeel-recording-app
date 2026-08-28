@@ -144,6 +144,37 @@ describe('assignments: reads', () => {
       getDoc(doc(mgrTheirs().firestore(), COLLECTIONS.assignments, assignmentId(STUDENT, REC))),
     );
   });
+
+  // The recording ledger's own query shape. `recordingId ==` reads as
+  // class-scoped to a human — one recording belongs to one class — but Firestore
+  // evaluates a `list` rule against the query's CONSTRAINTS, and the manager arm
+  // resolves get(/courses/$(resource.data.courseId)). Unless the query pins
+  // courseId that path cannot be resolved and the listen is refused, whatever it
+  // would have matched. See the same pair in rules.ledger.test.ts.
+  it('a manager CANNOT list a recording’s assignments without pinning courseId', async () => {
+    await assertFails(
+      getDocs(
+        query(
+          collection(mgrMine().firestore(), COLLECTIONS.assignments),
+          where('recordingId', '==', REC),
+          where('active', '==', true),
+        ),
+      ),
+    );
+  });
+
+  it('a manager CAN list a recording’s assignments scoped to their class', async () => {
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(mgrMine().firestore(), COLLECTIONS.assignments),
+          where('courseId', '==', CLASS_MINE),
+          where('recordingId', '==', REC),
+          where('active', '==', true),
+        ),
+      ),
+    );
+  });
 });
 
 describe('assignments: writes are server-only', () => {

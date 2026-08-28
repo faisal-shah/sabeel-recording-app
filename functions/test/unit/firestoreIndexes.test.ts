@@ -98,7 +98,7 @@ describe('firestore composite indexes cover the app’s queries', () => {
     // too simple to be wrong, and demand the parser account for all of them.
     //
     // The two exemptions are the generic wrappers in ledger.ts
-    // (useMapByStudent, useStudentCourseMap): their label is a parameter, so
+    // (useScopedMap, useStudentCourseMap): their label is a parameter, so
     // there is no literal to capture. Neither can need a composite index — both
     // build equality-only filters with no orderBy, which Firestore serves by
     // merging single-field indexes.

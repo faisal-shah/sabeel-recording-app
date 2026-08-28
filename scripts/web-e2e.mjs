@@ -780,6 +780,44 @@ check(
 );
 check('CSV reflects the override', /Complete \(override\)/.test(csv));
 
+// ------------------------------------------- the same ledger, as a MANAGER --
+//
+// THE ADMIN RUN ABOVE IS NOT EVIDENCE ABOUT THIS ONE. Every rule the ledger
+// touches — assignments, completions, completionOverrides, listeningProgress —
+// answers an admin from a zero-read arm that depends on no `resource.data`, and
+// answers a manager by resolving get(/courses/$(resource.data.courseId)). Only
+// the second cares what the query pins, so only the second can fail closed.
+//
+// It did. All four listeners were denied for every manager on every recording,
+// because the queries filtered on `recordingId` alone; the sweep never noticed
+// because a manager had never opened this screen. The rows below are the whole
+// point: a denial renders as an EMPTY ledger, not an error, so asserting the
+// roster is present is what distinguishes "allowed" from "silently refused" —
+// and `listenerDenials` (asserted at the end of this file) catches the rest.
+await goHome(mgr);
+await tap(mgr, 'nav-myclasses');
+await tap(mgr, 'course-open-Hikam Foundations');
+await tap(mgr, 'nav-sessions');
+await tap(mgr, 'session-open-Session 1');
+await tap(mgr, 'recording-ledger');
+await mgr.getByTestId('ledger-filter-all').waitFor({ timeout: 10000 });
+await tap(mgr, 'ledger-filter-all');
+await mgr.waitForTimeout(1500);
+const mgrLedger = await mgr.locator('body').innerText();
+check(
+  'a MANAGER sees the accountable roster on the recording ledger',
+  /Fatima Ahmed/.test(mgrLedger) && /Bilal Khan/.test(mgrLedger),
+);
+check(
+  'the manager ledger joins the override written by the admin',
+  /Complete \(override\)/.test(mgrLedger),
+);
+check(
+  'no live-data error is showing on the manager ledger',
+  !/Live data error/.test(mgrLedger),
+);
+await shot(mgr, '16b-recording-ledger-manager');
+
 // ------------------------------------------------------- attendance report --
 console.log('\nAttendance report');
 await openHikam(admin);

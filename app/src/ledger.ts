@@ -44,25 +44,46 @@ export const clearCompletionOverride = call<{
 }>('clearCompletionOverride');
 
 // ------------------------------------------------------- per-recording reads --
-// Each is class-scoped by nature (one recording belongs to one class), so the
-// staff rules accept the `recordingId ==` query.
+//
+// EVERY staff read here MUST pin `courseId`, and being "class-scoped by nature"
+// is not the same thing. The staff arm of these collections resolves
+// `get(/courses/$(resource.data.courseId))`, and Firestore evaluates a `list`
+// rule against the QUERY's constraints, not only against the documents it would
+// return: unless the query pins `courseId`, that path is unresolvable and the
+// listen is refused outright — even when it would have returned nothing.
+//
+// A `recordingId ==` filter does not pin it. One recording does belong to one
+// class, but Firestore cannot know that, so it cannot collapse the lookup. That
+// mistake shipped: the recording ledger read `recordingId ==` alone, and every
+// one of its four listeners was denied for every MANAGER on every recording,
+// while admins saw nothing wrong (their arm reads no documents and depends on no
+// `resource.data`). See the shape assertions in rules.ledger.test.ts.
 
-function useMapByStudent<T, V>(
+function useScopedMap<T, V>(
   label: string,
   coll: string,
-  field: 'recordingId' | 'courseId',
-  value: string | null,
+  /** The course scope the rules require. Null until it is known. */
+  courseId: string | null,
+  /** Narrows the course scope to one recording; null reads the whole course. */
+  recordingId: string | null,
   pick: (data: T, pending: boolean) => V,
   keyOf: (data: T) => string,
   metadata = false,
 ) {
   return useLiveQuery<Map<string, V>>(
-    () => (value ? query(collection(db, coll), where(field, '==', value)) : null),
-    // coll and field are constants at every call site today, so listing them
-    // changes nothing at runtime — but the query reads them, and a wrapper whose
-    // dep list quietly under-reports its inputs is how a subscription ends up
-    // serving another collection's data after a refactor.
-    [value, coll, field],
+    () =>
+      courseId
+        ? query(
+            collection(db, coll),
+            where('courseId', '==', courseId),
+            ...(recordingId ? [where('recordingId', '==', recordingId)] : []),
+          )
+        : null,
+    // coll is a constant at every call site today, so listing it changes nothing
+    // at runtime — but the query reads it, and a wrapper whose dep list quietly
+    // under-reports its inputs is how a subscription ends up serving another
+    // collection's data after a refactor.
+    [courseId, recordingId, coll],
     {
       label: label,
       map: (snap) => {
@@ -123,8 +144,9 @@ export interface RecordingLedger {
  * (who owe it), the present and the absent (who do not, and cannot open it), and
  * the excused whose grant has since lapsed. Every uid the session recorded lands
  * in exactly one group, which is what lets the screen claim to account for the
- * whole submitted roster. All reads are `recordingId ==`, so the staff rules
- * accept them class-scoped; the join and the counts are pure.
+ * whole submitted roster. Every read is `courseId == && recordingId ==` — the
+ * course scope is what the staff rules require, not an optimisation (see the
+ * note on useScopedMap); the join and the counts are pure.
  */
 export function useRecordingLedger(
   recording: RecordingRow,
@@ -132,41 +154,44 @@ export function useRecordingLedger(
   today: string,
 ): RecordingLedger {
   const rid = recording.id;
+  // The course scope every read below carries — see the note on useScopedMap.
+  const cid = recording.courseId;
   const assignments = useLiveQuery<Map<string, AssignmentDoc>>(
     () =>
       query(
         collection(db, COLLECTIONS.assignments),
+        where('courseId', '==', cid),
         where('recordingId', '==', rid),
         where('active', '==', true),
       ),
-    [rid],
+    [cid, rid],
     {
       label: 'ledgerAssignments',
       map: (snap) => new Map(snap.docs.map((d) => [(d.data() as AssignmentDoc).studentUid, d.data() as AssignmentDoc])),
       empty: new Map(),
     },
   );
-  const completions = useMapByStudent<CompletionDoc, { completed: boolean; completedAt: number | null; pending: boolean }>(
+  const completions = useScopedMap<CompletionDoc, { completed: boolean; completedAt: number | null; pending: boolean }>(
     'ledgerCompletions',
     COLLECTIONS.completions,
-    'recordingId',
+    cid,
     rid,
     (d, pending) => ({ completed: d.completed, completedAt: d.completedAt, pending }),
     (d) => d.studentUid,
     true,
   );
-  const overrides = useMapByStudent<CompletionOverrideDoc, CompletionOverrideDoc>(
+  const overrides = useScopedMap<CompletionOverrideDoc, CompletionOverrideDoc>(
     'ledgerOverrides',
     COLLECTIONS.completionOverrides,
-    'recordingId',
+    cid,
     rid,
     (d) => d,
     (d) => d.studentUid,
   );
-  const progress = useMapByStudent<ListeningProgressDoc, { listenedMs: number; updatedAt: number }>(
+  const progress = useScopedMap<ListeningProgressDoc, { listenedMs: number; updatedAt: number }>(
     'ledgerProgress',
     COLLECTIONS.listeningProgress,
-    'recordingId',
+    cid,
     rid,
     (d) => ({ listenedMs: d.listenedMs, updatedAt: d.updatedAt }),
     (d) => d.studentUid,
@@ -282,19 +307,19 @@ export function useCourseLedger(courseId: string | null, today: string): CourseL
       empty: [],
     },
   );
-  const completions = useMapByStudent<CompletionDoc, boolean>(
+  const completions = useScopedMap<CompletionDoc, boolean>(
     'courseLedgerCompletions',
     COLLECTIONS.completions,
-    'courseId',
     courseId,
+    null,
     (d) => d.completed,
     (d) => `${d.studentUid}_${d.recordingId}`,
   );
-  const overrides = useMapByStudent<CompletionOverrideDoc, CompletionOverrideDoc>(
+  const overrides = useScopedMap<CompletionOverrideDoc, CompletionOverrideDoc>(
     'courseLedgerOverrides',
     COLLECTIONS.completionOverrides,
-    'courseId',
     courseId,
+    null,
     (d) => d,
     (d) => `${d.studentUid}_${d.recordingId}`,
   );
@@ -427,7 +452,7 @@ function useStudentCourseMap<T extends { recordingId: string }, V>(
             where('courseId', '==', courseId),
           )
         : null,
-    // `coll` for the same reason as useMapByStudent: the query reads it.
+    // `coll` for the same reason as useScopedMap: the query reads it.
     [studentUid, courseId, coll],
     {
       label: label,

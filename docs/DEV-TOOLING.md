@@ -224,10 +224,13 @@ something has to hold on a clean machine rather than this one:
 `gh workflow run ci.yml --ref <branch>`. The trigger block to restore is written
 out at the top of `ci.yml`.
 
-**Scale and cost, measured 2026-08-27:** 623 checks over 5 viewports x 34
-screens, **~5m25s wall clock** (two complete runs of this same 623-check workload: 325s, 326s) including the shared/functions build, Metro's cold
-bundle and emulator boot. That is what it adds to a CI run, and it is the reason
-the widths are five deliberate ones rather than a comfortable-looking grid.
+**Scale and cost, measured 2026-08-28:** 674 checks over 5 viewports x 36
+screens, **~6m0s wall clock** (361s, including the shared/functions build,
+Metro's cold bundle and emulator boot). Up from 623 checks over 34 screens on
+2026-08-27: the manager tour gained the recording ledger and its override
+editor, which is where a rules failure invisible to an admin had been hiding.
+That is what the sweep adds to a CI run, and it is the reason the widths are
+five deliberate ones rather than a comfortable-looking grid.
 
 Shots land in `shots/screens/` (gitignored); CI uploads them as an artifact when
 the sweep fails. **Look at them** — the sweep says a layout is not broken, never
@@ -339,16 +342,42 @@ for Phase 0's baseline and again for every predicate added in Phase 1 (see
 `PHASE_STATUS.md`), and it is the only thing that makes a suite of denials
 meaningful.
 
-Two Phase 1 specifics worth keeping in mind when editing `firestore.rules`:
+**Assert the query the APP sends, not the one the rule was written for.** These
+are not the same test, and the gap is invisible from either side. The ledger
+rules were covered by `where('courseId','==',…)` on every collection — the shape
+they were designed around — while `useRecordingLedger` sent `where('recordingId',
+'==',…)`. Every one of its four listeners was denied for every manager, on every
+recording, and `rules.ledger.test.ts` stayed green because it was asserting the
+author's intent. Copy the query out of the hook, or the suite proves the rule
+rather than the product.
+
+Three specifics worth keeping in mind when editing `firestore.rules`:
 
 - **A `list` rule that does not reference `resource.data` grants everything.**
   Referencing it is what forces the client's query to be constrained; a comment
   describing the expected query shape enforces nothing.
+- **A `list` is judged on the query's CONSTRAINTS, not only on what it returns.**
+  Whatever a rule's `get()` path is built from, the query must pin — otherwise
+  the path cannot be resolved and the listen is refused. The tell is that it
+  fails **with an empty result set too**: a query matching nothing is still
+  denied, so the failure is total rather than data-dependent, and no amount of
+  seeding will surface it if the shape is wrong. Test both, as
+  `rules.ledger.test.ts` now does.
 - **A `get()` resolved from document data costs one read per row** unless every
-  row resolves the same path, and Firestore caps document-access calls per
-  query. Keep such an arm behind a role guard that excludes any population whose
-  queries span many parents, and size the test past the limit —
-  `rules.structure.test.ts` uses 25 rows because at three it passes either way.
+  row resolves the same path, in which case the result is cached and the query
+  costs one (verified at 30 rows against the real engine). Firestore caps
+  document-access calls per query, so keep such an arm behind a role guard that
+  excludes any population whose queries span many parents, and size the test past
+  the limit — `rules.structure.test.ts` uses 25 rows because at three it passes
+  either way.
+
+**An admin's run is not evidence about a manager's.** Every staff arm in this
+app answers an admin from a zero-read branch that depends on no `resource.data`,
+and a manager by resolving a course from the row. Only the second can fail
+closed, so a screen exercised only as an admin is a screen whose rules are
+untested — and the person who owns the app is the one who will never see the
+failure. Both browser suites carry a manager's pass over the recording ledger
+for exactly this reason.
 
 Reading Firestore out of band (as the e2e does) needs
 `Authorization: Bearer owner`; without it the rules apply and the read is

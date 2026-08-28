@@ -22,9 +22,54 @@ import { captureError } from './sentry';
 // ---- Listener-error visibility -------------------------------------------
 // A server-rejected listen (a missing index, a rules denial) otherwise dies as
 // a console.warn nobody sees on a phone. Screens surface the latest live-data
-// error via useListenerError; a later success from the same source clears it.
+// error via useListenerError.
+//
+// KEYED BY LABEL, AND DROPPED WHEN THE SUBSCRIPTION GOES AWAY. A single sticky
+// string cleared only by a later success from the same label outlives the screen
+// that produced it: nothing else in the app subscribes under that label, so the
+// banner follows the user onto every screen afterwards and never clears. That
+// shipped — a denial on the recording ledger was read as "the upload is broken"
+// because the red message was still there on the session screen.
+//
+// The live set answers the honest question instead: is anything subscribed RIGHT
+// NOW failing? An entry leaves on success or when its listener is torn down
+// (both via forgetListener), so navigating away from the broken screen clears it
+// and returning brings it back.
 const errorWatchers = new Set<(msg: string | null) => void>();
+const listenerErrors = new Map<string, string>();
 let lastListenerError: string | null = null;
+
+/**
+ * Registry key: one entry per SUBSCRIPTION, not per label.
+ *
+ * A label is not unique — the library mounts a `courseRecordings` listener for
+ * every course a manager teaches. Keyed by label alone, the one that succeeds
+ * erases the one that was denied, and the screen goes quiet while a section is
+ * still empty. `scope` is exactly the disambiguator the Sentry tag carries, so
+ * the two stay in step by construction.
+ */
+function subscriptionKey(label: string, context?: Record<string, string>): string {
+  return context?.scope ? `${label}:${context.scope}` : label;
+}
+
+/** Recompute the surfaced message and notify screens when it changed. */
+function publishListenerError(): void {
+  // Most recently recorded failure wins — the one the user just provoked.
+  const next = [...listenerErrors.values()].pop() ?? null;
+  if (next === lastListenerError) return;
+  lastListenerError = next;
+  errorWatchers.forEach((w) => w(next));
+}
+
+/**
+ * This subscription is healthy or gone — retire any banner it raised.
+ *
+ * One function for both because they are the same fact: the error described a
+ * live subscription, and it no longer describes anything.
+ */
+function forgetListener(key: string) {
+  if (listenerErrors.delete(key)) publishListenerError();
+}
 
 /**
  * Whether there is an account behind these subscriptions that may read anything.
@@ -52,7 +97,12 @@ export function setLiveDataSession(canRead: boolean): void {
   sessionCanRead = canRead;
 }
 
-function reportListenerError(label: string, e: { code?: string; message: string }) {
+function reportListenerError(
+  key: string,
+  label: string,
+  e: { code?: string; message: string },
+  context?: Record<string, string>,
+) {
   const code = e.code ?? '';
   if (!sessionCanRead && (code === 'permission-denied' || code === 'unauthenticated')) {
     // Still logged, and marked — the e2e counts unmarked listener warnings and
@@ -61,8 +111,11 @@ function reportListenerError(label: string, e: { code?: string; message: string 
     console.warn(`${label} listener`, code, '(session ended — expected)');
     return;
   }
-  lastListenerError = `Live data error (${label}): ${e.code ?? e.message}`;
-  errorWatchers.forEach((w) => w(lastListenerError));
+  const message = `Live data error (${label}): ${e.code ?? e.message}`;
+  // Re-insert so this one is the most recent entry, not merely present.
+  listenerErrors.delete(key);
+  listenerErrors.set(key, message);
+  publishListenerError();
   console.warn(`${label} listener`, e.code ?? e.message);
   // Off-device visibility: a listener failure in a phone console is invisible.
   //
@@ -73,18 +126,17 @@ function reportListenerError(label: string, e: { code?: string; message: string 
   // guessing which of two dozen subscriptions produced it. The label is the
   // whole diagnostic, so it belongs in the title; the code and the original
   // message ride along, and the SDK frames were never worth reading.
-  captureError(new Error(lastListenerError), {
+  captureError(new Error(message), {
     source: label,
     code: e.code ?? 'none',
     detail: e.message,
+    // `scope` names WHICH subscription of this label failed. A label alone is
+    // ambiguous wherever a screen mounts one listener per row — the library runs
+    // a `courseRecordings` listener per course a manager teaches, so a denial
+    // there says a course is unreadable without saying which one, and the event
+    // cannot be chased any further. Set it wherever the label is not unique.
+    ...(context ?? {}),
   });
-}
-
-function reportListenerSuccess(label: string) {
-  if (lastListenerError?.includes(`(${label})`)) {
-    lastListenerError = null;
-    errorWatchers.forEach((w) => w(null));
-  }
 }
 
 /** Latest live-listener failure, app-wide; null when healthy. */
@@ -114,6 +166,12 @@ export interface LiveQueryOptions<T> {
    * by default because it doubles snapshot callbacks and most screens do not care.
    */
   includeMetadataChanges?: boolean;
+  /**
+   * Extra Sentry tags naming WHICH subscription of this label failed. Required
+   * wherever a screen mounts one listener per row and the label alone cannot
+   * identify the failing one — see the note in reportListenerError.
+   */
+  context?: Record<string, string>;
 }
 
 /**
@@ -130,25 +188,30 @@ export interface LiveQueryOptions<T> {
 export function useLiveQuery<T>(
   make: () => Query | null,
   deps: readonly unknown[],
-  { label, map, empty, includeMetadataChanges = false }: LiveQueryOptions<T>,
+  { label, map, empty, includeMetadataChanges = false, context }: LiveQueryOptions<T>,
 ): T {
   const [value, setValue] = useState<T>(empty);
   useEffect(() => {
     setValue(empty);
     const q = make();
     if (!q) return;
-    return onSnapshot(
+    const key = subscriptionKey(label, context);
+    const unsubscribe = onSnapshot(
       q,
       { includeMetadataChanges },
       (snap) => {
         setValue(map(snap));
-        reportListenerSuccess(label);
+        forgetListener(key);
       },
       (e) => {
         setValue(empty);
-        reportListenerError(label, e);
+        reportListenerError(key, label, e, context);
       },
     );
+    return () => {
+      unsubscribe();
+      forgetListener(key);
+    };
     // deps are the caller's subscription inputs; make/map/empty are per-render
     // closures over exactly those inputs.
     //
@@ -169,6 +232,12 @@ export interface LiveDocOptions<T> {
   map: (snap: DocumentSnapshot) => T;
   /** Rendered before the first snapshot, on an error, and when the doc is absent. */
   empty: T;
+  /**
+   * Extra Sentry tags naming WHICH subscription of this label failed. Required
+   * wherever a screen mounts one listener per row and the label alone cannot
+   * identify the failing one — see the note in reportListenerError.
+   */
+  context?: Record<string, string>;
 }
 
 /**
@@ -196,7 +265,7 @@ export interface LiveDocOptions<T> {
 export function useLiveDocState<T>(
   make: () => DocumentReference | null,
   deps: readonly unknown[],
-  { label, map, empty }: LiveDocOptions<T>,
+  { label, map, empty, context }: LiveDocOptions<T>,
 ): { value: T; resolved: boolean } {
   const [state, setState] = useState<{ value: T; resolved: boolean }>({
     value: empty,
@@ -206,19 +275,24 @@ export function useLiveDocState<T>(
     setState({ value: empty, resolved: false });
     const ref = make();
     if (!ref) return;
-    return onSnapshot(
+    const key = subscriptionKey(label, context);
+    const unsubscribe = onSnapshot(
       ref,
       (snap) => {
         setState({ value: snap.exists() ? map(snap) : empty, resolved: true });
-        reportListenerSuccess(label);
+        forgetListener(key);
       },
       (e) => {
         // A denial is an answer too: the caller may not read it, and telling
         // them it is unavailable beats a spinner that never stops.
         setState({ value: empty, resolved: true });
-        reportListenerError(label, e);
+        reportListenerError(key, label, e, context);
       },
     );
+    return () => {
+      unsubscribe();
+      forgetListener(key);
+    };
     // Same caller-supplied-deps contract as useLiveQuery; see the note there.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
