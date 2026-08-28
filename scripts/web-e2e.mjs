@@ -740,8 +740,18 @@ await admin.getByTestId('override-open-Bilal Khan').waitFor({ timeout: 8000 });
 await tap(admin, 'override-open-Bilal Khan');
 await admin.getByTestId('override-reason-Bilal Khan').fill('Attended the class live');
 await tap(admin, 'override-complete-Bilal Khan');
-await admin.waitForTimeout(1800);
-const overrides = await readCollection('completionOverrides');
+// POLL, do not sleep. This was a fixed 1800ms wait, which is a guess about how
+// fast the machine is — and on 2026-08-28, straight after three suites had been
+// hammering the box, the write had not landed and this read returned 0. The two
+// checks below saw the override perfectly well, because they happen to read
+// later; so it reported a failure in a feature that worked. Waiting for the
+// thing you expect instead of for a duration is this repo's own rule, and it
+// also makes the happy path faster than the old sleep.
+let overrides = await readCollection('completionOverrides');
+for (let i = 0; i < 30 && overrides.length === 0; i++) {
+  await admin.waitForTimeout(500);
+  overrides = await readCollection('completionOverrides');
+}
 check(
   'staff override writes a completionOverrides doc with the reason',
   overrides.length === 1 &&
