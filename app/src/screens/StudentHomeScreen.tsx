@@ -12,6 +12,7 @@ import {
   type RecordingDoc,
 } from '@sabeel/shared';
 import { Button, Empty, Notice, Screen } from '../components/ui';
+import { PushNudge } from '../components/PushNudge';
 import { db } from '../firebase';
 import { signOut } from '../session';
 import { useListenerError } from '../liveQuery';
@@ -99,6 +100,8 @@ export function StudentHomeScreen({
   return (
     <Screen title="Your listening" subtitle="Recordings you were excused from, most urgent first">
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
+
+      <PushNudge uid={uid} />
 
       {rows.length === 0 ? (
         <Empty>Nothing to listen to right now. New recordings will appear here.</Empty>

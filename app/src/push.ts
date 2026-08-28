@@ -1,3 +1,4 @@
+import { Linking } from 'react-native';
 import {
   AndroidImportance,
   getDevicePushTokenAsync,
@@ -43,6 +44,16 @@ let cached: string | null = null;
  * the permission dialog on the way out, and someone who never granted permission
  * has no registration to drop.
  */
+/**
+ * Native can deep-link to its own settings page, so a blocked device gets a
+ * button rather than instructions. The web sibling cannot — see there.
+ */
+export const canOpenPushSettings = true;
+
+export function openPushSettings(): void {
+  void Linking.openSettings();
+}
+
 /**
  * What the settings screen should offer: ask, explain, or say nothing can be
  * done here. Mirrors the web sibling; `canAskAgain` is Android's way of saying

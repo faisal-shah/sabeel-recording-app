@@ -11,7 +11,7 @@ import {
 import { Button, Card, Notice, Screen, SectionTitle, SwitchRow } from '../components/ui';
 import { useListenerError } from '../liveQuery';
 import { registerThisDevice, setNotificationPref, useNotificationPrefs } from '../notifications';
-import { pushPromptState } from '../push';
+import { canOpenPushSettings, openPushSettings, pushPromptState } from '../push';
 import { getTheme } from '../theme';
 
 const t = getTheme();
@@ -98,33 +98,39 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
 
       {device === 'canAsk' ? (
         <Card>
-          <Notice tone="info">
-            This device isn&apos;t set up to receive notifications yet. Your choices below are
-            saved either way — they apply on any device where you are signed in.
-          </Notice>
+          <Notice tone="info">Notifications are not enabled on this device.</Notice>
           <Button
             testID="enable-push"
-            label="Turn on notifications"
+            label="Enable notifications"
             onPress={turnOn}
             busy={asking}
           />
         </Card>
       ) : null}
 
+      {device === 'ready' ? (
+        <Notice tone="info">Notifications are enabled on this device.</Notice>
+      ) : null}
+
       {device === 'blocked' ? (
-        <Notice tone="info">
-          Notifications are turned off for this app. Turn them back on where this device keeps
-          its permissions — your browser&apos;s site settings, or the system settings for the
-          app — then come back here. Your choices below are saved either way.
-        </Notice>
+        <Card>
+          <Notice tone="info">
+            Notifications are blocked for this app on this device.
+          </Notice>
+          {/* Native can open its own settings page; a browser cannot, so there
+              it is instructions or nothing. */}
+          {canOpenPushSettings ? (
+            <Button label="Open settings" variant="secondary" onPress={openPushSettings} />
+          ) : (
+            <Notice tone="info">
+              Allow them in your browser&apos;s site settings, then reopen this screen.
+            </Notice>
+          )}
+        </Card>
       ) : null}
 
       {device === 'unavailable' ? (
-        <Notice tone="info">
-          This device can&apos;t receive notifications — this browser doesn&apos;t support them.
-          Your choices below are saved either way, and apply on any device where you are signed
-          in.
-        </Notice>
+        <Notice tone="info">This device can&apos;t show notifications.</Notice>
       ) : null}
 
       <SectionTitle>Send me</SectionTitle>

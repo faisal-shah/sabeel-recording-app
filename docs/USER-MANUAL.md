@@ -183,12 +183,12 @@ Both start switched on. There's deliberately no message *after* a recording
 closes: by then there'd be nothing you could do about it.
 
 Your choices follow you — they apply on every device you sign in on. Reaching
-this device needs its permission as well: if the screen offers **Turn on
-notifications**, tap it and say yes. If it says notifications are turned off,
-they have been blocked — for the app in your phone's own settings, or for the
-site in your browser — and only those settings can turn them back on. If it says
-this device can't show them at all, you're in a browser that doesn't support
-them.
+this device needs its permission as well. The app offers to set that up once, on
+your home screen after you sign in; you can also tap **Enable notifications** on
+this screen at any time. If it says they are blocked, use **Open settings** on a
+phone, or allow them from the site settings behind the icon in your browser's
+address bar. If it says this device can't show them at all, you're in a browser
+that doesn't support them.
 
 ---
 

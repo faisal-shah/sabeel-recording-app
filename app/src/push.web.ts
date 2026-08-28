@@ -56,6 +56,15 @@ function canRequestPush(): boolean {
 }
 
 /**
+ * A browser deliberately offers no way to open its own site settings — the
+ * permission would be worth little if a site could reach past it. So a blocked
+ * browser gets told where to look instead of a button that cannot work.
+ */
+export const canOpenPushSettings = false;
+
+export function openPushSettings(): void {}
+
+/**
  * What the settings screen should offer: ask, explain, or say nothing can be
  * done here. Read on mount, never in a press handler — it awaits.
  */

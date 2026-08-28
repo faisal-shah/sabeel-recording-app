@@ -364,6 +364,7 @@ function Landing({ name, role, uid }: { name: string; role: Role; uid: string })
   }
   return (
     <HomeScreen
+      uid={uid}
       name={name}
       role={role}
       onOpen={(route) => navigation.navigate(route)}

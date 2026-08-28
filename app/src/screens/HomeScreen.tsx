@@ -1,5 +1,6 @@
 import type { Role } from '@sabeel/shared';
 import { Button, Card, Screen, SectionTitle } from '../components/ui';
+import { PushNudge } from '../components/PushNudge';
 import { signOut } from '../session';
 import { IS_DEV } from '../env';
 
@@ -11,11 +12,13 @@ import { IS_DEV } from '../env';
  * whole point of Phase 1 — a manager and a student must see different things.
  */
 export function HomeScreen({
+  uid,
   name,
   role,
   onOpen,
   onOpenAudit,
 }: {
+  uid: string;
   name: string;
   role: Role;
   onOpen: (
@@ -29,6 +32,8 @@ export function HomeScreen({
 
   return (
     <Screen title={`Salaam, ${name}`} subtitle={roleLabel(role)}>
+      <PushNudge uid={uid} />
+
       <SectionTitle>Manage</SectionTitle>
       <Card>
         {isAdmin ? (

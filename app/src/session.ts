@@ -12,7 +12,7 @@ import {
 import { googleSignOut } from './auth/google';
 import { auth, db } from './firebase';
 import { setLiveDataSession } from './liveQuery';
-import { unregisterThisDevice } from './notifications';
+import { registerThisDevice, unregisterThisDevice } from './notifications';
 
 export type Profile =
   | { kind: 'staff'; doc: StaffUserDoc }
@@ -41,6 +41,15 @@ export async function signOut(): Promise<void> {
 function profileCollection(role: Role | undefined): string {
   return isStaffRole(role) ? COLLECTIONS.staffUsers : COLLECTIONS.students;
 }
+
+/**
+ * Whose device registration has been claimed this run.
+ *
+ * The session publishes repeatedly — the approval poll, a claim refresh, any
+ * profile edit — and re-registering on each would rewrite the same document for
+ * no reason. Cleared on sign-out, below.
+ */
+let pushRegisteredFor: string | null = null;
 
 /** True once the account is approved and usable — the only state that leaves the gate. */
 function isReady(claims: TokenClaims, profile: Profile | null): boolean {
@@ -99,6 +108,7 @@ export function useSession(): Session {
       setLiveDataSession(false);
 
       if (!user) {
+        pushRegisteredFor = null;
         setSession({ phase: 'signedOut' });
         return;
       }
@@ -123,6 +133,17 @@ export function useSession(): Session {
         setLiveDataSession(isReady(claims, profile));
         setSession({ phase: 'signedIn', user, profile, claims });
         if (isReady(claims, profile)) stopPoll();
+
+        // Claim this device's push token once the account is usable. SILENT —
+        // it never prompts, and only writes a token for a device already
+        // permitted. Without it the sole thing that ever registers is a visit
+        // to the notifications screen, so someone who granted permission and
+        // never went back received nothing, and a rotated FCM token was never
+        // replaced. The sibling apps have always done this at sign-in.
+        if (isReady(claims, profile) && pushRegisteredFor !== user.uid) {
+          pushRegisteredFor = user.uid;
+          void registerThisDevice(user.uid, false).catch(() => undefined);
+        }
         else if (!pollTimer) pollTimer = setInterval(poll, 3000);
       };
 

@@ -115,6 +115,23 @@ describe('devicePushToken(true) — the gesture path', () => {
   });
 });
 
+/**
+ * The blocked state branches on this. A browser offers no way to open its own
+ * site settings, so the screen must show instructions there rather than a
+ * button that silently does nothing.
+ */
+describe('opening settings', () => {
+  it('is not possible from a browser', async () => {
+    const { canOpenPushSettings } = await loadPush();
+    expect(canOpenPushSettings).toBe(false);
+  });
+
+  it('is a no-op rather than a throw, so a mis-wired caller cannot crash a screen', async () => {
+    const { openPushSettings } = await loadPush();
+    expect(() => openPushSettings()).not.toThrow();
+  });
+});
+
 describe('pushPromptState', () => {
   it('reports a browser that can still be asked', async () => {
     browser('default');
