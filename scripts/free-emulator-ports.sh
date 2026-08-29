@@ -35,8 +35,18 @@ pids_on_port() {
 #
 # Matched by cwd, not by name: sibling checkouts on this machine run the exact
 # same binary, and killing theirs is the thing this whole port scheme exists to
-# stop. ppid==1 is what distinguishes an orphan from a worker belonging to a run
-# that is legitimately in progress right now.
+# stop.
+#
+# An orphan is one whose PARENT IS NO LONGER THE EMULATOR THAT SPAWNED IT — not
+# one whose ppid is 1. Testing for ppid==1 made this whole function inert here:
+# on a systemd user session the kernel reparents to `systemd --user`, not to
+# init, so the test never matched and the reaper reported nothing while 24
+# runtimes sat holding 1.3 GB. Found on 2026-08-28, hours after the run that
+# leaked them, when a release build died on Gradle metaspace exhaustion.
+#
+# So: alive parent that is still firebase-tools means a run owns this worker,
+# leave it. Anything else — reparented, or a parent already gone — is an
+# orphan.
 reap_orphaned_runtimes() {
   local repo_functions orphans=()
   repo_functions="$(cd "$(dirname "$0")/../functions" && pwd)"
@@ -47,7 +57,12 @@ reap_orphaned_runtimes() {
   # cannot match the caller by accident.
   # shellcheck disable=SC2009
   while read -r pid ppid _; do
-    [ "$ppid" = "1" ] || continue
+    # Still owned by a live emulator? Then it is a worker, not a leftover.
+    # Matched on 'firebase', NOT 'firebase-tools': a running emulator's own
+    # command line is `node .../bin/firebase emulators:start …`, which contains
+    # no such string — a narrower pattern here reaps the workers of a run that
+    # is legitimately in progress. Verified against a live emulator, not assumed.
+    ps -p "$ppid" -o args= 2>/dev/null | grep -q 'firebase' && continue
     case "$CALLER_PIDS" in *" $pid "*) continue ;; esac
     [ "$(readlink "/proc/$pid/cwd" 2>/dev/null)" = "$repo_functions" ] || continue
     orphans+=("$pid")
