@@ -1,5 +1,5 @@
 import { getMessaging } from 'firebase-admin/messaging';
-import type { PushMessage } from '@sabeel/shared';
+import { PUSH_CHANNEL_ID, type PushMessage } from '@sabeel/shared';
 
 /**
  * The one place FCM is actually called.
@@ -54,6 +54,11 @@ const fcmSender: Sender = async (tokens, message) => {
     // A data payload as well as a notification, so a foregrounded app can
     // render its own banner rather than relying on the OS one it never sees.
     data: { title: message.title, body: message.body },
+    // Without this every push lands in FCM's fallback channel, which Android
+    // shows as "Miscellaneous" — see PUSH_CHANNEL_ID. The app creates this
+    // channel before it hands over a token, so it exists by the time anything
+    // can be addressed to it.
+    android: { notification: { channelId: PUSH_CHANNEL_ID } },
   });
   const stale: string[] = [];
   res.responses.forEach((r, i) => {

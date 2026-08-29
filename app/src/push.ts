@@ -1,11 +1,13 @@
 import { Linking } from 'react-native';
 import {
   AndroidImportance,
+  deleteNotificationChannelAsync,
   getDevicePushTokenAsync,
   getPermissionsAsync,
   requestPermissionsAsync,
   setNotificationChannelAsync,
 } from 'expo-notifications';
+import { PUSH_CHANNEL_ID, PUSH_CHANNEL_NAME } from '@sabeel/shared';
 
 /**
  * Native side of the push seam (web sibling: push.web.ts).
@@ -24,8 +26,6 @@ import {
 
 export const pushPlatform = 'android' as const;
 
-/** Android will not display a notification that has no channel to land in. */
-const CHANNEL_ID = 'default';
 
 /**
  * Only a SUCCESSFUL token is remembered. Caching the null too made every failure
@@ -93,11 +93,18 @@ async function resolveToken(prompt: boolean): Promise<string | null> {
 
     // Created before the first message arrives, not after: a notification
     // delivered to a channel that does not exist yet is dropped silently, and
-    // the only symptom is the first one never appearing.
-    await setNotificationChannelAsync(CHANNEL_ID, {
-      name: 'Class recordings',
-      importance: AndroidImportance.DEFAULT,
+    // the only symptom is the first one never appearing. The id is shared with
+    // the server, which addresses it — see PUSH_CHANNEL_ID.
+    await setNotificationChannelAsync(PUSH_CHANNEL_ID, {
+      name: PUSH_CHANNEL_NAME,
+      importance: AndroidImportance.HIGH,
     });
+    // The old channel, which nothing ever posted to because the server named no
+    // channel at all. Left alone it sits in Android's notification settings as a
+    // second, permanently silent "Class recordings" that someone would
+    // reasonably try to configure. Failure is ignored: on a fresh install there
+    // is nothing to delete, which is not a problem.
+    await deleteNotificationChannelAsync('default').catch(() => undefined);
 
     const token = await getDevicePushTokenAsync();
     return typeof token.data === 'string' ? token.data : null;

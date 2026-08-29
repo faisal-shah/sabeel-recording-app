@@ -9,18 +9,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 vi.mock('expo-notifications', () => ({
   setNotificationChannelAsync: vi.fn(() => Promise.resolve()),
+  deleteNotificationChannelAsync: vi.fn(() => Promise.resolve()),
   requestPermissionsAsync: vi.fn(),
   getPermissionsAsync: vi.fn(),
   getDevicePushTokenAsync: vi.fn(),
-  AndroidImportance: { DEFAULT: 3 },
+  AndroidImportance: { DEFAULT: 3, HIGH: 4 },
 }));
 vi.mock('react-native', () => ({ Linking: { openSettings: vi.fn(() => Promise.resolve()) } }));
 
 import {
+  deleteNotificationChannelAsync,
   getPermissionsAsync,
   getDevicePushTokenAsync,
   requestPermissionsAsync,
+  setNotificationChannelAsync,
 } from 'expo-notifications';
+import { PUSH_CHANNEL_ID, PUSH_CHANNEL_NAME } from '@sabeel/shared';
 
 const asMock = (fn: unknown) => fn as ReturnType<typeof vi.fn>;
 
@@ -90,5 +94,45 @@ describe('pushPromptState', () => {
     device({ granted: true });
     const { pushPromptState } = await loadPush();
     await expect(pushPromptState()).resolves.toBe('granted');
+  });
+});
+
+/**
+ * The channel is a two-sided contract with `fcmSender`, and NEITHER SIDE CAN
+ * CHECK THE OTHER at runtime: a send naming a channel the app never created
+ * does not fail, it is quietly posted to FCM's fallback and shown under
+ * "Miscellaneous". These pin this side to the shared id; the server's half is
+ * pinned in senderSelection.test.ts. Both read the same constant, so what they
+ * really catch is the field being dropped or a literal creeping back in.
+ */
+describe('the notification channel', () => {
+  it('creates the channel the server addresses, before handing over a token', async () => {
+    device({ granted: true });
+    const { devicePushToken } = await loadPush();
+    await devicePushToken(false);
+
+    expect(setNotificationChannelAsync).toHaveBeenCalledWith(
+      PUSH_CHANNEL_ID,
+      expect.objectContaining({ name: PUSH_CHANNEL_NAME, importance: 4 }),
+    );
+  });
+
+  it('retires the dead channel that nothing ever posted to', async () => {
+    device({ granted: true });
+    const { devicePushToken } = await loadPush();
+    await devicePushToken(false);
+
+    // Left behind, it sits in Android's settings as a second, permanently
+    // silent entry that someone would reasonably try to configure.
+    expect(deleteNotificationChannelAsync).toHaveBeenCalledWith('default');
+  });
+
+  it('still yields a token when the old channel is not there to delete', async () => {
+    // A fresh install has nothing to remove, and expo rejects on an unknown
+    // channel. That must not cost the device its registration.
+    device({ granted: true });
+    asMock(deleteNotificationChannelAsync).mockRejectedValueOnce(new Error('no such channel'));
+    const { devicePushToken } = await loadPush();
+    await expect(devicePushToken(false)).resolves.toBe('fcm-native-token');
   });
 });

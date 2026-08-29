@@ -56,23 +56,42 @@ and commit messages, and renaming them would strand every one of those.
   Restored and green. Confirmed on web and on the AVD, which ships the same
   bundle.
 
-  **Two defects that only a real device shows, both pre-existing, neither
-  fixed here.** A push was delivered end to end for the first time — token
-  minted on the AVD, written to Firestore, sent from the real project, banner
-  read on the shade — and the banner itself is what carried the news:
+  **Two defects that only a real device shows, both pre-existing, both fixed.**
+  A push was delivered end to end for the first time — token minted on the AVD,
+  written to Firestore, sent from the real project, banner read on the shade —
+  and the banner itself is what carried the news:
 
-  - **Every notification lands in FCM's fallback channel, named
-    "Miscellaneous."** `push.ts` creates a `default` channel called "Class
-    recordings", but nothing ever targets it: `fcmSender` sets no
-    `android.notification.channelId` and the manifest declares no
-    `com.google.firebase.messaging.default_notification_channel_id`. So the
-    configured importance never applies and the app's notifications appear
-    under a generic heading in system settings. One line in `fcmSender` fixes
-    it, server-side, no rebuild.
-  - **The notification icon renders as an empty ring.** Android draws the small
-    icon from the alpha silhouette, and the launcher icon does not survive that
-    reduction — the mark is simply not there. Needs a dedicated monochrome
-    drawable.
+  - **Every notification landed in FCM's fallback channel, named
+    "Miscellaneous."** `push.ts` created a `default` channel called "Class
+    recordings", but nothing ever targeted it: `fcmSender` set no
+    `android.notification.channelId`, so the configured importance never
+    applied. Fixed the way the sibling kanban app fixed the identical bug,
+    deliberately down to the constant names: `PUSH_CHANNEL_ID` /
+    `PUSH_CHANNEL_NAME` in `@sabeel/shared`, created by the client before it
+    hands over a token and addressed by the server on every send. A NEW id
+    (`sabeel-alerts`) rather than a correction to the old one, because Android
+    fixes a channel's importance at creation and an app may never raise it
+    afterwards — only the person can. The dead `default` channel is deleted so
+    it does not sit in settings as a second, permanently silent entry.
+
+    The one deliberate behaviour change: HIGH rather than the fallback's
+    DEFAULT, matching the sibling, so a deadline message can raise a heads-up
+    banner. It had to be decided now — this is the only moment the choice is
+    ours.
+
+  - **The notification icon rendered as an empty ring.** Android draws the small
+    icon from the alpha silhouette alone, and the launcher icon is a full-bleed
+    ivory square, so its silhouette carried no mark at all. Now a vector
+    drawable of the microphone from the app icon's badge, wired up in the
+    MANIFEST rather than through the expo-notifications config plugin, which
+    does nothing here: `android/` is committed and prebuild never runs.
+
+  Both confirmed on the device afterwards — `channel=sabeel-alerts`,
+  `importance=4`, `color=0xff83114f`, and a microphone in the shade where the
+  blank ring had been. Both halves of the channel contract are pinned by tests
+  (`push.test.ts`, `senderSelection.test.ts`), each mutation-checked: dropping
+  the server's `android` block and pointing the client back at `default` were
+  each watched to go red.
 
   Both were invisible to the unit suite, the rules suite, the sweep and the
   e2e, and would have stayed invisible: nothing in this repo renders a system
@@ -85,6 +104,15 @@ and commit messages, and renaming them would strand every one of those.
   writes a real FCM token; the home nudge clears on return, which is the
   focus-versus-mount fix; "Not now" persists. Both populations, each on its own
   home screen.
+
+  A third defect, found by reading the same screenshots rather than by any
+  check: the ledger's four summary tiles broke "Accountable" mid-word as
+  "Accountabl / e" on any phone. The row now wraps, at a `minWidth` chosen to
+  break CLEANLY — 84 fits the label but leaves three across at 390px with
+  "Missed" orphaned full-width, so 112, which gives a tidy two-by-two on phones
+  and one row of four from the 720 content cap up. Every layout assertion passed
+  before and after: they can see overlap and clipping, not a word broken in
+  half.
 
   The staff half of the manual never got the device-permission paragraph the
   student half got in `3899318`. Added, and the PDF re-rendered.

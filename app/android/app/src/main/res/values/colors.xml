@@ -2,4 +2,8 @@
   <color name="splashscreen_background">#FFFFFF</color>
   <color name="colorPrimary">#023c69</color>
   <color name="iconBackground">#F6EBDD</color>
+  <!-- Dark Raspberry, the brand identity colour (docs/BRAND.md). Native
+       resources cannot read palette.ts, so this is the one place the value
+       is restated; it tints the notification small icon. -->
+  <color name="notification_icon_color">#83114F</color>
 </resources>

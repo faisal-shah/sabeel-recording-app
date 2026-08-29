@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The status-bar / shade icon for a push.
+
+  Android draws a small icon from its ALPHA CHANNEL ONLY: every opaque pixel is
+  painted flat in the tint colour and everything else is dropped. The launcher
+  icon does not survive that — it is a full-bleed ivory square, so its silhouette
+  is the whole square, which is why it rendered as a featureless blob before this
+  existed (observed on a device, 2026-08-28).
+
+  So this is a silhouette by construction: transparent ground, one opaque glyph.
+  The glyph is the microphone from the app icon's badge, which is the only part
+  of the mark that reads at 24dp — the Arabic wordmark does not.
+
+  A vector rather than five PNGs: it stays crisp at every density, and it is the
+  only form of this asset that is reviewable in a diff.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+  <!-- Capsule body: two semicircles joined by straight sides. -->
+  <path
+      android:fillColor="#FFFFFFFF"
+      android:pathData="M9,5 A3,3 0 0 1 15,5 L15,11 A3,3 0 0 1 9,11 Z" />
+
+  <!-- Cradle: a half-circle under the body, r=5.5 across an 11-wide chord. -->
+  <path
+      android:fillColor="#00000000"
+      android:strokeColor="#FFFFFFFF"
+      android:strokeWidth="1.8"
+      android:strokeLineCap="round"
+      android:pathData="M6.5,11 A5.5,5.5 0 0 0 17.5,11" />
+
+  <!-- Stem, from the bottom of the cradle. -->
+  <path
+      android:fillColor="#00000000"
+      android:strokeColor="#FFFFFFFF"
+      android:strokeWidth="1.8"
+      android:strokeLineCap="round"
+      android:pathData="M12,16.5 L12,20.5" />
+
+  <!-- Foot. -->
+  <path
+      android:fillColor="#00000000"
+      android:strokeColor="#FFFFFFFF"
+      android:strokeWidth="1.8"
+      android:strokeLineCap="round"
+      android:pathData="M8.5,20.5 L15.5,20.5" />
+</vector>

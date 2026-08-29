@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { PUSH_CHANNEL_ID } from '@sabeel/shared';
 
 /**
  * Which sender the module picks, in both directions.
@@ -58,6 +59,31 @@ describe('sender selection', () => {
       const { send } = await freshMessaging();
       await expect(send(['tok-a'], MESSAGE)).rejects.toThrow();
     }
+  });
+
+  /**
+   * The other half of the channel contract (client half: app/src/push.test.ts).
+   *
+   * A send that names no channel does not fail — Android posts it to FCM's
+   * fallback, which it labels "Miscellaneous", and the app's own channel sits
+   * there unused. That shipped, and only a real device showed it. Asserting the
+   * payload is the only way to catch it without one.
+   */
+  it('addresses the shared channel, so the push does not land in "Miscellaneous"', async () => {
+    vi.stubEnv('FUNCTIONS_EMULATOR', '');
+    const sendEachForMulticast = vi.fn(async () => ({ responses: [], successCount: 0 }));
+    vi.doMock('firebase-admin/messaging', () => ({
+      getMessaging: () => ({ sendEachForMulticast }),
+    }));
+
+    const { send } = await freshMessaging();
+    await send(['tok-a'], MESSAGE);
+
+    expect(sendEachForMulticast).toHaveBeenCalledTimes(1);
+    expect(sendEachForMulticast.mock.calls[0][0]).toMatchObject({
+      android: { notification: { channelId: PUSH_CHANNEL_ID } },
+    });
+    vi.doUnmock('firebase-admin/messaging');
   });
 
   it('resetSender restores the default rather than re-arming a real send', async () => {

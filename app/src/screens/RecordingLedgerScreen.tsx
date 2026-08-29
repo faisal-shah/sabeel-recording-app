@@ -358,8 +358,30 @@ function fmtDate(ms: number | null): string {
 }
 
 const styles = StyleSheet.create({
-  summary: { flexDirection: 'row', gap: spacing(3), marginBottom: spacing(4) },
-  stat: { flex: 1, backgroundColor: t.bg.surface, borderRadius: 10, padding: spacing(3), alignItems: 'center' },
+  /**
+   * WRAPS, because four tiles across a phone cannot hold their own labels.
+   * "Accountable" is 11 characters and a quarter of a 360dp screen leaves it
+   * about 49dp of inner width, so it broke mid-word — rendering as
+   * "Accountabl / e" on a real device. Every layout check passed throughout:
+   * nothing overlapped and nothing was clipped, which is all they can see.
+   *
+   * `minWidth` is what makes the row break, and it is set to break CLEANLY. The
+   * label itself only needs about 84 — but at 84 a 390px screen fits three
+   * across, orphaning "Missed" on a full-width second row. 112 is the smallest
+   * value that takes 320 and 390 to a tidy two-by-two while still seating all
+   * four in one row once the content column reaches its 720 cap. Shrinking the
+   * type instead would have bought a few characters and cost legibility for an
+   * adult-learner audience.
+   */
+  summary: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3), marginBottom: spacing(4) },
+  stat: {
+    flex: 1,
+    minWidth: 112,
+    backgroundColor: t.bg.surface,
+    borderRadius: 10,
+    padding: spacing(3),
+    alignItems: 'center',
+  },
   statValue: { fontSize: 22, fontWeight: '700', color: t.text.primary },
   statLabel: { fontSize: 11, color: t.text.secondary, marginTop: spacing(1) },
   ok: { color: t.feedback.success },

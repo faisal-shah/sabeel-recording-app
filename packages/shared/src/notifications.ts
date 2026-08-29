@@ -37,6 +37,32 @@ export const STUDENT_KINDS: NotificationKind[] = ['recordingReady', 'lastDay'];
 export const STAFF_KINDS: NotificationKind[] = ['attendanceMissing'];
 
 /**
+ * The Android notification channel every push is posted to.
+ *
+ * Shared because BOTH sides have to name it and neither can check the other:
+ * the app creates the channel, the server addresses it by id, and a typo on
+ * either side is silent. A send naming no channel does not fail — Android posts
+ * it to FCM's own `fcm_fallback_notification_channel`, which it labels
+ * **"Miscellaneous"** in the app's notification settings.
+ *
+ * That fallback is exactly what was happening, confirmed on a device on
+ * 2026-08-28: `push.ts` created a channel called "Class recordings" that
+ * nothing ever posted to, because `fcmSender` sent no channel at all. The
+ * sibling kanban app hit the identical bug and fixed it the same way; this is
+ * deliberately its shape, down to the constant names, so the two do not drift.
+ *
+ * IMPORTANCE_HIGH, and it has to be right FIRST TIME: Android fixes a channel's
+ * importance when the channel is created and an app may never raise it
+ * afterwards — only the person can. That is also why this is a NEW channel id
+ * rather than a correction to the old one, which already exists at DEFAULT
+ * importance on every device that has run this app. HIGH matches the sibling
+ * and means a deadline message can raise a heads-up banner; the old fallback
+ * sat at DEFAULT, so this is the one deliberate change in how loud these are.
+ */
+export const PUSH_CHANNEL_ID = 'sabeel-alerts';
+export const PUSH_CHANNEL_NAME = 'Recording alerts and deadlines';
+
+/**
  * One person's switches. Document id is their uid; the only client-writable
  * document either population has, so the rules allow exactly these keys.
  *
