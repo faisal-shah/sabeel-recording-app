@@ -39,6 +39,30 @@ and commit messages, and renaming them would strand every one of those.
 - 2026-08-28 — **v0.4.3: the first Android verification this app has had, and it
   found two things every other check is blind to.**
 
+  **Shipped the same day.** Rules, functions and hosting, in that order. The
+  deployed bundle carries the commit, contains no `EXPO_PUBLIC_USE_EMULATORS`,
+  and its `.map` URLs return `text/html`; source maps uploaded (the skip line is
+  the silent failure, and it did not appear). `smoke:prod` green.
+  `gcloud functions describe` reads 540s / 512Mi against a 60s / 256Mi baseline
+  captured before the deploy — **config verified, not import verified**: no suite
+  moves a real two-hour file.
+
+  The release build failed first with a Gradle `Metaspace` exhaustion and left
+  the PREVIOUS version's APKs in the output directory, timestamped hours earlier.
+  `BUILD SUCCESSFUL` was absent, but nothing else would have said so — the files
+  were all present and plausibly sized. Deleted them, stopped the daemons, built
+  clean, and confirmed the installed APK reports 0.4.3 / 24 with no dev sign-in
+  panel.
+
+  **`check-query-shapes.mjs` was still listing the PRE-FIX ledger shapes.** It
+  queried `recordingId` alone on three collections and omitted the assignments
+  shape entirely, so it passed while exercising queries the app had stopped
+  sending and skipping the four it now sends. The same failure the ledger bug
+  itself was: a check written against the author's intent rather than the
+  caller's query. Corrected and re-run against the real project — all four
+  equality-only shapes are servable, so no composite index is needed, which is
+  now evidence rather than reasoning.
+
   The release pass for the ledger permissions fix, the notification rework and
   the Zoom import limits. Gates green on this machine: lint, typecheck, knip,
   202 unit, 252 emulator, 674/674 sweep, 101/101 e2e.

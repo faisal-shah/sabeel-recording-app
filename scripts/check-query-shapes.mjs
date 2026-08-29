@@ -159,17 +159,37 @@ const shapes = [
     () => db.collection('auditLog').orderBy('at', 'desc'),
   ],
   // ---- Phase 5c: recording-ledger reads ----
+  //
+  // All four pin courseId. That is not an optimisation and it is not optional:
+  // the staff arm of these rules resolves get(/courses/$(resource.data.courseId)),
+  // and Firestore judges a `list` against the QUERY's constraints, so an
+  // unpinned courseId is refused outright. These shapes must be the ones
+  // app/src/ledger.ts actually sends — this list carried the pre-fix,
+  // recordingId-only shapes for a while after the app stopped sending them,
+  // which made this check pass while covering queries no longer issued and
+  // missing the ones that were.
+  [
+    'assignments — a recording\'s accountable roster (recording ledger)',
+    () =>
+      db
+        .collection('assignments')
+        .where('courseId', '==', ID)
+        .where('recordingId', '==', ID)
+        .where('active', '==', true),
+  ],
   [
     "completions — a recording's roster (recording ledger)",
-    () => db.collection('completions').where('recordingId', '==', ID),
+    () => db.collection('completions').where('courseId', '==', ID).where('recordingId', '==', ID),
   ],
   [
     "completionOverrides — a recording's (recording ledger)",
-    () => db.collection('completionOverrides').where('recordingId', '==', ID),
+    () =>
+      db.collection('completionOverrides').where('courseId', '==', ID).where('recordingId', '==', ID),
   ],
   [
     "listeningProgress — a recording's (recording ledger)",
-    () => db.collection('listeningProgress').where('recordingId', '==', ID),
+    () =>
+      db.collection('listeningProgress').where('courseId', '==', ID).where('recordingId', '==', ID),
   ],
 ];
 
