@@ -1,6 +1,6 @@
 # Sabeel Class Recordings — User Manual
 
-*For app version 0.4.2 · August 2026*
+*For app version 0.4.3 · August 2026*
 
 Welcome! This guide explains everything the Sabeel Class Recordings app can do —
 from listening to your first class to taking attendance and tracking who has
@@ -526,6 +526,12 @@ Tap **Notifications** on your home screen. Staff get one message:
 It's more useful than it sounds. Until attendance is submitted nobody has been
 excused, so a recording you've already published is sitting there that not one
 student can open — and nothing else in the app tells you.
+
+Reaching this device needs its permission as well. The app offers to set that up
+once, on your home screen after you sign in; you can also tap **Enable
+notifications** on this screen at any time. If it says they are blocked, use
+**Open settings** on a phone, or allow them from the site settings behind the
+icon in your browser's address bar.
 
 ---
 

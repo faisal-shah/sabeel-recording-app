@@ -210,6 +210,21 @@ reporting itself works on native today, just with minified release stack traces.
 console. For functions, check the logs for an actual invocation rather than
 trusting that the deploy succeeded.
 
+When a function's RUNTIME CONFIG changed — timeout, memory — logs prove nothing,
+because a config that did not take looks identical until something runs long
+enough to hit the old limit. Read it back instead (gcloud has no default project
+here, so name it):
+
+```bash
+gcloud functions describe importZoomRecording --region=us-central1 --gen2 \
+  --project=sabeel-class-recordings \
+  --format="value(serviceConfig.timeoutSeconds,serviceConfig.availableMemory)"
+```
+
+That verifies the CONFIG, not the import. No suite moves a genuinely large file —
+the fixtures are kilobytes — so the only end-to-end proof is importing a real
+two-hour meeting.
+
 ## Android
 
 No EAS. Local Gradle builds with a committed `android/` directory. The APK ships

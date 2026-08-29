@@ -36,6 +36,59 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-08-28 — **v0.4.3: the first Android verification this app has had, and it
+  found two things every other check is blind to.**
+
+  The release pass for the ledger permissions fix, the notification rework and
+  the Zoom import limits. Gates green on this machine: lint, typecheck, knip,
+  202 unit, 252 emulator, 674/674 sweep, 101/101 e2e.
+
+  **The ledger was confirmed AS A MANAGER, which is the only account that can
+  see it fail.** All four rules answer an admin from a zero-read arm, so an
+  admin's pass is evidence about nothing. Judged on the reads the bug denied —
+  the completion, override and listened-% values — not on the page having rows,
+  because the names come from the session's attendance map and render either
+  way. Then mutation-tested: with `courseId` removed from the four queries again
+  the screen kept every student name under "excused, access closed" while the
+  override line vanished, every row read 0% listened, and the console carried
+  `ledgerAssignments` / `ledgerCompletions` / `ledgerOverrides` /
+  `ledgerProgress` — the four production Sentry labels, reproduced exactly.
+  Restored and green. Confirmed on web and on the AVD, which ships the same
+  bundle.
+
+  **Two defects that only a real device shows, both pre-existing, neither
+  fixed here.** A push was delivered end to end for the first time — token
+  minted on the AVD, written to Firestore, sent from the real project, banner
+  read on the shade — and the banner itself is what carried the news:
+
+  - **Every notification lands in FCM's fallback channel, named
+    "Miscellaneous."** `push.ts` creates a `default` channel called "Class
+    recordings", but nothing ever targets it: `fcmSender` sets no
+    `android.notification.channelId` and the manifest declares no
+    `com.google.firebase.messaging.default_notification_channel_id`. So the
+    configured importance never applies and the app's notifications appear
+    under a generic heading in system settings. One line in `fcmSender` fixes
+    it, server-side, no rebuild.
+  - **The notification icon renders as an empty ring.** Android draws the small
+    icon from the alpha silhouette, and the launcher icon does not survive that
+    reduction — the mark is simply not there. Needs a dedicated monochrome
+    drawable.
+
+  Both were invisible to the unit suite, the rules suite, the sweep and the
+  e2e, and would have stayed invisible: nothing in this repo renders a system
+  notification. That is the argument for the device pass being mandatory rather
+  than a formality.
+
+  Also confirmed on the device: the notifications screen raises NO system dialog
+  on arrival (focus stays on MainActivity), offering **Enable notifications**
+  instead; the button does raise it; granting flips the screen to "enabled" and
+  writes a real FCM token; the home nudge clears on return, which is the
+  focus-versus-mount fix; "Not now" persists. Both populations, each on its own
+  home screen.
+
+  The staff half of the manual never got the device-permission paragraph the
+  student half got in `3899318`. Added, and the PDF re-rendered.
+
 - 2026-08-28 — **The recording ledger was denied for every manager, and the
   suites were green throughout. Four defects fixed.**
 
