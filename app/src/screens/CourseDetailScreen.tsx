@@ -5,9 +5,10 @@ import {
   Card,
   Empty,
   Field,
+  Grid,
   IconButton,
-  Notice,
   ListRow,
+  Notice,
   Row,
   Screen,
   SectionTitle,
@@ -98,29 +99,33 @@ export function CourseDetailScreen({
 
   return (
     <Screen
-      subtitle={cls.name}
+      title={cls.name}
+      subtitle="Sessions, roster and listening"
       status={cls.effectiveActive ? 'active' : 'inactive'}
+      width="list"
+      /* THE TWO THINGS THIS PAGE IS FOR, beside the name rather than in a card
+         under it. Everything below is settings and lists; these two are where a
+         teacher is actually going. */
+      actions={
+        <>
+          <Button testID="nav-sessions" label="Sessions" onPress={onOpenSessions} />
+          <Button
+            testID="nav-attendance"
+            label="Attendance report"
+            variant="secondary"
+            onPress={onOpenAttendance}
+          />
+        </>
+      }
     >
       {error ? <Notice tone="error">{error}</Notice> : null}
-
-      <Card>
-        <Button testID="nav-sessions" label="Sessions" onPress={onOpenSessions} />
-        <Button
-          testID="nav-attendance"
-          label="Attendance report"
-          variant="secondary"
-          onPress={onOpenAttendance}
-        />
-        {/* The chip itself now rides the heading line; only the consequence of
-            being archived still needs saying here. */}
-        {!cls.effectiveActive ? (
-          <Text style={styles.hint}>
-            {cls.archivedAccess
-              ? 'archived — students can still listen'
-              : 'archived — listening is off'}
-          </Text>
-        ) : null}
-      </Card>
+      {!cls.effectiveActive ? (
+        <Notice tone="info">
+          {cls.archivedAccess
+            ? 'This course is archived. Students can still listen to what they were assigned.'
+            : 'This course is archived and listening is off.'}
+        </Notice>
+      ) : null}
 
       {/* Course-level accountability at a glance. Zeroes out when archived (no
           active assignments), while the recordings' history stays. */}
@@ -248,7 +253,8 @@ export function CourseDetailScreen({
       {enrolled.length === 0 ? (
         <Empty>Nobody is enrolled in this course yet.</Empty>
       ) : (
-        roster
+        <Grid min={320}>
+        {roster
           .filter((r) => r.active)
           .map((r) => {
             const s = byUid.get(r.studentUid);
@@ -313,7 +319,8 @@ export function CourseDetailScreen({
                 }
               />
             );
-          })
+          })}
+        </Grid>
       )}
 
       <SectionTitle>Add a student</SectionTitle>
@@ -321,7 +328,7 @@ export function CourseDetailScreen({
         {notEnrolled.length === 0 ? (
           <Empty>
             {students.filter((s) => s.status === 'active').length === 0
-              ? 'No student accounts yet. Create one from the Students screen first.'
+              ? 'No student accounts yet. Create one from the People screen first.'
               : 'Every active student is already in this course.'}
           </Empty>
         ) : (

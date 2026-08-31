@@ -11,16 +11,16 @@ import {
   type DueBucket,
   type RecordingDoc,
 } from '@sabeel/shared';
-import { Button, Empty, Notice, Screen } from '../components/ui';
+import { Empty, Grid, Notice, Screen } from '../components/ui';
 import { PushNudge } from '../components/PushNudge';
 import { db } from '../firebase';
-import { signOut } from '../session';
 import { useListenerError } from '../liveQuery';
 import { captureError } from '../sentry';
 import { useMyAssignments, useMyCompletions } from '../completion';
 import { drainCompletionOutbox } from '../completionOutbox';
 import type { CourseRow } from '../structure';
 import type { RecordingRow } from '../recordings';
+import { NAV_VARIANT } from '../design/variant';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -42,13 +42,9 @@ const t = getTheme();
 export function StudentHomeScreen({
   uid,
   onOpen,
-  onBrowse,
-  onNotifications,
 }: {
   uid: string;
   onOpen: (recording: RecordingRow, cls: CourseRow, dueDate: string) => void;
-  onBrowse: () => void;
-  onNotifications: () => void;
 }) {
   const listenerError = useListenerError();
   const assignments = useMyAssignments(uid);
@@ -89,21 +85,67 @@ export function StudentHomeScreen({
       );
   }, [assignments, resolved, completions, today]);
 
+  /**
+   * Design B's hero: the most urgent recording that can actually be OPENED.
+   *
+   * Not simply the first incomplete row. A missed recording sorts above
+   * everything and is deliberately not a play target — the server refuses to
+   * mint a URL past the deadline, so a big tappable card for one would look
+   * like the app's most important action and then fail. It stays in the Missed
+   * group, where the student is owed the record of what closed and when, and
+   * the hero falls through to the first thing still open.
+   */
+  const next =
+    NAV_VARIANT === 'b'
+      ? (rows.find((r) => r.bucket === 'dueSoon' || r.bucket === 'upcoming') ?? null)
+      : null;
+  const listed = next ? rows.filter((r) => r.key !== next.key) : rows;
+
   const groups: { bucket: DueBucket; label: string; rows: TaskRow[] }[] = [
     { bucket: 'missed', label: 'Missed', rows: [] },
     { bucket: 'dueSoon', label: 'Due soon', rows: [] },
     { bucket: 'upcoming', label: 'Upcoming', rows: [] },
     { bucket: 'done', label: 'Completed', rows: [] },
   ];
-  for (const row of rows) groups.find((g) => g.bucket === row.bucket)?.rows.push(row);
+  for (const row of listed) groups.find((g) => g.bucket === row.bucket)?.rows.push(row);
 
   return (
-    <Screen title="Your listening" subtitle="Recordings you were excused from, most urgent first">
+    <Screen
+      title="Your listening"
+      subtitle="Recordings you were excused from, most urgent first"
+      width="list"
+    >
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
 
       {/* Top of the content, below the listener error only. Same place in all
           three apps: first thing after anything that needs acting on today. */}
       <PushNudge uid={uid} />
+
+      {/*
+        DESIGN B leads with the one recording to listen to next, at full size,
+        and lists the rest beneath it.
+
+        The argument is that this list is usually one item long. A student is
+        excused from a class now and then, not every week, so the common case is
+        a single card sitting under a heading with three empty groups implied
+        around it — and the tap that matters is always the first one. Designs A
+        and C keep the even grouping, which is the better shape the week somebody
+        comes back from a fortnight away with five to catch up on.
+      */}
+      {NAV_VARIANT === 'b' && next ? (
+        <Pressable
+          testID={`next-up-${next.recording.title}`}
+          accessibilityRole="button"
+          accessibilityLabel={`Listen to ${next.recording.title}`}
+          onPress={() => onOpen(next.recording, next.cls, next.dueDate)}
+          style={({ pressed }) => [styles.hero, pressed ? styles.heroPressed : null]}
+        >
+          <Text style={styles.heroLabel}>NEXT TO LISTEN</Text>
+          <Text style={styles.heroTitle}>{next.recording.title}</Text>
+          <Text style={styles.heroCourse}>{next.cls.name}</Text>
+          <Text style={styles.heroDue}>Listen by {next.dueDate}</Text>
+        </Pressable>
+      ) : null}
 
       {rows.length === 0 ? (
         <Empty>Nothing to listen to right now. New recordings will appear here.</Empty>
@@ -115,32 +157,19 @@ export function StudentHomeScreen({
               <Text style={[styles.groupLabel, g.bucket === 'missed' ? styles.missedLabel : null]}>
                 {g.label}
               </Text>
-              {g.rows.map((row) => (
-                <TaskCard
-                  key={row.key}
-                  row={row}
-                  onOpen={() => onOpen(row.recording, row.cls, row.dueDate)}
-                />
-              ))}
+              <Grid min={320}>
+                {g.rows.map((row) => (
+                  <TaskCard
+                    key={row.key}
+                    row={row}
+                    onOpen={() => onOpen(row.recording, row.cls, row.dueDate)}
+                  />
+                ))}
+              </Grid>
             </View>
           ))
       )}
 
-      <View style={styles.footer}>
-        <Button
-          testID="student-classes"
-          label="My classes"
-          variant="secondary"
-          onPress={onBrowse}
-        />
-        <Button
-          testID="nav-notifications"
-          label="Notifications"
-          variant="secondary"
-          onPress={onNotifications}
-        />
-        <Button testID="sign-out" label="Sign out" variant="secondary" onPress={() => void signOut()} />
-      </View>
     </Screen>
   );
 }
@@ -287,6 +316,22 @@ function useResolvedRecordings(
 }
 
 const styles = StyleSheet.create({
+  hero: {
+    backgroundColor: t.accent.base,
+    borderRadius: 12,
+    padding: spacing(5),
+    marginBottom: spacing(5),
+  },
+  heroPressed: { opacity: 0.9 },
+  heroLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+    color: t.accent.onAccentMuted,
+  },
+  heroTitle: { fontSize: 22, fontWeight: '700', color: t.accent.onAccent, marginTop: spacing(2) },
+  heroCourse: { fontSize: 14, color: t.accent.onAccentMuted, marginTop: 2 },
+  heroDue: { fontSize: 14, fontWeight: '600', color: t.accent.onAccent, marginTop: spacing(3) },
   group: { marginBottom: spacing(5) },
   groupLabel: {
     fontSize: 13,

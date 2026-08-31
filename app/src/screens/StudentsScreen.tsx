@@ -1,19 +1,22 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
+  AddAction,
   Button,
-  Card,
   Collapsible,
   Empty,
   Field,
-  Notice,
+  Grid,
   ListRow,
+  Notice,
   Screen,
   SectionTitle,
   StatusChip,
+  useAddAction,
 } from '../components/ui';
 import { createStudent, useStudents } from '../students';
 import { useAllCourses, useCohorts, useMyCourses } from '../structure';
+import { CAN_CREATE_ACCOUNTS } from '../accountCreation';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -31,111 +34,38 @@ const t = getTheme();
 export function StudentsScreen({
   isAdmin,
   uid,
+  header,
   onOpenStudent,
 }: {
   isAdmin: boolean;
   uid: string;
+  /** Rendered directly under the heading — the People tab's students/staff
+   *  switch. Passed in rather than owned here so this screen stays one list. */
+  header?: ReactNode;
   onOpenStudent: (studentUid: string) => void;
 }) {
   const students = useStudents(true);
   const active = students.filter((s) => s.status !== 'disabled');
   const disabled = students.filter((s) => s.status === 'disabled');
-  const courseOptions = useCourseOptions(isAdmin, uid);
-  const [displayName, setDisplayName] = useState('');
-  const [email, setEmail] = useState('');
-  const [courseId, setCourseId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
-
-  const create = async () => {
-    setBusy(true);
-    setError(null);
-    setInfo(null);
-    try {
-      const res = await createStudent({
-        displayName: displayName.trim(),
-        email: email.trim(),
-        // The key is OMITTED when no course is chosen, never set to undefined:
-        // the callable SDK serializes an explicitly-undefined property as null,
-        // so `courseId: undefined` reaches the server as `courseId: null`.
-        ...(courseId ? { courseId } : {}),
-      });
-      setDisplayName('');
-      setEmail('');
-      setCourseId(null);
-      setInfo(
-        res.emailSent
-          ? 'Account created. They have been emailed a link to set their password.'
-          : 'Account created, but the password email could not be sent. Use Resend below.',
-      );
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
-    <Screen subtitle="Create accounts and manage access">
-      <SectionTitle>Add a student</SectionTitle>
-      <Card>
-        <Field
-          testID="student-name"
-          label="Full name"
-          value={displayName}
-          onChangeText={setDisplayName}
-          autoCapitalize="words"
-          placeholder="Fatima Ahmed"
-        />
-        <Field
-          testID="student-email"
-          label="Email"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          placeholder="student@example.com"
-        />
-        {courseOptions.length > 0 ? (
-          <View style={styles.picker}>
-            {/* A tappable list, not a dropdown — React Native has no dropdown
-                primitive, and this matches the approve-as-manager/-admin shape
-                already used elsewhere. */}
-            <Text style={styles.pickerLabel}>Enrol in a course (optional)</Text>
-            {courseOptions.map((c) => {
-              const on = courseId === c.id;
-              return (
-                <Pressable
-                  key={c.id}
-                  testID={`student-course-${c.name}`}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: on }}
-                  accessibilityLabel={`Enrol in ${c.name} in ${c.cohortName}`}
-                  onPress={() => setCourseId(on ? null : c.id)}
-                  style={styles.pickRow}
-                >
-                  <View style={[styles.tick, on ? styles.tickOn : null]} />
-                  <View style={styles.pickTextWrap}>
-                    <Text style={styles.pickText}>{c.name}</Text>
-                    {/* Cohort shown so two courses that share a name (same course
-                        in different semesters) are told apart. */}
-                    <Text style={styles.pickSub}>{c.cohortName}</Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-        ) : null}
-        <Button
-          testID="student-create"
-          label="Create account"
-          busy={busy}
-          disabled={!displayName.trim() || !email.includes('@')}
-          onPress={() => void create()}
-        />
-        {error ? <Notice tone="error">{error}</Notice> : null}
-        {info ? <Notice tone="success">{info}</Notice> : null}
-      </Card>
+    <Screen
+      title="People"
+      subtitle="Students and their access"
+      width="list"
+      /* CREATION IS WEB-ONLY — see `accountCreation.ts`. The button is absent on
+         the apps, with nothing in its place: a line explaining where to do it
+         instead would itself be the thing the store rule forbids. Everything
+         else on this screen — access, enrolment, the student's own page —
+         stays, because none of it creates an identity. */
+      actions={
+        CAN_CREATE_ACCOUNTS ? (
+          <AddAction testID="students-add" label="Add a student" title="Add a student">
+            <AddStudent isAdmin={isAdmin} uid={uid} />
+          </AddAction>
+        ) : null
+      }
+    >
+      {header}
 
       {/* The list is for finding someone; everything you can DO to them lives on
           their page. Per-row actions made every row three controls wide and
@@ -144,29 +74,33 @@ export function StudentsScreen({
       {active.length === 0 ? (
         <Empty>No students yet.</Empty>
       ) : (
-        active.map((s) => (
-          <ListRow
-            key={s.uid}
-            testID={`student-open-${s.email}`}
-            name={s.displayName}
-            detail={s.email}
-            onPress={() => onOpenStudent(s.uid)}
-          />
-        ))
-      )}
-
-      {disabled.length > 0 ? (
-        <Collapsible testID="students-disabled" title="Disabled" count={disabled.length}>
-          {disabled.map((s) => (
+        <Grid min={330}>
+          {active.map((s) => (
             <ListRow
               key={s.uid}
               testID={`student-open-${s.email}`}
               name={s.displayName}
-              status={<StatusChip status={s.status} />}
               detail={s.email}
               onPress={() => onOpenStudent(s.uid)}
             />
           ))}
+        </Grid>
+      )}
+
+      {disabled.length > 0 ? (
+        <Collapsible testID="students-disabled" title="Disabled" count={disabled.length}>
+          <Grid min={330}>
+            {disabled.map((s) => (
+              <ListRow
+                key={s.uid}
+                testID={`student-open-${s.email}`}
+                name={s.displayName}
+                status={<StatusChip status={s.status} />}
+                detail={s.email}
+                onPress={() => onOpenStudent(s.uid)}
+              />
+            ))}
+          </Grid>
         </Collapsible>
       ) : null}
     </Screen>
@@ -188,6 +122,108 @@ interface CourseOption {
  * the security rules would let them read. Each option carries its cohort name so
  * same-named courses are distinguishable. Both roles may read cohorts.
  */
+
+/**
+ * The create form, in the sheet the header action opens.
+ *
+ * REACHED ONLY ON WEB (`CAN_CREATE_ACCOUNTS`). The component is still compiled
+ * into the app bundle, which is fine — what the store rules turn on is whether
+ * a user can reach a creation flow, and with no affordance there is no route to
+ * this at all.
+ */
+function AddStudent({ isAdmin, uid }: { isAdmin: boolean; uid: string }) {
+  const close = useAddAction();
+  const courseOptions = useCourseOptions(isAdmin, uid);
+  const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
+  const [courseId, setCourseId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+
+  const create = async () => {
+    setBusy(true);
+    setError(null);
+    setInfo(null);
+    try {
+      await createStudent({
+        displayName: displayName.trim(),
+        email: email.trim().toLowerCase(),
+        courseId: courseId ?? undefined,
+      });
+      setInfo(`Account created. A set-password link has been emailed to ${email.trim()}.`);
+      setDisplayName('');
+      setEmail('');
+      setCourseId(null);
+      close();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <Field
+        testID="student-name"
+        label="Full name"
+        value={displayName}
+        onChangeText={setDisplayName}
+        autoCapitalize="words"
+        placeholder="Fatima Ahmed"
+      />
+      <Field
+        testID="student-email"
+        label="Email"
+        value={email}
+        onChangeText={setEmail}
+        keyboardType="email-address"
+        placeholder="student@example.com"
+      />
+      {courseOptions.length > 0 ? (
+        <View style={styles.picker}>
+          {/* A tappable list, not a dropdown — React Native has no dropdown
+              primitive, and this matches the approve-as-manager/-admin shape
+              already used elsewhere. */}
+          <Text style={styles.pickerLabel}>Enrol in a course (optional)</Text>
+          {courseOptions.map((c) => {
+            const on = courseId === c.id;
+            return (
+              <Pressable
+                key={c.id}
+                testID={`student-course-${c.name}`}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={`Enrol in ${c.name} in ${c.cohortName}`}
+                onPress={() => setCourseId(on ? null : c.id)}
+                style={styles.pickRow}
+              >
+                <View style={[styles.tick, on ? styles.tickOn : null]} />
+                <View style={styles.pickTextWrap}>
+                  <Text style={styles.pickText}>{c.name}</Text>
+                  {/* Cohort shown so two courses that share a name (same course
+                      in different semesters) are told apart. */}
+                  <Text style={styles.pickSub}>{c.cohortName}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+      <Button
+        testID="student-create"
+        label="Create account"
+        busy={busy}
+        disabled={!displayName.trim() || !email.includes('@')}
+        onPress={() => void create()}
+      />
+      {error ? <Notice tone="error">{error}</Notice> : null}
+      {info ? <Notice tone="success">{info}</Notice> : null}
+    </>
+  );
+}
+
 function useCourseOptions(isAdmin: boolean, uid: string): CourseOption[] {
   const cohorts = useCohorts(true);
   const adminCourses = useAllCourses(isAdmin);

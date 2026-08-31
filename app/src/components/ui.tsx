@@ -1,4 +1,4 @@
-import { Children, useEffect, useState, type ReactNode } from 'react';
+import { Children, createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -7,9 +7,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { CONTENT_MAX_WIDTH, getTheme, spacing } from '../theme';
+import { CONTENT_MAX_WIDTH, LAYOUT_WIDTHS, getTheme, spacing, type LayoutWidth } from '../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useListenerError } from '../liveQuery';
+import { useWide } from '../useWidth';
 import { KbScroll } from './KbScroll';
+import { Sheet } from './Sheet';
 
 const t = getTheme();
 
@@ -20,12 +23,36 @@ const t = getTheme();
  */
 
 /**
+ * WHETHER THIS SCREEN MUST PAY FOR THE STATUS BAR ITSELF.
+ *
+ * True on the tab roots, which run with no stack header. Set by the navigation
+ * shell, which is the only thing that knows which route is showing; a screen
+ * cannot answer it, and hard-coding it per screen would be a second copy of the
+ * shell's own list.
+ */
+export const ScreenOwnsTopInset = createContext(false);
+
+/**
  * Page wrapper. Renders the latest live-data error above the content — a
  * rejected listener otherwise dies as a console warning nobody sees on a phone.
  */
-export function Screen({ title, subtitle, status, parent, children }: {
+export function Screen({ title, subtitle, status, parent, width = 'read', actions, children }: {
   title?: string;
   subtitle?: string;
+  /**
+   * Which maximum this screen's content stops growing at. See `LAYOUT_WIDTHS` —
+   * prose and forms want a narrow reading column, collections want the room.
+   * Defaulting to `read` is deliberate: a screen that has not thought about it
+   * is far more likely to be a form than a grid, and an over-narrow column is a
+   * cosmetic fault where an over-wide one is unreadable.
+   */
+  width?: LayoutWidth;
+  /**
+   * Screen-level actions, rendered beside the heading on a wide screen and
+   * beneath it on a phone. A primary action belongs next to the title it acts
+   * on, not stranded at the bottom of a 1400px window.
+   */
+  actions?: ReactNode;
   /** The state of the thing this screen is about. Rendered as a lamp on the
    *  LEFT of the heading, with the heading centred against it — the same shape
    *  on a phone and on a wide screen. */
@@ -44,6 +71,10 @@ export function Screen({ title, subtitle, status, parent, children }: {
   children: ReactNode;
 }) {
   const listenerError = useListenerError();
+  const wide = useWide();
+  const insets = useSafeAreaInsets();
+  const ownsTopInset = useContext(ScreenOwnsTopInset);
+  const max = LAYOUT_WIDTHS[width];
   const heading =
     title || subtitle || parent ? (
       <View style={styles.headRow}>
@@ -72,13 +103,23 @@ export function Screen({ title, subtitle, status, parent, children }: {
             </Text>
           ) : null}
         </View>
+        {actions && wide ? <View style={styles.headActions}>{actions}</View> : null}
       </View>
     ) : null;
   return (
-    <KbScroll style={styles.canvas} contentContainerStyle={styles.content}>
+    <KbScroll
+      style={styles.canvas}
+      contentContainerStyle={[
+        styles.content,
+        wide ? styles.contentWide : null,
+        ownsTopInset ? { paddingTop: insets.top + spacing(5) } : null,
+        Number.isFinite(max) ? { maxWidth: max } : null,
+      ]}
+    >
       {/* Chrome is ivory with a dark title, never a raspberry app bar: a
           brand-coloured bar on every screen puts raspberry far past its share. */}
       {heading}
+      {actions && !wide ? <View style={styles.headActionsNarrow}>{actions}</View> : null}
       {listenerError ? (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>{listenerError}</Text>
@@ -104,6 +145,7 @@ export function Button({
   busy,
   disabled,
   compact,
+  block,
   testID,
 }: {
   label: string;
@@ -113,9 +155,18 @@ export function Button({
   disabled?: boolean;
   /** A row-level action sitting beside a name, not a full-width page action. */
   compact?: boolean;
+  /**
+   * Keep the phone's full-width shape at every width.
+   *
+   * The escape hatch for the rare screen whose single action SHOULD span its
+   * container — sign-in is the whole of it. Everywhere else a standalone button
+   * that stretches to 1400px reads as an unfinished phone layout.
+   */
+  block?: boolean;
   testID?: string;
 }) {
   const isDisabled = disabled || busy;
+  const wide = useWide();
   const style =
     variant === 'primary'
       ? styles.btnPrimary
@@ -133,6 +184,11 @@ export function Button({
       style={({ pressed }) => [
         styles.btn,
         compact ? styles.btnCompact : null,
+        // A button laid out as a column child stretches to the column on a
+        // phone, which is the right primary-action shape there and a bar across
+        // the window on a laptop. Inside a Row it is already content-width, so
+        // this only changes the stretched case.
+        wide && !compact && !block ? styles.btnWide : null,
         style,
         pressed && !isDisabled ? styles.btnPressed : null,
         isDisabled ? styles.btnDisabled : null,
@@ -317,8 +373,9 @@ export function Field({
   keyboardType?: 'email-address' | 'default';
   testID?: string;
 }) {
+  const wide = useWide();
   return (
-    <View style={styles.field}>
+    <View style={[styles.field, wide ? styles.fieldWide : null]}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
         testID={testID}
@@ -423,11 +480,158 @@ function StatusLight({ status }: { status: string }) {
  * broken mid-word — "Publ / ish" — on a real phone. A row is allowed to wrap; it
  * is not allowed to crush a control below the width of its own text.
  */
+/**
+ * A collection that flows into as many columns as fit.
+ *
+ * The single most visible difference between a designed desktop layout and a
+ * stretched phone one: a list of cards down the middle of a 1500px window is
+ * mostly empty space, and the same cards at 320px must be one per row. `min` is
+ * the narrowest a cell may be before the row reflows — the cap on the SAME axis
+ * stops a lone last card in a row from stretching to the full width and looking
+ * like a different component.
+ */
+export function Grid({ min = 300, children }: { min?: number; children: ReactNode }) {
+  const wide = useWide();
+  const [width, setWidth] = useState(0);
+  const cells = Children.toArray(children);
+  if (!wide) return <>{cells}</>;
+
+  // MEASURED, not left to flex-grow. `flexBasis` + `flexGrow` shares the row
+  // evenly, which is right until the last row is short: one leftover card then
+  // grows to the full width and reads as a different, more important component
+  // than the ones above it. Computing the column count and giving every cell the
+  // same fixed width makes the last row line up with the rest and simply end.
+  const gap = spacing(3);
+  const cols = width > 0 ? Math.max(1, Math.floor((width + gap) / (min + gap))) : 1;
+  const cell = width > 0 ? (width - gap * (cols - 1)) / cols : undefined;
+
+  return (
+    <View style={styles.grid} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+      {cells.map((child, i) => (
+        <View key={i} style={[styles.gridCell, cell ? { width: cell } : null]}>
+          {child}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
+ * "Add a …" — a header action that opens the form in a sheet.
+ *
+ * The shape this replaced was a form pinned above the list on every one of
+ * these screens. It is wrong at both widths and for the same reason: creating a
+ * cohort, a course or a student is a few-times-a-term task, and the list is
+ * what every other visit came for. On a phone the form pushed the list below
+ * the fold; on a laptop it put a banner of empty fields across the top of a
+ * 1400px window and left the content stranded under it.
+ *
+ * As a modal task it also gets two things for free. The form is the same at
+ * every width, so there is no second layout to keep honest — and on a build
+ * where the affordance must not exist at all (see `accountCreation.ts`) there
+ * is exactly one thing to leave out.
+ */
+export function AddAction({
+  label,
+  title,
+  testID,
+  children,
+}: {
+  /** The button's words — "Add a student", not "Add" or "+". */
+  label: string;
+  /** The sheet's heading. Usually the same words. */
+  title: string;
+  testID?: string;
+  /** The form. Close it from inside with `useAddAction`. */
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <AddActionContext.Provider value={() => setOpen(false)}>
+      {/* Not `compact`: that shape is for an action sitting inside a list row,
+          and it lands under the 44pt touch minimum. At the head of a screen this
+          is a page action — content-width on a laptop, full width on a phone,
+          which is what the button primitive already does. */}
+      <Button testID={testID} label={label} onPress={() => setOpen(true)} />
+      <Sheet visible={open} title={title} onClose={() => setOpen(false)} closeLabel="Cancel">
+        {children}
+      </Sheet>
+    </AddActionContext.Provider>
+  );
+}
+
+const AddActionContext = createContext<() => void>(() => {});
+
+/** Close the sheet from inside the form, once the thing is created. */
+export function useAddAction(): () => void {
+  return useContext(AddActionContext);
+}
+
+/**
+ * A two-or-three way switch between views of the same subject.
+ *
+ * Not navigation: every segment is the same screen showing a different slice,
+ * so it must not push, must not appear in history, and must not get a Back. The
+ * People tab is the case it exists for — students and staff are one destination
+ * with two lists, and giving each its own tab would spend a permanent slot on a
+ * screen an admin opens a few times a term.
+ */
+export function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <View style={styles.segmented} accessibilityRole="tablist">
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <Pressable
+            key={o.value}
+            testID={`segment-${o.value}`}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: on }}
+            accessibilityLabel={o.label}
+            onPress={() => onChange(o.value)}
+            style={({ pressed }) => [
+              styles.segment,
+              on ? styles.segmentOn : null,
+              pressed ? styles.segmentPressed : null,
+            ]}
+          >
+            <Text style={[styles.segmentText, on ? styles.segmentTextOn : null]}>{o.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 export function Row({ children }: { children: ReactNode }) {
+  const wide = useWide();
   return (
     <View style={styles.row}>
       {Children.map(children, (child) =>
-        child ? <View style={styles.rowItem}>{child}</View> : null,
+        child ? (
+          /*
+           * THE CELLS SHARE THE WIDTH ON A PHONE AND NOT ON A LAPTOP.
+           *
+           * Growing each cell is what makes two actions on a 320px screen come
+           * out as two equal halves instead of one wide button and one narrow
+           * one. At 1400px the same rule gives each cell 537px and leaves its
+           * button sitting at its natural width in the middle of it — so a pair
+           * of related actions ends up 400px apart with nothing between them,
+           * reading as two unrelated controls. It is the single most visible
+           * "stretched phone layout" tell in the app, and it was in the shared
+           * primitive rather than in any screen, which is why it appeared on
+           * five screens at once.
+           */
+          <View style={[styles.rowItem, wide ? styles.rowItemWide : null]}>{child}</View>
+        ) : null,
       )}
     </View>
   );
@@ -631,7 +835,32 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
+  contentWide: { paddingHorizontal: spacing(8), paddingTop: spacing(7) },
+  headActions: { flexDirection: 'row', gap: spacing(2), alignItems: 'flex-start' },
+  headActionsNarrow: { marginBottom: spacing(4) },
   h1: { fontSize: 26, fontWeight: '700', color: t.text.primary },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3) },
+  segmented: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    gap: 2,
+    padding: 3,
+    borderRadius: 9,
+    backgroundColor: t.bg.inset,
+    marginBottom: spacing(4),
+  },
+  segment: {
+    paddingVertical: spacing(2),
+    paddingHorizontal: spacing(4),
+    borderRadius: 7,
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  segmentOn: { backgroundColor: t.bg.surface },
+  segmentPressed: { opacity: 0.7 },
+  segmentText: { fontSize: 14, fontWeight: '600', color: t.text.secondary },
+  segmentTextOn: { color: t.text.primary },
+  gridCell: { flexGrow: 0, flexShrink: 0 },
   lede: { fontSize: 15, color: t.text.secondary, marginTop: spacing(1), marginBottom: spacing(4) },
   // Raspberry is the primary action's colour, and this IS the header's action.
   // #83114F on the ivory canvas is far past 4.5:1, so it carries at 15pt.
@@ -714,6 +943,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     marginTop: spacing(2),
   },
+  btnWide: { alignSelf: 'flex-start', minWidth: 120 },
   btnPrimary: { backgroundColor: t.accent.base },
   btnSecondary: { backgroundColor: t.bg.sage },
   btnDanger: { backgroundColor: t.feedback.danger },
@@ -730,6 +960,9 @@ const styles = StyleSheet.create({
   btnPrimaryText: { color: t.accent.onAccent },
   btnSecondaryText: { color: t.text.primary },
   field: { marginTop: spacing(3) },
+  // A single-line field stretched to 1100px is unreadable and looks unfinished;
+  // the value in it is a name or an email, never a paragraph.
+  fieldWide: { maxWidth: 440 },
   fieldLabel: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(1) },
   input: {
     backgroundColor: t.bg.inset,
@@ -761,6 +994,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    justifyContent: 'flex-start',
     flexWrap: 'wrap',
     gap: spacing(2),
     paddingVertical: spacing(1),
@@ -771,6 +1005,7 @@ const styles = StyleSheet.create({
   // fits or wraps — both readable. maxWidth caps the one case shrink used to
   // cover: a basis wider than the container itself, on a very narrow screen.
   rowItem: { flexGrow: 1, flexShrink: 0, flexBasis: 150, maxWidth: '100%' },
+  rowItemWide: { flexGrow: 0, flexBasis: 'auto' },
 
   // --- compact row actions -------------------------------------------------
   btnCompact: { paddingVertical: spacing(2), paddingHorizontal: spacing(3), minHeight: 40 },
@@ -789,7 +1024,7 @@ const styles = StyleSheet.create({
 
   // --- a person in a list --------------------------------------------------
   // The heading: lamp on the left, title centred against it.
-  headRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
+  headRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), flexWrap: 'wrap' },
   headText: { flexShrink: 1, flexGrow: 1 },
   light: { alignItems: 'center', width: 56 },
   // Bigger than the chip's 8pt dot — at a page heading this is the thing you

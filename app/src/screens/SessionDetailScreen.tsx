@@ -41,6 +41,7 @@ import { retryZoomImport } from '../zoom';
 import { useRoster } from '../structure';
 import { useStudents } from '../students';
 import { canPickAudio, pickAudioFile } from '../filePicker';
+import { useWide } from '../useWidth';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -99,7 +100,8 @@ export function SessionDetailScreen({
     <Screen
       title={session.title}
       parent={{ label: cls.name, testID: 'up-to-course-from-session', onPress: onOpenCourse }}
-      subtitle={session.date}
+      subtitle={`${session.date} · excused listen by ${session.dueDate}`}
+      width="list"
     >
       <SessionHeader session={session} isAdmin={isAdmin} />
       <AttendanceSection session={session} />
@@ -185,8 +187,13 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
   return (
     <Card>
       {error ? <Notice tone="error">{error}</Notice> : null}
-      <Text style={styles.meta}>Excused students listen by: {session.dueDate}</Text>
-      {session.notes ? <Text style={styles.notes}>{session.notes}</Text> : null}
+      {/* The listen-by date rides the heading line now — stating it again here
+          was the same sentence twice on one screen. */}
+      {session.notes ? (
+        <Text style={styles.notes}>{session.notes}</Text>
+      ) : (
+        <Text style={styles.meta}>No notes for this session.</Text>
+      )}
       <ConfirmDanger
         // A session with a recording is deleted by removing the recording first,
         // which is the deliberate order — otherwise attendance would vanish out
@@ -211,6 +218,7 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
 // ------------------------------------------------------------ attendance --
 
 function AttendanceSection({ session }: { session: SessionRow }) {
+  const wide = useWide();
   const roster = useRoster(session.courseId);
   const students = useStudents(true);
   const nameByUid = useMemo(() => {
@@ -282,10 +290,23 @@ function AttendanceSection({ session }: { session: SessionRow }) {
           <Empty>No students enrolled in this course yet.</Empty>
         ) : (
           <>
+            {/*
+              ON A WIDE SCREEN THIS IS A REGISTER, not a stack of cards.
+
+              Taking attendance is the teacher's daily job and the step the whole
+              product hangs off — nothing is granted to anybody until it is
+              submitted — so it is the screen most worth the width. Name above
+              control is right on a phone, where 320px cannot hold both; at
+              desktop width it doubles the height of a fourteen-student roster
+              for nothing and makes the reader's eye travel down two lines per
+              student instead of across one. Same markup, one flex direction.
+            */}
             {activeUids.map((uid) => (
-              <View key={uid} style={styles.rosterRow}>
-                <Text style={styles.rosterName}>{nameByUid.get(uid) ?? uid}</Text>
-                <View style={styles.segment}>
+              <View key={uid} style={[styles.rosterRow, wide ? styles.rosterRowWide : null]}>
+                <Text style={[styles.rosterName, wide ? styles.rosterNameWide : null]}>
+                  {nameByUid.get(uid) ?? uid}
+                </Text>
+                <View style={[styles.segment, wide ? styles.segmentWide : null]}>
                   {STATUSES.map((s) => {
                     const on = statusOf(uid) === s;
                     return (
@@ -666,8 +687,21 @@ const styles = StyleSheet.create({
   notes: { fontSize: 14, color: t.text.secondary, marginTop: spacing(2) },
   hint: { fontSize: 13, color: t.text.secondary },
   rosterRow: { marginTop: spacing(3) },
+  rosterRowWide: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(4),
+    marginTop: 0,
+    paddingVertical: spacing(2),
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: t.border.subtle,
+  },
   rosterName: { fontSize: 15, color: t.text.primary, marginBottom: spacing(1) },
+  rosterNameWide: { flex: 1, marginBottom: 0 },
   segment: { flexDirection: 'row', borderRadius: 8, borderWidth: 1, borderColor: t.border.strong, overflow: 'hidden' },
+  // Fixed, so every row's three states line up in a column the eye can run
+  // down. Sized to the widest label rather than to the roster.
+  segmentWide: { width: 330 },
   segBtn: { flex: 1, paddingVertical: spacing(2), alignItems: 'center', backgroundColor: t.bg.surface },
   segBtnOn: { backgroundColor: t.accent.base },
   segText: { fontSize: 13, fontWeight: '600', color: t.text.secondary },

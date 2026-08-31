@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   INSTITUTE_TIMEZONE,
@@ -10,15 +10,27 @@ import {
 import { Notice } from '../components/ui';
 import { Scrubber } from '../components/Scrubber';
 import { Transport } from '../components/Transport';
-import { usePlayback } from '../playback';
+import { openPlayback, playback, usePlayback } from '../playback';
 import { useCompletion, setCompleted } from '../completion';
 import { useListenerError } from '../liveQuery';
 import { useCohortName, type CourseRow } from '../structure';
 import type { RecordingRow } from '../recordings';
+import { useWide } from '../useWidth';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
 const RATES = [1, 1.25, 1.5, 2];
+
+/** What this screen shows before the app-wide session is about its recording. */
+const IDLE_VIEW = {
+  ready: false,
+  playing: false,
+  positionMs: 0,
+  listenedMs: 0,
+  rate: 1,
+  error: null,
+  now: null,
+} as const;
 
 /**
  * Listening to one recording.
@@ -50,11 +62,31 @@ export function PlayerScreen({
   const closed =
     studentUid !== null && dueDate !== null && isOverdue(dueDate, todayInZone(INSTITUTE_TIMEZONE));
   const allowed = canPlayFromCourse(cls) && !closed;
-  const { state, play, pause, seek, setRate } = usePlayback(
-    recording.id,
-    studentUid,
-    recording.courseId,
-  );
+  const session = usePlayback();
+  // The session is app-wide, so on the first render after arriving it may still
+  // describe the PREVIOUS recording. Read it only once it is about this one;
+  // otherwise the scrubber shows another lecture's position for a frame.
+  const state = session.now?.recordingId === recording.id ? session : IDLE_VIEW;
+  const wide = useWide();
+  const { play, pause, seek, setRate } = playback;
+  // Opening the session is an EFFECT, not a render-time call: this screen is one
+  // view onto app-wide playback, and re-entering it for something already
+  // playing must re-focus rather than restart. `openPlayback` is idempotent for
+  // the loaded recording, so a re-render costs nothing.
+  useEffect(() => {
+    if (!allowed) return;
+    openPlayback(
+      {
+        recordingId: recording.id,
+        title: recording.title,
+        courseName: cls.name,
+        durationMs: (recording.durationSec ?? 0) * 1000,
+        dueDate,
+      },
+      studentUid,
+      recording.courseId,
+    );
+  }, [allowed, recording.id, recording.title, recording.durationSec, recording.courseId, cls.name, studentUid, dueDate]);
   // While the scrubber is being dragged it reports the previewed position; the
   // time readouts follow the thumb rather than the still-advancing playhead.
   const [scrubMs, setScrubMs] = useState<number | null>(null);
@@ -82,10 +114,26 @@ export function PlayerScreen({
   const listened = listenedFraction(state.listenedMs, recording.durationSec);
 
   return (
-    <ScrollView style={styles.canvas} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.canvas}
+      contentContainerStyle={[styles.content, wide ? styles.contentWide : null]}
+    >
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {state.error ? <Notice tone="error">{state.error}</Notice> : null}
 
+      {/*
+        TWO COLUMNS ON A WIDE SCREEN.
+
+        A phone has to stack this: the transport owns the first screenful and
+        everything else — the listening bar, the completion control, the shared
+        notes — sits below the fold. That ordering is right when there is one
+        column and wrong when there are two: on a laptop the notes a teacher
+        wrote for the session end up two scrolls below a play button, in a window
+        with 700px of unused space beside it. Side by side, the whole recording
+        is one screen and nothing is hidden behind a scroll.
+      */}
+      <View style={wide ? styles.columns : undefined}>
+      <View style={wide ? styles.columnMain : undefined}>
       <Hero recording={recording} courseName={cls.name} cohortName={cohortName} />
 
       <Scrubber
@@ -132,9 +180,11 @@ export function PlayerScreen({
       </View>
 
       {!state.ready && !state.error ? <Text style={styles.preparing}>Preparing…</Text> : null}
+      </View>
 
-      {/* ---- below the fold ---- */}
-      <View style={styles.divider} />
+      {/* ---- below the fold on a phone; beside it on a laptop ---- */}
+      <View style={wide ? styles.columnSide : undefined}>
+      {wide ? null : <View style={styles.divider} />}
 
       {/* Staff reach this player to preview/reference audio; there is no student
           to track, so the listening bar and completion control are student-only.
@@ -178,7 +228,8 @@ export function PlayerScreen({
           {studentUid ? `Available to listen until ${dueDate}` : `Due ${dueDate}`}
         </Text>
       ) : null}
-
+      </View>
+      </View>
     </ScrollView>
   );
 }
@@ -292,6 +343,12 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
+  // Wider than the phone column and still capped: two 480px columns plus a
+  // gutter. Past that the notes run to line lengths nobody reads.
+  contentWide: { maxWidth: 1060, paddingHorizontal: spacing(8), paddingTop: spacing(7) },
+  columns: { flexDirection: 'row', gap: spacing(8), alignItems: 'flex-start' },
+  columnMain: { flex: 1, minWidth: 0 },
+  columnSide: { flex: 1, minWidth: 0 },
   hero: {
     backgroundColor: t.bg.sage,
     borderRadius: 16,

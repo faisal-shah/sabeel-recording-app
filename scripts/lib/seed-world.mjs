@@ -1,0 +1,493 @@
+/**
+ * THE SEEDED WORLD — one definition, used by every suite that needs one.
+ *
+ * Extracted from `screens-e2e.mjs`, which built it inline. A second suite
+ * needing the same world is exactly the moment that stops being fine: two
+ * copies of a seed drift, and the way they drift is that one of them stops
+ * covering a state while still reporting a pass. `capture-design.mjs` is that
+ * second caller.
+ *
+ * The content is chosen to BREAK layouts and to cover every state a screen can
+ * be in — the longest name a real cohort would write, a roster longer than one
+ * screen, an empty cohort, an archived one, a session whose attendance was
+ * never taken, a draft, a recording that needs attention — not to look tidy.
+ * Read the comments inside: most of them record a bug this shape once caught.
+ *
+ * Everything goes through the Admin SDK except staff accounts, which cannot be
+ * minted that way (see `provisionStaff`).
+ */
+import { createRequire } from 'node:module';
+
+import { EMULATOR_PROJECT_ID as PROJECT } from './project.mjs';
+
+const require = createRequire(new URL('../../functions/package.json', import.meta.url));
+const admin = require('firebase-admin');
+
+
+const DAY = 86_400_000;
+const now = Date.now();
+const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
+
+/**
+ * WAITING FOR THE PORT IS NOT WAITING FOR READINESS.
+ *
+ * `emulators:exec` starts this script once it believes the suite is up, and the
+ * functions emulator in particular accepts connections before it has registered
+ * anything — the trap docs/DEV-TOOLING.md records. The browser pays for that
+ * gap, not this script: the first dev sign-in came back
+ * `auth/network-request-failed`, the pending screen never arrived, and the run
+ * died 60 seconds later pointing at a locator. So poll the two services this
+ * suite actually drives until each answers for real.
+ */
+async function waitForEmulators() {
+  /*
+   * READ-ONLY probes, deliberately.
+   *
+   * The obvious readiness check for the functions emulator — call a known
+   * function and wait for it to stop 404ing — cannot be used here: the only
+   * unauthenticated one is `bootstrapAdmin`, and calling it PROMOTES THE FIRST
+   * ADMIN. A readiness check with a side effect on the thing being tested is
+   * not a readiness check. The functions emulator is covered instead by
+   * `emulators:exec`, which does not run this script until every emulator has
+   * started, and by `free-emulator-ports.sh` at the top of the runner, which is
+   * what rules out the half-dead leftover the poll-a-callable rule exists for.
+   */
+  const probes = [
+    ['auth', `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/emulator/v1/projects/${PROJECT}/config`],
+    ['firestore', `http://${process.env.FIRESTORE_EMULATOR_HOST}/`],
+  ];
+  for (const [what, url] of probes) {
+    let ok = false;
+    for (let i = 0; i < 120 && !ok; i += 1) {
+      ok = await fetch(url).then((r) => r.ok, () => false);
+      if (!ok) await new Promise((r) => setTimeout(r, 500));
+    }
+    if (!ok) throw new Error(`the ${what} emulator never became ready at ${url}`);
+  }
+}
+/**
+ * Start from nothing.
+ *
+ * Leftover emulator state silently SKIPS the paths that matter — a previous run
+ * leaves an approved admin behind and the next one sails past the pending gate
+ * while still reporting success. Safe because the caller's runner owns the
+ * emulator for the length of its run; nothing else is looking at it.
+ *
+ * A STEP THE CALLER TAKES, not a module side effect. Importing this file used
+ * to wipe the emulator, which is the kind of thing that is fine until something
+ * imports it for a constant.
+ */
+export async function resetEmulators() {
+  await waitForEmulators();
+  for (const [what, url] of [
+    ['firestore', `http://${process.env.FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/${PROJECT}/databases/(default)/documents`],
+    ['auth', `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/emulator/v1/projects/${PROJECT}/accounts`],
+  ]) {
+    const r = await fetch(url, { method: 'DELETE' });
+    if (!r.ok) throw new Error(`could not clear ${what}: ${r.status}`);
+  }
+}
+
+/**
+ * A real, decodable audio object — 8 kHz 8-bit mono PCM, generated here.
+ *
+ * GENERATED rather than committed (this repo never adds a binary) and WAV rather
+ * than the M4A `web-e2e.mjs` makes with ffmpeg, because ffmpeg is not a
+ * dependency of this suite and a CI runner that lacks it would fail on the
+ * fixture rather than on a layout. It has to actually decode: the transport
+ * renders disabled until the media reports a duration, and a sweep of disabled
+ * controls is a photograph of a state no student ever sees.
+ */
+function wav(seconds) {
+  const rate = 8000;
+  const samples = rate * seconds;
+  const buf = Buffer.alloc(44 + samples);
+  buf.write('RIFF', 0);
+  buf.writeUInt32LE(36 + samples, 4);
+  buf.write('WAVEfmt ', 8);
+  buf.writeUInt32LE(16, 16); // PCM header size
+  buf.writeUInt16LE(1, 20); // PCM
+  buf.writeUInt16LE(1, 22); // mono
+  buf.writeUInt32LE(rate, 24);
+  buf.writeUInt32LE(rate, 28); // byte rate
+  buf.writeUInt16LE(1, 32); // block align
+  buf.writeUInt16LE(8, 34); // bits per sample
+  buf.write('data', 36);
+  buf.writeUInt32LE(samples, 40);
+  for (let i = 0; i < samples; i += 1) {
+    // A quiet tone rather than digital silence: some decoders shortcut a
+    // constant stream, and then `durationSec` and the media disagree.
+    buf[44 + i] = 128 + Math.round(20 * Math.sin((i / rate) * 2 * Math.PI * 220));
+  }
+  return buf;
+}
+const AUDIO_SECONDS = 120;
+const AUDIO = wav(AUDIO_SECONDS);
+/**
+ * Only ever the VISIBLE match.
+ *
+ * React Navigation keeps the previous screen MOUNTED but hidden, so a locator
+ * that does not say "visible" can resolve to a node on the screen underneath —
+ * one that will never become clickable. Playwright then retries for its whole
+ * timeout against an element that cannot change, and the run dies at a step with
+ * nothing wrong with it, roughly one run in two.
+ *
+ * Two details make it worse than it sounds. `getByTestId` is a CSS attribute
+ * selector, so unlike a ROLE selector it does not skip `display:none` subtrees
+ * the way a screen reader does — which is why a testID present on both screens
+ * is ambiguous rather than obviously wrong. And `.first()` / `.last()` do not
+ * mean "the one on screen"; they mean document order, which is exactly the wrong
+ * question. Found in the sibling time-tracker's flow suite, at clean HEAD.
+ *
+ * So every locator in this file goes through one of these three. There are no
+ * bare `page.getBy*` calls, deliberately.
+ */
+const byId = (page, id) => page.getByTestId(id).filter({ visible: true }).first();
+const byName = (page, name) =>
+  page.getByRole('button', { name, exact: true }).filter({ visible: true }).first();
+/** By LABEL, not by role: the header Back is a link on web (see `escapes`). */
+const backButton = (page) =>
+  page.getByLabel(/(^|,\s*)(go\s+)?back$/i).filter({ visible: true }).first();
+
+async function tap(locator, timeout = 30_000) {
+  await locator.waitFor({ timeout });
+  await locator.click();
+}
+
+/**
+ * Build the world. Returns the handles a suite needs to drive it: who to sign
+ * in as, which ids to navigate to, and which sessions cover which state.
+ */
+export async function seedWorld({ db, auth, browser, base }) {
+  /**
+   * Mint a staff account THROUGH THE APP, then approve it out of band.
+   *
+   * Staff are Google identities and the Admin SDK cannot create one, so the dev
+   * sign-in row is the only way to produce an account the domain gate would
+   * accept. `onUserCreate` writes the pending `staffUsers` document; this waits
+   * for it, then does what an admin's approval does — claims first, then the
+   * mirror, in that order, because the token is what rules trust.
+   */
+  async function provisionStaff(testId, email, role) {
+    const staffDoc = async () => {
+      const snap = await db.collection('staffUsers').where('email', '==', email).get();
+      return snap.empty ? '' : snap.docs[0].id;
+    };
+
+    /*
+     * Waits for the DOCUMENT, not for the pending screen, and tries twice.
+     *
+     * The document is what this function is for, and it is the only unambiguous
+     * evidence: the app shows "Setting up your account" and "Waiting for
+     * approval" at different moments of the same successful path, so a wait on
+     * one text is a race against which one is up. Twice because the first
+     * sign-in of a run meets a backend that has only just come up — that came
+     * back `auth/network-request-failed`, which the app REPORTS to the user
+     * rather than throwing at the caller, so there is nothing to catch here,
+     * only a screen that never changes.
+     */
+    let uid = '';
+    for (let attempt = 1; attempt <= 2 && !uid; attempt += 1) {
+      const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+      const page = await ctx.newPage();
+      await page.goto(base, { waitUntil: 'domcontentloaded' });
+      await tap(byId(page, testId), 60_000);
+      for (let i = 0; i < 60 && !uid; i += 1) {
+        uid = await staffDoc();
+        if (!uid) await new Promise((r) => setTimeout(r, 500));
+      }
+      await ctx.close();
+      if (!uid) console.log(`  ..  ${email} never provisioned; signing in again`);
+    }
+    if (!uid) throw new Error(`${email} was never provisioned by onUserCreate`);
+    await auth.setCustomUserClaims(uid, { role, status: 'active' });
+    await db.collection('staffUsers').doc(uid).update({ role, status: 'active', approvedAt: now });
+    return uid;
+  }
+
+  const adminUid = await provisionStaff('dev-signin-first-admin', 'faisal.shah@oursabeel.com', 'admin');
+  const managerUid = await provisionStaff('dev-signin-manager', 'manager@oursabeel.com', 'manager');
+
+  /**
+   * A roster LONGER THAN ONE SCREEN, because the bug being looked for is what
+   * happens at the bottom of a list, and eight rows all fit at every width.
+   *
+   * The first name is the longest one a real roster would carry — a full Arabic
+   * name with a nisba — and its address is the longest with it. Rows in this app
+   * pin the name beside its actions and forbid both from shrinking (`rowItem`,
+   * `rowHeadPinned`), which is correct and is also precisely the shape that
+   * carries a control off the right edge when the name is long enough.
+   */
+  const NAMES = [
+    'Abd al-Rahman ibn Muhammad al-Shinqiti',
+    'Fatima Ahmed',
+    'Bilal Khan',
+    'Omar Siddiqui',
+    'Ayesha Rahman',
+    'Yusuf Ali',
+    'Maryam Iqbal',
+    'Zainab Hassan',
+    'Ibrahim Malik',
+    'Khadija Noor',
+    'Sumayya Patel',
+    'Hamza Chaudhry',
+    'Aminah Bello',
+    'Idris Abubakar',
+  ];
+  const STUDENT_PASSWORD = 'HikamStudent1';
+  const students = [];
+  for (const [i, name] of NAMES.entries()) {
+    const email = `${name.toLowerCase().replace(/[^a-z]+/g, '.')}@example.com`;
+    // The last one is DISABLED so the Students screen's collapsed "Disabled"
+    // section has something in it — an empty collapsible documents nothing.
+    const status = i === NAMES.length - 1 ? 'disabled' : 'active';
+    /*
+     * Created WITHOUT a password, then given one.
+     *
+     * Not a detail: `onUserCreate` reads the provider list to tell the two
+     * populations apart, and a `password` provider AT CREATION means a
+     * client-side sign-up, which it deletes. `createStudent` makes a
+     * password-less account precisely so the student can set their own from the
+     * emailed link — and a password-less Admin-SDK user has EMPTY provider data,
+     * which is the shape the trigger ignores. Passing the password to
+     * `createUser` had every student deleted moments after it was made, exactly
+     * as it once did in production.
+     */
+    const u = await auth.createUser({ email, displayName: name });
+    await new Promise((r) => setTimeout(r, 250));
+    await auth.updateUser(u.uid, { password: STUDENT_PASSWORD, emailVerified: true });
+    await auth.setCustomUserClaims(u.uid, { role: 'student', status });
+    await db.collection('students').doc(u.uid).set({
+      displayName: name,
+      email,
+      role: 'student',
+      status,
+      createdAt: now - 40 * DAY,
+      createdBy: adminUid,
+    });
+    students.push({ uid: u.uid, name, email, status });
+  }
+  /** The student the student tour signs in as: on the long-named row, so their own
+   *  screens carry the longest strings too. */
+  const STUDENT = students[0];
+
+  const COHORT = 'sw-autumn';
+  const COURSE = 'sw-hikam';
+  /** The longest course name the institute would really write, and it is not a
+   *  stress test for its own sake: it is what a section-and-day title looks like. */
+  const LONG_COURSE = 'sw-arabic';
+  const LONG_COURSE_NAME = 'Arabic I & Qur’anic Morphology — Tuesday Evening Section';
+
+  await db.collection('cohorts').doc(COHORT).set({
+    name: 'Autumn 2026', archived: false, createdAt: now - 45 * DAY, createdBy: adminUid,
+  });
+  /** An EMPTY cohort. Reachable in ordinary use — a term is created before its
+   *  courses are — and the only way to photograph the Courses screen's empty
+   *  state, which no amount of seeded content will show. */
+  await db.collection('cohorts').doc('sw-empty').set({
+    name: 'Spring 2027 — Evening Intensive', archived: false, createdAt: now - 2 * DAY, createdBy: adminUid,
+  });
+  /** An ARCHIVED cohort, so the Cohorts screen's collapsed archive section has a
+   *  row in it. */
+  await db.collection('cohorts').doc('sw-past').set({
+    name: 'Spring 2026', archived: true, createdAt: now - 220 * DAY, createdBy: adminUid,
+  });
+
+  const course = (id, cohortId, name, extra = {}) =>
+    db.collection('courses').doc(id).set({
+      cohortId,
+      name,
+      archived: false,
+      effectiveActive: true,
+      archivedAccess: false,
+      managerUids: [],
+      createdAt: now - 45 * DAY,
+      createdBy: adminUid,
+      ...extra,
+    });
+  // The manager is scoped to ONE course, which is the whole of their access —
+  // cohort membership grants nothing. Their tour is the read of that.
+  await course(COURSE, COHORT, 'Hikam Foundations', { managerUids: [managerUid] });
+  await course(LONG_COURSE, COHORT, LONG_COURSE_NAME);
+  await course('sw-past-course', 'sw-past', 'Seerah Survey', { effectiveActive: false });
+
+  for (const s of students) {
+    await db.collection('enrollments').doc(`${s.uid}_${COURSE}`).set({
+      studentUid: s.uid, courseId: COURSE, cohortId: COHORT,
+      active: true, enrolledAt: now - 40 * DAY, enrolledBy: adminUid,
+    });
+  }
+  for (const s of students.slice(0, 4)) {
+    await db.collection('enrollments').doc(`${s.uid}_${LONG_COURSE}`).set({
+      studentUid: s.uid, courseId: LONG_COURSE, cohortId: COHORT,
+      active: true, enrolledAt: now - 40 * DAY, enrolledBy: adminUid,
+    });
+  }
+
+  /**
+   * One session, its recording, its attendance snapshot and the grants that fall
+   * out of it — the same order the app builds them in.
+   *
+   * Being EXCUSED is the whole of a student's entitlement, so a seed that marked
+   * everyone present would photograph every student screen empty. `present` and
+   * `absent` are here because the ledger has a section for each.
+   */
+  async function seedSession(id, recId, title, opts) {
+    const { courseId = COURSE, daysAgo, dueOffset, status = 'published', notes = '',
+      roster = students, present = 0, absent = [], attention = null } = opts;
+    const date = iso(now - daysAgo * DAY);
+    // Never null: the due date is the day access closes, so a session cannot be
+    // without one. A past one is planted directly, which no callable will do —
+    // a deadline may only BECOME past by the passage of time.
+    const dueDate = iso(now + dueOffset * DAY);
+    /*
+     * The demo student is ALWAYS excused, whoever else is present.
+     *
+     * Being excused is the whole of a student's entitlement, so the person the
+     * student tour signs in as has to be excused everywhere or their home, their
+     * class record and every ledger row about them are empty — and the sweep
+     * would photograph a set of empty states and call it coverage. The first
+     * version of this seed marked by position and put them present in all five
+     * sessions, which is exactly what happened.
+     */
+    const attendance = opts.attendance === null ? null : Object.fromEntries(
+      roster.map((s, i) => [
+        s.uid,
+        absent.includes(s.uid) ? 'absent'
+          : s.uid === STUDENT.uid ? 'excused'
+          : i <= present ? 'present'
+          : 'excused',
+      ]),
+    );
+    const submittedAt = attendance ? now - daysAgo * DAY : null;
+    const hasAudio = status !== 'draft' && status !== 'needsAttention';
+    const audioPath = `recordings/${recId}/audio.wav`;
+    if (hasAudio) {
+      await admin.storage().bucket().file(audioPath).save(AUDIO, { contentType: 'audio/wav' });
+    }
+
+    await db.collection('sessions').doc(id).set({
+      courseId, cohortId: COHORT, date, title, dueDate, notes,
+      recordingId: recId, attendance: attendance ?? {}, attendanceSubmittedAt: submittedAt,
+      archived: false, createdAt: now - daysAgo * DAY, createdBy: adminUid, updatedAt: now - daysAgo * DAY,
+    });
+    if (recId) {
+      await db.collection('recordings').doc(recId).set({
+        sessionId: id, courseId, cohortId: COHORT, title, notes, date, status, source: 'manual',
+        audioPath: hasAudio ? audioPath : null,
+        durationSec: hasAudio ? AUDIO_SECONDS : null,
+        sizeBytes: hasAudio ? AUDIO.length : null,
+        createdAt: now - daysAgo * DAY, createdBy: adminUid, updatedAt: now - daysAgo * DAY,
+        ...(status === 'published' ? { publishedAt: now - daysAgo * DAY } : {}),
+        ...(attention ? { attentionReason: attention } : {}),
+      });
+    }
+    if (attendance) {
+      for (const [uid, mark] of Object.entries(attendance)) {
+        // A student cannot read a session, so their own mark is projected onto a
+        // document of their own. Written here because the sweep's world is seeded
+        // rather than submitted through the callable that normally does it.
+        await db.collection('attendanceRecords').doc(`${uid}_${id}`).set({
+          studentUid: uid, sessionId: id, courseId, cohortId: COHORT,
+          date, title, status: mark, submittedAt,
+        });
+        if (mark === 'excused' && status === 'published') {
+          await db.collection('assignments').doc(`${uid}_${recId}`).set({
+            studentUid: uid, recordingId: recId, sessionId: id, courseId, cohortId: COHORT,
+            dueDate, active: true, assignedAt: submittedAt, assignedBy: 'system',
+          });
+        }
+      }
+    }
+    return { id, recId, dueDate, title };
+  }
+
+  /**
+   * Five sessions covering every bucket the student home groups by — missed, due
+   * soon, upcoming, completed — because the home's layout is those four group
+   * headings and a sweep that saw one of them saw a quarter of the screen.
+   */
+  const missed = await seedSession('sw-s1', 'sw-s1r',
+    'Session 1 — Introduction to the Hikam of Ibn ʿAtaʾillah, and the Method of the Commentary',
+    { daysAgo: 28, dueOffset: -9, present: 6, absent: [students[6].uid],
+      notes: 'Read the first ten hikam before next week. The commentary we are using is the ' +
+        'one by al-Shurnubi; a scan is in the shared folder, and the pages for this session ' +
+        'are 1 through 24. Bring your questions about the second hikma in particular.' });
+  const dueSoon = await seedSession('sw-s2', 'sw-s2r', 'Session 2 — Knowledge and Certainty',
+    { daysAgo: 5, dueOffset: 3, present: 5 });
+  // Not bound to anything: nothing navigates to it by name. It is here so the
+  // student home has an "Upcoming" group at all — the four bucket headings ARE
+  // that screen's layout, and a home missing one is a quarter untested.
+  await seedSession('sw-s3', 'sw-s3r', 'Session 3 — Patience in Hardship',
+    { daysAgo: 2, dueOffset: 20, present: 4 });
+  const done = await seedSession('sw-s4', 'sw-s4r', 'Session 4 — Sincerity of Intention',
+    { daysAgo: 12, dueOffset: 14, present: 3 });
+  /** Published, attendance NOT taken: nobody is granted anything. The state the
+   *  `attendanceMissing` notification exists for, and a real staff screen. */
+  await seedSession('sw-s5', 'sw-s5r', 'Session 5 — Reliance and Trust',
+    { daysAgo: 1, dueOffset: 7, attendance: null });
+  /** A session with NO RECORDING — the only route to the Zoom import screen. */
+  await db.collection('sessions').doc('sw-s6').set({
+    courseId: COURSE, cohortId: COHORT, date: iso(now), title: 'Session 6 — Today (recording pending)',
+    dueDate: iso(now + 7 * DAY), notes: '', recordingId: null, attendance: {},
+    attendanceSubmittedAt: null, archived: false, createdAt: now, createdBy: adminUid, updatedAt: now,
+  });
+  await seedSession('sw-a1', 'sw-a1r', 'Lesson 1 — The Arabic Alphabet',
+    { courseId: LONG_COURSE, daysAgo: 9, dueOffset: 5, roster: students.slice(0, 4), present: 2 });
+
+  /** The demo student completed one and part-listened another, so both the ledger
+   *  and their own home have every row type on them. */
+  await db.collection('completions').doc(`${STUDENT.uid}_${done.recId}`).set({
+    studentUid: STUDENT.uid, recordingId: done.recId, courseId: COURSE,
+    completed: true, completedAt: now - 3 * DAY, updatedAt: now - 3 * DAY,
+  });
+  for (const [rid, frac] of [[done.recId, 1], [dueSoon.recId, 0.6], [missed.recId, 0.2]]) {
+    await db.collection('listeningProgress').doc(`${STUDENT.uid}_${rid}`).set({
+      studentUid: STUDENT.uid, recordingId: rid, courseId: COURSE,
+      positionMs: AUDIO_SECONDS * 1000 * frac, listenedMs: AUDIO_SECONDS * 1000 * frac,
+      updatedAt: now - 2 * DAY,
+    });
+  }
+  /** Two more students complete, so the ledger's filters are not all one row. */
+  for (const s of students.slice(1, 5)) {
+    await db.collection('completions').doc(`${s.uid}_${dueSoon.recId}`).set({
+      studentUid: s.uid, recordingId: dueSoon.recId, courseId: COURSE,
+      completed: true, completedAt: now - DAY, updatedAt: now - DAY,
+    });
+  }
+  /** An override already in place, so the ledger row that carries one — an extra
+   *  line of raspberry text above the actions — is toured, not just the plain row. */
+  await db.collection('completionOverrides').doc(`${students[5].uid}_${dueSoon.recId}`).set({
+    studentUid: students[5].uid, recordingId: dueSoon.recId, courseId: COURSE, completed: true,
+    reason: 'Listened on a borrowed phone; confirmed in person after class on the 14th.',
+    overriddenBy: adminUid, at: now - DAY,
+  });
+
+  for (const [i, action] of ['createCourse', 'submitAttendance', 'createRecording',
+    'setRecordingStatus', 'overrideCompletion', 'createStudent'].entries()) {
+    await db.collection('auditLog').add({
+      at: now - i * 3600_000, actorUid: adminUid, actorRole: 'admin', action,
+      courseId: i % 2 ? COURSE : null,
+      targets: { courseId: COURSE, recordingId: dueSoon.recId },
+      detail: { note: 'Seeded so the audit list has rows at every width.' },
+    });
+  }
+
+
+  return {
+    adminUid,
+    managerUid,
+    students,
+    STUDENT,
+    STUDENT_PASSWORD,
+    COHORT,
+    COURSE,
+    LONG_COURSE,
+    LONG_COURSE_NAME,
+    missed,
+    dueSoon,
+    done,
+  };
+}
+
+export { byId, byName, backButton, tap };

@@ -41,13 +41,10 @@ WEB_PORT="${SWEEP_WEB_PORT:-61110}"
 # ABSOLUTE: the dev server is started from a subshell that cd's into app/,
 # while the readiness grep below runs from the repo root. A relative path
 # would mean two different files and a readiness check that never matches.
-WEB_LOG="$PWD/shots/expo-screens-e2e.log"
+WEB_LOG="$PWD/shots/expo-capture-design.log"
 mkdir -p "$(dirname "$WEB_LOG")"
 : > "$WEB_LOG"
 export E2E_BASE="http://127.0.0.1:${WEB_PORT}/"
-# Passed straight through to the harness; see SWEEP_NAV there. Temporary, and it
-# goes with the design decision.
-export SWEEP_NAV="${SWEEP_NAV:-}"
 
 bash scripts/free-emulator-ports.sh
 
@@ -143,4 +140,4 @@ fi
 firebase emulators:exec \
   --project demo-sabeel-recordings \
   --only firestore,auth,storage,functions \
-  "node scripts/screens-e2e.mjs"
+  "node scripts/capture-design.mjs"

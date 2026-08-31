@@ -78,6 +78,20 @@ export async function createStudent(input: {
   }
 }
 
+/**
+ * A signed-in student asks for their OWN password reset link.
+ *
+ * Same Firebase call as the staff-initiated resend, and deliberately a separate
+ * export: this one is reached from the student's own More menu, and the two
+ * would otherwise read as one function serving two different permissions. It is
+ * first-party — an emailed link, no third-party login service — so it engages
+ * nothing under App Store Guideline 4.8, and it creates no account, so it
+ * engages nothing under 5.1.1(v) either.
+ */
+export async function sendMyPasswordReset(email: string): Promise<void> {
+  await sendPasswordResetEmail(auth, email);
+}
+
 /** Resend the set-password link for an existing student. */
 export async function resendPasswordSetup(email: string): Promise<void> {
   await sendPasswordResetEmail(auth, email);

@@ -63,3 +63,22 @@ export const SIGNED_URL_TTL_MS = 12 * 60 * 60 * 1000;
  * user.
  */
 export const SIGNED_URL_REFRESH_MS = 60 * 60 * 1000;
+
+/**
+ * The public privacy policy, served as a STATIC page by Firebase Hosting
+ * outside the authenticated app.
+ *
+ * Required in two places and for two different reasons: in the store listing,
+ * and reachable from INSIDE the app (Apple 5.1.1(i) — store metadata alone does
+ * not satisfy it). It must answer an anonymous fetch, because reviewers and
+ * store crawlers do not sign in and a client-side route behind auth looks empty
+ * to them.
+ *
+ * Absolute, not a relative path: it is opened from the native apps as well as
+ * the browser, where there is no origin to be relative to.
+ */
+export const PRIVACY_URL = 'https://recordings.oursabeel.com/privacy';
+
+/** Where an account-deletion request goes. Named in the policy, per the store
+ *  rules — one address across all three Sabeel apps. */
+export const PRIVACY_CONTACT = 'privacy@oursabeel.com';

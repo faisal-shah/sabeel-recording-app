@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
+  AddAction,
   Button,
   Card,
   Empty,
   Field,
+  Grid,
   Notice,
   Screen,
   SectionTitle,
   StatusChip,
+  useAddAction,
 } from '../components/ui';
 import {
   createCourse,
@@ -22,6 +25,45 @@ import { getTheme, spacing } from '../theme';
 const t = getTheme();
 
 /** Shared with the cohort list, which shows the same count per cohort. */
+/** The create form, in the sheet the header action opens. */
+function AddCourse({ cohortId }: { cohortId: string }) {
+  const close = useAddAction();
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <>
+      <Field
+        testID="course-name"
+        label="Name"
+        value={name}
+        onChangeText={setName}
+        autoCapitalize="words"
+        placeholder="Hikam Foundations"
+      />
+      {error ? <Notice tone="error">{error}</Notice> : null}
+      <Button
+        testID="course-create"
+        label="Create course"
+        busy={busy}
+        disabled={!name.trim()}
+        block
+        onPress={() => {
+          setBusy(true);
+          setError(null);
+          void createCourse({ cohortId, name: name.trim() })
+            .then(() => {
+              setName('');
+              close();
+            })
+            .catch((e: Error) => setError(e.message))
+            .finally(() => setBusy(false));
+        }}
+      />
+    </>
+  );
+}
+
 export function courseLabel(n: number): string {
   return n === 1 ? '1 course' : `${n} courses`;
 }
@@ -45,7 +87,6 @@ export function CoursesScreen({
   const cohortState = useCohortState(cohortId);
   const cohort = cohortState.value;
   const courses = useCoursesInCohort(cohortId);
-  const [name, setName] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const archived = cohort?.archived ?? false;
@@ -78,7 +119,17 @@ export function CoursesScreen({
   }
 
   return (
-    <Screen subtitle={cohort.name} status={archived ? 'archived' : 'active'}>
+    <Screen
+      title={cohort.name}
+      subtitle="Courses in this cohort"
+      status={archived ? 'archived' : 'active'}
+      width="list"
+      actions={
+        <AddAction testID="courses-add" label="Add a course" title="Add a course">
+          <AddCourse cohortId={cohortId} />
+        </AddAction>
+      }
+    >
       {error ? <Notice tone="error">{error}</Notice> : null}
       {archived ? (
         <Notice tone="info">
@@ -111,35 +162,16 @@ export function CoursesScreen({
         />
       </Card>
 
-      <SectionTitle>Add a course</SectionTitle>
-      <Card>
-        <Field
-          testID="course-name"
-          label="Name"
-          value={name}
-          onChangeText={setName}
-          autoCapitalize="words"
-          placeholder="Hikam Foundations"
-        />
-        <Button
-          testID="course-create"
-          label="Create course"
-          busy={busy === 'create'}
-          disabled={!name.trim()}
-          onPress={() =>
-            void run('create', async () => {
-              await createCourse({ cohortId, name: name.trim() });
-              setName('');
-            })
-          }
-        />
-      </Card>
 
       <SectionTitle>Courses ({courses.length})</SectionTitle>
       {courses.length === 0 ? (
         <Empty>No courses in this cohort yet.</Empty>
       ) : (
-        courses.map((c) => <CourseCard key={c.id} cls={c} onOpen={onOpen} />)
+        <Grid min={320}>
+          {courses.map((c) => (
+            <CourseCard key={c.id} cls={c} onOpen={onOpen} />
+          ))}
+        </Grid>
       )}
     </Screen>
   );

@@ -95,8 +95,19 @@ const require = createRequire(new URL('../functions/package.json', import.meta.u
 const admin = require('firebase-admin');
 import { EMULATOR_PORTS, WEB_PORTS } from './lib/ports.mjs';
 import { EMULATOR_PROJECT_ID, EMULATOR_STORAGE_BUCKET } from './lib/project.mjs';
+import { backButton, byId, byName, resetEmulators, seedWorld, tap } from './lib/seed-world.mjs';
 
-const BASE = process.env.E2E_BASE ?? `http://127.0.0.1:${WEB_PORTS.sweep}/`;
+/**
+ * WHICH NAVIGATION DESIGN TO SWEEP.
+ *
+ * Temporary, and it goes when the design decision is made. Three proposals
+ * share one build behind `?nav=a|b|c` (app/src/design/variant.ts) so they can be
+ * compared against identical data — and a design nobody has swept is a folder
+ * of screenshots, not evidence. `SWEEP_NAV=b bash scripts/screens-e2e.sh` runs
+ * the whole suite against proposal B.
+ */
+const NAV = process.env.SWEEP_NAV ? `?nav=${process.env.SWEEP_NAV}` : '';
+const BASE = (process.env.E2E_BASE ?? `http://127.0.0.1:${WEB_PORTS.sweep}/`) + NAV;
 const ROOT = resolve(import.meta.dirname, '..');
 const SHOTS = resolve(ROOT, 'shots', 'screens');
 const PROJECT = EMULATOR_PROJECT_ID;
@@ -188,6 +199,26 @@ const CONTENT_MAX_WIDTH = Number(themeSrc.match(/CONTENT_MAX_WIDTH\s*=\s*(\d+)/)
 if (!CONTENT_MAX_WIDTH) throw new Error('CONTENT_MAX_WIDTH is no longer in app/src/theme/index.ts');
 
 /**
+ * THE CAPS A SCREEN MAY CHOOSE FROM — read out of the theme, not restated.
+ *
+ * There used to be one number and it was the whole of the app's responsive
+ * behaviour. A desktop layout needs two, because a reading column and a card
+ * grid want opposite things from a 1500px window: prose capped for line length,
+ * collections given the room. So a screen declares which kind it is
+ * (`Screen width="read" | "list" | "full"`) and this check accepts any of the
+ * declared maxima rather than a single one.
+ *
+ * That is weaker than the old check by exactly one bit — it can no longer tell
+ * a list screen that claimed the wrong cap — and it is not weaker in the way
+ * that matters: a column past EVERY cap, or one that fails to centre, still
+ * fails. The alternative was for the sweep to know which screen is which kind,
+ * which is the restatement this file exists to avoid.
+ */
+const LIST_MAX_WIDTH = Number(themeSrc.match(/list:\s*(\d+)/)?.[1]);
+if (!LIST_MAX_WIDTH) throw new Error('LAYOUT_WIDTHS.list is no longer in app/src/theme/index.ts');
+const COLUMN_CAPS = [CONTENT_MAX_WIDTH, LIST_MAX_WIDTH];
+
+/**
  * Widths chosen to STRADDLE the breakpoint, not to look thorough: a bug on one
  * side of it is invisible from the other. One narrow phone, one ordinary phone,
  * one exactly at the cap, one just past it, one desktop.
@@ -209,451 +240,20 @@ admin.initializeApp({ projectId: PROJECT, storageBucket: BUCKET });
 const db = admin.firestore();
 const auth = admin.auth();
 
-// ---- the world ------------------------------------------------------------
-
-const DAY = 86_400_000;
-const now = Date.now();
-const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
+// ---- the world -----------------------------------------------------------
 
 /**
- * WAITING FOR THE PORT IS NOT WAITING FOR READINESS.
- *
- * `emulators:exec` starts this script once it believes the suite is up, and the
- * functions emulator in particular accepts connections before it has registered
- * anything — the trap docs/DEV-TOOLING.md records. The browser pays for that
- * gap, not this script: the first dev sign-in came back
- * `auth/network-request-failed`, the pending screen never arrived, and the run
- * died 60 seconds later pointing at a locator. So poll the two services this
- * suite actually drives until each answers for real.
+ * SEEDED ONCE, IN ONE PLACE. `lib/seed-world.mjs` owns the fixture; this suite
+ * and `capture-design.mjs` both drive it. It used to be built inline here, and
+ * the moment a second suite needed the same world that stopped being tenable —
+ * two copies of a seed drift, and the way they drift is that one of them
+ * quietly stops covering a state while still reporting a pass.
  */
-async function waitForEmulators() {
-  /*
-   * READ-ONLY probes, deliberately.
-   *
-   * The obvious readiness check for the functions emulator — call a known
-   * function and wait for it to stop 404ing — cannot be used here: the only
-   * unauthenticated one is `bootstrapAdmin`, and calling it PROMOTES THE FIRST
-   * ADMIN. A readiness check with a side effect on the thing being tested is
-   * not a readiness check. The functions emulator is covered instead by
-   * `emulators:exec`, which does not run this script until every emulator has
-   * started, and by `free-emulator-ports.sh` at the top of the runner, which is
-   * what rules out the half-dead leftover the poll-a-callable rule exists for.
-   */
-  const probes = [
-    ['auth', `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/emulator/v1/projects/${PROJECT}/config`],
-    ['firestore', `http://${process.env.FIRESTORE_EMULATOR_HOST}/`],
-  ];
-  for (const [what, url] of probes) {
-    let ok = false;
-    for (let i = 0; i < 120 && !ok; i += 1) {
-      ok = await fetch(url).then((r) => r.ok, () => false);
-      if (!ok) await new Promise((r) => setTimeout(r, 500));
-    }
-    if (!ok) throw new Error(`the ${what} emulator never became ready at ${url}`);
-  }
-}
-await waitForEmulators();
-
-/**
- * Start from nothing.
- *
- * Leftover emulator state silently SKIPS the paths that matter — a previous run
- * leaves an approved admin behind and the next one sails past the pending gate
- * while still reporting success. Safe to do here because `screens-e2e.sh` owns
- * the emulator for the length of this run; nothing else is looking at it.
- */
-for (const [what, url] of [
-  ['firestore', `http://${process.env.FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/${PROJECT}/databases/(default)/documents`],
-  ['auth', `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/emulator/v1/projects/${PROJECT}/accounts`],
-]) {
-  const r = await fetch(url, { method: 'DELETE' });
-  if (!r.ok) throw new Error(`could not clear ${what}: ${r.status}`);
-}
-
-/**
- * A real, decodable audio object — 8 kHz 8-bit mono PCM, generated here.
- *
- * GENERATED rather than committed (this repo never adds a binary) and WAV rather
- * than the M4A `web-e2e.mjs` makes with ffmpeg, because ffmpeg is not a
- * dependency of this suite and a CI runner that lacks it would fail on the
- * fixture rather than on a layout. It has to actually decode: the transport
- * renders disabled until the media reports a duration, and a sweep of disabled
- * controls is a photograph of a state no student ever sees.
- */
-function wav(seconds) {
-  const rate = 8000;
-  const samples = rate * seconds;
-  const buf = Buffer.alloc(44 + samples);
-  buf.write('RIFF', 0);
-  buf.writeUInt32LE(36 + samples, 4);
-  buf.write('WAVEfmt ', 8);
-  buf.writeUInt32LE(16, 16); // PCM header size
-  buf.writeUInt16LE(1, 20); // PCM
-  buf.writeUInt16LE(1, 22); // mono
-  buf.writeUInt32LE(rate, 24);
-  buf.writeUInt32LE(rate, 28); // byte rate
-  buf.writeUInt16LE(1, 32); // block align
-  buf.writeUInt16LE(8, 34); // bits per sample
-  buf.write('data', 36);
-  buf.writeUInt32LE(samples, 40);
-  for (let i = 0; i < samples; i += 1) {
-    // A quiet tone rather than digital silence: some decoders shortcut a
-    // constant stream, and then `durationSec` and the media disagree.
-    buf[44 + i] = 128 + Math.round(20 * Math.sin((i / rate) * 2 * Math.PI * 220));
-  }
-  return buf;
-}
-const AUDIO_SECONDS = 120;
-const AUDIO = wav(AUDIO_SECONDS);
-
+await resetEmulators();
 const browser = await chromium.launch();
+const world = await seedWorld({ db, auth, browser, base: BASE });
+const { STUDENT, STUDENT_PASSWORD, missed, dueSoon } = world;
 
-// ---- driving ---------------------------------------------------------------
-
-/**
- * Only ever the VISIBLE match.
- *
- * React Navigation keeps the previous screen MOUNTED but hidden, so a locator
- * that does not say "visible" can resolve to a node on the screen underneath —
- * one that will never become clickable. Playwright then retries for its whole
- * timeout against an element that cannot change, and the run dies at a step with
- * nothing wrong with it, roughly one run in two.
- *
- * Two details make it worse than it sounds. `getByTestId` is a CSS attribute
- * selector, so unlike a ROLE selector it does not skip `display:none` subtrees
- * the way a screen reader does — which is why a testID present on both screens
- * is ambiguous rather than obviously wrong. And `.first()` / `.last()` do not
- * mean "the one on screen"; they mean document order, which is exactly the wrong
- * question. Found in the sibling time-tracker's flow suite, at clean HEAD.
- *
- * So every locator in this file goes through one of these three. There are no
- * bare `page.getBy*` calls, deliberately.
- */
-const byId = (page, id) => page.getByTestId(id).filter({ visible: true }).first();
-const byName = (page, name) =>
-  page.getByRole('button', { name, exact: true }).filter({ visible: true }).first();
-/** By LABEL, not by role: the header Back is a link on web (see `escapes`). */
-const backButton = (page) =>
-  page.getByLabel(/(^|,\s*)(go\s+)?back$/i).filter({ visible: true }).first();
-
-async function tap(locator, timeout = 30_000) {
-  await locator.waitFor({ timeout });
-  await locator.click();
-}
-
-/**
- * Mint a staff account THROUGH THE APP, then approve it out of band.
- *
- * Staff are Google identities and the Admin SDK cannot create one, so the dev
- * sign-in row is the only way to produce an account the domain gate would
- * accept. `onUserCreate` writes the pending `staffUsers` document; this waits
- * for it, then does what an admin's approval does — claims first, then the
- * mirror, in that order, because the token is what rules trust.
- */
-async function provisionStaff(testId, email, role) {
-  const staffDoc = async () => {
-    const snap = await db.collection('staffUsers').where('email', '==', email).get();
-    return snap.empty ? '' : snap.docs[0].id;
-  };
-
-  /*
-   * Waits for the DOCUMENT, not for the pending screen, and tries twice.
-   *
-   * The document is what this function is for, and it is the only unambiguous
-   * evidence: the app shows "Setting up your account" and "Waiting for
-   * approval" at different moments of the same successful path, so a wait on
-   * one text is a race against which one is up. Twice because the first
-   * sign-in of a run meets a backend that has only just come up — that came
-   * back `auth/network-request-failed`, which the app REPORTS to the user
-   * rather than throwing at the caller, so there is nothing to catch here,
-   * only a screen that never changes.
-   */
-  let uid = '';
-  for (let attempt = 1; attempt <= 2 && !uid; attempt += 1) {
-    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-    const page = await ctx.newPage();
-    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
-    await tap(byId(page, testId), 60_000);
-    for (let i = 0; i < 60 && !uid; i += 1) {
-      uid = await staffDoc();
-      if (!uid) await new Promise((r) => setTimeout(r, 500));
-    }
-    await ctx.close();
-    if (!uid) console.log(`  ..  ${email} never provisioned; signing in again`);
-  }
-  if (!uid) throw new Error(`${email} was never provisioned by onUserCreate`);
-  await auth.setCustomUserClaims(uid, { role, status: 'active' });
-  await db.collection('staffUsers').doc(uid).update({ role, status: 'active', approvedAt: now });
-  return uid;
-}
-
-const adminUid = await provisionStaff('dev-signin-first-admin', 'faisal.shah@oursabeel.com', 'admin');
-const managerUid = await provisionStaff('dev-signin-manager', 'manager@oursabeel.com', 'manager');
-
-/**
- * A roster LONGER THAN ONE SCREEN, because the bug being looked for is what
- * happens at the bottom of a list, and eight rows all fit at every width.
- *
- * The first name is the longest one a real roster would carry — a full Arabic
- * name with a nisba — and its address is the longest with it. Rows in this app
- * pin the name beside its actions and forbid both from shrinking (`rowItem`,
- * `rowHeadPinned`), which is correct and is also precisely the shape that
- * carries a control off the right edge when the name is long enough.
- */
-const NAMES = [
-  'Abd al-Rahman ibn Muhammad al-Shinqiti',
-  'Fatima Ahmed',
-  'Bilal Khan',
-  'Omar Siddiqui',
-  'Ayesha Rahman',
-  'Yusuf Ali',
-  'Maryam Iqbal',
-  'Zainab Hassan',
-  'Ibrahim Malik',
-  'Khadija Noor',
-  'Sumayya Patel',
-  'Hamza Chaudhry',
-  'Aminah Bello',
-  'Idris Abubakar',
-];
-const STUDENT_PASSWORD = 'HikamStudent1';
-const students = [];
-for (const [i, name] of NAMES.entries()) {
-  const email = `${name.toLowerCase().replace(/[^a-z]+/g, '.')}@example.com`;
-  // The last one is DISABLED so the Students screen's collapsed "Disabled"
-  // section has something in it — an empty collapsible documents nothing.
-  const status = i === NAMES.length - 1 ? 'disabled' : 'active';
-  /*
-   * Created WITHOUT a password, then given one.
-   *
-   * Not a detail: `onUserCreate` reads the provider list to tell the two
-   * populations apart, and a `password` provider AT CREATION means a
-   * client-side sign-up, which it deletes. `createStudent` makes a
-   * password-less account precisely so the student can set their own from the
-   * emailed link — and a password-less Admin-SDK user has EMPTY provider data,
-   * which is the shape the trigger ignores. Passing the password to
-   * `createUser` had every student deleted moments after it was made, exactly
-   * as it once did in production.
-   */
-  const u = await auth.createUser({ email, displayName: name });
-  await new Promise((r) => setTimeout(r, 250));
-  await auth.updateUser(u.uid, { password: STUDENT_PASSWORD, emailVerified: true });
-  await auth.setCustomUserClaims(u.uid, { role: 'student', status });
-  await db.collection('students').doc(u.uid).set({
-    displayName: name,
-    email,
-    role: 'student',
-    status,
-    createdAt: now - 40 * DAY,
-    createdBy: adminUid,
-  });
-  students.push({ uid: u.uid, name, email, status });
-}
-/** The student the student tour signs in as: on the long-named row, so their own
- *  screens carry the longest strings too. */
-const STUDENT = students[0];
-
-const COHORT = 'sw-autumn';
-const COURSE = 'sw-hikam';
-/** The longest course name the institute would really write, and it is not a
- *  stress test for its own sake: it is what a section-and-day title looks like. */
-const LONG_COURSE = 'sw-arabic';
-const LONG_COURSE_NAME = 'Arabic I & Qur’anic Morphology — Tuesday Evening Section';
-
-await db.collection('cohorts').doc(COHORT).set({
-  name: 'Autumn 2026', archived: false, createdAt: now - 45 * DAY, createdBy: adminUid,
-});
-/** An EMPTY cohort. Reachable in ordinary use — a term is created before its
- *  courses are — and the only way to photograph the Courses screen's empty
- *  state, which no amount of seeded content will show. */
-await db.collection('cohorts').doc('sw-empty').set({
-  name: 'Spring 2027 — Evening Intensive', archived: false, createdAt: now - 2 * DAY, createdBy: adminUid,
-});
-/** An ARCHIVED cohort, so the Cohorts screen's collapsed archive section has a
- *  row in it. */
-await db.collection('cohorts').doc('sw-past').set({
-  name: 'Spring 2026', archived: true, createdAt: now - 220 * DAY, createdBy: adminUid,
-});
-
-const course = (id, cohortId, name, extra = {}) =>
-  db.collection('courses').doc(id).set({
-    cohortId,
-    name,
-    archived: false,
-    effectiveActive: true,
-    archivedAccess: false,
-    managerUids: [],
-    createdAt: now - 45 * DAY,
-    createdBy: adminUid,
-    ...extra,
-  });
-// The manager is scoped to ONE course, which is the whole of their access —
-// cohort membership grants nothing. Their tour is the read of that.
-await course(COURSE, COHORT, 'Hikam Foundations', { managerUids: [managerUid] });
-await course(LONG_COURSE, COHORT, LONG_COURSE_NAME);
-await course('sw-past-course', 'sw-past', 'Seerah Survey', { effectiveActive: false });
-
-for (const s of students) {
-  await db.collection('enrollments').doc(`${s.uid}_${COURSE}`).set({
-    studentUid: s.uid, courseId: COURSE, cohortId: COHORT,
-    active: true, enrolledAt: now - 40 * DAY, enrolledBy: adminUid,
-  });
-}
-for (const s of students.slice(0, 4)) {
-  await db.collection('enrollments').doc(`${s.uid}_${LONG_COURSE}`).set({
-    studentUid: s.uid, courseId: LONG_COURSE, cohortId: COHORT,
-    active: true, enrolledAt: now - 40 * DAY, enrolledBy: adminUid,
-  });
-}
-
-/**
- * One session, its recording, its attendance snapshot and the grants that fall
- * out of it — the same order the app builds them in.
- *
- * Being EXCUSED is the whole of a student's entitlement, so a seed that marked
- * everyone present would photograph every student screen empty. `present` and
- * `absent` are here because the ledger has a section for each.
- */
-async function seedSession(id, recId, title, opts) {
-  const { courseId = COURSE, daysAgo, dueOffset, status = 'published', notes = '',
-    roster = students, present = 0, absent = [], attention = null } = opts;
-  const date = iso(now - daysAgo * DAY);
-  // Never null: the due date is the day access closes, so a session cannot be
-  // without one. A past one is planted directly, which no callable will do —
-  // a deadline may only BECOME past by the passage of time.
-  const dueDate = iso(now + dueOffset * DAY);
-  /*
-   * The demo student is ALWAYS excused, whoever else is present.
-   *
-   * Being excused is the whole of a student's entitlement, so the person the
-   * student tour signs in as has to be excused everywhere or their home, their
-   * class record and every ledger row about them are empty — and the sweep
-   * would photograph a set of empty states and call it coverage. The first
-   * version of this seed marked by position and put them present in all five
-   * sessions, which is exactly what happened.
-   */
-  const attendance = opts.attendance === null ? null : Object.fromEntries(
-    roster.map((s, i) => [
-      s.uid,
-      absent.includes(s.uid) ? 'absent'
-        : s.uid === STUDENT.uid ? 'excused'
-        : i <= present ? 'present'
-        : 'excused',
-    ]),
-  );
-  const submittedAt = attendance ? now - daysAgo * DAY : null;
-  const hasAudio = status !== 'draft' && status !== 'needsAttention';
-  const audioPath = `recordings/${recId}/audio.wav`;
-  if (hasAudio) {
-    await admin.storage().bucket().file(audioPath).save(AUDIO, { contentType: 'audio/wav' });
-  }
-
-  await db.collection('sessions').doc(id).set({
-    courseId, cohortId: COHORT, date, title, dueDate, notes,
-    recordingId: recId, attendance: attendance ?? {}, attendanceSubmittedAt: submittedAt,
-    archived: false, createdAt: now - daysAgo * DAY, createdBy: adminUid, updatedAt: now - daysAgo * DAY,
-  });
-  if (recId) {
-    await db.collection('recordings').doc(recId).set({
-      sessionId: id, courseId, cohortId: COHORT, title, notes, date, status, source: 'manual',
-      audioPath: hasAudio ? audioPath : null,
-      durationSec: hasAudio ? AUDIO_SECONDS : null,
-      sizeBytes: hasAudio ? AUDIO.length : null,
-      createdAt: now - daysAgo * DAY, createdBy: adminUid, updatedAt: now - daysAgo * DAY,
-      ...(status === 'published' ? { publishedAt: now - daysAgo * DAY } : {}),
-      ...(attention ? { attentionReason: attention } : {}),
-    });
-  }
-  if (attendance) {
-    for (const [uid, mark] of Object.entries(attendance)) {
-      // A student cannot read a session, so their own mark is projected onto a
-      // document of their own. Written here because the sweep's world is seeded
-      // rather than submitted through the callable that normally does it.
-      await db.collection('attendanceRecords').doc(`${uid}_${id}`).set({
-        studentUid: uid, sessionId: id, courseId, cohortId: COHORT,
-        date, title, status: mark, submittedAt,
-      });
-      if (mark === 'excused' && status === 'published') {
-        await db.collection('assignments').doc(`${uid}_${recId}`).set({
-          studentUid: uid, recordingId: recId, sessionId: id, courseId, cohortId: COHORT,
-          dueDate, active: true, assignedAt: submittedAt, assignedBy: 'system',
-        });
-      }
-    }
-  }
-  return { id, recId, dueDate, title };
-}
-
-/**
- * Five sessions covering every bucket the student home groups by — missed, due
- * soon, upcoming, completed — because the home's layout is those four group
- * headings and a sweep that saw one of them saw a quarter of the screen.
- */
-const missed = await seedSession('sw-s1', 'sw-s1r',
-  'Session 1 — Introduction to the Hikam of Ibn ʿAtaʾillah, and the Method of the Commentary',
-  { daysAgo: 28, dueOffset: -9, present: 6, absent: [students[6].uid],
-    notes: 'Read the first ten hikam before next week. The commentary we are using is the ' +
-      'one by al-Shurnubi; a scan is in the shared folder, and the pages for this session ' +
-      'are 1 through 24. Bring your questions about the second hikma in particular.' });
-const dueSoon = await seedSession('sw-s2', 'sw-s2r', 'Session 2 — Knowledge and Certainty',
-  { daysAgo: 5, dueOffset: 3, present: 5 });
-// Not bound to anything: nothing navigates to it by name. It is here so the
-// student home has an "Upcoming" group at all — the four bucket headings ARE
-// that screen's layout, and a home missing one is a quarter untested.
-await seedSession('sw-s3', 'sw-s3r', 'Session 3 — Patience in Hardship',
-  { daysAgo: 2, dueOffset: 20, present: 4 });
-const done = await seedSession('sw-s4', 'sw-s4r', 'Session 4 — Sincerity of Intention',
-  { daysAgo: 12, dueOffset: 14, present: 3 });
-/** Published, attendance NOT taken: nobody is granted anything. The state the
- *  `attendanceMissing` notification exists for, and a real staff screen. */
-await seedSession('sw-s5', 'sw-s5r', 'Session 5 — Reliance and Trust',
-  { daysAgo: 1, dueOffset: 7, attendance: null });
-/** A session with NO RECORDING — the only route to the Zoom import screen. */
-await db.collection('sessions').doc('sw-s6').set({
-  courseId: COURSE, cohortId: COHORT, date: iso(now), title: 'Session 6 — Today (recording pending)',
-  dueDate: iso(now + 7 * DAY), notes: '', recordingId: null, attendance: {},
-  attendanceSubmittedAt: null, archived: false, createdAt: now, createdBy: adminUid, updatedAt: now,
-});
-await seedSession('sw-a1', 'sw-a1r', 'Lesson 1 — The Arabic Alphabet',
-  { courseId: LONG_COURSE, daysAgo: 9, dueOffset: 5, roster: students.slice(0, 4), present: 2 });
-
-/** The demo student completed one and part-listened another, so both the ledger
- *  and their own home have every row type on them. */
-await db.collection('completions').doc(`${STUDENT.uid}_${done.recId}`).set({
-  studentUid: STUDENT.uid, recordingId: done.recId, courseId: COURSE,
-  completed: true, completedAt: now - 3 * DAY, updatedAt: now - 3 * DAY,
-});
-for (const [rid, frac] of [[done.recId, 1], [dueSoon.recId, 0.6], [missed.recId, 0.2]]) {
-  await db.collection('listeningProgress').doc(`${STUDENT.uid}_${rid}`).set({
-    studentUid: STUDENT.uid, recordingId: rid, courseId: COURSE,
-    positionMs: AUDIO_SECONDS * 1000 * frac, listenedMs: AUDIO_SECONDS * 1000 * frac,
-    updatedAt: now - 2 * DAY,
-  });
-}
-/** Two more students complete, so the ledger's filters are not all one row. */
-for (const s of students.slice(1, 5)) {
-  await db.collection('completions').doc(`${s.uid}_${dueSoon.recId}`).set({
-    studentUid: s.uid, recordingId: dueSoon.recId, courseId: COURSE,
-    completed: true, completedAt: now - DAY, updatedAt: now - DAY,
-  });
-}
-/** An override already in place, so the ledger row that carries one — an extra
- *  line of raspberry text above the actions — is toured, not just the plain row. */
-await db.collection('completionOverrides').doc(`${students[5].uid}_${dueSoon.recId}`).set({
-  studentUid: students[5].uid, recordingId: dueSoon.recId, courseId: COURSE, completed: true,
-  reason: 'Listened on a borrowed phone; confirmed in person after class on the 14th.',
-  overriddenBy: adminUid, at: now - DAY,
-});
-
-for (const [i, action] of ['createCourse', 'submitAttendance', 'createRecording',
-  'setRecordingStatus', 'overrideCompletion', 'createStudent'].entries()) {
-  await db.collection('auditLog').add({
-    at: now - i * 3600_000, actorUid: adminUid, actorRole: 'admin', action,
-    courseId: i % 2 ? COURSE : null,
-    targets: { courseId: COURSE, recordingId: dueSoon.recId },
-    detail: { note: 'Seeded so the audit list has rows at every width.' },
-  });
-}
 
 // ---- assertions ------------------------------------------------------------
 
@@ -877,11 +477,15 @@ const layoutFaults = (page) =>
 /**
  * Can you LEAVE this screen without the browser's Back?
  *
- * This app is a pure native stack with NO TAB BAR anywhere, so a pushed screen
- * has exactly one exit: the header's Back. On a phone browser there is no
- * hardware Back either, so a screen that loses it is a dead end. Home is the
- * root and needs none — it is where every Back leads — so it answers with its
- * own way out of the app instead.
+ * The answer changed when the app grew persistent navigation. It used to be a
+ * pure stack with no bar anywhere, so a pushed screen had exactly one exit and
+ * losing the header Back stranded it. Now every screen also carries the bar (on
+ * a phone) or the rail (on a wide screen), so the question is whether it has
+ * EITHER — and a tab root, which is never pushed, correctly has no Back at all.
+ *
+ * Both halves still matter. `nav` alone would pass a pushed screen that lost
+ * its Back, leaving no way back to where you came from — only a way to start
+ * over at a tab root, which is not the same thing.
  */
 const escapes = (page) =>
   page.evaluate(() => {
@@ -906,7 +510,12 @@ const escapes = (page) =>
       // "Go back" when there is no previous title, "<Title>, back" when there
       // is — both from @react-navigation/elements.
       back: controls.some((e) => /(^|,\s*)(go\s+)?back$/i.test(label(e))),
-      signOut: controls.some((e) => /^sign out$/i.test(label(e))),
+      // A sheet is not a screen and has no header. Its exit is its own dismiss
+      // button, which is as real an escape as a Back arrow.
+      cancel: controls.some((e) => /^(cancel|close)$/i.test(label(e))),
+      // The persistent chrome. Every screen has it; only a tab root may rely on
+      // it as its ONLY exit.
+      nav: !!document.querySelector('[data-testid="tab-more"]'),
     };
   });
 
@@ -945,15 +554,22 @@ const contentColumn = (page) =>
     };
   });
 
-function columnFault(col, cap) {
+function columnFault(col, caps) {
   if (!col) return 'no scrolling content column found';
   const { outerLeft, outerWidth, left, width } = col;
-  if (outerWidth < cap) {
+  const smallest = Math.min(...caps);
+  const largest = Math.max(...caps);
+  // Narrower than every cap: the column must fill it. Nothing to centre.
+  if (outerWidth < smallest) {
     return width < outerWidth - 2
       ? `column is ${Math.round(width)}px inside a ${Math.round(outerWidth)}px viewport — should be full-bleed`
       : '';
   }
-  if (width > cap + 1) return `column is ${Math.round(width)}px, past the ${cap}px cap`;
+  if (width > largest + 1) {
+    return `column is ${Math.round(width)}px, past the widest ${largest}px cap`;
+  }
+  // Between two caps, a screen using the wider one is legitimately full-bleed.
+  if (width > outerWidth - 2) return '';
   const offset = left - outerLeft;
   const centred = (outerWidth - width) / 2;
   return Math.abs(offset - centred) > 2
@@ -1024,17 +640,43 @@ const scrollToBottom = (page) =>
  * on screen, which is the state a genuinely stranded screen is in; the
  * `has a way out` check has already reported it by then.
  */
+/**
+ * Back to the first tab.
+ *
+ * ONE TAP NOW, where it used to be a loop clicking Back up to sixteen times.
+ * That loop was the honest way to do it in a pure stack; with a persistent bar
+ * the first tab is always on screen and always resets the stack, which is both
+ * faster and closer to what a person does. The Back-walk is kept as the
+ * fallback for the one case the bar cannot answer — a screen that failed to
+ * render the chrome at all, which is itself a fault the check above reports.
+ */
 async function goHome(page, homeMarker) {
+  /*
+   * DISMISS ANY OPEN SHEET FIRST.
+   *
+   * A modal's backdrop covers the whole viewport, tab bar included, so the tab
+   * is visible, enabled and stable — and every click on it lands on the
+   * backdrop. Playwright retries for its full timeout and then reports the
+   * intercepting element by class name, which says nothing about which sheet.
+   * Escape is what `onRequestClose` is wired to on web.
+   */
+  await page.keyboard.press('Escape').catch(() => undefined);
+  await page.waitForTimeout(150);
+  const firstTab = byId(page, homeMarker);
+  if (await firstTab.isVisible().catch(() => false)) {
+    await firstTab.click();
+    await page.waitForTimeout(350);
+    return;
+  }
   for (let i = 0; i < 16; i += 1) {
-    if (await byId(page, homeMarker).isVisible().catch(() => false)) return;
     const back = backButton(page);
     if (!(await back.isVisible().catch(() => false))) break;
     await back.click();
     await page.waitForTimeout(350);
   }
-  if (await byId(page, homeMarker).isVisible().catch(() => false)) return;
+  if (await firstTab.isVisible().catch(() => false)) return;
   await page.goto(BASE, { waitUntil: 'domcontentloaded' });
-  await byId(page, homeMarker).waitFor({ timeout: 60_000 });
+  await firstTab.waitFor({ timeout: 60_000 });
 }
 
 /**
@@ -1059,13 +701,14 @@ function visitor(page, tag, homeMarker, counter) {
     check(`${tag} / ${name}`, top.faults.length === 0, top.faults.join('; ').slice(0, 200));
 
     const out = await escapes(page);
+    const root = TAB_ROOTS.has(name);
     check(
       `${tag} / ${name} has a way out`,
-      name === 'home' ? out.signOut : out.back,
-      name === 'home' ? 'the root screen offers no sign out' : 'no Back in the header',
+      root ? out.nav : out.back ? out.nav : out.cancel,
+      root ? 'a tab root with no navigation bar' : 'no Back in the header and no way to dismiss',
     );
 
-    const fault = columnFault(await contentColumn(page), CONTENT_MAX_WIDTH);
+    const fault = columnFault(await contentColumn(page), COLUMN_CAPS);
     check(`${tag} / ${name} content column`, fault === '', fault);
 
     const small = await smallTargets(page);
@@ -1090,13 +733,34 @@ function visitor(page, tag, homeMarker, counter) {
 
 // ---- the tours -------------------------------------------------------------
 
-const STAFF_SCREENS = 24;
+/**
+ * The screens a tab lands on directly. These are never pushed, so they have no
+ * Back and must not be asked for one — the bar is their exit.
+ */
+const TAB_ROOTS = new Set([
+  'home',
+  'cohorts',
+  'my-courses',
+  'people',
+  'staff',
+  'students-add',
+  'students-disabled',
+  'library',
+  'listening',
+  'my-classes',
+  // Reached by opening a recording and leaving it — which lands back on a tab
+  // root, with the now-playing bar on it.
+  'miniplayer',
+]);
+
+const STAFF_SCREENS = 25;
 
 async function tourStaff(page, tag) {
   const counter = { seen: 0 };
-  const visit = visitor(page, tag, 'nav-cohorts', counter);
+  // The first tab, which for an admin IS the cohort list — `Home` renders it.
+  const visit = visitor(page, tag, 'tab-courses', counter);
   const openCourse = async () => {
-    await tap(byId(page, 'nav-cohorts'));
+    await tap(byId(page, 'tab-courses'));
     await tap(byId(page, 'cohort-open-Autumn 2026'));
     await tap(byId(page, 'course-open-Hikam Foundations'));
   };
@@ -1105,29 +769,44 @@ async function tourStaff(page, tag) {
     await tap(byId(page, 'nav-sessions'));
     await tap(byId(page, `session-open-${missed.title}`));
   };
+  const more = async (option) => {
+    await tap(byId(page, 'tab-more'));
+    await tap(byId(page, option));
+  };
 
   await visit('home', async () => {});
-  await visit('staff', () => tap(byId(page, 'nav-staff')));
-  await visit('students', () => tap(byId(page, 'nav-students')));
+  await visit('people', () => tap(byId(page, 'tab-people')));
+  // The staff half of the People tab. A SEGMENT, not a route: same screen, other
+  // list, so it is toured as its own screen and asks for no Back.
+  await visit('staff', async () => {
+    await tap(byId(page, 'tab-people'));
+    await tap(byId(page, 'segment-staff'));
+  });
+  // The create sheet OPEN — a form that exists in no other state, and the one
+  // affordance that is absent entirely on a native build.
+  await visit('students-add', async () => {
+    await tap(byId(page, 'tab-people'));
+    await tap(byId(page, 'students-add'));
+  });
   // The disabled section EXPANDED: rows that exist in no other state, and the
   // collapsible's own header row moves when they arrive.
   await visit('students-disabled', async () => {
-    await tap(byId(page, 'nav-students'));
+    await tap(byId(page, 'tab-people'));
     await tap(byId(page, 'students-disabled'));
   });
   await visit('student', async () => {
-    await tap(byId(page, 'nav-students'));
+    await tap(byId(page, 'tab-people'));
     await tap(byId(page, `student-open-${STUDENT.email}`));
   });
-  await visit('cohorts', () => tap(byId(page, 'nav-cohorts')));
+  await visit('cohorts', () => tap(byId(page, 'tab-courses')));
   await visit('cohort', async () => {
-    await tap(byId(page, 'nav-cohorts'));
+    await tap(byId(page, 'tab-courses'));
     await tap(byId(page, 'cohort-open-Autumn 2026'));
   });
   // The empty state. No amount of seeding shows it, and it is the screen a term
   // spends its first week in.
   await visit('cohort-empty', async () => {
-    await tap(byId(page, 'nav-cohorts'));
+    await tap(byId(page, 'tab-courses'));
     await tap(byId(page, 'cohort-open-Spring 2027 — Evening Intensive'));
   });
   await visit('course', openCourse);
@@ -1180,15 +859,18 @@ async function tourStaff(page, tag) {
     await tap(byId(page, 'session-open-Session 6 — Today (recording pending)'));
     await tap(byId(page, 'recording-import-zoom'));
   });
-  await visit('library', () => tap(byId(page, 'nav-library')));
+  await visit('library', () => tap(byId(page, 'tab-library')));
   await visit('player', async () => {
-    await tap(byId(page, 'nav-library'));
+    await tap(byId(page, 'tab-library'));
     await tap(byId(page, `library-listen-${missed.title}`));
   });
-  await visit('audit', () => tap(byId(page, 'nav-audit-global')));
-  await visit('notifications', () => tap(byId(page, 'nav-notifications')));
+  await visit('audit', () => more('more-audit'));
+  await visit('notifications', () => more('more-notifications'));
   await checkDeviceState(page, tag);
-  await visit('tokens', () => tap(byName(page, 'Design tokens')));
+  await visit('tokens', async () => {
+    await tap(byId(page, 'tab-more'));
+    await tap(byName(page, 'Design tokens'));
+  });
 
   check(`${tag} reached every staff screen`, counter.seen === STAFF_SCREENS,
     `${counter.seen}/${STAFF_SCREENS}`);
@@ -1210,20 +892,22 @@ const MANAGER_SCREENS = 7;
  */
 async function tourManager(page, tag) {
   const counter = { seen: 0 };
-  const visit = visitor(page, tag, 'nav-myclasses', counter);
+  // A manager's first tab lands on their own courses — the rules give them no
+  // cohort list at all, so the same tab resolves to a different screen.
+  const visit = visitor(page, tag, 'tab-courses', counter);
   const openCourse = async () => {
-    await tap(byId(page, 'nav-myclasses'));
+    await tap(byId(page, 'tab-courses'));
     await tap(byId(page, 'course-open-Hikam Foundations'));
   };
 
   await visit('home', async () => {});
-  await visit('my-courses', () => tap(byId(page, 'nav-myclasses')));
+  await visit('my-courses', () => tap(byId(page, 'tab-courses')));
   await visit('course', openCourse);
   await visit('audit-scoped', async () => {
     await openCourse();
     await tap(byId(page, 'nav-audit'));
   });
-  await visit('library', () => tap(byId(page, 'nav-library')));
+  await visit('library', () => tap(byId(page, 'tab-library')));
   // The ledger, which a manager reads through a DIFFERENT rule arm than an
   // admin: theirs resolves a course lookup from the row, so it is the only one
   // that can fail closed — and it did, silently, as an empty roster. A denial
@@ -1248,24 +932,43 @@ async function tourManager(page, tag) {
     `${counter.seen}/${MANAGER_SCREENS}`);
 }
 
-const STUDENT_SCREENS = 5;
+const STUDENT_SCREENS = 6;
 
 async function tourStudent(page, tag) {
   const counter = { seen: 0 };
-  const visit = visitor(page, tag, 'student-classes', counter);
+  const visit = visitor(page, tag, 'tab-listening', counter);
 
   // The task list, with all four buckets on it — Missed, Due soon, Upcoming,
   // Completed. Those group headings ARE the layout.
   await visit('home', async () => {});
-  await visit('my-classes', () => tap(byId(page, 'student-classes')));
+  await visit('my-classes', () => tap(byId(page, 'tab-classes')));
   await visit('class-record', async () => {
-    await tap(byId(page, 'student-classes'));
+    await tap(byId(page, 'tab-classes'));
     await tap(byId(page, 'myclass-Hikam Foundations'));
   });
   // An open recording: the transport, the scrubber and the speed chips, which
   // are the only fixed-width row in the app.
-  await visit('player', () => tap(byId(page, `task-${dueSoon.title}`)));
-  await visit('notifications', () => tap(byId(page, 'nav-notifications')));
+  const openDueSoon = async () => {
+    // Proposal B promotes the most urgent open recording to a hero card and
+    // drops it from the grouped list, so the same recording has two handles.
+    const hero = byId(page, `next-up-${dueSoon.title}`);
+    await tap((await hero.count()) ? hero : byId(page, `task-${dueSoon.title}`));
+  };
+  await visit('player', openDueSoon);
+  // THE DOCKED NOW-PLAYING BAR, on a screen that is not the player. It is a row
+  // that exists in no other state and it eats 56px off the bottom of every
+  // screen under it — which on a 320px phone is exactly where a list runs out
+  // of room. Reached by opening a recording and then leaving, because that is
+  // the only way it appears.
+  await visit('miniplayer', async () => {
+    await openDueSoon();
+    await page.waitForTimeout(1500);
+    await tap(byId(page, 'tab-classes'));
+  });
+  await visit('notifications', async () => {
+    await tap(byId(page, 'tab-more'));
+    await tap(byId(page, 'more-notifications'));
+  });
   await checkDeviceState(page, tag);
 
   /*
@@ -1295,12 +998,12 @@ async function signInStudent(page) {
   await byId(page, 'signin-email').fill(STUDENT.email);
   await byId(page, 'signin-password').fill(STUDENT_PASSWORD);
   await tap(byId(page, 'signin-student'));
-  await byId(page, 'student-classes').waitFor({ timeout: 60_000 });
+  await byId(page, 'tab-listening').waitFor({ timeout: 60_000 });
 }
 
 const TOURS = [
-  ['staff', (page) => signInStaff(page, 'dev-signin-first-admin', 'nav-cohorts'), tourStaff],
-  ['manager', (page) => signInStaff(page, 'dev-signin-manager', 'nav-myclasses'), tourManager],
+  ['staff', (page) => signInStaff(page, 'dev-signin-first-admin', 'tab-courses'), tourStaff],
+  ['manager', (page) => signInStaff(page, 'dev-signin-manager', 'tab-courses'), tourManager],
   ['student', signInStudent, tourStudent],
 ];
 

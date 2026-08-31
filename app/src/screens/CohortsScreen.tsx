@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import {
+  AddAction,
   Button,
-  Card,
   Collapsible,
   Empty,
   Field,
+  Grid,
   ListRow,
   Notice,
   Screen,
   SectionTitle,
+  useAddAction,
 } from '../components/ui';
 import { createCohort, useAllCourses, useCohorts, type CohortRow } from '../structure';
 import { courseLabel } from './CoursesScreen';
@@ -33,65 +35,78 @@ export function CohortsScreen({ onOpen }: { onOpen: (cohort: CohortRow) => void 
   }, {});
   const active = cohorts.filter((c) => !c.archived);
   const archived = cohorts.filter((c) => c.archived);
-  const [name, setName] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const run = async (fn: () => Promise<void>) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await fn();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
-    <Screen subtitle="Semesters, and the courses inside them">
-      {error ? <Notice tone="error">{error}</Notice> : null}
-
-      <SectionTitle>Add a cohort</SectionTitle>
-      <Card>
-        <Field
-          testID="cohort-name"
-          label="Name"
-          value={name}
-          onChangeText={setName}
-          autoCapitalize="words"
-          placeholder="Autumn 2026"
-        />
-        <Button
-          testID="cohort-create"
-          label="Create cohort"
-          busy={busy}
-          disabled={!name.trim()}
-          onPress={() =>
-            void run(async () => {
-              await createCohort({ name: name.trim() });
-              setName('');
-            })
-          }
-        />
-      </Card>
-
+    <Screen
+      title="Cohorts"
+      subtitle="Semesters, and the courses inside them"
+      width="list"
+      actions={
+        <AddAction testID="cohorts-add" label="Add a cohort" title="Add a cohort">
+          <AddCohort />
+        </AddAction>
+      }
+    >
       <SectionTitle>Cohorts ({active.length})</SectionTitle>
       {active.length === 0 ? (
         <Empty>No cohorts yet.</Empty>
       ) : (
-        active.map((c) => <CohortRowItem key={c.id} cohort={c} count={courseCounts[c.id] ?? 0} onOpen={onOpen} />)
+        <Grid min={320}>
+          {active.map((c) => (
+            <CohortRowItem key={c.id} cohort={c} count={courseCounts[c.id] ?? 0} onOpen={onOpen} />
+          ))}
+        </Grid>
       )}
 
       {archived.length > 0 ? (
         <Collapsible testID="cohorts-archived" title="Archived" count={archived.length}>
-          {archived.map((c) => (
-            <CohortRowItem key={c.id} cohort={c} count={courseCounts[c.id] ?? 0} onOpen={onOpen} />
-          ))}
+          <Grid min={320}>
+            {archived.map((c) => (
+              <CohortRowItem key={c.id} cohort={c} count={courseCounts[c.id] ?? 0} onOpen={onOpen} />
+            ))}
+          </Grid>
         </Collapsible>
       ) : null}
     </Screen>
+  );
+}
+
+/** The create form, in the sheet the header action opens. */
+function AddCohort() {
+  const close = useAddAction();
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <>
+      <Field
+        testID="cohort-name"
+        label="Name"
+        value={name}
+        onChangeText={setName}
+        autoCapitalize="words"
+        placeholder="Autumn 2026"
+      />
+      {error ? <Notice tone="error">{error}</Notice> : null}
+      <Button
+        testID="cohort-create"
+        label="Create cohort"
+        busy={busy}
+        disabled={!name.trim()}
+        block
+        onPress={() => {
+          setBusy(true);
+          setError(null);
+          void createCohort({ name: name.trim() })
+            .then(() => {
+              setName('');
+              close();
+            })
+            .catch((e: Error) => setError(e.message))
+            .finally(() => setBusy(false));
+        }}
+      />
+    </>
   );
 }
 

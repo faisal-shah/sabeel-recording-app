@@ -1,4 +1,4 @@
-import { Empty, Notice, Screen, SectionTitle } from '../components/ui';
+import { Empty, Grid, Notice, Screen, SectionTitle } from '../components/ui';
 import { useMyCourses, type CourseRow } from '../structure';
 import { CourseCard } from './CoursesScreen';
 
@@ -18,8 +18,8 @@ export function MyCoursesScreen({
 }) {
   const courses = useMyCourses(uid);
   return (
-    <Screen subtitle="Courses you have been assigned">
-      <SectionTitle>My courses ({courses.length})</SectionTitle>
+    <Screen title="Your courses" subtitle="Everything you run, and the way in to each" width="list">
+      <SectionTitle>Courses ({courses.length})</SectionTitle>
       {courses.length === 0 ? (
         <>
           <Empty>You are not assigned to any courses yet.</Empty>
@@ -29,7 +29,11 @@ export function MyCoursesScreen({
           </Notice>
         </>
       ) : (
-        courses.map((c) => <CourseCard key={c.id} cls={c} onOpen={onOpen} />)
+        <Grid min={320}>
+          {courses.map((c) => (
+            <CourseCard key={c.id} cls={c} onOpen={onOpen} />
+          ))}
+        </Grid>
       )}
     </Screen>
   );

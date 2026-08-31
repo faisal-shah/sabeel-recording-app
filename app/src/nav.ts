@@ -14,6 +14,9 @@
  */
 export type RootStackParamList = {
   Home: undefined;
+  /** Design B only — the staff work queue. Registered for staff regardless of
+   *  variant so the route table stays one shape; only the tab bar offers it. */
+  Today: undefined;
   /** Both populations have one; the switches shown depend on the role. */
   Notifications: undefined;
   Staff: undefined;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { Role } from '@sabeel/shared';
 import {
@@ -23,7 +23,7 @@ const t = getTheme();
  * the caller is an admin. The UI hiding a control is convenience, never the
  * boundary.
  */
-export function StaffScreen({ selfUid }: { selfUid: string }) {
+export function StaffScreen({ selfUid, header }: { selfUid: string; header?: ReactNode }) {
   const pending = usePendingStaff(true);
   const decided = useDecidedStaff(true);
   const [busyUid, setBusyUid] = useState<string | null>(null);
@@ -42,7 +42,8 @@ export function StaffScreen({ selfUid }: { selfUid: string }) {
   };
 
   return (
-    <Screen subtitle="Approve accounts and set roles">
+    <Screen title="People" subtitle="Approve accounts and set roles" width="list">
+      {header}
       {error ? <Notice tone="error">{error}</Notice> : null}
 
       <SectionTitle>Waiting for approval ({pending.length})</SectionTitle>

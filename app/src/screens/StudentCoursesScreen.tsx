@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Empty, Notice, Screen } from '../components/ui';
+import { Empty, Grid, Notice, Screen } from '../components/ui';
 import { useListenerError } from '../liveQuery';
+import { useMyAttendance } from '../attendance';
 import { useCourse, useStudentEnrollments } from '../structure';
 import { getTheme, spacing } from '../theme';
 
@@ -30,28 +31,43 @@ export function StudentCoursesScreen({
   );
 
   return (
-    <Screen title="Your classes" subtitle="Your attendance and required listening, class by class">
+    <Screen
+      title="Your classes"
+      subtitle="Your attendance and required listening, class by class"
+      width="list"
+    >
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {courseIds.length === 0 ? (
         <Empty>You are not enrolled in any classes yet.</Empty>
       ) : (
-        courseIds.map((courseId) => (
-          <CourseCard key={courseId} courseId={courseId} onOpen={onOpen} />
-        ))
+        <Grid min={320}>
+          {courseIds.map((courseId) => (
+            <CourseCard key={courseId} uid={uid} courseId={courseId} onOpen={onOpen} />
+          ))}
+        </Grid>
       )}
     </Screen>
   );
 }
 
 function CourseCard({
+  uid,
   courseId,
   onOpen,
 }: {
+  uid: string;
   courseId: string;
   onOpen: (courseId: string) => void;
 }) {
   const cls = useCourse(courseId);
+  // The card answers the question the screen is for, so most visits need no tap
+  // at all: how many meetings am I marked in, and how many did I miss. Read from
+  // the student's OWN projected records — a student cannot read a session.
+  const marks = useMyAttendance(uid, courseId);
   if (!cls) return null;
+  const present = marks.filter((m) => m.status === 'present').length;
+  const excused = marks.filter((m) => m.status === 'excused').length;
+  const absent = marks.filter((m) => m.status === 'absent').length;
   return (
     <Pressable
       testID={`myclass-${cls.name}`}
@@ -62,6 +78,13 @@ function CourseCard({
     >
       <View style={{ flex: 1 }}>
         <Text style={styles.name}>{cls.name}</Text>
+        {marks.length === 0 ? (
+          <Text style={styles.sub}>No attendance taken yet</Text>
+        ) : (
+          <Text style={styles.sub}>
+            {present} present · {excused} excused{absent > 0 ? ` · ${absent} absent` : ''}
+          </Text>
+        )}
         {!cls.effectiveActive ? <Text style={styles.sub}>Finished</Text> : null}
       </View>
     </Pressable>

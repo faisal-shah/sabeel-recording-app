@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { DEFAULT_DUE_DAYS, INSTITUTE_TIMEZONE, addDays, todayInZone } from '@sabeel/shared';
-import { Button, Card, Empty, Field, Notice, Screen, SectionTitle } from '../components/ui';
+import { AddAction, Button, Card, Empty, Field, Notice, Screen, SectionTitle } from '../components/ui';
 import { DateField } from '../components/DateField';
 import { createSession, useCourseSessions, type SessionRow } from '../sessions';
 import { getTheme, spacing } from '../theme';
@@ -79,37 +79,41 @@ export function SessionsScreen({
     })();
 
   return (
-    <Screen parent={{ label: courseName, testID: 'up-to-course-from-sessions', onPress: onOpenCourse }}>
-      {error ? <Notice tone="error">{error}</Notice> : null}
-
-      <SectionTitle>Add a session</SectionTitle>
-      <Card>
-        <Field
-          testID="session-title"
-          label="Title"
-          value={title}
-          onChangeText={setTitle}
-          autoCapitalize="words"
-          placeholder="Session 1 — Introduction"
-        />
-        <DateField label="Date of the meeting" value={date} onChange={changeDate} />
-        <DateField
-          label="Listen by"
-          value={dueDate}
-          onChange={(v) => {
-            setDueEdited(true);
-            setDueDate(v);
-          }}
-        />
-        <Button
-          testID="session-create"
-          label="Create session"
-          busy={busy}
-          disabled={!title.trim() || !date || !dueDate}
-          onPress={add}
-        />
-      </Card>
-
+    <Screen
+      title="Sessions"
+      parent={{ label: courseName, testID: 'up-to-course-from-sessions', onPress: onOpenCourse }}
+      width="list"
+      actions={
+        <AddAction testID="sessions-add" label="Add a session" title="Add a session">
+          <Field
+            testID="session-title"
+            label="Title"
+            value={title}
+            onChangeText={setTitle}
+            autoCapitalize="words"
+            placeholder="Session 1 — Introduction"
+          />
+          <DateField label="Date of the meeting" value={date} onChange={changeDate} />
+          <DateField
+            label="Listen by"
+            value={dueDate}
+            onChange={(v) => {
+              setDueEdited(true);
+              setDueDate(v);
+            }}
+          />
+          {error ? <Notice tone="error">{error}</Notice> : null}
+          <Button
+            testID="session-create"
+            label="Create session"
+            busy={busy}
+            disabled={!title.trim() || !date || !dueDate}
+            block
+            onPress={add}
+          />
+        </AddAction>
+      }
+    >
       <SectionTitle>Sessions ({sessions.length})</SectionTitle>
       {sessions.length === 0 ? (
         <Empty>No sessions yet. Add one for each class meeting.</Empty>

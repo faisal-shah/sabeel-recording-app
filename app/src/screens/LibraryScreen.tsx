@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { isVisibleToStudents, type RecordingStatus } from '@sabeel/shared';
-import { Button, Card, Empty, Notice, Row, Screen, SectionTitle, StatusChip } from '../components/ui';
+import { Button, Card, Empty, Grid, Notice, Row, Screen, SectionTitle, StatusChip } from '../components/ui';
 import { useAllRecordings, useCourseRecordings, type RecordingRow } from '../recordings';
 import { useAllCourses, useCohortName, useMyCourses, type CourseRow } from '../structure';
 import { useListenerError } from '../liveQuery';
@@ -34,7 +34,11 @@ export function LibraryScreen({
   const cohortNameOf = useCohortName();
 
   return (
-    <Screen title="Recording library" subtitle={isAdmin ? 'All recordings' : 'Your courses'}>
+    <Screen
+      title="Recording library"
+      subtitle={isAdmin ? 'Every recording, across every cohort' : 'Recordings in the courses you run'}
+      width="list"
+    >
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       <View style={styles.chips}>
         {STATUSES.map((s) => (
@@ -106,19 +110,21 @@ function AdminLibrary({
       {filtered.length === 0 ? (
         <Empty>No recordings with that status.</Empty>
       ) : (
-        filtered.map((r) => {
-          const cls = clsFor(r);
-          return (
-            <RecordingLine
-              key={r.id}
-              r={r}
-              courseName={cls.name}
-              cohortName={cohortNameOf(cls.cohortId)}
-              onPlay={() => onPlay(r, cls)}
-              onOpenProgress={() => onOpenProgress(r, cls)}
-            />
-          );
-        })
+        <Grid min={340}>
+          {filtered.map((r) => {
+            const cls = clsFor(r);
+            return (
+              <RecordingLine
+                key={r.id}
+                r={r}
+                courseName={cls.name}
+                cohortName={cohortNameOf(cls.cohortId)}
+                onPlay={() => onPlay(r, cls)}
+                onOpenProgress={() => onOpenProgress(r, cls)}
+              />
+            );
+          })}
+        </Grid>
       )}
     </>
   );
@@ -146,14 +152,16 @@ function CourseSection({
       {filtered.length === 0 ? (
         <Empty>No recordings with that status.</Empty>
       ) : (
-        filtered.map((r) => (
-          <RecordingLine
-            key={r.id}
-            r={r}
-            onPlay={() => onPlay(r, cls)}
-            onOpenProgress={() => onOpenProgress(r, cls)}
-          />
-        ))
+        <Grid min={340}>
+          {filtered.map((r) => (
+            <RecordingLine
+              key={r.id}
+              r={r}
+              onPlay={() => onPlay(r, cls)}
+              onOpenProgress={() => onOpenProgress(r, cls)}
+            />
+          ))}
+        </Grid>
       )}
     </>
   );

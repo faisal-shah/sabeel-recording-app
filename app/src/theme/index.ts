@@ -119,3 +119,42 @@ export const spacing = (n: number) => n * 4;
  * restated in the test that checks it drifts from the thing it is testing.
  */
 export const CONTENT_MAX_WIDTH = 720;
+
+/**
+ * The width at and above which the app switches to its DESKTOP layout.
+ *
+ * Branch on width, never on platform: a tablet in landscape deserves the wide
+ * layout and a half-width browser window deserves the phone one. Above this the
+ * navigation chrome becomes a left rail, list screens flow into a grid, and a
+ * standalone button sizes to its label instead of spanning the window.
+ *
+ * 900 rather than 720: `CONTENT_MAX_WIDTH` is the point a READING column stops
+ * growing, which is a typographic limit and is reached long before a window is
+ * wide enough to give up 72px to a rail and still hold a useful content area.
+ * The two numbers answer different questions and must not be merged.
+ */
+export const WIDE_BREAKPOINT = 900;
+
+/**
+ * The three content maximums, one per kind of content.
+ *
+ * A single "content width" cannot serve all three, which is what makes a
+ * phone-first app look stretched on a laptop: prose capped for readability
+ * leaves a card list stranded in a narrow ribbon down the middle of a 1600px
+ * window, and a card list allowed to fill the window drags body copy out to
+ * unreadable line lengths.
+ *
+ *   read  text, forms, a single record — line length is the constraint
+ *   list  card and row collections — these want the room, and flow into columns
+ *   full  a screen that manages its own panes (the workbench navigator)
+ */
+export const LAYOUT_WIDTHS = {
+  read: CONTENT_MAX_WIDTH,
+  list: 1180,
+  full: Infinity,
+} as const;
+
+export type LayoutWidth = keyof typeof LAYOUT_WIDTHS;
+
+/** Rail width on wide screens; the bar's height is content-driven. */
+export const RAIL_WIDTH = 76;
