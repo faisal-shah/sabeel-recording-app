@@ -28,13 +28,15 @@
  *     overlap                            not another
  *   - every screen has a way out         a pushed screen with no Back is a dead
  *                                        end in a phone browser, where there is
- *                                        no hardware Back either. This app is a
- *                                        pure stack — no tab bar anywhere — so
- *                                        the header Back is the ONLY exit, and
- *                                        a screen that loses it is stranded
- *   - the content column is capped and   the app's one layout rule, read from
- *     centred above the breakpoint,      `app/src/theme/index.ts` rather than
- *     full-bleed below it                restated here
+ *                                        no hardware Back either. A tab root is
+ *                                        never pushed and correctly has none —
+ *                                        the bar is its exit — so the check
+ *                                        asks for whichever applies
+ *   - the content column caps at one of  read from `app/src/theme/index.ts`
+ *     the declared maxima, and centres   rather than restated here. A reading
+ *                                        column and a card grid want opposite
+ *                                        things from a wide window, so there is
+ *                                        more than one legal answer
  *   - no interactive content nested      `accessibilityRole="button"` becomes a
  *     inside a <button>                  real <button> ELEMENT on web, and keys
  *                                        pressed in a control inside one
@@ -97,17 +99,7 @@ import { EMULATOR_PORTS, WEB_PORTS } from './lib/ports.mjs';
 import { EMULATOR_PROJECT_ID, EMULATOR_STORAGE_BUCKET } from './lib/project.mjs';
 import { backButton, byId, byName, resetEmulators, seedWorld, tap } from './lib/seed-world.mjs';
 
-/**
- * WHICH NAVIGATION DESIGN TO SWEEP.
- *
- * Temporary, and it goes when the design decision is made. Three proposals
- * share one build behind `?nav=a|b|c` (app/src/design/variant.ts) so they can be
- * compared against identical data — and a design nobody has swept is a folder
- * of screenshots, not evidence. `SWEEP_NAV=b bash scripts/screens-e2e.sh` runs
- * the whole suite against proposal B.
- */
-const NAV = process.env.SWEEP_NAV ? `?nav=${process.env.SWEEP_NAV}` : '';
-const BASE = (process.env.E2E_BASE ?? `http://127.0.0.1:${WEB_PORTS.sweep}/`) + NAV;
+const BASE = process.env.E2E_BASE ?? `http://127.0.0.1:${WEB_PORTS.sweep}/`;
 const ROOT = resolve(import.meta.dirname, '..');
 const SHOTS = resolve(ROOT, 'shots', 'screens');
 const PROJECT = EMULATOR_PROJECT_ID;
@@ -243,11 +235,11 @@ const auth = admin.auth();
 // ---- the world -----------------------------------------------------------
 
 /**
- * SEEDED ONCE, IN ONE PLACE. `lib/seed-world.mjs` owns the fixture; this suite
- * and `capture-design.mjs` both drive it. It used to be built inline here, and
- * the moment a second suite needed the same world that stopped being tenable —
- * two copies of a seed drift, and the way they drift is that one of them
- * quietly stops covering a state while still reporting a pass.
+ * SEEDED ONCE, IN ONE PLACE. `lib/seed-world.mjs` owns the fixture. It was
+ * built inline here until a second suite needed the same world, which is the
+ * moment that stops being tenable — two copies of a seed drift, and the way
+ * they drift is that one of them quietly stops covering a state while still
+ * reporting a pass.
  */
 await resetEmulators();
 const browser = await chromium.launch();
@@ -758,7 +750,8 @@ const STAFF_SCREENS = 25;
 async function tourStaff(page, tag) {
   const counter = { seen: 0 };
   // The first tab, which for an admin IS the cohort list — `Home` renders it.
-  const visit = visitor(page, tag, 'tab-courses', counter);
+  // The first tab, which for staff is the work queue.
+  const visit = visitor(page, tag, 'tab-today', counter);
   const openCourse = async () => {
     await tap(byId(page, 'tab-courses'));
     await tap(byId(page, 'cohort-open-Autumn 2026'));
@@ -774,6 +767,8 @@ async function tourStaff(page, tag) {
     await tap(byId(page, option));
   };
 
+  // The work queue: attendance not taken, drafts waiting, deadlines closing.
+  // It is the landing screen, so it is also what `home` means for staff.
   await visit('home', async () => {});
   await visit('people', () => tap(byId(page, 'tab-people')));
   // The staff half of the People tab. A SEGMENT, not a route: same screen, other
@@ -892,9 +887,9 @@ const MANAGER_SCREENS = 7;
  */
 async function tourManager(page, tag) {
   const counter = { seen: 0 };
-  // A manager's first tab lands on their own courses — the rules give them no
+  const visit = visitor(page, tag, 'tab-today', counter);
+  // A manager's Courses tab lands on their own courses — the rules give them no
   // cohort list at all, so the same tab resolves to a different screen.
-  const visit = visitor(page, tag, 'tab-courses', counter);
   const openCourse = async () => {
     await tap(byId(page, 'tab-courses'));
     await tap(byId(page, 'course-open-Hikam Foundations'));
@@ -948,12 +943,9 @@ async function tourStudent(page, tag) {
   });
   // An open recording: the transport, the scrubber and the speed chips, which
   // are the only fixed-width row in the app.
-  const openDueSoon = async () => {
-    // Proposal B promotes the most urgent open recording to a hero card and
-    // drops it from the grouped list, so the same recording has two handles.
-    const hero = byId(page, `next-up-${dueSoon.title}`);
-    await tap((await hero.count()) ? hero : byId(page, `task-${dueSoon.title}`));
-  };
+  // The home screen promotes the most urgent OPEN recording to a hero card and
+  // drops it from the grouped list below, so this is where that one is.
+  const openDueSoon = () => tap(byId(page, `next-up-${dueSoon.title}`));
   await visit('player', openDueSoon);
   // THE DOCKED NOW-PLAYING BAR, on a screen that is not the player. It is a row
   // that exists in no other state and it eats 56px off the bottom of every
@@ -1002,8 +994,8 @@ async function signInStudent(page) {
 }
 
 const TOURS = [
-  ['staff', (page) => signInStaff(page, 'dev-signin-first-admin', 'tab-courses'), tourStaff],
-  ['manager', (page) => signInStaff(page, 'dev-signin-manager', 'tab-courses'), tourManager],
+  ['staff', (page) => signInStaff(page, 'dev-signin-first-admin', 'tab-today'), tourStaff],
+  ['manager', (page) => signInStaff(page, 'dev-signin-manager', 'tab-today'), tourManager],
   ['student', signInStudent, tourStudent],
 ];
 

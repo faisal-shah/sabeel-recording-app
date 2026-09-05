@@ -237,10 +237,12 @@ the sweep fails. **Look at them** — the sweep says a layout is not broken, nev
 that it is good.
 
 - **The widths straddle `CONTENT_MAX_WIDTH`, which it READS from
-  `app/src/theme/index.ts`.** That constant is the app's whole responsive
-  behaviour — full-bleed below it, capped and centred at or above it — and a
-  sweep carrying its own copy would drift from the thing it checks. Change the
-  constant and the sweep follows.
+  `app/src/theme/index.ts`,** along with the wider `list` maximum beside it. A
+  sweep carrying its own copy of either would drift from the thing it checks;
+  change a constant and the sweep follows. There is more than one legal answer
+  now — a reading column and a card grid want opposite things from a wide window
+  — so the check accepts any declared maximum and still fails a column that
+  exceeds every one of them, or that fails to centre.
 - **A screen with an editor open is a different screen.** The session editor, the
   ledger's override and a roster removal each add rows that exist in no other
   state, and 320px is where they run out of room. They are toured as their own

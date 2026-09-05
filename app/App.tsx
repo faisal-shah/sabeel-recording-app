@@ -42,8 +42,6 @@ import { TokensScreen } from './src/screens/TokensScreen';
 import { TodayScreen } from './src/screens/TodayScreen';
 import { AppNav } from './src/components/AppNav';
 import { MiniPlayer } from './src/components/MiniPlayer';
-import { Workbench, type WorkbenchTarget } from './src/components/Workbench';
-import { NAV_VARIANT } from './src/design/variant';
 import { useWide } from './src/useWidth';
 import type { RootStackParamList } from './src/nav';
 // Note the two senses of "session" in this file: `useSession` above is the AUTH
@@ -51,7 +49,8 @@ import type { RootStackParamList } from './src/nav';
 import { useSessionState } from './src/sessions';
 import { useRecordingState } from './src/recordings';
 import { useStudent } from './src/students';
-import { useAllCourses, useCourse, useCourseState, useMyCourses } from './src/structure';
+import { useCourse, useCourseState } from './src/structure';
+import { useStaffQueue, type TodayQueue } from './src/today';
 import { Empty, Screen, ScreenOwnsTopInset, Segmented } from './src/components/ui';
 import { getTheme } from './src/theme';
 
@@ -95,8 +94,6 @@ const SHARED_PATHS = {
  *  courses a MANAGER is assigned, not anything a student has. */
 const STAFF_PATHS = {
   ...SHARED_PATHS,
-  Today: 'today',
-  Staff: 'staff',
   Students: 'students',
   StudentDetail: 'students/:studentUid',
   Cohorts: 'cohorts',
@@ -262,7 +259,7 @@ export default function App() {
                 back affordance on pushed screens, and on Home it is what provides
                 the status-bar inset. Hiding it here put the title under the clock. */}
             <Stack.Screen name="Home" options={{ title: 'Class Recordings', headerShown: false }}>
-              {() => <Landing role={role} uid={user.uid} isAdmin={isAdmin} />}
+              {() => <Landing role={role} uid={user.uid} />}
             </Stack.Screen>
             <Stack.Screen name="Notifications" options={{ title: 'Notifications' }}>
               {() => <NotificationsScreen uid={user.uid} isStudent={isStudent} />}
@@ -282,14 +279,6 @@ export default function App() {
               </>
             ) : (
               <>
-                {/* Registered for every staff variant so the route table has
-                    one shape; only Design B's tab bar offers a way in. */}
-                <Stack.Screen name="Today" options={{ title: 'Today', headerShown: false }}>
-                  {() => <Today uid={user.uid} isAdmin={isAdmin} />}
-                </Stack.Screen>
-                <Stack.Screen name="Staff" options={{ title: 'Staff' }}>
-                  {() => <StaffScreen selfUid={user.uid} />}
-                </Stack.Screen>
                 <Stack.Screen name="Students" options={{ title: 'People', headerShown: false }}>
                   {() => <People isAdmin={isAdmin} uid={user.uid} />}
                 </Stack.Screen>
@@ -371,12 +360,12 @@ export default function App() {
 /**
  * THE PERSISTENT CHROME — everything that stays put while screens come and go.
  *
- * Composition, deliberately, rather than React Navigation's own tab navigator:
- * the rail must be a SIBLING of the whole stack (a tab navigator draws its bar
- * inside each screen, so it cannot become a left column), the mini-player has to
- * outlive every screen including the player, and Design C needs a third column
- * that no navigator has a slot for. One layout component that owns the frame and
- * hands the stack a box to render into does all three and stays readable.
+ * Composition, deliberately, rather than React Navigation's own tab navigator.
+ * A tab navigator draws its bar inside each screen, so it can never become a
+ * left column — and the rail has to be a SIBLING of the whole stack. The
+ * mini-player has the same requirement for a different reason: it outlives
+ * every screen, the player included. One layout component that owns the frame
+ * and hands the stack a box to render into does both and stays readable.
  *
  * The route name comes from a container-ref listener rather than a hook, because
  * this component is outside the container it is describing.
@@ -395,12 +384,22 @@ function Shell({
   children: ReactNode;
 }) {
   const wide = useWide();
-  const [route, setRoute] = useState<{ name: keyof RootStackParamList; params?: object }>({
-    name: 'Home',
-  });
+  /*
+   * THE WORK QUEUE IS SUBSCRIBED HERE, not on the screen that shows it.
+   *
+   * The Today tab carries a count of the sessions blocking access, and a badge
+   * that disagrees with the screen behind it is worse than no badge. One
+   * subscription, held above both, makes them the same fact rather than two
+   * queries that happen to match. A student subscribes to nothing — see
+   * `useStaffQueue`.
+   */
+  const queue = useStaffQueue(role !== 'student', isAdmin, uid);
+  // The NAME only. The chrome needs to know which tab to light and whether the
+  // screen owns its own top inset; it has no business knowing a route's subject.
+  const [routeName, setRouteName] = useState<keyof RootStackParamList>('Home');
   const onStateChange = useCallback(() => {
     const current = navRef.getCurrentRoute();
-    if (current) setRoute({ name: current.name as keyof RootStackParamList, params: current.params });
+    if (current) setRouteName(current.name as keyof RootStackParamList);
   }, []);
 
   /**
@@ -429,37 +428,27 @@ function Shell({
     if (navRef.isReady()) navRef.navigate('Player', { recordingId });
   }, []);
 
-  // Design C only. Derived from the live route rather than kept in step by hand,
-  // so a URL opened cold reveals its own place in the tree.
-  const params = (route.params ?? {}) as WorkbenchTarget;
-  const workbench =
-    NAV_VARIANT === 'c' && wide && role !== 'student' ? (
-      <Workbench
-        uid={uid}
-        isAdmin={isAdmin}
-        target={params}
-        onOpenCohort={(cohortId) => navRef.isReady() && navRef.navigate('Courses', { cohortId })}
-        onOpenCourse={(courseId) => navRef.isReady() && navRef.navigate('CourseDetail', { courseId })}
-        onOpenSession={(sessionId, courseId) =>
-          navRef.isReady() && navRef.navigate('SessionDetail', { sessionId, courseId })
-        }
-      />
-    ) : null;
-
   const nav = (variant: 'bar' | 'rail') => (
-    <AppNav role={role} email={email} variant={variant} active={route.name} onNavigate={go} />
+    <AppNav
+      role={role}
+      email={email}
+      variant={variant}
+      active={routeName}
+      blocking={queue.blocking}
+      onNavigate={go}
+    />
   );
 
   // The mini-player is redundant on the screen that IS the player — showing a
   // one-line summary of what fills the screen behind it is noise.
-  const mini = route.name === 'Player' ? null : <MiniPlayer onOpen={openPlayer} />;
+  const mini = routeName === 'Player' ? null : <MiniPlayer onOpen={openPlayer} />;
 
   return (
     <NavStateContext.Provider value={onStateChange}>
-      <ScreenOwnsTopInset.Provider value={HEADERLESS.has(route.name)}>
+      <QueueContext.Provider value={queue}>
+      <ScreenOwnsTopInset.Provider value={HEADERLESS.has(routeName)}>
       <View style={[styles.shell, wide ? styles.shellWide : null]}>
         {wide ? nav('rail') : null}
-        {workbench}
         <View style={styles.stack}>
           {children}
           {mini}
@@ -470,15 +459,32 @@ function Shell({
               the one screen people spend the most time on a cul-de-sac they can
               only leave through Back. Every audio app on either store keeps the
               bar and the now-playing strip together, and this is why.
-              The cost is real — bar, strip and header take 168px of a small
-              phone — and it is the right trade. */}
+              The cost is real and it is the right trade: on a tab root the bar
+              and the strip take about 112px of a small phone, and on a pushed
+              screen the header takes 56px more. */}
           {!wide ? nav('bar') : null}
         </View>
       </View>
       </ScreenOwnsTopInset.Provider>
+      </QueueContext.Provider>
     </NavStateContext.Provider>
   );
 }
+
+/**
+ * The work queue, reaching the screens inside the navigator.
+ *
+ * A prop would have to be threaded through the navigator's render callbacks,
+ * which are written where the queue is not in scope. This is the same shape as
+ * `ScreenOwnsTopInset` next door and for the same reason: one fact the shell
+ * knows and one screen inside it needs.
+ */
+const QueueContext = createContext<TodayQueue>({
+  items: [],
+  blocking: 0,
+  loading: true,
+  truncated: false,
+});
 
 /**
  * THE TAB ROOTS RUN WITHOUT A STACK HEADER.
@@ -497,7 +503,6 @@ function Shell({
  */
 const HEADERLESS = new Set<keyof RootStackParamList>([
   'Home',
-  'Today',
   'Cohorts',
   'MyCourses',
   'Students',
@@ -534,15 +539,12 @@ function Navigator({
   );
 }
 
-function Today({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
+function Today({ uid, queue }: { uid: string; queue: TodayQueue }) {
   const navigation = useNavigation<Nav>();
-  // Admin's queue spans every course; a manager's spans the ones they run.
-  const all = useAllCourses(isAdmin);
-  const mine = useMyCourses(isAdmin ? null : uid);
   return (
     <TodayScreen
       uid={uid}
-      courses={isAdmin ? all : mine}
+      queue={queue}
       onOpenSession={(sessionId, courseId) =>
         navigation.navigate('SessionDetail', { sessionId, courseId })
       }
@@ -559,11 +561,12 @@ function Today({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
  * bar now does — keeping both would mean two competing menus and a landing
  * screen that says nothing about the work.
  *
- * So `Home` is simply THE FIRST TAB, and which screen that is is the decision
- * under review: the queue (Design B) or the course spine (A and C).
+ * So `Home` is simply THE FIRST TAB: their own listening for a student, and the
+ * work queue for staff.
  */
-function Landing({ role, uid, isAdmin }: { role: Role; uid: string; isAdmin: boolean }) {
+function Landing({ role, uid }: { role: Role; uid: string }) {
   const navigation = useNavigation<Nav>();
+  const queue = useContext(QueueContext);
   if (role === 'student') {
     return (
       <StudentHomeScreen
@@ -576,8 +579,7 @@ function Landing({ role, uid, isAdmin }: { role: Role; uid: string; isAdmin: boo
       />
     );
   }
-  if (NAV_VARIANT === 'b') return <Today uid={uid} isAdmin={isAdmin} />;
-  return isAdmin ? <Cohorts /> : <MyCourses uid={uid} />;
+  return <Today uid={uid} queue={queue} />;
 }
 
 function Cohorts() {

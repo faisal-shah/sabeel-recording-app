@@ -20,7 +20,6 @@ import { useMyAssignments, useMyCompletions } from '../completion';
 import { drainCompletionOutbox } from '../completionOutbox';
 import type { CourseRow } from '../structure';
 import type { RecordingRow } from '../recordings';
-import { NAV_VARIANT } from '../design/variant';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -86,7 +85,7 @@ export function StudentHomeScreen({
   }, [assignments, resolved, completions, today]);
 
   /**
-   * Design B's hero: the most urgent recording that can actually be OPENED.
+   * The hero: the most urgent recording that can actually be OPENED.
    *
    * Not simply the first incomplete row. A missed recording sorts above
    * everything and is deliberately not a play target — the server refuses to
@@ -95,10 +94,7 @@ export function StudentHomeScreen({
    * group, where the student is owed the record of what closed and when, and
    * the hero falls through to the first thing still open.
    */
-  const next =
-    NAV_VARIANT === 'b'
-      ? (rows.find((r) => r.bucket === 'dueSoon' || r.bucket === 'upcoming') ?? null)
-      : null;
+  const next = rows.find((r) => r.bucket === 'dueSoon' || r.bucket === 'upcoming') ?? null;
   const listed = next ? rows.filter((r) => r.key !== next.key) : rows;
 
   const groups: { bucket: DueBucket; label: string; rows: TaskRow[] }[] = [
@@ -122,17 +118,16 @@ export function StudentHomeScreen({
       <PushNudge uid={uid} />
 
       {/*
-        DESIGN B leads with the one recording to listen to next, at full size,
-        and lists the rest beneath it.
+        The one recording to listen to next, at full size, above the grouped
+        list of everything else.
 
-        The argument is that this list is usually one item long. A student is
-        excused from a class now and then, not every week, so the common case is
-        a single card sitting under a heading with three empty groups implied
-        around it — and the tap that matters is always the first one. Designs A
-        and C keep the even grouping, which is the better shape the week somebody
-        comes back from a fortnight away with five to catch up on.
+        This list is usually one item long — a student is excused from a class
+        now and then, not every week — so the common case is a single card under
+        a heading with three empty groups implied around it, and the tap that
+        matters is always the first one. The grouping below still carries the
+        week somebody returns from a fortnight away with five to catch up on.
       */}
-      {NAV_VARIANT === 'b' && next ? (
+      {next ? (
         <Pressable
           testID={`next-up-${next.recording.title}`}
           accessibilityRole="button"

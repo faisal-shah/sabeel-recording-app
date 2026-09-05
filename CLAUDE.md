@@ -175,11 +175,12 @@ emulator. That is the default for layout, flows, rules, data and copy.
 of both populations at five widths straddling `CONTENT_MAX_WIDTH` — which it
 reads out of `app/src/theme/index.ts` rather than restating — asserting that the
 page never scrolls sideways, that nothing is clipped by the right edge, that no
-two same-layer controls overlap, that every pushed screen still has its Back, and
-that the content column caps and centres where it should. Targets under 44px are
-reported, never failed. Screens with an editor OPEN are toured as their own
-screens, because the rows a session editor or a ledger override adds exist in no
-other state and 320px is where they run out of room.
+two same-layer controls overlap, that every screen has a way out (Back on a
+pushed screen, the bar on a tab root), and that the content column settles on one
+of the declared maxima and centres. Targets under 44px are reported, never
+failed. Screens with an editor OPEN are toured as their own screens, because the
+rows a session editor or a ledger override adds exist in no other state and 320px
+is where they run out of room.
 
 It is not a substitute for looking: it says a layout is not broken, never that it
 is good. Read `shots/screens/` after a change to a shared component or the theme

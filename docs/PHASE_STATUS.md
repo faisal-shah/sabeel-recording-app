@@ -36,6 +36,74 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-09-05 — **A persistent navigation shell, a real desktop layout, and a
+  work queue as the staff landing screen.**
+
+  Three designs were built behind `?nav=a|b|c` and compared against one seeded
+  world at both widths; **B** was chosen and the other two deleted. What
+  survived:
+
+  **The chrome.** A bottom bar below `WIDE_BREAKPOINT` (900) and a 76px activity
+  rail above it, branched on WIDTH, never on platform. It shows on *every*
+  screen, not only the tab roots — the reflex is to copy the sibling kanban,
+  which hides its bar on the immersive board, and that is wrong here: this app is
+  navigated while something is playing, and hiding the bar on the player makes
+  the most-used screen a cul-de-sac. Tabs reset the stack; More-menu destinations
+  push. Resetting for both was the first version and the sweep caught it as three
+  screens reporting "no Back in the header".
+
+  Staff: **Today · Courses · Library · People · More**. Students:
+  **Listening · Classes · More**. The set does not change with role — an admin
+  and a manager see the same four words, resolved to different routes. Both hub
+  screens are gone; `Home` is simply the first tab.
+
+  **Playback moved out of `PlayerScreen` into a module-level session.** It had
+  to: while the audio lived in that screen's state, leaving the screen unmounted
+  the hook and tore it down, so a student could not check their attendance record
+  without losing their place in a two-hour lecture. The player is now one view
+  onto the session and the docked bar is another. `player.ts` keeps its module
+  handle, but "at most one player alive" stopped being a rule it defends by hand
+  and became the shape.
+
+  **Three content maxima instead of one.** `CONTENT_MAX_WIDTH` (720) is now the
+  READING cap only; `LAYOUT_WIDTHS.list` (1180) serves collections, which flow
+  into a measured grid. Prose and a card grid want opposite things from a 1500px
+  window and one number cannot serve both. Attendance lays out as a register
+  above 900px — name and control on one line — which halves the height of a
+  fourteen-student roster on the screen a teacher uses most.
+
+  **The worst defect of the lot passed every assertion.** `Row` grew each of its
+  cells to fill, which is right at 320px and gives every cell 537px at 1400px,
+  leaving pairs of related buttons 400px apart on five screens at once. Nothing
+  overlapped, nothing clipped, the column capped correctly. It took looking at a
+  screenshot and then measuring the DOM. The sweep says a layout is not broken;
+  it never says it is good.
+
+  **Today is derived and live.** Sessions past their date with no attendance,
+  drafts waiting to publish, sessions with no audio, recordings closing within
+  the week — computed from documents the reader can already see, with no queue
+  collection to keep in step. Two `onSnapshot` listeners rather than a one-shot
+  read, because the tab carries a count of the sessions blocking access and a
+  badge that lies about work you have just finished is worse than no badge. The
+  count and the screen come from one subscription held at the shell.
+
+  Also shipped, from Faisal's locked decisions: `PRIVACY_URL` reachable inside
+  the app (Apple 5.1.1(i)); `CAN_CREATE_ACCOUNTS` removing "Add a student" from
+  the native builds with nothing in its place, since a pointer at the web flow is
+  itself the Play trigger; and a student's own first-party password reset. Offline
+  downloads were confirmed still deferred — `expo-file-system` is imported in one
+  module, for CSV export — so there is no Downloads tab.
+
+  `screens-e2e.mjs` now reads its fixture from `scripts/lib/seed-world.mjs`
+  rather than building one inline; the second caller is what made two copies of a
+  seed untenable.
+
+  Green on this machine: lint, typecheck, knip, 206 unit, 252 emulator, 703/703
+  sweep at five widths, and the web e2e. **Not yet run on a device** — this box
+  has no hardware virtualization, and the playback refactor touches exactly the
+  seam a browser cannot reach, so the pre-release AVD pass is mandatory before
+  any release.
+
 - 2026-08-28 — **v0.4.3: the first Android verification this app has had, and it
   found two things every other check is blind to.**
 

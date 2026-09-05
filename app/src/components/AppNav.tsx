@@ -6,7 +6,6 @@ import { PRIVACY_URL, type Role } from '@sabeel/shared';
 import { Sheet, SheetOption, SheetSection } from './Sheet';
 import { signOut } from '../session';
 import { sendMyPasswordReset } from '../students';
-import { NAV_VARIANT, VARIANT_NAME } from '../design/variant';
 import { BUILD_LABEL } from '../buildInfo';
 import { IS_DEV } from '../env';
 import { RAIL_WIDTH, getTheme, spacing } from '../theme';
@@ -16,7 +15,7 @@ const t = getTheme();
 type IconName = ComponentProps<typeof MaterialIcons>['name'];
 type RouteName = keyof RootStackParamList;
 
-export type Tab = {
+type Tab = {
   key: string;
   label: string;
   icon: IconName;
@@ -28,17 +27,18 @@ export type Tab = {
 };
 
 /**
- * THE TAB SETS — the whole of what separates the three proposals.
+ * THE DESTINATIONS THAT EARN A PERMANENT SLOT.
  *
- * Everything else in this shell (the rail, the sheet, the mini-player, the
- * wide-layout primitives) is shared, because those are settled. What is being
- * decided is which handful of destinations earn a permanent slot, and that is
- * this table.
+ * Four for staff and two for students, plus More. The rule for what belongs
+ * here is that it is somewhere you GO, repeatedly — which is why notification
+ * preferences are not on it: a screen visited twice in an account's life does
+ * not deserve a permanent slot, however often it gets proposed for one.
  *
- * The set does NOT change with role. An admin and a manager see the same five
+ * THE SET DOES NOT CHANGE WITH ROLE. An admin and a manager see the same four
  * words; what differs is where each one lands. A bar that grows a tab when an
  * admin signs in makes the manager's app read as a stripped-down copy of a
- * fuller one, and it moves every other tab sideways on a shared device.
+ * fuller one, and on a shared device it moves every other tab sideways under
+ * the person's thumb.
  */
 const STUDENT_TABS: Tab[] = [
   {
@@ -58,53 +58,52 @@ const STUDENT_TABS: Tab[] = [
 ];
 
 function staffTabs(isAdmin: boolean): Tab[] {
-  const queueLeads = NAV_VARIANT === 'b';
-  const drilldown: RouteName[] = [
-    'Cohorts',
-    'MyCourses',
-    'Courses',
-    'CourseDetail',
-    'CourseAttendance',
-    'Sessions',
-    'SessionDetail',
-    'ZoomImport',
-    'StudentLedger',
+  return [
+    {
+      key: 'today',
+      label: 'Today',
+      icon: 'checklist',
+      // `Home` IS the first tab: it is the route the bare URL resolves to and
+      // the one the app opens on, so pointing the first tab anywhere else would
+      // leave the landing screen belonging to no tab.
+      route: 'Home',
+      activeFor: ['Home'],
+    },
+    {
+      key: 'courses',
+      label: 'Courses',
+      icon: 'menu-book',
+      // The one route that differs by role. A manager has no cohort list — the
+      // rules give them no unconstrained course query — so their spine is the
+      // courses they were assigned.
+      route: isAdmin ? 'Cohorts' : 'MyCourses',
+      activeFor: [
+        'Cohorts',
+        'MyCourses',
+        'Courses',
+        'CourseDetail',
+        'CourseAttendance',
+        'Sessions',
+        'SessionDetail',
+        'ZoomImport',
+        'StudentLedger',
+      ],
+    },
+    {
+      key: 'library',
+      label: 'Library',
+      icon: 'library-music',
+      route: 'Library',
+      activeFor: ['Library', 'RecordingLedger'],
+    },
+    {
+      key: 'people',
+      label: 'People',
+      icon: 'people',
+      route: 'Students',
+      activeFor: ['Students', 'StudentDetail'],
+    },
   ];
-  const courses: Tab = {
-    key: 'courses',
-    label: 'Courses',
-    icon: 'menu-book',
-    // `Home` IS the first tab, whichever design is running: it is the route the
-    // bare URL resolves to and the one the app opens on, so pointing the first
-    // tab anywhere else would leave the landing screen belonging to no tab.
-    // What `Home` renders differs by role — an admin has a cohort list, a
-    // manager has no unconstrained course query at all and gets the courses
-    // they were assigned.
-    route: queueLeads ? (isAdmin ? 'Cohorts' : 'MyCourses') : 'Home',
-    activeFor: queueLeads ? drilldown : ['Home', ...drilldown],
-  };
-  const library: Tab = {
-    key: 'library',
-    label: 'Library',
-    icon: 'library-music',
-    route: 'Library',
-    activeFor: ['Library', 'RecordingLedger'],
-  };
-  const people: Tab = {
-    key: 'people',
-    label: 'People',
-    icon: 'people',
-    route: 'Students',
-    activeFor: ['Students', 'StudentDetail', 'Staff'],
-  };
-  const today: Tab = {
-    key: 'today',
-    label: 'Today',
-    icon: 'checklist',
-    route: 'Home',
-    activeFor: ['Home', 'Today'],
-  };
-  return queueLeads ? [today, courses, library, people] : [courses, library, people];
 }
 
 function tabsFor(role: Role): Tab[] {
@@ -125,12 +124,21 @@ export function AppNav({
   email,
   variant,
   active,
+  blocking,
   onNavigate,
 }: {
   role: Role;
   email: string;
   variant: 'bar' | 'rail';
   active: RouteName;
+  /**
+   * Sessions whose attendance is not in, and which therefore grant nobody
+   * anything. The ONLY thing in this app that gets a badge: under the
+   * excused-only policy it is the one failure that is invisible from every
+   * other screen, and a badge that means "several things are somewhat
+   * outstanding" teaches people to ignore it.
+   */
+  blocking: number;
   onNavigate: (route: RouteName, mode: 'tab' | 'push') => void;
 }) {
   const insets = useSafeAreaInsets();
@@ -147,6 +155,7 @@ export function AppNav({
       label={tab.label}
       rail={rail}
       active={tab.activeFor.includes(active)}
+      badge={tab.key === 'today' ? blocking : 0}
       testID={`tab-${tab.key}`}
       onPress={() => onNavigate(tab.route, 'tab')}
     />
@@ -242,7 +251,6 @@ export function AppNav({
       <View style={styles.build}>
         <Text style={styles.buildText}>
           Class Recordings · {BUILD_LABEL}
-          {IS_DEV ? ` · design ${NAV_VARIANT.toUpperCase()} ${VARIANT_NAME[NAV_VARIANT]}` : ''}
         </Text>
       </View>
     </Sheet>
@@ -285,6 +293,7 @@ function NavItem({
   active,
   onPress,
   rail,
+  badge = 0,
   testID,
 }: {
   icon: IconName;
@@ -292,6 +301,7 @@ function NavItem({
   active: boolean;
   onPress: () => void;
   rail: boolean;
+  badge?: number;
   testID?: string;
 }) {
   // Raspberry is the identity accent, spent on the active destination and
@@ -301,7 +311,13 @@ function NavItem({
     <Pressable
       testID={testID}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      /* The badge is a number drawn over an icon, so a screen reader saw nothing
+         of it and announced "Today" whether one class was locked out or nine.
+         Appended rather than replacing the label, so the name still STARTS with
+         the destination — the sweep finds every tab by that prefix. */
+      accessibilityLabel={
+        badge > 0 ? `${label}, ${badge} blocking access` : label
+      }
       accessibilityState={{ selected: active }}
       onPress={onPress}
       style={({ pressed }) => [
@@ -311,7 +327,14 @@ function NavItem({
         pressed ? styles.itemPressed : null,
       ]}
     >
-      <MaterialIcons name={icon} size={24} color={tint} />
+      <View>
+        <MaterialIcons name={icon} size={24} color={tint} />
+        {badge > 0 ? (
+          <View testID={`${testID}-badge`} style={styles.badge}>
+            <Text style={styles.badgeText}>{badge > 9 ? '9+' : badge}</Text>
+          </View>
+        ) : null}
+      </View>
       <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
         {label}
       </Text>
@@ -346,6 +369,22 @@ const styles = StyleSheet.create({
   itemActive: { backgroundColor: t.bg.accentSoft },
   itemPressed: { opacity: 0.6 },
   label: { fontSize: 11, fontWeight: '600' },
+  // Danger, not the brand accent: this count is a warning about access being
+  // withheld, and raspberry is already doing the "which tab am I on" job two
+  // pixels away.
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -10,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: t.feedback.danger,
+  },
+  badgeText: { fontSize: 10, fontWeight: '700', color: t.text.inverse },
   build: { alignItems: 'center', paddingTop: spacing(3) },
   buildText: { fontSize: 11, color: t.text.muted },
 });

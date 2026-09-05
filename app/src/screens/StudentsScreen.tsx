@@ -47,6 +47,16 @@ export function StudentsScreen({
   const students = useStudents(true);
   const active = students.filter((s) => s.status !== 'disabled');
   const disabled = students.filter((s) => s.status === 'disabled');
+  /*
+   * THE CONFIRMATION BELONGS HERE, not inside the sheet that created the account.
+   *
+   * Every other create sheet closes on success and the new row appearing in the
+   * list behind it IS the confirmation. This one has something more to say — a
+   * set-password link has been emailed, and nobody handled a password — and the
+   * list cannot say it. Closing the sheet with the message still in it meant the
+   * message was never read.
+   */
+  const [created, setCreated] = useState<string | null>(null);
   return (
     <Screen
       title="People"
@@ -60,12 +70,13 @@ export function StudentsScreen({
       actions={
         CAN_CREATE_ACCOUNTS ? (
           <AddAction testID="students-add" label="Add a student" title="Add a student">
-            <AddStudent isAdmin={isAdmin} uid={uid} />
+            <AddStudent isAdmin={isAdmin} uid={uid} onCreated={setCreated} />
           </AddAction>
         ) : null
       }
     >
       {header}
+      {created ? <Notice tone="success">{created}</Notice> : null}
 
       {/* The list is for finding someone; everything you can DO to them lives on
           their page. Per-row actions made every row three controls wide and
@@ -131,7 +142,16 @@ interface CourseOption {
  * a user can reach a creation flow, and with no affordance there is no route to
  * this at all.
  */
-function AddStudent({ isAdmin, uid }: { isAdmin: boolean; uid: string }) {
+function AddStudent({
+  isAdmin,
+  uid,
+  onCreated,
+}: {
+  isAdmin: boolean;
+  uid: string;
+  /** Reports the success line to the screen, which is where it can be read. */
+  onCreated: (message: string) => void;
+}) {
   const close = useAddAction();
   const courseOptions = useCourseOptions(isAdmin, uid);
   const [displayName, setDisplayName] = useState('');
@@ -139,19 +159,18 @@ function AddStudent({ isAdmin, uid }: { isAdmin: boolean; uid: string }) {
   const [courseId, setCourseId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
 
   const create = async () => {
     setBusy(true);
     setError(null);
-    setInfo(null);
     try {
+      const address = email.trim();
       await createStudent({
         displayName: displayName.trim(),
-        email: email.trim().toLowerCase(),
+        email: address.toLowerCase(),
         courseId: courseId ?? undefined,
       });
-      setInfo(`Account created. A set-password link has been emailed to ${email.trim()}.`);
+      onCreated(`Account created. A set-password link has been emailed to ${address}.`);
       setDisplayName('');
       setEmail('');
       setCourseId(null);
@@ -219,7 +238,6 @@ function AddStudent({ isAdmin, uid }: { isAdmin: boolean; uid: string }) {
         onPress={() => void create()}
       />
       {error ? <Notice tone="error">{error}</Notice> : null}
-      {info ? <Notice tone="success">{info}</Notice> : null}
     </>
   );
 }

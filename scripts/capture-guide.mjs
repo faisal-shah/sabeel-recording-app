@@ -38,10 +38,16 @@ async function pair(p, name, { viewportOnly = false } = {}) {
   console.log('  ✓', name);
 }
 
-// Admin: Cohorts → Autumn 2026 → Hikam Foundations, from home.
+/** Open one of the rows behind "More" — the audit history lives there. */
+async function more(p, option) {
+  await tap(p, 'tab-more'); await p.waitForTimeout(600);
+  await tap(p, option);
+}
+
+// Admin: Courses → Autumn 2026 → Hikam Foundations, from home.
 async function openHikam(p) {
   await home(p);
-  await tap(p, 'nav-cohorts'); await p.waitForTimeout(2000);
+  await tap(p, 'tab-courses'); await p.waitForTimeout(2000);
   await tap(p, 'cohort-open-Autumn 2026'); await p.waitForTimeout(2000);
   await tap(p, 'course-open-Hikam Foundations');
   await p.getByTestId('nav-sessions').waitFor({ timeout: 15000 });
@@ -56,14 +62,16 @@ await stu.getByTestId('signin-password').fill('HikamStudent1');
 await tap(stu, 'signin-student');
 await sawText(stu, 'Your listening', 25000);
 await pair(stu, '02-student-home');
-await tap(stu, 'task-Session 3 — Patience in Hardship');
+// The hero card: the home screen promotes the most urgent recording still open
+// and drops it from the grouped list, so this is the handle it has.
+await tap(stu, 'next-up-Session 3 — Patience in Hardship');
 await stu.getByTestId('player-play').waitFor({ timeout: 25000 });
 await tap(stu, 'player-play');
 await stu.waitForTimeout(2500);
 await pair(stu, '03-player');
 await home(stu);
 await sawText(stu, 'Your listening', 15000);
-await tap(stu, 'student-classes');
+await tap(stu, 'tab-classes');
 await stu.getByTestId('myclass-Hikam Foundations').waitFor({ timeout: 20000 });
 await tap(stu, 'myclass-Hikam Foundations');
 await stu.waitForTimeout(3000);
@@ -74,10 +82,11 @@ console.log('Admin / staff');
 const adm = await newPage(PHONE);
 await tap(adm, 'dev-signin-first-admin');
 await fetch(`${FN}/bootstrapAdmin`).catch(() => {});
-await adm.getByTestId('nav-cohorts').waitFor({ timeout: 30000 });
+await adm.getByTestId('tab-today').waitFor({ timeout: 30000 });
+await adm.waitForTimeout(2500);
 await pair(adm, '10-staff-home');
 
-await tap(adm, 'nav-students'); await adm.waitForTimeout(3000);
+await tap(adm, 'tab-people'); await adm.waitForTimeout(3000);
 // Open the Disabled section so the list is photographed showing both parts —
 // a closed collapsible documents nothing about what is inside it.
 await tap(adm, 'students-disabled'); await adm.waitForTimeout(800);
@@ -88,11 +97,12 @@ await tap(adm, 'student-open-fatima.ahmed@example.com'); await adm.waitForTimeou
 await pair(adm, '11b-student-page');
 
 await home(adm);
-await tap(adm, 'nav-staff'); await adm.waitForTimeout(1200);
+await tap(adm, 'tab-people'); await adm.waitForTimeout(1500);
+await tap(adm, 'segment-staff'); await adm.waitForTimeout(1200);
 await pair(adm, '12-staff-approvals');
 
 await home(adm);
-await tap(adm, 'nav-cohorts'); await adm.waitForTimeout(3000);
+await tap(adm, 'tab-courses'); await adm.waitForTimeout(3000);
 await tap(adm, 'cohorts-archived'); await adm.waitForTimeout(800);
 await pair(adm, '13-cohorts');
 // The cohort's own page — its settings (archiving lives here now) and courses.
@@ -128,11 +138,11 @@ await tap(adm, 'nav-attendance'); await adm.waitForTimeout(2000);
 await pair(adm, '20-attendance-report');
 
 await home(adm);
-await tap(adm, 'nav-library'); await adm.waitForTimeout(3000);
+await tap(adm, 'tab-library'); await adm.waitForTimeout(3000);
 await pair(adm, '21-library');
 
 await home(adm);
-await tap(adm, 'nav-audit-global'); await adm.waitForTimeout(1500);
+await more(adm, 'more-audit'); await adm.waitForTimeout(1500);
 await pair(adm, '22-audit');
 await adm.context().close();
 

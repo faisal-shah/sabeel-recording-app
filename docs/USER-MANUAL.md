@@ -39,6 +39,23 @@ a phone** and once **on a computer**, so you can recognize it wherever you are.
 
 That's the whole system. Everything below is detail.
 
+## Finding your way around
+
+The app has a **bar along the bottom** on a phone and a **narrow strip of icons
+down the left** on a computer. It is the same set of places either way, and it
+is always there — so wherever you are, you are one tap from anywhere else.
+
+Students have **Listening**, **Classes** and **More**. Staff have **Today**,
+**Courses**, **Library**, **People** and **More**.
+
+**More** holds the things you need occasionally rather than daily: notification
+settings, the privacy policy, signing out, and — for students — changing your
+password. Admins also reach the audit history there.
+
+When something is playing, a slim bar sits just above the navigation showing
+what it is, with a play/pause button. You can move around the app and it keeps
+playing; tap the bar to go back to the full player.
+
 ---
 
 # Part 1 — For students
@@ -77,7 +94,10 @@ missed a class without being excused, it isn't opened to you. So this one list i
 both what you *may* listen to and what you *need* to listen to — there is no
 separate archive to go hunting through.
 
-It's grouped so nothing slips past you:
+**The one to listen to next is at the top, in full.** It is the most urgent
+recording still open to you, shown as a large card so there is no hunting on the
+screen you open most. Everything else sits underneath it, grouped so nothing
+slips past you:
 
 - **Missed** — the date to listen by has passed. Shown in red, with the date it
   closed.
@@ -120,6 +140,12 @@ laptop at home — it remembers where you were.
 If the teacher left a note, it appears under **About this recording** — often
 "focus on this part" or "we'll discuss this next week."
 
+**You can leave this screen without stopping the audio.** Go and check your
+attendance record or open another class — a slim bar above the navigation keeps
+showing what's playing, with a play/pause button, and tapping it brings you back
+here. On a computer that bar carries the skip buttons and the times as well.
+Closing it with the **×** is what stops playback.
+
 ## 1.4 Marking a recording complete
 
 The **Mark complete** button is at the bottom of the player. Tap it when you've
@@ -142,8 +168,9 @@ A few things worth knowing:
 <figure class="wd"><img src="manual/img/04-attendance-record-desktop.png" alt="Your attendance for a class on a computer"><figcaption>On a computer</figcaption></figure>
 </div>
 
-Tap **My classes** at the bottom of your home screen to see the classes you're
-enrolled in, then tap one to see **your own attendance** for it.
+Tap **Classes** in the navigation to see the classes you're enrolled in — each
+one shows your tally at a glance — then tap one to see **your own attendance**
+for it.
 
 At the top is a tally — how many meetings you were **present** for, **absent**
 from, and **excused** from. Below it, every meeting your teacher recorded you in,
@@ -157,7 +184,14 @@ Two things this page is not: it isn't a way to play anything (that's your home
 screen), and it never shows anyone else's attendance. You see your own marks and
 nobody else's.
 
-## 1.6 Listening on a spotty connection
+## 1.6 Changing your password
+
+Tap **More**, then **Change password**. The app emails you a link to set a new
+one — the same kind of link you used when your account was first created. Your
+account is created for you by the institute; you can't sign yourself up, and
+there's nothing to create here.
+
+## 1.7 Listening on a spotty connection
 
 The app is built to survive a bad signal. If you mark a recording complete while
 you're offline or your connection drops, the app **holds onto that** and syncs it
@@ -168,10 +202,10 @@ sent." You don't have to do anything; it sorts itself out.
 Streaming the audio itself does need a connection, so for a long class on the go,
 a stable network (or Wi-Fi before you leave) is your friend.
 
-## 1.7 Notifications
+## 1.8 Notifications
 
-The app can send you two messages, and only two. Tap **Notifications** at the
-bottom of your home screen to turn either off:
+The app can send you two messages, and only two. Tap **More**, then
+**Notifications**, to turn either off:
 
 - **A recording is ready for me** — when a class you were excused from has a
   recording you can listen to. Worth leaving on: it's the only way you'll know
@@ -184,8 +218,8 @@ closes: by then there'd be nothing you could do about it.
 
 Your choices follow you — they apply on every device you sign in on. Reaching
 this device needs its permission as well. The app offers to set that up once, on
-your home screen after you sign in; you can also tap **Enable notifications** on
-this screen at any time. If it says they are blocked, use **Open settings** on a
+your listening screen after you sign in; you can also tap **Enable
+notifications** on this screen at any time. If it says they are blocked, use **Open settings** on a
 phone, or allow them from the site settings behind the icon in your browser's
 address bar. If it says this device can't show them at all, either the browser
 doesn't support them or setting them up didn't finish — try again from this
@@ -208,26 +242,34 @@ with Google** with your Sabeel Google account.
 can do anything. Once they do, sign in again and you're in. (If you're the very
 first administrator, that step was done for you during setup.)
 
-## 2.2 The staff home
+## 2.2 Today — what's waiting
 
 <div class="pair">
-<figure class="ph"><img src="manual/img/10-staff-home-phone.png" alt="Staff home on a phone"><figcaption>On a phone</figcaption></figure>
-<figure class="wd"><img src="manual/img/10-staff-home-desktop.png" alt="Staff home on a computer"><figcaption>On a computer</figcaption></figure>
+<figure class="ph"><img src="manual/img/10-staff-home-phone.png" alt="Today on a phone"><figcaption>On a phone</figcaption></figure>
+<figure class="wd"><img src="manual/img/10-staff-home-desktop.png" alt="Today on a computer"><figcaption>On a computer</figcaption></figure>
 </div>
 
-Your home screen is a hub, grouped into what you **manage** and what you
-**report** on:
+The app opens on **Today**: everything across your courses that is waiting on
+you, most urgent first. Every card is a link straight to the screen where you do
+the thing.
 
-- **Cohorts & courses** — the heart of the app: terms, courses, their sessions
-  and recordings, and the ledgers that track them.
-- **Staff** *(admin only)* — approve new staff and set roles.
-- **Students** *(admin only)* — create student accounts and manage access.
-- **Recording library** — every recording across every course you can see, with
-  filters.
-- **Audit history** — the record of who did what.
+- **Attendance not taken** — a class has met and nobody has submitted the
+  register. This is first and it's marked in red, because until it's submitted
+  **nobody in that class has access to the recording** — and nothing else on any
+  screen would tell you. The count on the **Today** tab is this number.
+- **Waiting to publish** — a recording is added but still a draft, or an import
+  needs attention before it can go out.
+- **No recording yet** — attendance is in, the audio isn't.
+- **Closing soon** — access to a recording ends within the week; a good moment
+  to see who still hasn't listened.
 
-Managers see a smaller version of this — just what they need for their own
-courses.
+A card disappears the moment you close the gap, and the count goes with it. An
+empty Today is the answer, not a blank screen: it means attendance is in, every
+recording is published, and nothing closes this week.
+
+The rest of the navigation is the structure: **Courses** (cohorts and their
+courses for an admin, your own courses for a manager), **Library**, **People**,
+and **More**.
 
 ## 2.3 Cohorts, courses, and a course at a glance
 
@@ -474,16 +516,25 @@ unpublished / needs attention**. It's the fastest way to answer "which recording
 still need audio?" or "what's flagged?" without walking course by course. Admins
 see everything; managers see their assigned courses.
 
-## 2.11 Managing students *(admin)*
+## 2.11 People — managing students *(admin)*
 
 <div class="pair">
-<figure class="ph"><img src="manual/img/11-students-phone.png" alt="Students screen on a phone"><figcaption>On a phone</figcaption></figure>
-<figure class="wd"><img src="manual/img/11-students-desktop.png" alt="Students screen on a computer"><figcaption>On a computer</figcaption></figure>
+<figure class="ph"><img src="manual/img/11-students-phone.png" alt="The People screen on a phone"><figcaption>On a phone</figcaption></figure>
+<figure class="wd"><img src="manual/img/11-students-desktop.png" alt="The People screen on a computer"><figcaption>On a computer</figcaption></figure>
 </div>
 
-To add a student, enter their **full name** and **email**, optionally **enrol
-them in a course** right away, and tap **Create account**. The app emails them a
-link to set their own password — you never handle passwords.
+**People** holds both populations. Admins get a **Students / Staff** switch above
+the list; managers see the students in their courses and no switch, because
+approving staff isn't theirs to do.
+
+To add a student, tap **Add a student**, enter their **full name** and **email**,
+optionally **enrol them in a course** right away, and tap **Create account**. The
+app emails them a link to set their own password — you never handle passwords.
+
+**Creating accounts is done on the website, not in the phone apps.** The button
+is simply absent there. This is a store requirement rather than a limitation we
+chose, and it only affects *creating* — changing roles, disabling an account and
+enrolling someone all work everywhere.
 
 The list itself is just for finding someone. **Tap a student to open their
 page**, where everything about them lives. Students you've disabled move out of
@@ -518,18 +569,19 @@ sees every course.
 
 ## 2.12 Notifications *(staff)*
 
-Tap **Notifications** on your home screen. Staff get one message:
+Tap **More**, then **Notifications**. Staff get one message:
 
 - **Attendance still not taken** — a couple of days after a class meeting whose
   attendance you never submitted.
 
 It's more useful than it sounds. Until attendance is submitted nobody has been
 excused, so a recording you've already published is sitting there that not one
-student can open — and nothing else in the app tells you.
+student can open. **Today** now shows the same thing in the app, with a count on
+the tab, so this message is a nudge rather than the only warning.
 
 Reaching this device needs its permission as well. The app offers to set that up
-once, on your home screen after you sign in; you can also tap **Enable
-notifications** on this screen at any time. If it says they are blocked, use
+once, on Today after you sign in; you can also tap **Enable notifications** on
+this screen at any time. If it says they are blocked, use
 **Open settings** on a phone, or allow them from the site settings behind the
 icon in your browser's address bar.
 
@@ -544,8 +596,8 @@ icon in your browser's address bar.
 <figure class="wd"><img src="manual/img/12-staff-approvals-desktop.png" alt="Staff approvals on a computer"><figcaption>On a computer</figcaption></figure>
 </div>
 
-New staff who sign in with Google land in **Waiting for approval**. For each, you
-choose the role as you approve:
+Open **People** and switch to **Staff**. New staff who sign in with Google land
+in **Waiting for approval**. For each, you choose the role as you approve:
 
 - **Approve as manager** — they can run the courses you later assign to them.
 - **Approve as admin** — full access, including approving other staff.
@@ -601,13 +653,13 @@ confirmation, and is audited. Reach for disable, unpublish, or archive first.
 
 | I want to… | Do this |
 |---|---|
-| **Listen to something I missed** | Home → tap the card → big round button. |
+| **Listen to something I missed** | **Listening** → tap the card → big round button. |
 | **Pick up where I left off** | Just reopen it — your place is saved automatically, on any device. |
 | **Slow down or speed up** | Tap **1×–2×** on the player. |
 | **Mark something done** | Press play once, then **Mark complete** at the bottom of the player. |
-| **See my attendance for a class** | Home → **My classes** → tap the class. |
+| **See my attendance for a class** | **Classes** → tap the class. |
 | **Set my student password** | Open the emailed link, or tap **Email me a password link** on sign-in. |
-| **Add a session** *(staff)* | Course → **Sessions** → title + date → **Create session**. |
+| **Add a session** *(staff)* | Course → **Sessions** → **Add a session** → title + date → **Create session**. |
 | **Take attendance** *(staff)* | Session → mark Present / Absent / Excused → **Submit attendance**. |
 | **Add a recording** *(staff)* | Open the session → **Upload audio…** (or import from Zoom). |
 | **Open a recording to students** *(staff)* | Mark them **Excused**, then **Publish** — that is the whole of it. |
@@ -617,11 +669,11 @@ confirmation, and is audited. Reach for disable, unpublish, or archive first.
 | **Make a latecomer catch up on an old session** *(staff)* | Open that session → mark them **Excused** → **Submit attendance**. (Move **Listen by** forward first if it has passed.) |
 | **See course attendance** *(staff)* | Course → **Attendance report** (toggle by session / by student). |
 | **Export for records** *(staff)* | Any ledger or the attendance report → **Export CSV**. |
-| **Turn a notification off** | Home → **Notifications** → tap the one you don't want. |
-| **Approve a new teacher** *(admin)* | Home → **Staff** → **Approve as manager / admin**. |
+| **Turn a notification off** | **More** → **Notifications** → tap the one you don't want. |
+| **Approve a new teacher** *(admin)* | **People** → **Staff** → **Approve as manager / admin**. |
 | **Give a manager a course** *(admin)* | Course page → **Managers** → add them. |
-| **Create a student** *(admin)* | Home → **Students** → name + email → **Create account**. |
-| **See who changed what** *(admin)* | Home → **Audit history**. |
+| **Create a student** *(admin)* | On the website: **People** → **Add a student** → name + email → **Create account**. |
+| **See who changed what** *(admin)* | **More** → **Audit history**. |
 
 ## Troubleshooting
 
@@ -630,7 +682,7 @@ for an admin to approve them. The screen updates by itself the moment they do �
 refresh needed. If you're stuck, contact your administrator.
 
 **A student can't sign in.** Check the email address matches the one on their
-account exactly, then open their page from the Students screen and use
+account exactly, then open their page from the People screen and use
 **Resend password link** so they can set a fresh password. New students have no password until they use that link.
 
 **The audio won't play.** Streaming needs a working connection — try switching

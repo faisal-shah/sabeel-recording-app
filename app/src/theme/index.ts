@@ -109,10 +109,14 @@ export const spacing = (n: number) => n * 4;
 /**
  * The width the content column stops growing at.
  *
- * The one number this app's layout turns on. Below it a screen is full-bleed;
- * at and above it the column caps here and centres, so the empty space lands on
- * both sides instead of leaving lines too long to read. There is no second
- * layout — no rail, no columns — which is why this is the whole breakpoint.
+ * The READING maximum: prose, forms, a single record. Below it a screen is
+ * full-bleed; at and above it the column caps here and centres, so the empty
+ * space lands on both sides instead of leaving lines too long to read.
+ *
+ * It is no longer the whole of the app's responsive behaviour — see
+ * `LAYOUT_WIDTHS` below, and `WIDE_BREAKPOINT`, which is a different number
+ * answering a different question. This one is a typographic limit and is
+ * reached long before a window is wide enough to give up space to a rail.
  *
  * `scripts/screens-e2e.mjs` READS THIS FILE for the number rather than keeping
  * its own copy, and picks its viewport widths to straddle it. A constant

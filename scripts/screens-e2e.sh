@@ -45,9 +45,6 @@ WEB_LOG="$PWD/shots/expo-screens-e2e.log"
 mkdir -p "$(dirname "$WEB_LOG")"
 : > "$WEB_LOG"
 export E2E_BASE="http://127.0.0.1:${WEB_PORT}/"
-# Passed straight through to the harness; see SWEEP_NAV there. Temporary, and it
-# goes with the design decision.
-export SWEEP_NAV="${SWEEP_NAV:-}"
 
 bash scripts/free-emulator-ports.sh
 

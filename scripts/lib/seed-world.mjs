@@ -4,8 +4,7 @@
  * Extracted from `screens-e2e.mjs`, which built it inline. A second suite
  * needing the same world is exactly the moment that stops being fine: two
  * copies of a seed drift, and the way they drift is that one of them stops
- * covering a state while still reporting a pass. `capture-design.mjs` is that
- * second caller.
+ * covering a state while still reporting a pass.
  *
  * The content is chosen to BREAK layouts and to cover every state a screen can
  * be in — the longest name a real cohort would write, a roster longer than one

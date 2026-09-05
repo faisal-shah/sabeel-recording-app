@@ -1,7 +1,17 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { DEFAULT_DUE_DAYS, INSTITUTE_TIMEZONE, addDays, todayInZone } from '@sabeel/shared';
-import { AddAction, Button, Card, Empty, Field, Notice, Screen, SectionTitle } from '../components/ui';
+import {
+  AddAction,
+  Button,
+  Card,
+  Empty,
+  Field,
+  Notice,
+  Screen,
+  SectionTitle,
+  useAddAction,
+} from '../components/ui';
 import { DateField } from '../components/DateField';
 import { createSession, useCourseSessions, type SessionRow } from '../sessions';
 import { getTheme, spacing } from '../theme';
@@ -23,6 +33,87 @@ function dueFor(date: string): string {
 }
 
 /**
+ * The create form, in the sheet the header action opens.
+ *
+ * ITS OWN COMPONENT so it can close the sheet on success, which is the contract
+ * every "Add a …" sheet in the app keeps: the new row appearing in the list
+ * behind it is the confirmation. Leaving it open blocks the list underneath —
+ * the e2e caught it as a modal backdrop swallowing the tap on the session that
+ * had just been created.
+ */
+function AddSession({ courseId }: { courseId: string }) {
+  const close = useAddAction();
+  const [title, setTitle] = useState('');
+  const [date, setDate] = useState(todayInZone(INSTITUTE_TIMEZONE));
+  // Prefilled from the meeting date and kept in step with it until staff edit it
+  // themselves. It cannot be blank: the due date is the day access closes, so an
+  // empty one would mean a recording that never closes.
+  const [dueDate, setDueDate] = useState(() => dueFor(todayInZone(INSTITUTE_TIMEZONE)));
+  const [dueEdited, setDueEdited] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const changeDate = (next: string) => {
+    setDate(next);
+    if (!dueEdited && next) setDueDate(dueFor(next));
+  };
+
+  const add = () =>
+    void (async () => {
+      setBusy(true);
+      setError(null);
+      try {
+        await createSession({
+          courseId,
+          date,
+          title: title.trim(),
+          dueDate: dueDate.trim(),
+          notes: '',
+        });
+        setTitle('');
+        setDueEdited(false);
+        setDueDate(dueFor(date));
+        close();
+      } catch (e) {
+        setError((e as Error).message);
+      } finally {
+        setBusy(false);
+      }
+    })();
+
+  return (
+    <>
+      <Field
+        testID="session-title"
+        label="Title"
+        value={title}
+        onChangeText={setTitle}
+        autoCapitalize="words"
+        placeholder="Session 1 — Introduction"
+      />
+      <DateField label="Date of the meeting" value={date} onChange={changeDate} />
+      <DateField
+        label="Listen by"
+        value={dueDate}
+        onChange={(v) => {
+          setDueEdited(true);
+          setDueDate(v);
+        }}
+      />
+      {error ? <Notice tone="error">{error}</Notice> : null}
+      <Button
+        testID="session-create"
+        label="Create session"
+        busy={busy}
+        disabled={!title.trim() || !date || !dueDate}
+        block
+        onPress={add}
+      />
+    </>
+  );
+}
+
+/**
  * Staff: the sessions (dated meetings) of one course.
  *
  * A session is the organizing unit — attendance lives on it, and its recording
@@ -41,42 +132,6 @@ export function SessionsScreen({
   onOpenSession: (session: SessionRow) => void;
 }) {
   const sessions = useCourseSessions(courseId);
-  const [title, setTitle] = useState('');
-  const [date, setDate] = useState(todayInZone(INSTITUTE_TIMEZONE));
-  // Prefilled from the meeting date and kept in step with it until staff edit it
-  // themselves. It cannot be blank: the due date is the day access closes, so an
-  // empty one would mean a recording that never closes.
-  const [dueDate, setDueDate] = useState(() => dueFor(todayInZone(INSTITUTE_TIMEZONE)));
-  const [dueEdited, setDueEdited] = useState(false);
-
-  const changeDate = (next: string) => {
-    setDate(next);
-    if (!dueEdited && next) setDueDate(dueFor(next));
-  };
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const add = () =>
-    void (async () => {
-      setBusy(true);
-      setError(null);
-      try {
-        await createSession({
-          courseId,
-          date,
-          title: title.trim(),
-          dueDate: dueDate.trim(),
-          notes: '',
-        });
-        setTitle('');
-        setDueEdited(false);
-        setDueDate(dueFor(date));
-      } catch (e) {
-        setError((e as Error).message);
-      } finally {
-        setBusy(false);
-      }
-    })();
 
   return (
     <Screen
@@ -85,32 +140,7 @@ export function SessionsScreen({
       width="list"
       actions={
         <AddAction testID="sessions-add" label="Add a session" title="Add a session">
-          <Field
-            testID="session-title"
-            label="Title"
-            value={title}
-            onChangeText={setTitle}
-            autoCapitalize="words"
-            placeholder="Session 1 — Introduction"
-          />
-          <DateField label="Date of the meeting" value={date} onChange={changeDate} />
-          <DateField
-            label="Listen by"
-            value={dueDate}
-            onChange={(v) => {
-              setDueEdited(true);
-              setDueDate(v);
-            }}
-          />
-          {error ? <Notice tone="error">{error}</Notice> : null}
-          <Button
-            testID="session-create"
-            label="Create session"
-            busy={busy}
-            disabled={!title.trim() || !date || !dueDate}
-            block
-            onPress={add}
-          />
+          <AddSession courseId={courseId} />
         </AddAction>
       }
     >

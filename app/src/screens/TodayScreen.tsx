@@ -2,8 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { INSTITUTE_TIMEZONE, todayInZone } from '@sabeel/shared';
 import { Empty, Grid, Screen } from '../components/ui';
 import { PushNudge } from '../components/PushNudge';
-import { useTodayQueue, type TodayItem, type TodayKind } from '../today';
-import type { CourseRow } from '../structure';
+import type { TodayItem, TodayKind, TodayQueue } from '../today';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -20,9 +19,10 @@ const HEADINGS: { kind: TodayKind; label: string; blurb: string }[] = [
 ];
 
 /**
- * The staff work queue — Design B's landing screen.
+ * The staff landing screen: what is waiting, most urgent first.
  *
- * The argument for it is the shape of the job. Everything a teacher does here
+ * The argument for leading with this rather than with the cohort hierarchy is
+ * the shape of the job. Everything a teacher does here
  * runs on a fixed cycle: a class meets, attendance is taken, the recording is
  * added and published, and a week later access closes. Every one of those steps
  * is dated, every one has an owner, and every one is invisible until somebody
@@ -30,9 +30,10 @@ const HEADINGS: { kind: TodayKind; label: string; blurb: string }[] = [
  * answers "what is waiting", which is the question actually being asked on a
  * Tuesday evening.
  *
- * Nothing here is stored — see `today.ts`. Each row is derived from documents
- * the reader can already see, so it cannot go stale and there is no second copy
- * of the truth to reconcile.
+ * Nothing here is stored — see `today.ts`. Each row is derived, live, from
+ * documents the reader can already see, so it cannot go stale and there is no
+ * second copy of the truth to reconcile. The count on the tab comes from the
+ * same subscription, so the badge and this screen cannot disagree.
  *
  * An empty queue is a RESULT, not a blank screen: "nothing is waiting" is the
  * single most useful thing this screen can say, and it has to say it in those
@@ -40,18 +41,18 @@ const HEADINGS: { kind: TodayKind; label: string; blurb: string }[] = [
  */
 export function TodayScreen({
   uid,
-  courses,
+  queue,
   onOpenSession,
   onOpenLedger,
 }: {
   uid: string;
-  courses: CourseRow[];
+  /** Subscribed by the app shell, so the tab's badge cannot disagree with it. */
+  queue: TodayQueue;
   onOpenSession: (sessionId: string, courseId: string) => void;
   onOpenLedger: (recordingId: string) => void;
 }) {
-  const { items, loading, truncated } = useTodayQueue(courses);
+  const { items, blocking, loading, truncated } = queue;
   const today = todayInZone(INSTITUTE_TIMEZONE);
-  const blocking = items.filter((i) => i.kind === 'attendance').length;
 
   return (
     <Screen

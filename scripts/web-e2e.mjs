@@ -196,12 +196,24 @@ async function goHome(page) {
   await page.waitForTimeout(3000);
 }
 
-/** Admin: Cohorts → Autumn 2026 → Hikam Foundations, from home. Reused a lot. */
+/** Admin: Courses → Autumn 2026 → Hikam Foundations, from home. Reused a lot. */
 async function openHikam(page) {
   await goHome(page);
-  await tap(page, 'nav-cohorts');
+  await tap(page, 'tab-courses');
   await tap(page, 'cohort-open-Autumn 2026');
   await tap(page, 'course-open-Hikam Foundations');
+}
+
+/**
+ * Open one of the rows behind "More".
+ *
+ * Notification preferences, the audit history and sign out live in a sheet
+ * rather than on a screen, so reaching them is two taps and the second one only
+ * resolves once the sheet is up.
+ */
+async function more(page, option) {
+  await tap(page, 'tab-more');
+  await tap(page, option);
 }
 
 const shot = (page, name) => page.screenshot({ path: `${SHOTS}/${name}.png` });
@@ -223,7 +235,7 @@ check('first staff sign-in lands PENDING — domain membership grants nothing', 
 await shot(admin, '02-pending');
 
 const boot = await fetch(`${FN}/bootstrapAdmin`);
-await admin.getByTestId('nav-cohorts').waitFor({ timeout: 30000 });
+await admin.getByTestId('tab-courses').waitFor({ timeout: 30000 });
 check('bootstrapAdmin promotes and the gate lifts LIVE, with no sign-out', boot.status === 200);
 await shot(admin, '03-home-admin');
 
@@ -234,9 +246,10 @@ check('bootstrapAdmin refuses a second call', again.status === 409);
 const mgr = await newSession();
 await tap(mgr, 'dev-signin-manager');
 await sawText(mgr, 'Waiting for approval');
-await tap(admin, 'nav-staff');
+await tap(admin, 'tab-people');
+await tap(admin, 'segment-staff');
 await tap(admin, 'approve-manager@oursabeel.com');
-await mgr.getByTestId('nav-myclasses').waitFor({ timeout: 30000 });
+await mgr.getByTestId('tab-courses').waitFor({ timeout: 30000 });
 check('approving a pending manager un-gates THEIR session live', true);
 
 // An off-domain account must be deleted outright, not marked rejected.
@@ -323,11 +336,16 @@ check(
 // ------------------------------------------------------- academic structure --
 console.log('\nAcademic structure');
 await goHome(admin);
-await tap(admin, 'nav-cohorts');
+await tap(admin, 'tab-courses');
+// Creating is a header action that opens a sheet, not a form pinned above the
+// list — so every one of these is a tap before it is a fill. The sheet closes
+// itself on success, which is what makes the next `waitFor` meaningful.
+await tap(admin, 'cohorts-add');
 await admin.getByTestId('cohort-name').fill('Autumn 2026');
 await tap(admin, 'cohort-create');
 await tap(admin, 'cohort-open-Autumn 2026');
 for (const name of ['Hikam Foundations', 'Arabic I']) {
+  await tap(admin, 'courses-add');
   await admin.getByTestId('course-name').fill(name);
   await tap(admin, 'course-create');
   await admin.getByTestId(`course-open-${name}`).waitFor({ timeout: 20000 });
@@ -342,7 +360,7 @@ await shot(admin, '04-courses');
 // to "[object Object]" in the URL and comes back as that string.
 const path = () => new URL(admin.url()).pathname;
 await goHome(admin);
-await tap(admin, 'nav-cohorts');
+await tap(admin, 'tab-courses');
 check('navigating pushes a real URL', path() === '/cohorts', path());
 await tap(admin, 'cohort-open-Autumn 2026');
 await admin.waitForTimeout(1200);
@@ -409,7 +427,7 @@ await tap(admin, 'course-manager-manager@oursabeel.com');
 check('re-assigning ticks it again', (await tickState()) === 'true');
 await shot(admin, '05-course-detail');
 
-await tap(mgr, 'nav-myclasses');
+await tap(mgr, 'tab-courses');
 await mgr.getByTestId('course-open-Hikam Foundations').waitFor({ timeout: 20000 });
 await mgr.waitForTimeout(1500);
 // innerText returns only VISIBLE text, so retained nodes from the previous
@@ -429,7 +447,8 @@ await shot(mgr, '06-my-courses');
 // --------------------------------------------------------------- enrolment --
 console.log('\nEnrolment');
 await goHome(admin);
-await tap(admin, 'nav-students');
+await tap(admin, 'tab-people');
+await tap(admin, 'students-add');
 await admin.getByTestId('student-name').fill('Fatima Ahmed');
 await admin.getByTestId('student-email').fill('fatima@example.com');
 await tap(admin, 'student-course-Hikam Foundations');
@@ -472,8 +491,14 @@ await shot(student, '09-home-student');
 console.log('\nSession, attendance, and the publish fan-out');
 await openHikam(admin);
 await tap(admin, 'nav-sessions');
+await tap(admin, 'sessions-add');
 await admin.getByTestId('session-title').fill('Session 1');
 await tap(admin, 'session-create');
+// A create sheet that stays open covers the list it just added to — its
+// backdrop swallows every tap, and the failure reads as "the row never
+// appeared" rather than "the sheet never closed".
+await admin.getByTestId('session-create').waitFor({ state: 'detached', timeout: 15000 });
+check('a create sheet closes itself on success', true);
 await tap(admin, 'session-open-Session 1');
 
 // Take attendance: mark the enrolled student EXCUSED — the only mark that opens
@@ -539,9 +564,12 @@ check(
 await shot(admin, '11-session-published');
 
 // The student plays it. Same session that set its own password above.
+// `next-up-`, not `task-`: the home screen promotes the most urgent recording
+// still open to a hero card and drops it from the grouped list, so while this
+// one is incomplete and in date it exists under that handle and no other.
 await goHome(student);
-await student.getByTestId('task-Session 1').waitFor({ timeout: 10000 });
-await tap(student, 'task-Session 1');
+await student.getByTestId('next-up-Session 1').waitFor({ timeout: 10000 });
+await tap(student, 'next-up-Session 1');
 await student.getByTestId('player-play').waitFor({ timeout: 25000 });
 await student.waitForTimeout(1500);
 check('a student reaches the player for their required recording', true);
@@ -596,7 +624,7 @@ const savedMs = Number(
 );
 
 await goHome(student);
-await tap(student, 'task-Session 1');
+await tap(student, 'next-up-Session 1');
 await student.getByTestId('player-play').waitFor({ timeout: 25000 });
 await student.waitForTimeout(2500);
 const resumedAt = await elapsedSeconds(student);
@@ -625,6 +653,8 @@ check(
 await student.getByTestId('mark-incomplete').waitFor({ timeout: 8000 });
 check('the player reflects completion and offers unmark', true);
 
+// Back to `task-`: once complete it leaves the hero (which only ever promotes
+// something still to do) and joins the grouped list under Completed.
 await goHome(student);
 await student.getByTestId('task-Session 1').waitFor({ timeout: 8000 });
 const homeText = await student.locator('body').innerText();
@@ -637,7 +667,7 @@ await shot(student, '14-home-completed');
 // used on staff screens is denied here, and denial looks like an empty screen
 // plus a console warning, not a crash. So the course NAME rendering is the
 // assertion: it can only come from a document listener the rules allowed.
-await tap(student, 'student-classes');
+await tap(student, 'tab-classes');
 await student.getByTestId('myclass-Hikam Foundations').waitFor({ timeout: 20000 });
 // innerText returns RENDERED text, and SectionTitle uppercases via CSS — so this
 // compares case-insensitively rather than against the source string.
@@ -649,6 +679,15 @@ check(
 
 await tap(student, 'myclass-Hikam Foundations');
 await student.getByTestId('attendance-Session 1').waitFor({ timeout: 20000 });
+/*
+ * WAIT FOR THE LINE, not just for the row.
+ *
+ * The row is drawn from the student's attendance projection; the "completed"
+ * half of it comes from a SECOND listener, on completions. Reading the body the
+ * moment the row appears is a race against that second snapshot, and it is the
+ * kind of race that passes on a fast day and fails on a slow one.
+ */
+await sawText(student, 'Recording required · completed', 20000);
 const recordText = await student.locator('body').innerText();
 // Their own mark, out of a session document they can never read: this can only
 // have come from the attendanceRecords projection the trigger wrote.
@@ -673,7 +712,8 @@ console.log('\nEnrollment-onward (no retroactive assignment)');
 // so they are not in its snapshot and get no obligation for it. This is the
 // replacement for the old "catch-up" path — accountability is attendance-driven.
 await goHome(admin);
-await tap(admin, 'nav-students');
+await tap(admin, 'tab-people');
+await tap(admin, 'students-add');
 await admin.getByTestId('student-name').fill('Bilal Khan');
 await admin.getByTestId('student-email').fill('bilal@example.com');
 await tap(admin, 'student-course-Hikam Foundations');
@@ -795,7 +835,7 @@ check('CSV reflects the override', /Complete \(override\)/.test(csv));
 // roster is present is what distinguishes "allowed" from "silently refused" —
 // and `listenerDenials` (asserted at the end of this file) catches the rest.
 await goHome(mgr);
-await tap(mgr, 'nav-myclasses');
+await tap(mgr, 'tab-courses');
 await tap(mgr, 'course-open-Hikam Foundations');
 await tap(mgr, 'nav-sessions');
 await tap(mgr, 'session-open-Session 1');
@@ -929,7 +969,7 @@ check(
 // cohort-archive lives INSIDE the cohort now, mirroring a course: the list is a
 // list, and the settings are on the thing they belong to.
 await goHome(admin);
-await tap(admin, 'nav-cohorts');
+await tap(admin, 'tab-courses');
 await tap(admin, 'cohort-open-Autumn 2026');
 await tap(admin, 'cohort-archive');
 await admin.waitForTimeout(3000);
@@ -965,7 +1005,7 @@ check(
 // courses instead — rules.structure.test.ts owns that boundary).
 console.log('\nStudent page');
 await goHome(admin);
-await tap(admin, 'nav-students');
+await tap(admin, 'tab-people');
 await tap(admin, 'student-open-bilal@example.com');
 await admin.getByTestId('student-course-open-Hikam Foundations').waitFor({ timeout: 20000 });
 const stuPage = (await admin.locator('body').innerText()).toLowerCase();
@@ -984,12 +1024,12 @@ check(
 // Disabling moves them into a section that is CLOSED, and closed means
 // unmounted: the row must be unreachable until the section is expanded.
 await goHome(admin);
-await tap(admin, 'nav-students');
+await tap(admin, 'tab-people');
 await tap(admin, 'student-open-bilal@example.com');
 await tap(admin, 'student-access');
 await admin.waitForTimeout(2500);
 await goHome(admin);
-await tap(admin, 'nav-students');
+await tap(admin, 'tab-people');
 await admin.waitForTimeout(2000);
 check(
   'a disabled student leaves the main list',
@@ -1011,7 +1051,7 @@ await admin.waitForTimeout(2500);
 // at a time. A denial here is an empty section, not an error — so assert the
 // course actually appears.
 await goHome(mgr);
-await tap(mgr, 'nav-students');
+await tap(mgr, 'tab-people');
 await tap(mgr, 'student-open-fatima@example.com');
 await mgr.waitForTimeout(3500);
 const mgrStudent = (await mgr.locator('body').innerText()).toLowerCase();
@@ -1041,14 +1081,15 @@ await shot(mgr, '20c-student-page-manager');
 // appeared either way while every non-matching course fired a permission denial
 // into the banner and into Sentry. Assert the absence of the banner too.
 await goHome(admin);
-await tap(admin, 'nav-students');
+await tap(admin, 'tab-people');
+await tap(admin, 'students-add');
 await admin.getByTestId('student-name').fill('Zayd Noor');
 await admin.getByTestId('student-email').fill('zayd@example.com');
 await tap(admin, 'student-create');
 await admin.getByTestId('student-open-zayd@example.com').waitFor({ timeout: 20000 });
 
 await goHome(mgr);
-await tap(mgr, 'nav-students');
+await tap(mgr, 'tab-people');
 await tap(mgr, 'student-open-zayd@example.com');
 await mgr.waitForTimeout(3500);
 const mgrNoMatch = (await mgr.locator('body').innerText()).toLowerCase();
@@ -1160,7 +1201,13 @@ await mgr.waitForTimeout(3500);
 const mgrOnStudentUrl = (await mgr.locator('body').innerText()).toLowerCase();
 check(
   'a manager asking for a student URL gets their own home too',
-  mgrOnStudentUrl.includes('recording library') && !mgrOnStudentUrl.includes('your attendance'),
+  // Their home is the work queue, and `Today` is a staff-only word — it is the
+  // heading and the first tab. `library` pins the staff bar alongside it, so
+  // this cannot pass on a student screen that happened to say "today".
+  mgrOnStudentUrl.includes('today') &&
+    mgrOnStudentUrl.includes('library') &&
+    !mgrOnStudentUrl.includes('your attendance'),
+  mgrOnStudentUrl.replace(/\n+/g, ' | ').slice(0, 200),
 );
 check('…so nothing on it is denied', !mgrOnStudentUrl.includes('live data error'));
 
@@ -1263,7 +1310,7 @@ console.log('\nNotifications');
 // this is the one place the rules have to let a client through — worth driving
 // end to end rather than trusting the rules test alone.
 await goHome(student);
-await tap(student, 'nav-notifications');
+await more(student, 'more-notifications');
 await student.getByTestId('notify-lastDay').waitFor({ timeout: 20000 });
 const notifyText = await student.locator('body').innerText();
 check(
@@ -1294,7 +1341,7 @@ check(
 await shot(student, '26-notifications');
 
 await goHome(mgr);
-await tap(mgr, 'nav-notifications');
+await more(mgr, 'more-notifications');
 await mgr.getByTestId('notify-attendanceMissing').waitFor({ timeout: 20000 });
 const mgrNotify = await mgr.locator('body').innerText();
 check(
