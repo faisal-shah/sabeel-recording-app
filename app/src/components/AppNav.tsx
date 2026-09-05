@@ -46,7 +46,10 @@ const STUDENT_TABS: Tab[] = [
     label: 'Listening',
     icon: 'headset',
     route: 'Home',
-    activeFor: ['Home'],
+    // The player is under Listening for a student: it is the only place their
+    // recordings are opened from, and a screen where no tab is lit reads as
+    // having fallen out of the app.
+    activeFor: ['Home', 'Player'],
   },
   {
     key: 'classes',
@@ -94,7 +97,9 @@ function staffTabs(isAdmin: boolean): Tab[] {
       label: 'Library',
       icon: 'library-music',
       route: 'Library',
-      activeFor: ['Library', 'RecordingLedger'],
+      // Staff reach the player from the library and from a session; the library
+      // is the one that is a tab, so it holds it.
+      activeFor: ['Library', 'RecordingLedger', 'Player'],
     },
     {
       key: 'people',
@@ -114,10 +119,10 @@ function tabsFor(role: Role): Tab[] {
  * The app's persistent navigation chrome.
  *
  * `bar` on a phone, `rail` on a wide screen — chosen by WIDTH, never platform.
- * The rail persists on every screen because a 76px vertical strip costs
- * horizontal space, which a wide layout has to spare; the bar shows on the tab
- * roots only, because vertical space on a phone is exactly what a list of
- * recordings needs.
+ * Both persist on every screen: the rail because a 76px vertical strip costs
+ * horizontal space a wide layout has to spare, and the bar because this app is
+ * navigated while something is playing — see the note at its render site in
+ * `App.tsx`, which is where that trade is argued.
  */
 export function AppNav({
   role,

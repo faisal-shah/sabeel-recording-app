@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { INSTITUTE_TIMEZONE, todayInZone } from '@sabeel/shared';
-import { Button, Card, Empty, Notice, Screen } from '../components/ui';
+import { Button, Card, Empty, Notice, Screen, Segmented } from '../components/ui';
 import { useCourseAttendance } from '../ledger';
 import { exportCsv } from '../exportCsv';
 import { useListenerError } from '../liveQuery';
@@ -84,26 +84,23 @@ export function CourseAttendanceScreen({
       title="Attendance"
       parent={{ label: cls.name, testID: 'up-to-course-from-attendance', onPress: onOpenCourse }}
       subtitle={`${report.sessionsWithAttendance} of ${report.totalSessions} sessions taken`}
+      width="list"
     >
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
 
       <View style={styles.toggleRow}>
-        <View style={styles.toggle}>
-          {(['sessions', 'students'] as Tab[]).map((k) => (
-            <Pressable
-              key={k}
-              testID={`attendance-tab-${k}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected: tab === k }}
-              onPress={() => setTab(k)}
-              style={[styles.tabBtn, tab === k ? styles.tabOn : null]}
-            >
-              <Text style={[styles.tabText, tab === k ? styles.tabTextOn : null]}>
-                {k === 'sessions' ? `By session (${report.sessions.length})` : `By student (${studentRows.length})`}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        {/* The shared control, not a local twin. This one predates `Segmented`
+            and had drifted from it — `accessibilityRole="button"` where the
+            shared one says `"tab"`, and its own colours. Same job, same widget. */}
+        <Segmented
+          value={tab}
+          testIdPrefix="attendance-tab"
+          options={[
+            { value: 'sessions' as Tab, label: `By session (${report.sessions.length})` },
+            { value: 'students' as Tab, label: `By student (${studentRows.length})` },
+          ]}
+          onChange={setTab}
+        />
         <Button
           testID={tab === 'sessions' ? 'attendance-export-sessions' : 'attendance-export-students'}
           label="Export CSV"
@@ -187,16 +184,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing(4),
     flexWrap: 'wrap',
   },
-  toggle: {
-    flexDirection: 'row',
-    backgroundColor: t.bg.inset,
-    borderRadius: 999,
-    padding: 3,
-  },
-  tabBtn: { paddingVertical: spacing(2), paddingHorizontal: spacing(3), borderRadius: 999 },
-  tabOn: { backgroundColor: t.accent.base },
-  tabText: { fontSize: 13, fontWeight: '600', color: t.text.secondary },
-  tabTextOn: { color: t.accent.onAccent },
   name: { fontSize: 15, fontWeight: '600', color: t.text.primary },
   hint: { fontSize: 13, color: t.text.secondary },
   counts: { fontSize: 14, color: t.text.secondary, marginTop: spacing(1) },

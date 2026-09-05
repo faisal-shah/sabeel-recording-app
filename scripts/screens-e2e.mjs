@@ -30,8 +30,8 @@
  *                                        end in a phone browser, where there is
  *                                        no hardware Back either. A tab root is
  *                                        never pushed and correctly has none —
- *                                        the bar is its exit — so the check
- *                                        asks for whichever applies
+ *                                        the bar or the rail is its exit — so
+ *                                        the check asks for whichever applies
  *   - the content column caps at one of  read from `app/src/theme/index.ts`
  *     the declared maxima, and centres   rather than restated here. A reading
  *                                        column and a card grid want opposite
@@ -180,10 +180,7 @@ function check(name, ok, detail = '') {
 }
 
 /**
- * The breakpoint comes from the SOURCE, never from a copy here.
- *
- * This app has exactly one layout rule — a content column that caps and centres
- * — so `CONTENT_MAX_WIDTH` is the whole of its responsive behaviour. A constant
+ * EVERY LAYOUT NUMBER COMES FROM THE SOURCE, never from a copy here. A constant
  * restated in the test that checks it drifts from the thing it is testing.
  */
 const themeSrc = await readFile(resolve(ROOT, 'app/src/theme/index.ts'), 'utf8');
@@ -193,31 +190,38 @@ if (!CONTENT_MAX_WIDTH) throw new Error('CONTENT_MAX_WIDTH is no longer in app/s
 /**
  * THE CAPS A SCREEN MAY CHOOSE FROM — read out of the theme, not restated.
  *
- * There used to be one number and it was the whole of the app's responsive
- * behaviour. A desktop layout needs two, because a reading column and a card
- * grid want opposite things from a 1500px window: prose capped for line length,
- * collections given the room. So a screen declares which kind it is
- * (`Screen width="read" | "list" | "full"`) and this check accepts any of the
- * declared maxima rather than a single one.
+ * A reading column and a card grid want opposite things from a 1500px window:
+ * prose capped for line length, collections given the room. So a screen
+ * declares which kind it is (`Screen width="read" | "list"`) and this check
+ * accepts either declared maximum.
  *
- * That is weaker than the old check by exactly one bit — it can no longer tell
- * a list screen that claimed the wrong cap — and it is not weaker in the way
- * that matters: a column past EVERY cap, or one that fails to centre, still
- * fails. The alternative was for the sweep to know which screen is which kind,
- * which is the restatement this file exists to avoid.
+ * That is weaker by exactly one bit — it cannot tell a list screen that claimed
+ * the wrong cap — and not weaker in the way that matters: a column past EVERY
+ * cap, or one that fails to centre, still fails. The alternative was for the
+ * sweep to know which screen is which kind, which is the restatement this file
+ * exists to avoid.
  */
 const LIST_MAX_WIDTH = Number(themeSrc.match(/list:\s*(\d+)/)?.[1]);
 if (!LIST_MAX_WIDTH) throw new Error('LAYOUT_WIDTHS.list is no longer in app/src/theme/index.ts');
 const COLUMN_CAPS = [CONTENT_MAX_WIDTH, LIST_MAX_WIDTH];
 
 /**
- * Widths chosen to STRADDLE the breakpoint, not to look thorough: a bug on one
- * side of it is invisible from the other. One narrow phone, one ordinary phone,
- * one exactly at the cap, one just past it, one desktop.
+ * The width the chrome changes shape at — read, like the caps, rather than
+ * restated. The sweep has to straddle it or it silently stops exercising the
+ * rail, which is half the layouts in the app.
+ */
+const WIDE_BREAKPOINT = Number(themeSrc.match(/WIDE_BREAKPOINT\s*=\s*(\d+)/)?.[1]);
+if (!WIDE_BREAKPOINT) throw new Error('WIDE_BREAKPOINT is no longer in app/src/theme/index.ts');
+
+/**
+ * Widths chosen to STRADDLE BOTH BREAKPOINTS, not to look thorough: a bug on one
+ * side of either is invisible from the other. A narrow phone, an ordinary phone,
+ * one exactly at the reading cap, one just past the point the rail appears, and
+ * a desktop. Both numbers come from the theme, so moving either moves these.
  */
 const WIDTHS = process.env.SWEEP_WIDTHS
   ? process.env.SWEEP_WIDTHS.split(',').map(Number)
-  : [320, 390, CONTENT_MAX_WIDTH, 1024, 1440];
+  : [320, 390, CONTENT_MAX_WIDTH, WIDE_BREAKPOINT + 124, 1440];
 /** Real descriptors add DPR, touch and a mobile UA, which plain widths do not. */
 const PROFILES = FULL
   ? [
@@ -235,11 +239,9 @@ const auth = admin.auth();
 // ---- the world -----------------------------------------------------------
 
 /**
- * SEEDED ONCE, IN ONE PLACE. `lib/seed-world.mjs` owns the fixture. It was
- * built inline here until a second suite needed the same world, which is the
- * moment that stops being tenable — two copies of a seed drift, and the way
- * they drift is that one of them quietly stops covering a state while still
- * reporting a pass.
+ * The fixture lives in `lib/seed-world.mjs`, so this file is checks rather than
+ * three hundred lines of setup in front of them. Its docblock says what the
+ * content is chosen to break.
  */
 await resetEmulators();
 const browser = await chromium.launch();
@@ -512,10 +514,10 @@ const escapes = (page) =>
   });
 
 /**
- * The one layout rule this app has, MEASURED rather than assumed.
+ * THE COLUMN, MEASURED rather than assumed.
  *
  * Every screen is a scroll view whose content container caps at
- * `CONTENT_MAX_WIDTH` and centres. Below that width the column must be
+ * one of the declared maxima and centres. Below that width the column must be
  * full-bleed — losing that is how a phone gets margins it cannot afford — and at
  * or above it the column must actually cap AND actually centre, because
  * `maxWidth` without `alignSelf` leaves a desktop page hugging the left and
@@ -625,22 +627,13 @@ const scrollToBottom = (page) =>
 // ---- the tour --------------------------------------------------------------
 
 /**
- * Back to the root, by WALKING BACK — which also means the tour cannot pass
- * while the exits it depends on are broken.
+ * Back to the first tab, in one tap.
  *
- * Falls back to a reload only when there is no Back to press and the root is not
- * on screen, which is the state a genuinely stranded screen is in; the
- * `has a way out` check has already reported it by then.
- */
-/**
- * Back to the first tab.
- *
- * ONE TAP NOW, where it used to be a loop clicking Back up to sixteen times.
- * That loop was the honest way to do it in a pure stack; with a persistent bar
- * the first tab is always on screen and always resets the stack, which is both
- * faster and closer to what a person does. The Back-walk is kept as the
- * fallback for the one case the bar cannot answer — a screen that failed to
- * render the chrome at all, which is itself a fault the check above reports.
+ * The bar is always on screen and a tab always resets the stack, so this is both
+ * faster than walking Back and closer to what a person does. The Back-walk
+ * survives as the fallback for the one case the bar cannot answer — a screen
+ * that failed to render the chrome at all, which is itself a fault the
+ * `has a way out` check reports.
  */
 async function goHome(page, homeMarker) {
   /*
@@ -727,7 +720,7 @@ function visitor(page, tag, homeMarker, counter) {
 
 /**
  * The screens a tab lands on directly. These are never pushed, so they have no
- * Back and must not be asked for one — the bar is their exit.
+ * Back and must not be asked for one — the bar, or the rail, is their exit.
  */
 const TAB_ROOTS = new Set([
   'home',
@@ -738,7 +731,6 @@ const TAB_ROOTS = new Set([
   'students-add',
   'students-disabled',
   'library',
-  'listening',
   'my-classes',
   // Reached by opening a recording and leaving it — which lands back on a tab
   // root, with the now-playing bar on it.
@@ -749,7 +741,6 @@ const STAFF_SCREENS = 25;
 
 async function tourStaff(page, tag) {
   const counter = { seen: 0 };
-  // The first tab, which for an admin IS the cohort list — `Home` renders it.
   // The first tab, which for staff is the work queue.
   const visit = visitor(page, tag, 'tab-today', counter);
   const openCourse = async () => {

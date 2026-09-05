@@ -100,8 +100,7 @@ export function SessionDetailScreen({
     <Screen
       title={session.title}
       parent={{ label: cls.name, testID: 'up-to-course-from-session', onPress: onOpenCourse }}
-      subtitle={`${session.date} · excused listen by ${session.dueDate}`}
-      width="list"
+      subtitle={`${session.date} · excused students listen by ${session.dueDate}`}
     >
       <SessionHeader session={session} isAdmin={isAdmin} />
       <AttendanceSection session={session} />
@@ -161,7 +160,12 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
         <Field label="Title" value={title} onChangeText={setTitle} autoCapitalize="words" />
         <DateField label="Date" value={date} onChange={setDate} />
         <DateField label="Listen by" value={dueDate} onChange={setDueDate} />
-        <Field label="Notes (everyone with access sees these)" value={notes} onChangeText={setNotes} />
+        <Field
+          label="Notes (everyone with access sees these)"
+          value={notes}
+          onChangeText={setNotes}
+          multiline
+        />
         <Row>
           <Button
             label="Save"
@@ -702,7 +706,16 @@ const styles = StyleSheet.create({
   // Fixed, so every row's three states line up in a column the eye can run
   // down. Sized to the widest label rather than to the roster.
   segmentWide: { width: 330 },
-  segBtn: { flex: 1, paddingVertical: spacing(2), alignItems: 'center', backgroundColor: t.bg.surface },
+  // 44pt: this is the single most-tapped control in the staff app — once per
+  // student, per session — and it was 32px tall at phone width.
+  segBtn: {
+    flex: 1,
+    paddingVertical: spacing(2),
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: t.bg.surface,
+  },
   segBtnOn: { backgroundColor: t.accent.base },
   segText: { fontSize: 13, fontWeight: '600', color: t.text.secondary },
   segTextOn: { color: t.accent.onAccent },

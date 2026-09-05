@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { INSTITUTE_TIMEZONE, isOverdue, todayInZone } from '@sabeel/shared';
-import { Button, Empty, Notice, Screen } from '../components/ui';
+import { Button, Empty, Grid, Notice, Screen } from '../components/ui';
 import { useStudentLedger, type StudentLedgerItem } from '../ledger';
 import { useCourseRecordings } from '../recordings';
 import { exportCsv } from '../exportCsv';
@@ -46,7 +46,7 @@ export function StudentLedgerScreen({
   };
 
   return (
-    <Screen title={studentName} subtitle={`${cls.name} · required listening`}>
+    <Screen title={studentName} subtitle={`${cls.name} · required listening`} width="list">
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       <View style={styles.chips}>
         {(['all', 'notComplete', 'missed'] as Filter[]).map((f) => (
@@ -68,15 +68,19 @@ export function StudentLedgerScreen({
       {rows.length === 0 ? (
         <Empty>No required recordings here.</Empty>
       ) : (
-        rows.map((r) => (
-          <View key={r.recordingId} style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.title}>{r.title}</Text>
-              {r.source === 'override' ? <Text style={styles.override}>Override: {r.overrideReason}</Text> : null}
+        <Grid min={340}>
+          {rows.map((r) => (
+            <View key={r.recordingId} style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.title}>{r.title}</Text>
+                {r.source === 'override' ? (
+                  <Text style={styles.override}>Override: {r.overrideReason}</Text>
+                ) : null}
+              </View>
+              <Text style={[styles.status, styleFor(r, today)]}>{statusLabel(r, today)}</Text>
             </View>
-            <Text style={[styles.status, styleFor(r, today)]}>{statusLabel(r, today)}</Text>
-          </View>
-        ))
+          ))}
+        </Grid>
       )}
     </Screen>
   );

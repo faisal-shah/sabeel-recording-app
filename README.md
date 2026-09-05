@@ -10,12 +10,17 @@ Storage for the audio.
 
 ## Status
 
-**Phase 1 complete.** Staff sign in with Google (restricted to the org domain
-and admin-approved); students get staff-created accounts and set their own
-password. Cohorts, classes and enrollments exist, with managers scoped class by
-class. Recordings arrive in Phase 3. See
-[`docs/PHASE_STATUS.md`](docs/PHASE_STATUS.md) for live status and
-[`PLAN.md`](PLAN.md) for the nine-phase build order.
+**In development, shipping to a real project.** Staff sign in with Google
+(restricted to the org domain and admin-approved); students get staff-created
+accounts and set their own password. Cohorts, courses, sessions and enrolments
+exist, with managers scoped course by course. Recordings are uploaded or
+imported, published, and opened to whoever was marked excused; students stream
+them, mark their own completion, and staff read the accountability ledger and
+export it. Everything consequential is audited.
+
+Not started: Zoom import (gated on credentials), admin backend stats, and the
+release itself. See [`docs/PHASE_STATUS.md`](docs/PHASE_STATUS.md) for live
+status and [`PLAN.md`](PLAN.md) for the build order.
 
 ## Documentation
 
@@ -29,6 +34,7 @@ class. Recordings arrive in Phase 3. See
 | [Deploy](docs/DEPLOY.md) | Deploy order and first-deploy traps |
 | [Secrets](docs/SECRETS.md) | What is and is not a secret; key names only |
 | [TODO](TODO.md) | Everything needing a human with console access |
+| [User manual](docs/USER-MANUAL.md) | The app as students, staff and admins meet it |
 | [Stack gotchas](docs/STACK-GOTCHAS.md) | Stub — the real content is a shared skill |
 
 ### Research

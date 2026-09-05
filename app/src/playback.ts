@@ -33,6 +33,18 @@ const mintUrl = (recordingId: string) =>
  */
 const cache = new Map<string, Minted>();
 
+/**
+ * Drop every cached URL. Called on sign-out.
+ *
+ * A signed URL is valid for 12 hours and is bound to a recording, not to the
+ * account that asked for it — so a cache that outlives the credential hands the
+ * next person on a shared device a working link to something they were never
+ * entitled to, without `getPlaybackUrl` ever being consulted.
+ */
+export function forgetPlaybackUrls(): void {
+  cache.clear();
+}
+
 async function playbackUrl(recordingId: string): Promise<string> {
   const hit = cache.get(recordingId);
   if (hit && hit.expiresAt - Date.now() > SIGNED_URL_REFRESH_MS) return hit.url;
@@ -118,15 +130,29 @@ function set(next: Partial<PlaybackState>) {
   listeners.forEach((l) => l(state));
 }
 
-async function persist() {
-  if (!owner?.studentUid || !dirty) return;
-  const { studentUid, recordingId, courseId } = owner;
-  dirty = false;
-  lastWrite = Date.now();
+/**
+ * Write one session's progress. TAKES ITS SUBJECT, rather than reading the
+ * module's.
+ *
+ * Every argument is captured by the caller before the first `await`, and the
+ * generation is checked before anything module-level is touched again. That is
+ * what makes a write belonging to the recording you just left unable to land on
+ * the one you just opened: the round trip is two network calls long, and in that
+ * window `owner`, `position` and `listened` can all belong to something else.
+ * Writing the wrong `listenedMs` here is not a cosmetic bug — that number is the
+ * audit evidence staff read on the ledger.
+ */
+async function persistFor(
+  gen: number,
+  who: { studentUid: string; recordingId: string; courseId: string },
+  positionMs: number,
+  listenedMs: number,
+): Promise<void> {
+  const { studentUid, recordingId, courseId } = who;
   const ref = doc(db, COLLECTIONS.listeningProgress, progressId(studentUid, recordingId));
   const mine = {
-    positionMs: Math.round(position),
-    listenedMs: Math.round(listened),
+    positionMs: Math.round(positionMs),
+    listenedMs: Math.round(listenedMs),
     updatedAt: Date.now(),
   };
   try {
@@ -136,11 +162,26 @@ async function persist() {
     const existing = (await getDoc(ref)).data() as ListeningProgressDoc | undefined;
     const merged = existing ? mergeProgress(mine, existing) : mine;
     await setDoc(ref, { studentUid, recordingId, courseId, ...merged });
-    listened = merged.listenedMs;
+    if (generation === gen) listened = merged.listenedMs;
   } catch {
-    // A failed write must not break playback. The next tick retries.
-    dirty = true;
+    // A failed write must not break playback. The next tick retries — but only
+    // for the session that is still open; a session already ended has had its
+    // one best-effort attempt.
+    if (generation === gen) dirty = true;
   }
+}
+
+/** Persist the CURRENT session, if it has anything to write. */
+function persist(): void {
+  if (!owner?.studentUid || !dirty) return;
+  dirty = false;
+  lastWrite = Date.now();
+  void persistFor(
+    generation,
+    { studentUid: owner.studentUid, recordingId: owner.recordingId, courseId: owner.courseId },
+    position,
+    listened,
+  );
 }
 
 /**
@@ -155,13 +196,16 @@ export function openPlayback(
   studentUid: string | null,
   courseId: string,
 ): void {
-  if (owner?.recordingId === now.recordingId) {
+  // `player` as well as `owner`: an owner with no player is a session that has
+  // been torn down, and treating that as "already open" would return without
+  // ever creating one — a play button that does nothing, for good.
+  if (player && owner?.recordingId === now.recordingId) {
     // Same recording — refresh only the metadata the caller may know better
     // (a staff visit has no due date; the student's own grant does).
     set({ now });
     return;
   }
-  void closePlayback();
+  closePlayback();
 
   const gen = ++generation;
   owner = { studentUid, recordingId: now.recordingId, courseId };
@@ -193,12 +237,12 @@ export function openPlayback(
       position = ms;
       dirty = true;
       set({ positionMs: ms, listenedMs: listened });
-      if (at - lastWrite >= PROGRESS_WRITE_INTERVAL_MS) void persist();
+      if (at - lastWrite >= PROGRESS_WRITE_INTERVAL_MS) persist();
     },
     onEnded: () => {
       if (generation !== gen) return;
       set({ playing: false });
-      void persist();
+      persist();
     },
     onError: (message) => {
       if (generation === gen) set({ error: message });
@@ -227,23 +271,77 @@ export function openPlayback(
   })();
 }
 
-/** End the session and release the audio. Safe to call when nothing is open. */
-export async function closePlayback(): Promise<void> {
-  if (!player) {
-    owner = null;
-    if (state.now) set({ ...IDLE });
-    return;
-  }
-  generation++;
+/**
+ * End the session and release the audio. Safe to call when nothing is open.
+ *
+ * SYNCHRONOUS, AND IT HAS TO BE. This used to `await persist()` in the middle
+ * and null `owner` and `state` afterwards — which meant `openPlayback` calling
+ * it and then setting up the next recording ran to completion first, and the
+ * continuation woke up and wiped the session that had just started. The symptom
+ * was that playing a second recording left a permanently disabled transport
+ * stuck on "Preparing…", with nothing to recover it but leaving the screen; and
+ * `await` on an already-resolved promise is enough to reproduce it, so it fired
+ * every time rather than under load.
+ *
+ * So: every mutation happens in one tick, and the final write is handed its own
+ * snapshot and fired detached. A session that has ended can no longer reach the
+ * one that replaced it.
+ */
+export function closePlayback(): void {
   const p = player;
+  const dying = owner;
+  const finalPosition = position;
+  const finalListened = listened;
+  const unsaved = dirty;
+  const gen = ++generation;
+
   player = null;
-  // Persist on the way out: whatever happened since the last tick would
-  // otherwise be lost exactly at the moment someone stops listening.
-  await persist();
   owner = null;
-  p.unload();
-  state = IDLE;
-  listeners.forEach((l) => l(state));
+  dirty = false;
+  lastTick = null;
+  seekTarget = null;
+  if (state.now || state.ready || state.playing) {
+    state = IDLE;
+    listeners.forEach((l) => l(state));
+  }
+
+  if (p) p.unload();
+  // Whatever happened since the last tick would otherwise be lost exactly at the
+  // moment someone stops listening. Best effort, and it can no longer write the
+  // wrong session's numbers: `gen` is already stale, so `persistFor` will not
+  // touch anything module-level when it lands.
+  if (unsaved && dying?.studentUid) {
+    void persistFor(
+      gen,
+      { studentUid: dying.studentUid, recordingId: dying.recordingId, courseId: dying.courseId },
+      finalPosition,
+      finalListened,
+    );
+  }
+}
+
+/**
+ * How far the skip controls move. ONE definition: the player screen and the
+ * docked bar are two views of the same session, and a 15 in one and a 15 in the
+ * other are the same 15 — right up until somebody changes one of them.
+ */
+export const SKIP_BACK_MS = 15_000;
+export const SKIP_FORWARD_MS = 30_000;
+
+/**
+ * `h:mm:ss` (or `m:ss` under an hour) for a position in a recording.
+ *
+ * Lives here rather than in either view, because it was in BOTH and the two
+ * copies disagreed — one floored the seconds and the other rounded them, so the
+ * same audio read a second apart depending on which surface you looked at.
+ */
+export function formatClock(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const mm = h > 0 ? String(m).padStart(2, '0') : String(m);
+  return `${h > 0 ? `${h}:` : ''}${mm}:${String(s).padStart(2, '0')}`;
 }
 
 export const playback = {
@@ -256,7 +354,7 @@ export const playback = {
     player?.pause();
     lastTick = null;
     set({ playing: false });
-    void persist();
+    persist();
   },
   seek: (ms: number) => {
     player?.seek(ms);
@@ -265,13 +363,18 @@ export const playback = {
     lastTick = Date.now();
     dirty = true;
     set({ positionMs: ms });
-    void persist();
+    persist();
   },
   setRate: (rate: number) => {
     player?.setRate(rate);
     set({ rate });
   },
   toggle: () => (state.playing ? playback.pause() : playback.play()),
+  // Clamped here rather than at each call site, so neither view has to know the
+  // duration or the amounts.
+  skipBack: () => playback.seek(Math.max(0, state.positionMs - SKIP_BACK_MS)),
+  skipForward: () =>
+    playback.seek(Math.min(state.now?.durationMs ?? 0, state.positionMs + SKIP_FORWARD_MS)),
 };
 
 /** Subscribe a component to the one session. */

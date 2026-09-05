@@ -224,11 +224,12 @@ something has to hold on a clean machine rather than this one:
 `gh workflow run ci.yml --ref <branch>`. The trigger block to restore is written
 out at the top of `ci.yml`.
 
-**Scale and cost, measured 2026-08-28:** 674 checks over 5 viewports x 36
-screens, **~6m0s wall clock** (361s, including the shared/functions build,
-Metro's cold bundle and emulator boot). Up from 623 checks over 34 screens on
-2026-08-27: the manager tour gained the recording ledger and its override
-editor, which is where a rules failure invisible to an admin had been hiding.
+**Scale and cost, measured 2026-09-05:** 705 checks over 5 viewports x 38
+screens, **~6m wall clock** (including the shared/functions build, Metro's cold
+bundle and emulator boot). The staff tour gained the work queue, the create
+sheet open, and the People tab's staff half; the student tour gained the docked
+now-playing bar, which is a row that exists in no other state and eats the
+bottom of every screen under it.
 That is what the sweep adds to a CI run, and it is the reason the widths are
 five deliberate ones rather than a comfortable-looking grid.
 

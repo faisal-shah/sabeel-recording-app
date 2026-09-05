@@ -4,7 +4,7 @@ import { CONTENT_MAX_WIDTH, getTheme, spacing, useTheme } from '../theme';
 const t = getTheme();
 
 /**
- * Every semantic theme token, rendered. Reachable from Home in dev builds only.
+ * Every semantic theme token, rendered. Reachable from the More menu, in dev builds only.
  *
  * It exists because the palette being *right* is the part that survives a code
  * review of the hex values and then looks wrong on a phone. Screenshot it on

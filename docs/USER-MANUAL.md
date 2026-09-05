@@ -24,7 +24,7 @@ a phone** and once **on a computer**, so you can recognize it wherever you are.
 2. **The app is for catching up on a class you were excused from.** Staff take
    **attendance** for each meeting. If they mark you **excused**, that meeting's
    recording opens to you and becomes *required listening* — it appears on your
-   home screen with a date to listen by, and closes again after it. If you were
+   **Listening** screen with a date to listen by, and closes again after it. If you were
    **present**, you don't need it. If you were **absent** without being excused,
    it isn't opened to you. Being excused is the whole of it.
 3. **You mark your own listening complete.** The app saves your place and shows
@@ -85,7 +85,7 @@ don't need it.
 <figure class="wd"><img src="manual/img/02-student-home-desktop.png" alt="Student home on a computer"><figcaption>On a computer</figcaption></figure>
 </div>
 
-This is your home screen — **Your listening**. It holds every recording that has
+This is **Your listening**, the first thing the app opens on. It holds every recording that has
 been opened to you, most urgent first.
 
 **A recording is opened to you when your teacher marks you *excused* for that
@@ -180,8 +180,8 @@ Where you were excused, the row also says that a recording was required and
 whether you've listened to it — so you can check your record without hunting
 through your listening list.
 
-Two things this page is not: it isn't a way to play anything (that's your home
-screen), and it never shows anyone else's attendance. You see your own marks and
+Two things this page is not: it isn't a way to play anything (that's
+**Listening**), and it never shows anyone else's attendance. You see your own marks and
 nobody else's.
 
 ## 1.6 Changing your password

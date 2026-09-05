@@ -6,7 +6,7 @@ import {
   todayInZone,
   type AttendanceStatus,
 } from '@sabeel/shared';
-import { Card, Empty, Notice, Screen, SectionTitle } from '../components/ui';
+import { Card, Empty, Grid, Notice, Screen, SectionTitle } from '../components/ui';
 import { useListenerError } from '../liveQuery';
 import { useMyAttendance } from '../attendance';
 import { useMyAssignments, useMyCompletions } from '../completion';
@@ -64,7 +64,7 @@ export function StudentAttendanceScreen({
   }, [marks]);
 
   return (
-    <Screen title={cls.name} subtitle="Your attendance">
+    <Screen title={cls.name} subtitle="Your attendance" width="list">
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
 
       <Card>
@@ -79,7 +79,8 @@ export function StudentAttendanceScreen({
       {rows.length === 0 ? (
         <Empty>No attendance has been taken for this class yet.</Empty>
       ) : (
-        rows.map((m) => {
+        <Grid min={330}>
+        {rows.map((m) => {
           const a = bySession.get(m.sessionId);
           return (
             <View key={m.id} testID={`attendance-${m.title}`} style={styles.row}>
@@ -99,7 +100,8 @@ export function StudentAttendanceScreen({
               <Text style={[styles.status, styles[m.status]]}>{STATUS_LABEL[m.status]}</Text>
             </View>
           );
-        })
+        })}
+        </Grid>
       )}
     </Screen>
   );

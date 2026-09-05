@@ -201,7 +201,7 @@ A **Missed** card stays on the list rather than disappearing: a student is owed 
 
 Students have a page per class showing **their own attendance record**: a tally of present / absent / excused, then every session they were marked in, with their own mark and its date. An excused row also says that a recording was required and whether they have listened to it.
 
-- It is a record, not a second way to play: listening happens on the home screen, which is the one place a recording is opened.
+- It is a record, not a second way to play: listening starts from the Listening tab, which is the one place a recording is opened. (Once something is playing, the docked now-playing bar can reopen the player from anywhere.)
 - Sessions whose attendance was taken before the student enrolled are simply not in their record.
 - No student ever sees another student's mark, or the roster's.
 
@@ -244,9 +244,27 @@ Students can mark complete offline.
 
 ## Staff experience
 
-### Staff home and recording library
+### Staff home: what is waiting
 
-Staff home starts with the recording library.
+Staff home is a dated work queue — everything across the reader's courses that
+is waiting on them, most urgent first, each row a direct link to the screen
+where the work is done.
+
+Attendance not taken ranks first and is the only entry that carries a count on
+the navigation. Under the excused-only policy an un-taken register grants nobody
+anything, so a published recording sits there that not one student can open —
+and it is the only failure in the product that is invisible from every other
+screen.
+
+The rest, in order: a recording waiting to be published (draft, unpublished, or
+an import needing attention), a session whose attendance is in but whose audio
+is not, and a recording whose access closes within the week.
+
+Nothing in the queue is stored. Every row is derived from sessions and
+recordings the reader can already see, so it cannot claim work that is already
+done, and closing the gap removes the row.
+
+### The recording library
 
 The recording library:
 

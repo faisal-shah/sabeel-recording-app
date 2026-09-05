@@ -367,7 +367,6 @@ const styles = StyleSheet.create({
   ledgerLine: { fontSize: 15, color: t.text.secondary, marginBottom: spacing(3) },
   ledgerNum: { fontSize: 18, fontWeight: '700', color: t.text.primary },
   missedNum: { color: t.feedback.danger },
-  meta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing(2) },
   pickRow: {
     flexDirection: 'row',
     alignItems: 'center',

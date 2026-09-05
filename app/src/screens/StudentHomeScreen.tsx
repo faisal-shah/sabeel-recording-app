@@ -11,7 +11,7 @@ import {
   type DueBucket,
   type RecordingDoc,
 } from '@sabeel/shared';
-import { Empty, Grid, Notice, Screen } from '../components/ui';
+import { Empty, Notice, Screen } from '../components/ui';
 import { PushNudge } from '../components/PushNudge';
 import { db } from '../firebase';
 import { useListenerError } from '../liveQuery';
@@ -105,12 +105,17 @@ export function StudentHomeScreen({
   ];
   for (const row of listed) groups.find((g) => g.bucket === row.bucket)?.rows.push(row);
 
+  /*
+   * A READING COLUMN, not a card grid.
+   *
+   * This is a short, ordered task list — usually one or two items — and flowing
+   * it into columns froze every row at a third of a 1400px window while leaving
+   * the rest of the page empty and wrapping the titles to five lines. A capped,
+   * centred column is the right shape for a list read top to bottom, and it is
+   * what `Screen` does by default.
+   */
   return (
-    <Screen
-      title="Your listening"
-      subtitle="Recordings you were excused from, most urgent first"
-      width="list"
-    >
+    <Screen title="Your listening" subtitle="Recordings you were excused from, most urgent first">
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
 
       {/* Top of the content, below the listener error only. Same place in all
@@ -152,15 +157,13 @@ export function StudentHomeScreen({
               <Text style={[styles.groupLabel, g.bucket === 'missed' ? styles.missedLabel : null]}>
                 {g.label}
               </Text>
-              <Grid min={320}>
-                {g.rows.map((row) => (
-                  <TaskCard
-                    key={row.key}
-                    row={row}
-                    onOpen={() => onOpen(row.recording, row.cls, row.dueDate)}
-                  />
-                ))}
-              </Grid>
+              {g.rows.map((row) => (
+                <TaskCard
+                  key={row.key}
+                  row={row}
+                  onOpen={() => onOpen(row.recording, row.cls, row.dueDate)}
+                />
+              ))}
             </View>
           ))
       )}
@@ -358,5 +361,4 @@ const styles = StyleSheet.create({
   missed: { color: t.feedback.danger, fontWeight: '600' },
   doneChip: { fontSize: 13, color: t.feedback.success, fontWeight: '600' },
   pending: { fontSize: 12, color: t.feedback.warning, fontWeight: '600', marginBottom: spacing(1) },
-  footer: { marginTop: spacing(4), gap: spacing(2) },
 });

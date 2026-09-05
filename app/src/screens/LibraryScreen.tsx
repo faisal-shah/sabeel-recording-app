@@ -12,6 +12,19 @@ type StatusFilter = 'all' | RecordingStatus;
 const STATUSES: StatusFilter[] = ['all', 'published', 'draft', 'archived', 'unpublished', 'needsAttention'];
 
 /**
+ * The filter words a person reads. `needsAttention` is the FIELD VALUE, and it
+ * was being printed raw — one camelCase chip sitting in a row of plain words.
+ */
+const STATUS_LABEL: Record<StatusFilter, string> = {
+  all: 'all',
+  published: 'published',
+  draft: 'draft',
+  archived: 'archived',
+  unpublished: 'unpublished',
+  needsAttention: 'needs attention',
+};
+
+/**
  * The cross-cohort recording library with status counts (deferred from Phase 3).
  * Admin sees a flat list of everything; a manager sees a section per course they
  * run (the rules forbid an unconstrained recordings list to a manager).
@@ -48,7 +61,9 @@ export function LibraryScreen({
             onPress={() => setStatus(s)}
             style={[styles.chip, status === s ? styles.chipOn : null]}
           >
-            <Text style={[styles.chipText, status === s ? styles.chipTextOn : null]}>{s}</Text>
+            <Text style={[styles.chipText, status === s ? styles.chipTextOn : null]}>
+              {STATUS_LABEL[s]}
+            </Text>
           </Pressable>
         ))}
       </View>
@@ -173,7 +188,7 @@ function Counts({ recordings }: { recordings: RecordingRow[] }) {
   return (
     <Text style={styles.counts}>
       {recordings.length} total · {published} published
-      {attention > 0 ? ` · ${attention} need attention` : ''}
+      {attention > 0 ? ` · ${attention} ${attention === 1 ? 'needs' : 'need'} attention` : ''}
     </Text>
   );
 }

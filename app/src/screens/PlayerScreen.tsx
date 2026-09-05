@@ -10,7 +10,7 @@ import {
 import { Notice } from '../components/ui';
 import { Scrubber } from '../components/Scrubber';
 import { Transport } from '../components/Transport';
-import { openPlayback, playback, usePlayback } from '../playback';
+import { formatClock, openPlayback, playback, usePlayback } from '../playback';
 import { useCompletion, setCompleted } from '../completion';
 import { useListenerError } from '../liveQuery';
 import { useCohortName, type CourseRow } from '../structure';
@@ -145,18 +145,20 @@ export function PlayerScreen({
         onScrub={setScrubMs}
       />
       <View style={styles.times}>
-        <Text testID="player-elapsed" style={styles.time}>{fmt(shownPositionMs)}</Text>
+        <Text testID="player-elapsed" style={styles.time}>
+          {formatClock(shownPositionMs)}
+        </Text>
         {/* Remaining, not total: mid-lecture, "how much is left" is the question
             anyone actually has. */}
-        <Text style={styles.time}>−{fmt(remainingMs)}</Text>
+        <Text style={styles.time}>−{formatClock(remainingMs)}</Text>
       </View>
 
       <Transport
         playing={state.playing}
         disabled={!state.ready}
         onPlayPause={state.playing ? pause : play}
-        onBack={() => seek(Math.max(0, state.positionMs - 15_000))}
-        onForward={() => seek(Math.min(durationMs, state.positionMs + 30_000))}
+        onBack={playback.skipBack}
+        onForward={playback.skipForward}
       />
 
       <View style={styles.speedRow}>
@@ -325,15 +327,6 @@ function CompletionControl({
   );
 }
 
-function fmt(ms: number) {
-  const total = Math.max(0, Math.round(ms / 1000));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  const mm = h > 0 ? String(m).padStart(2, '0') : String(m);
-  return `${h > 0 ? `${h}:` : ''}${mm}:${String(s).padStart(2, '0')}`;
-}
-
 const styles = StyleSheet.create({
   canvas: { flex: 1, backgroundColor: t.bg.canvas },
   content: {
@@ -382,6 +375,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: t.border.strong,
     minWidth: 56,
+    // 44pt. These sit on the screen students spend the most time on, and they
+    // were 32px tall — under the minimum on the app's core control row.
+    minHeight: 44,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   speedChipOn: { backgroundColor: t.accent.base, borderColor: t.accent.base },

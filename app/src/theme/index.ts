@@ -113,10 +113,10 @@ export const spacing = (n: number) => n * 4;
  * full-bleed; at and above it the column caps here and centres, so the empty
  * space lands on both sides instead of leaving lines too long to read.
  *
- * It is no longer the whole of the app's responsive behaviour — see
- * `LAYOUT_WIDTHS` below, and `WIDE_BREAKPOINT`, which is a different number
- * answering a different question. This one is a typographic limit and is
- * reached long before a window is wide enough to give up space to a rail.
+ * One of two maximums — see `LAYOUT_WIDTHS` below — and a different number
+ * again from `WIDE_BREAKPOINT`, which answers a different question. This one is
+ * a typographic limit, and it is reached long before a window is wide enough to
+ * give up space to a rail.
  *
  * `scripts/screens-e2e.mjs` READS THIS FILE for the number rather than keeping
  * its own copy, and picks its viewport widths to straddle it. A constant
@@ -140,9 +140,9 @@ export const CONTENT_MAX_WIDTH = 720;
 export const WIDE_BREAKPOINT = 900;
 
 /**
- * The three content maximums, one per kind of content.
+ * The two content maximums, one per kind of content.
  *
- * A single "content width" cannot serve all three, which is what makes a
+ * A single "content width" cannot serve both, which is what makes a
  * phone-first app look stretched on a laptop: prose capped for readability
  * leaves a card list stranded in a narrow ribbon down the middle of a 1600px
  * window, and a card list allowed to fill the window drags body copy out to
@@ -150,12 +150,14 @@ export const WIDE_BREAKPOINT = 900;
  *
  *   read  text, forms, a single record — line length is the constraint
  *   list  card and row collections — these want the room, and flow into columns
- *   full  a screen that manages its own panes (the workbench navigator)
+ *
+ * Deliberately only two. Every screen in the app is one or the other, and a
+ * third, uncapped variant with no screen to use it would be a width nobody
+ * could see was broken.
  */
 export const LAYOUT_WIDTHS = {
   read: CONTENT_MAX_WIDTH,
   list: 1180,
-  full: Infinity,
 } as const;
 
 export type LayoutWidth = keyof typeof LAYOUT_WIDTHS;

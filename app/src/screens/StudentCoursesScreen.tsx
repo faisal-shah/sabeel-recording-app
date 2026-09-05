@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Empty, Grid, Notice, Screen } from '../components/ui';
+import { Empty, Notice, Screen } from '../components/ui';
 import { useListenerError } from '../liveQuery';
 import { useMyAttendance } from '../attendance';
 import { useCourse, useStudentEnrollments } from '../structure';
@@ -40,11 +40,9 @@ export function StudentCoursesScreen({
       {courseIds.length === 0 ? (
         <Empty>You are not enrolled in any classes yet.</Empty>
       ) : (
-        <Grid min={320}>
-          {courseIds.map((courseId) => (
-            <CourseCard key={courseId} uid={uid} courseId={courseId} onOpen={onOpen} />
-          ))}
-        </Grid>
+        courseIds.map((courseId) => (
+          <CourseCard key={courseId} uid={uid} courseId={courseId} onOpen={onOpen} />
+        ))
       )}
     </Screen>
   );

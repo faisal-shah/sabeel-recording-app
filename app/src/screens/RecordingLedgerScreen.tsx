@@ -7,7 +7,7 @@ import {
   todayInZone,
   type DueBucket,
 } from '@sabeel/shared';
-import { Button, Empty, Field, Notice, Row, Screen, SectionTitle } from '../components/ui';
+import { Button, Empty, Field, Grid, Notice, Row, Screen, SectionTitle } from '../components/ui';
 import {
   overrideCompletion,
   clearCompletionOverride,
@@ -89,6 +89,7 @@ export function RecordingLedgerScreen({
     <Screen
       title={recording.title}
       subtitle={`${cohortName ? `${cls.name} · ${cohortName}` : cls.name} · listening progress`}
+      width="list"
     >
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
@@ -139,7 +140,8 @@ export function RecordingLedgerScreen({
               : 'Everyone required has completed this — nice.'}
         </Empty>
       ) : (
-        rows.map((r) => (
+        <Grid min={340}>
+        {rows.map((r) => (
           <LedgerRowCard
             key={r.studentUid}
             row={r}
@@ -148,7 +150,8 @@ export function RecordingLedgerScreen({
             busy={busy}
             onRun={run}
           />
-        ))
+        ))}
+        </Grid>
       )}
 
       <SectionTitle>Present ({attendees.length})</SectionTitle>
@@ -160,9 +163,11 @@ export function RecordingLedgerScreen({
             They were at the session, so this recording is neither required for them nor open to
             them.
           </Notice>
-          {attendees.map((r) => (
-            <ListenerRow key={r.studentUid} row={r} />
-          ))}
+          <Grid min={300}>
+            {attendees.map((r) => (
+              <ListenerRow key={r.studentUid} row={r} />
+            ))}
+          </Grid>
         </>
       )}
 
@@ -173,9 +178,11 @@ export function RecordingLedgerScreen({
             Marked absent rather than excused, so the recording was not opened to them. To let
             someone catch up, mark them excused on the session and submit again.
           </Notice>
-          {absentees.map((r) => (
-            <ListenerRow key={r.studentUid} row={r} />
-          ))}
+          <Grid min={300}>
+            {absentees.map((r) => (
+              <ListenerRow key={r.studentUid} row={r} />
+            ))}
+          </Grid>
         </>
       ) : null}
 
@@ -187,9 +194,11 @@ export function RecordingLedgerScreen({
             the class, or this recording was unpublished. Nothing is required of them, and they
             can&apos;t open it. Re-enrolling or republishing restores the grant.
           </Notice>
-          {lapsed.map((r) => (
-            <ListenerRow key={r.studentUid} row={r} />
-          ))}
+          <Grid min={300}>
+            {lapsed.map((r) => (
+              <ListenerRow key={r.studentUid} row={r} />
+            ))}
+          </Grid>
         </>
       ) : null}
 
@@ -200,9 +209,11 @@ export function RecordingLedgerScreen({
             Listening from someone who holds no current grant — for example, excused and listening,
             then corrected to present. Kept as history; does not count toward accountability.
           </Notice>
-          {otherListeners.map((r) => (
-            <ListenerRow key={r.studentUid} row={r} />
-          ))}
+          <Grid min={300}>
+            {otherListeners.map((r) => (
+              <ListenerRow key={r.studentUid} row={r} />
+            ))}
+          </Grid>
         </>
       ) : null}
     </Screen>

@@ -499,6 +499,27 @@ await tap(admin, 'session-create');
 // appeared" rather than "the sheet never closed".
 await admin.getByTestId('session-create').waitFor({ state: 'detached', timeout: 15000 });
 check('a create sheet closes itself on success', true);
+/*
+ * THE WORK QUEUE, WITH SOMETHING BLOCKING ACCESS IN IT.
+ *
+ * A session exists whose attendance has not been submitted, which is exactly
+ * the state Today ranks first and the only thing in the app that carries a
+ * count on the navigation. Checked here, before attendance is taken, because
+ * this is the one moment in the whole suite when that state exists.
+ */
+await goHome(admin);
+await admin.getByTestId('tab-today-badge').waitFor({ timeout: 20000 });
+const queueText = await admin.locator('body').innerText();
+check(
+  'Today counts a session whose attendance is not taken, and names it',
+  /1\s*$/m.test(await admin.getByTestId('tab-today-badge').innerText()) &&
+    /attendance not taken/i.test(queueText) &&
+    /Session 1/.test(queueText),
+  queueText.replace(/\n+/g, ' | ').slice(0, 200),
+);
+
+await openHikam(admin);
+await tap(admin, 'nav-sessions');
 await tap(admin, 'session-open-Session 1');
 
 // Take attendance: mark the enrolled student EXCUSED — the only mark that opens
@@ -512,6 +533,22 @@ check(
   'submitting attendance before a recording exists grants nobody',
   (await activeAssignments()).length === 0,
 );
+
+// The queue is LIVE: the blocking row and its count go the moment the register
+// is submitted, from a screen the reader is not even looking at. A badge that
+// lingers over work already done is worse than no badge, which is why this is
+// two listeners rather than a read on arrival.
+await goHome(admin);
+await admin.waitForTimeout(2500);
+check(
+  'the blocking count clears once attendance is submitted',
+  (await admin.getByTestId('tab-today-badge').count()) === 0,
+  (await admin.locator('body').innerText()).replace(/\n+/g, ' | ').slice(0, 160),
+);
+// Back to the session — the upload continues from there.
+await openHikam(admin);
+await tap(admin, 'nav-sessions');
+await tap(admin, 'session-open-Session 1');
 await shot(admin, '10-attendance');
 
 // Upload the recording to the session.
@@ -619,6 +656,49 @@ check(
 );
 await tap(student, 'player-play'); // pause, so the saved position settles
 
+/*
+ * THE DOCKED NOW-PLAYING BAR — leaving the player must not stop the audio.
+ *
+ * This is the whole reason playback moved out of `PlayerScreen` into an
+ * app-wide session, and it is the one behaviour no other check reaches: the
+ * sweep photographs the bar but never asserts that the position kept moving,
+ * and the unit suite does not touch playback at all. A two-hour lecture that
+ * stops because someone checked their attendance record is the bug.
+ */
+/*
+ * THE DOCKED NOW-PLAYING BAR — leaving the player must not stop the audio.
+ *
+ * This is the whole reason playback moved out of `PlayerScreen` into an app-wide
+ * session, and no other check reaches it: the sweep photographs the bar but
+ * never asserts the position kept moving, and the unit suite does not touch
+ * playback at all. A two-hour lecture that stops because someone checked their
+ * attendance record is the bug this proves is gone.
+ */
+await goHome(student);
+await tap(student, 'next-up-Session 1');
+await student.getByTestId('player-play').waitFor({ timeout: 25000 });
+await tap(student, 'player-play');
+await student.waitForTimeout(2000);
+const beforeLeaving = await elapsedSeconds(student);
+await tap(student, 'tab-classes');
+await student.getByTestId('mini-player').waitFor({ timeout: 15000 });
+check('leaving the player leaves the recording loaded, in a docked bar', true);
+await student.waitForTimeout(4000);
+await tap(student, 'mini-player-open');
+await student.getByTestId('player-play').waitFor({ timeout: 15000 });
+check('the docked bar reopens the player it belongs to', true);
+const afterReturning = await elapsedSeconds(student);
+check(
+  'the audio kept playing while the student was on another screen',
+  afterReturning >= beforeLeaving + 2,
+  `left at ${beforeLeaving}s, back at ${afterReturning}s`,
+);
+await tap(student, 'player-play'); // pause again
+await student.waitForTimeout(1500);
+
+// READ AFTER EVERYTHING HAS STOPPED PLAYING. The resume check below compares a
+// reopened position against this one, so anything that plays between the two
+// reads shows up as a resume that missed by exactly that much.
 const savedMs = Number(
   (await readCollection('listeningProgress'))[0].fields.positionMs.integerValue,
 );
@@ -1130,7 +1210,8 @@ console.log('\nUp to the course');
 // The header's Back arrow returns where you CAME FROM, which two screens into a
 // course is the list you came through. The course name in the subtitle is the
 // way to the course itself — and from a screen opened by URL there is nothing
-// below it in the stack to go back to at all, so this is the only way out.
+// below it in the stack to go back to at all, so this is the only way back to
+// the COURSE — the bar is still there, but it starts you over at a tab root.
 await openHikam(admin);
 await tap(admin, 'nav-sessions');
 await tap(admin, 'session-open-Session 1');
@@ -1149,7 +1230,8 @@ check(
   onCourse(admin),
 );
 
-// The case that has no Back at all: a session opened straight from its URL has
+// The case that has no Back at all — no header arrow, only the bar: a session
+// opened straight from its URL has
 // nothing beneath it in the stack, so the header draws no back arrow. That is
 // the whole reason this link exists rather than leaning on Back.
 await admin.goto(sessionUrl, { waitUntil: 'domcontentloaded' });

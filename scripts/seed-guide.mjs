@@ -148,4 +148,14 @@ const auditEntries=[
 for (const e of auditEntries) await db.collection('auditLog').add(e);
 await db.collection('auditLog').add({ at:now-2*day, actorUid:'seed-admin', actorRole:'admin', action:'createCohort', courseId:null, targets:{cohortId} });
 
+// ---- staff ----
+// A PENDING staff account, so the approvals figure in the manual can show the
+// two approve buttons the prose names. Without one the screen photographs as
+// "Nobody is waiting" — a true state, and the one state that documents nothing
+// about the page it illustrates.
+await db.collection('staffUsers').doc('guide-pending').set({
+  email:'nadia.karim@oursabeel.com', displayName:'Nadia Karim',
+  role:null, status:'pending', createdAt:now-2*day,
+});
+
 console.log(JSON.stringify({ studentEmail:students[0].email, studentPw:'HikamStudent1', hikamCourseId:courses.hikam.id, managerUidNeeded:true }, null, 0));

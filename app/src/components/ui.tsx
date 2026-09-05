@@ -1,4 +1,12 @@
-import { Children, createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  Children,
+  createContext,
+  isValidElement,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -103,7 +111,12 @@ export function Screen({ title, subtitle, status, parent, width = 'read', action
             </Text>
           ) : null}
         </View>
-        {actions && wide ? <View style={styles.headActions}>{actions}</View> : null}
+        {/* ONE POSITION, at every width. Rendering these in the heading row on a
+            wide screen and as a separate block below it on a phone put the same
+            element at two different places in the tree, so dragging a browser
+            across the breakpoint unmounted them — closing an open "Add a …"
+            sheet and throwing away a half-typed form. The row wraps instead. */}
+        {actions ? <View style={styles.headActions}>{actions}</View> : null}
       </View>
     ) : null;
   return (
@@ -112,14 +125,13 @@ export function Screen({ title, subtitle, status, parent, width = 'read', action
       contentContainerStyle={[
         styles.content,
         wide ? styles.contentWide : null,
-        ownsTopInset ? { paddingTop: insets.top + spacing(5) } : null,
-        Number.isFinite(max) ? { maxWidth: max } : null,
+        ownsTopInset ? { paddingTop: insets.top + spacing(8) } : null,
+        { maxWidth: max },
       ]}
     >
       {/* Chrome is ivory with a dark title, never a raspberry app bar: a
           brand-coloured bar on every screen puts raspberry far past its share. */}
       {heading}
-      {actions && !wide ? <View style={styles.headActionsNarrow}>{actions}</View> : null}
       {listenerError ? (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>{listenerError}</Text>
@@ -146,6 +158,7 @@ export function Button({
   disabled,
   compact,
   block,
+  hug,
   testID,
 }: {
   label: string;
@@ -158,11 +171,14 @@ export function Button({
   /**
    * Keep the phone's full-width shape at every width.
    *
-   * The escape hatch for the rare screen whose single action SHOULD span its
-   * container — sign-in is the whole of it. Everywhere else a standalone button
-   * that stretches to 1400px reads as an unfinished phone layout.
+   * The escape hatch for a button that SHOULD span its container whatever the
+   * width — a sheet's own dismiss, and the form buttons inside one, where the
+   * container is already a narrow panel. Everywhere else a standalone button
+   * stretched to 1400px reads as an unfinished phone layout.
    */
   block?: boolean;
+  /** Size to the label at EVERY width, not only on a wide screen. */
+  hug?: boolean;
   testID?: string;
 }) {
   const isDisabled = disabled || busy;
@@ -188,7 +204,7 @@ export function Button({
         // phone, which is the right primary-action shape there and a bar across
         // the window on a laptop. Inside a Row it is already content-width, so
         // this only changes the stretched case.
-        wide && !compact && !block ? styles.btnWide : null,
+        (hug || wide) && !compact && !block ? styles.btnWide : null,
         style,
         pressed && !isDisabled ? styles.btnPressed : null,
         isDisabled ? styles.btnDisabled : null,
@@ -362,6 +378,7 @@ export function Field({
   secureTextEntry,
   autoCapitalize = 'none',
   keyboardType,
+  multiline,
   testID,
 }: {
   label: string;
@@ -371,6 +388,12 @@ export function Field({
   secureTextEntry?: boolean;
   autoCapitalize?: 'none' | 'words';
   keyboardType?: 'email-address' | 'default';
+  /**
+   * A paragraph, not a value. The field grows and wraps instead of scrolling a
+   * single line sideways — a session's notes run to several sentences and were
+   * being edited through a one-line box that truncated mid-word.
+   */
+  multiline?: boolean;
   testID?: string;
 }) {
   const wide = useWide();
@@ -379,7 +402,7 @@ export function Field({
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
         testID={testID}
-        style={styles.input}
+        style={[styles.input, multiline ? styles.inputMultiline : null]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
@@ -388,6 +411,9 @@ export function Field({
         autoCapitalize={autoCapitalize}
         autoCorrect={false}
         keyboardType={keyboardType}
+        multiline={multiline}
+        numberOfLines={multiline ? 4 : undefined}
+        textAlignVertical={multiline ? 'top' : undefined}
       />
     </View>
   );
@@ -439,11 +465,22 @@ function statusColour(status: string): string {
         : t.text.muted;
 }
 
+/**
+ * A status word, in English.
+ *
+ * The chip prints a FIELD VALUE, and one of them is camelCase — so a recording
+ * card read "needsAttention" beside a summary line that said the same thing in
+ * words. Only the values that are not already a word need an entry.
+ */
+const STATUS_WORD: Record<string, string> = {
+  needsAttention: 'needs attention',
+};
+
 export function StatusChip({ status }: { status: string }) {
   return (
     <View style={styles.chip}>
       <View style={[styles.chipDot, { backgroundColor: statusColour(status) }]} />
-      <Text style={styles.chipText}>{status}</Text>
+      <Text style={styles.chipText}>{STATUS_WORD[status] ?? status}</Text>
     </View>
   );
 }
@@ -468,18 +505,6 @@ function StatusLight({ status }: { status: string }) {
   );
 }
 
-/**
- * Lays controls out side by side, wrapping instead of overflowing.
- *
- * Each child is wrapped rather than styled directly, so the flex behaviour
- * belongs to the row: putting flexGrow on the button itself made every
- * standalone button stretch to fill the column it sat in.
- *
- * Items GROW to share a line but never SHRINK (see `rowItem`). Shrinking is what
- * produced a Publish button squeezed to a third of its neighbour with its label
- * broken mid-word — "Publ / ish" — on a real phone. A row is allowed to wrap; it
- * is not allowed to crush a control below the width of its own text.
- */
 /**
  * A collection that flows into as many columns as fit.
  *
@@ -508,7 +533,20 @@ export function Grid({ min = 300, children }: { min?: number; children: ReactNod
   return (
     <View style={styles.grid} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       {cells.map((child, i) => (
-        <View key={i} style={[styles.gridCell, cell ? { width: cell } : null]}>
+        /*
+         * KEYED BY THE CHILD'S OWN KEY, never by index.
+         *
+         * `Children.toArray` already carries each child's key, and an index key
+         * over it throws that away: insert or remove one row and every cell
+         * after it is a different component to React, so all of them remount.
+         * Cells here hold live Firestore listeners (a student's class cards do),
+         * and `liveQuery` resets to `empty` on resubscribe — so one enrolment
+         * change flashed "No attendance taken yet" across the whole list.
+         */
+        <View
+          key={(isValidElement(child) && child.key) || i}
+          style={[styles.gridCell, cell ? { width: cell } : null]}
+        >
           {child}
         </View>
       ))}
@@ -548,11 +586,12 @@ export function AddAction({
   const [open, setOpen] = useState(false);
   return (
     <AddActionContext.Provider value={() => setOpen(false)}>
-      {/* Not `compact`: that shape is for an action sitting inside a list row,
-          and it lands under the 44pt touch minimum. At the head of a screen this
-          is a page action — content-width on a laptop, full width on a phone,
-          which is what the button primitive already does. */}
-      <Button testID={testID} label={label} onPress={() => setOpen(true)} />
+      {/* CONTENT-WIDTH AT EVERY WIDTH, which is the one place `hug` is used.
+          A full-width raspberry bar above the list is the first thing on a phone
+          screen, and it spends the accent well past its share on a page whose
+          job is the list underneath. Not `compact` either: that shape belongs
+          inside a list row and lands under the 44pt touch minimum. */}
+      <Button testID={testID} label={label} hug onPress={() => setOpen(true)} />
       <Sheet visible={open} title={title} onClose={() => setOpen(false)} closeLabel="Cancel">
         {children}
       </Sheet>
@@ -579,10 +618,13 @@ export function useAddAction(): () => void {
 export function Segmented<T extends string>({
   value,
   options,
+  testIdPrefix = 'segment',
   onChange,
 }: {
   value: T;
   options: { value: T; label: string }[];
+  /** Each segment gets `${testIdPrefix}-${value}`. */
+  testIdPrefix?: string;
   onChange: (value: T) => void;
 }) {
   return (
@@ -592,7 +634,7 @@ export function Segmented<T extends string>({
         return (
           <Pressable
             key={o.value}
-            testID={`segment-${o.value}`}
+            testID={`${testIdPrefix}-${o.value}`}
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
             accessibilityLabel={o.label}
@@ -611,6 +653,18 @@ export function Segmented<T extends string>({
   );
 }
 
+/**
+ * Lays controls out side by side, wrapping instead of overflowing.
+ *
+ * Each child is wrapped rather than styled directly, so the flex behaviour
+ * belongs to the row: putting flexGrow on the button itself made every
+ * standalone button stretch to fill the column it sat in.
+ *
+ * Items GROW to share a line but never SHRINK (see `rowItem`). Shrinking is what
+ * produced a Publish button squeezed to a third of its neighbour with its label
+ * broken mid-word — "Publ / ish" — on a real phone. A row is allowed to wrap; it
+ * is not allowed to crush a control below the width of its own text.
+ */
 export function Row({ children }: { children: ReactNode }) {
   const wide = useWide();
   return (
@@ -837,7 +891,6 @@ const styles = StyleSheet.create({
   },
   contentWide: { paddingHorizontal: spacing(8), paddingTop: spacing(7) },
   headActions: { flexDirection: 'row', gap: spacing(2), alignItems: 'flex-start' },
-  headActionsNarrow: { marginBottom: spacing(4) },
   h1: { fontSize: 26, fontWeight: '700', color: t.text.primary },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3) },
   segmented: {
@@ -861,7 +914,7 @@ const styles = StyleSheet.create({
   segmentText: { fontSize: 14, fontWeight: '600', color: t.text.secondary },
   segmentTextOn: { color: t.text.primary },
   gridCell: { flexGrow: 0, flexShrink: 0 },
-  lede: { fontSize: 15, color: t.text.secondary, marginTop: spacing(1), marginBottom: spacing(4) },
+  lede: { fontSize: 15, color: t.text.secondary, marginTop: spacing(1) },
   // Raspberry is the primary action's colour, and this IS the header's action.
   // #83114F on the ivory canvas is far past 4.5:1, so it carries at 15pt.
   ledeLink: { color: t.text.accent, textDecorationLine: 'underline' },
@@ -963,6 +1016,7 @@ const styles = StyleSheet.create({
   // A single-line field stretched to 1100px is unreadable and looks unfinished;
   // the value in it is a name or an email, never a paragraph.
   fieldWide: { maxWidth: 440 },
+  inputMultiline: { minHeight: 96, paddingTop: spacing(3) },
   fieldLabel: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(1) },
   input: {
     backgroundColor: t.bg.inset,
@@ -1024,7 +1078,14 @@ const styles = StyleSheet.create({
 
   // --- a person in a list --------------------------------------------------
   // The heading: lamp on the left, title centred against it.
-  headRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), flexWrap: 'wrap' },
+  headRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing(3),
+    flexWrap: 'wrap',
+    marginBottom: spacing(4),
+  },
   headText: { flexShrink: 1, flexGrow: 1 },
   light: { alignItems: 'center', width: 56 },
   // Bigger than the chip's 8pt dot — at a page heading this is the thing you

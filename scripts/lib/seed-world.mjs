@@ -1,10 +1,15 @@
 /**
- * THE SEEDED WORLD — one definition, used by every suite that needs one.
+ * THE LAYOUT SWEEP'S WORLD.
  *
- * Extracted from `screens-e2e.mjs`, which built it inline. A second suite
- * needing the same world is exactly the moment that stops being fine: two
- * copies of a seed drift, and the way they drift is that one of them stops
- * covering a state while still reporting a pass.
+ * Split out of `screens-e2e.mjs`, which built it inline: three hundred lines of
+ * fixture in front of the checks made both harder to read, and the sweep's own
+ * rule is that a suite has to be legible enough to be trusted.
+ *
+ * It is NOT the only seed in the repo — `seed-guide.mjs` builds a different,
+ * tidier world for the user-manual screenshots, deliberately, because a manual
+ * wants a plausible institute and a sweep wants the longest name a real roster
+ * would carry. Two seeds with two jobs is fine; two seeds with the same job is
+ * what drifts.
  *
  * The content is chosen to BREAK layouts and to cover every state a screen can
  * be in — the longest name a real cohort would write, a roster longer than one

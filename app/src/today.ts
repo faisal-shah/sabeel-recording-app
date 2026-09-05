@@ -4,12 +4,14 @@ import {
   COLLECTIONS,
   DUE_SOON_DAYS,
   INSTITUTE_TIMEZONE,
+  QUEUE_SCOPE,
+  daysUntilDue,
   todayInZone,
   type RecordingDoc,
   type SessionDoc,
 } from '@sabeel/shared';
 import { db } from './firebase';
-import { useLiveQuery } from './liveQuery';
+import { useListenerError, useLiveQuery } from './liveQuery';
 import { useAllCourses, useMyCourses, type CourseRow } from './structure';
 
 export type TodayKind = 'attendance' | 'recording' | 'publish' | 'closing';
@@ -36,18 +38,20 @@ export interface TodayQueue {
   blocking: number;
   /** No snapshot has arrived yet. Distinct from an empty queue, which is news. */
   loading: boolean;
+  /** A listener was refused. `loading` would otherwise be true for ever. */
+  failed: boolean;
+  /**
+   * Whether there are any courses to have a queue ABOUT.
+   *
+   * A manager an admin has not assigned anything to has an empty queue for a
+   * completely different reason than a manager who is on top of their work, and
+   * telling them "attendance is in, every recording is published" is a sentence
+   * about courses they do not have.
+   */
+  scoped: boolean;
   /** More courses than one `in` clause can carry; the queue is a partial view. */
   truncated: boolean;
 }
-
-/**
- * Firestore's `in` takes at most 30 values.
- *
- * An institute past that is past the point where one flat queue is the right
- * screen anyway, so this truncates and says so on the screen rather than
- * paginating a to-do list.
- */
-const MAX_SCOPE = 30;
 
 /**
  * How urgent each kind is, before age is considered.
@@ -65,12 +69,6 @@ const RANK: Record<TodayKind, number> = {
   closing: 3,
 };
 
-function daysBetween(from: string, to: string): number {
-  const a = Date.parse(`${from}T00:00:00Z`);
-  const b = Date.parse(`${to}T00:00:00Z`);
-  return Math.round((b - a) / 86_400_000);
-}
-
 /**
  * The staff work queue, derived — never stored.
  *
@@ -86,7 +84,7 @@ function daysBetween(from: string, to: string): number {
  * the whole thing honest: submit attendance and the row and the count go at the
  * same moment, from whichever screen you are on.
  */
-function useTodayQueue(courses: CourseRow[]): TodayQueue {
+function useTodayQueue(courses: CourseRow[], max: number): TodayQueue {
   /*
    * A STRING FIRST, THE ARRAY FROM IT — not the other way round.
    *
@@ -98,13 +96,18 @@ function useTodayQueue(courses: CourseRow[]): TodayQueue {
    * proves every live query resubscribes when its inputs change; silencing it
    * here would cost more than the two lines it saves.
    */
-  const key = courses
+  // ARCHIVED COURSES ARE NOT WORK. A finished term's recordings are closed to
+  // students anyway, so an un-taken sheet on one blocks nothing — and without
+  // this the queue grows for ever, one dead term at a time, and spends its
+  // scope on courses nobody is waiting on.
+  const live = courses.filter((c) => !c.archived);
+  const key = live
     .map((c) => c.id)
     .sort()
-    .slice(0, MAX_SCOPE)
+    .slice(0, max)
     .join(',');
   const scope = useMemo(() => (key ? key.split(',') : []), [key]);
-  const truncated = courses.length > MAX_SCOPE;
+  const truncated = live.length > max;
 
   /*
    * `null` UNTIL THE FIRST SNAPSHOT, deliberately — not an empty array.
@@ -143,22 +146,32 @@ function useTodayQueue(courses: CourseRow[]): TodayQueue {
   );
 
   const names = useMemo(() => new Map(courses.map((c) => [c.id, c.name])), [courses]);
+  // A refused listener leaves both queries on their `empty` value for ever, and
+  // `empty` is the same `null` that means "nothing has arrived yet" — so without
+  // this the landing screen sits on "Checking your courses…" with no way out.
+  const failed = useListenerError() !== null;
+
+  // OUTSIDE the memo: a browser left open past midnight would otherwise keep
+  // saying "Met today" until the next snapshot happened to arrive.
+  const today = todayInZone(INSTITUTE_TIMEZONE);
 
   return useMemo(() => {
     // Nothing subscribed is not the same as nothing loaded: a manager assigned
     // no courses has an answer already, and it is "nothing is waiting".
     const subscribed = scope.length > 0;
     if (subscribed && (sessions === null || recordings === null)) {
-      return { items: [], blocking: 0, loading: true, truncated };
+      return { items: [], blocking: 0, loading: !failed, failed, scoped: true, truncated };
     }
 
-    const today = todayInZone(INSTITUTE_TIMEZONE);
     const out: TodayItem[] = [];
 
     for (const s of sessions ?? []) {
       if (s.archived) continue;
       const courseName = names.get(s.courseId) ?? '';
-      const met = daysBetween(s.date, today);
+      // Days since the meeting: `daysUntilDue` counts whole calendar days
+      // between two date-only strings, which is exactly this with the arguments
+      // the other way round.
+      const met = -daysUntilDue(s.date, today);
       const base = {
         sessionId: s.id,
         courseId: s.courseId,
@@ -197,7 +210,11 @@ function useTodayQueue(courses: CourseRow[]): TodayQueue {
         continue;
       }
 
-      if (rec.status === 'needsAttention' || rec.status === 'draft') {
+      // `unpublished` belongs here as much as `draft` does — and it is the more
+      // urgent of the two, because unpublishing REVOKES access every excused
+      // student already had. Leaving it out was a hole in exactly the lockout
+      // this queue exists to make visible.
+      if (rec.status === 'needsAttention' || rec.status === 'draft' || rec.status === 'unpublished') {
         out.push({
           ...base,
           key: `pub-${s.id}`,
@@ -207,13 +224,15 @@ function useTodayQueue(courses: CourseRow[]): TodayQueue {
           detail:
             rec.status === 'needsAttention'
               ? 'The import needs attention before it can be published.'
-              : 'A draft is waiting to be published.',
+              : rec.status === 'unpublished'
+                ? 'Unpublished, so nobody excused can open it.'
+                : 'A draft is waiting to be published.',
         });
         continue;
       }
 
       if (rec.status === 'published') {
-        const left = daysBetween(today, s.dueDate);
+        const left = daysUntilDue(s.dueDate, today);
         if (left >= 0 && left <= DUE_SOON_DAYS) {
           out.push({
             ...base,
@@ -239,9 +258,11 @@ function useTodayQueue(courses: CourseRow[]): TodayQueue {
       items: out,
       blocking: out.filter((i) => i.kind === 'attendance').length,
       loading: false,
+      failed,
+      scoped: subscribed,
       truncated,
     };
-  }, [sessions, recordings, names, truncated, scope]);
+  }, [sessions, recordings, names, truncated, scope, today, failed]);
 }
 
 /**
@@ -261,5 +282,5 @@ function useTodayQueue(courses: CourseRow[]): TodayQueue {
 export function useStaffQueue(isStaff: boolean, isAdmin: boolean, uid: string): TodayQueue {
   const all = useAllCourses(isStaff && isAdmin);
   const mine = useMyCourses(isStaff && !isAdmin ? uid : null);
-  return useTodayQueue(isAdmin ? all : mine);
+  return useTodayQueue(isAdmin ? all : mine, isAdmin ? QUEUE_SCOPE.admin : QUEUE_SCOPE.manager);
 }

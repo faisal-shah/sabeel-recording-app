@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { Empty, Notice, Screen } from '../components/ui';
+import { Empty, Grid, Notice, Screen } from '../components/ui';
 import { useAudit, type AuditRow } from '../ledger';
 import { useListenerError } from '../liveQuery';
 import { getTheme, spacing } from '../theme';
@@ -15,12 +15,16 @@ export function AuditScreen({ courseId, title }: { courseId: string | null; titl
   const entries = useAudit(courseId);
 
   return (
-    <Screen title="Audit" subtitle={title}>
+    <Screen title="Audit" subtitle={title} width="list">
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {entries.length === 0 ? (
         <Empty>No audit entries yet.</Empty>
       ) : (
-        entries.map((e) => <AuditCard key={e.id} entry={e} />)
+        <Grid min={360}>
+          {entries.map((e) => (
+            <AuditCard key={e.id} entry={e} />
+          ))}
+        </Grid>
       )}
     </Screen>
   );
@@ -46,7 +50,14 @@ function AuditCard({ entry: e }: { entry: AuditRow }) {
   );
 }
 
-// Friendlier labels; unknown actions fall back to the raw name.
+/**
+ * Friendlier labels; unknown actions fall back to the raw name.
+ *
+ * EVERY action a callable writes needs an entry, or the fallback prints a
+ * camelCase function name in a list of English sentences — `submitAttendance`
+ * sat between "Created course" and "Changed recording status" for exactly that
+ * reason. Adding a `auditedCall` means adding a line here.
+ */
 const ACTION_LABELS: Record<string, string> = {
   createCohort: 'Created cohort',
   setCohortArchived: 'Archived/unarchived cohort',
@@ -57,7 +68,12 @@ const ACTION_LABELS: Record<string, string> = {
   setStudentAccess: 'Changed student access',
   createEnrollment: 'Enrolled student',
   setEnrollmentActive: 'Changed enrollment',
+  createSession: 'Created session',
+  updateSession: 'Edited session',
+  deleteSession: 'Deleted session',
+  submitAttendance: 'Submitted attendance',
   createRecording: 'Created recording',
+  deleteRecording: 'Deleted recording',
   finalizeRecordingUpload: 'Uploaded audio',
   updateRecording: 'Edited recording',
   setRecordingStatus: 'Changed recording status',

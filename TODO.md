@@ -247,6 +247,30 @@ currently debug-signed) and **its** SHA-1 registered.
   **debug tokens** for the `tb_emu` AVD and local web — without those it locks
   out our own dev builds. Wired but not enforced until then.
 
+### 6. The three static pages the stores need — RELEASE BLOCKER
+
+The app's More menu already links to `PRIVACY_URL`
+(`https://recordings.oursabeel.com/privacy`), so **following that link today
+lands on the app itself** — `firebase.json` rewrites `**` to `index.html` and no
+privacy asset exists. Apple 5.1.1(i) requires the policy reachable inside the
+app, and a store reviewer does not sign in, so a client-side route behind auth
+looks empty to them.
+
+- [ ] **Confirm the host.** `recordings.oursabeel.com` is the agent's guess; the
+      constant in `@sabeel/shared` follows whatever you decide.
+- [ ] **`/privacy`** — what is collected, every third party with access (Google
+      sign-in, Firebase/Cloud, Sentry), retention, and **how to request
+      deletion**. That last clause is not removed by the no-account-creation
+      exemption: the exemption removes the button, not the route.
+- [ ] **`/support`** — App Store Connect requires a support URL.
+- [ ] **`/get-app`** — a durable page linking the builds, linked from the
+      signed-in web UI. Web pointing at the app is unrestricted; only the app
+      pointing at web sign-up is the problem.
+- [ ] Decide the deletion-request address (the sibling apps settled on one
+      shared address) and put it in the policy.
+- [ ] Serve all three as static files with Hosting rewrites **ahead of** the
+      `**` catch-all, and check each answers an anonymous `curl`.
+
 ## Before Phase 6 (Zoom)
 
 Design decisions (locked 2026-07-24): **one central Zoom user** hosts the class

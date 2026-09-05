@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { INSTITUTE_TIMEZONE, todayInZone } from '@sabeel/shared';
-import { Empty, Grid, Screen } from '../components/ui';
+import { Empty, Grid, Notice, Screen } from '../components/ui';
 import { PushNudge } from '../components/PushNudge';
 import type { TodayItem, TodayKind, TodayQueue } from '../today';
 import { getTheme, spacing } from '../theme';
@@ -51,20 +51,24 @@ export function TodayScreen({
   onOpenSession: (sessionId: string, courseId: string) => void;
   onOpenLedger: (recordingId: string) => void;
 }) {
-  const { items, blocking, loading, truncated } = queue;
+  const { items, blocking, loading, failed, scoped, truncated } = queue;
   const today = todayInZone(INSTITUTE_TIMEZONE);
 
   return (
     <Screen
       title="Today"
       subtitle={
-        loading
+        failed
+          ? 'Could not read your courses'
+          : loading
           ? 'Checking your courses…'
-          : items.length === 0
-            ? `Nothing is waiting · ${today}`
-            : blocking > 0
-              ? `${items.length} waiting · ${blocking} blocking access`
-              : `${items.length} waiting`
+          : !scoped
+            ? 'No courses yet'
+            : items.length === 0
+              ? `Nothing is waiting · ${today}`
+              : blocking > 0
+                ? `${items.length} waiting · ${blocking} blocking access`
+                : `${items.length} waiting`
       }
       width="list"
     >
@@ -72,16 +76,29 @@ export function TodayScreen({
           anything that needs acting on today. */}
       <PushNudge uid={uid} />
 
+      {/* Not "the first N" in any order a reader could predict — the scope is
+          cut by document id, which is arbitrary. Say what is true. */}
       {truncated ? (
         <Text style={styles.note}>
-          Showing the first 30 courses. Open a cohort for the rest.
+          More courses than this queue can span. Some are not counted here — open a
+          cohort to see them.
         </Text>
       ) : null}
 
-      {!loading && items.length === 0 ? (
-        <Empty>
-          Attendance is in, every recording is published, and nothing closes this week.
-        </Empty>
+      {/* An empty queue has two quite different causes, and only one of them is
+          good news. Saying "attendance is in" to someone who has not been given
+          a course yet is a sentence about courses they do not have. */}
+      {!loading && !failed && items.length === 0 ? (
+        scoped ? (
+          <Empty>
+            Attendance is in, every recording is published, and nothing closes this week.
+          </Empty>
+        ) : (
+          <Notice tone="info">
+            You are not assigned to any courses yet. An administrator assigns them; once
+            they do, this is where the work waiting on you appears.
+          </Notice>
+        )
       ) : null}
 
       {HEADINGS.map((h) => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged, signOut as fbSignOut, type User } from 'firebase/auth';
-import { closePlayback } from './playback';
+import { closePlayback, forgetPlaybackUrls } from './playback';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import {
   COLLECTIONS,
@@ -29,7 +29,11 @@ export async function signOut(): Promise<void> {
   // started it now, so nothing else would end it: signing out would drop the
   // credential, leave a foreground service holding a lecture, and give the next
   // person on a shared device someone else's recording still playing.
-  await closePlayback().catch(() => undefined);
+  closePlayback();
+  // The signed-URL cache outlives a credential otherwise: a 12-hour URL minted
+  // for one account would still be handed to the next person on a shared
+  // device, bypassing `getPlaybackUrl`'s entitlement check entirely.
+  forgetPlaybackUrls();
   // Drop this device's push registration FIRST, while the credential still
   // exists to authorize the delete. A shared device that kept its registration
   // would deliver one student's "a recording is ready" to whoever signs in

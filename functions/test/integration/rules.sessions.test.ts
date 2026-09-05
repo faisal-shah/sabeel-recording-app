@@ -7,7 +7,7 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import { collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
-import { COLLECTIONS, EMULATOR_PROJECT_ID, enrollmentId } from '@sabeel/shared';
+import { COLLECTIONS, EMULATOR_PROJECT_ID, QUEUE_SCOPE, enrollmentId } from '@sabeel/shared';
 
 let testEnv: RulesTestEnvironment;
 
@@ -128,6 +128,75 @@ describe('sessions rules', () => {
 
   it('does NOT let a manager read another course session', async () => {
     await assertFails(getDoc(doc(mine().firestore(), COLLECTIONS.sessions, SESS_THEIRS)));
+  });
+
+  /**
+   * THE QUERY THE STAFF WORK QUEUE SENDS, at the widest scope it will ever send
+   * it at.
+   *
+   * `Today` reads every course the reader can see in one `where('courseId','in',
+   * [...])`. For an ADMIN that is free — their arm of the rule reads no
+   * documents. For a MANAGER every returned document costs a
+   * `get(courses/{id})`, and Firestore caps the document-access calls in a
+   * single rules evaluation. That cap is the real constraint on how many
+   * courses the queue may span, and it is not the `in` clause's own limit — so
+   * `QUEUE_SCOPE.manager` is pinned to what this test proves rather than to what
+   * the query builder allows. Measured: 30 is refused, 20 is served, 15 is the
+   * value shipped.
+   *
+   * If this ever goes red, lower `QUEUE_SCOPE.manager`; do not widen the rule.
+   */
+  it('serves the work queue query for a manager at the full scope it uses', async () => {
+    const ids: string[] = [];
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      for (let i = 0; i < QUEUE_SCOPE.manager; i += 1) {
+        const courseId = `qc${i}`;
+        ids.push(courseId);
+        await setDoc(doc(db, COLLECTIONS.courses, courseId), {
+          cohortId: 'c1',
+          name: courseId,
+          archived: false,
+          effectiveActive: true,
+          archivedAccess: false,
+          managerUids: [MINE],
+          createdAt: 1,
+          createdBy: ADMIN,
+        });
+        await setDoc(doc(db, COLLECTIONS.sessions, `qs${i}`), {
+          courseId,
+          cohortId: 'c1',
+          date: '2026-07-06',
+          title: `qs${i}`,
+          dueDate: '2026-07-13',
+          notes: '',
+          recordingId: null,
+          attendance: {},
+          attendanceSubmittedAt: null,
+          archived: false,
+          createdAt: 1,
+          createdBy: ADMIN,
+          updatedAt: 1,
+        });
+      }
+    });
+
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(mine().firestore(), COLLECTIONS.sessions),
+          where('courseId', 'in', ids),
+        ),
+      ),
+    );
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(mine().firestore(), COLLECTIONS.recordings),
+          where('courseId', 'in', ids),
+        ),
+      ),
+    );
   });
 
   it('does NOT let an enrolled student read a session (attendance is private)', async () => {

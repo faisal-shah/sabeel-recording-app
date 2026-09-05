@@ -95,8 +95,7 @@ and commit messages, and renaming them would strand every one of those.
   module, for CSV export — so there is no Downloads tab.
 
   `screens-e2e.mjs` now reads its fixture from `scripts/lib/seed-world.mjs`
-  rather than building one inline; the second caller is what made two copies of a
-  seed untenable.
+  rather than building three hundred lines of it inline in front of the checks.
 
   Green on this machine: lint, typecheck, knip, 206 unit, 252 emulator, 703/703
   sweep at five widths, and the web e2e. **Not yet run on a device** — this box

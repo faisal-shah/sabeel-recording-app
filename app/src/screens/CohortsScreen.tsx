@@ -38,8 +38,12 @@ export function CohortsScreen({ onOpen }: { onOpen: (cohort: CohortRow) => void 
 
   return (
     <Screen
-      title="Cohorts"
-      subtitle="Semesters, and the courses inside them"
+      /* NAMED FOR THE TAB THAT LEADS HERE. It is a list of cohorts, but the way
+         in is called Courses, and a destination whose heading contradicts the
+         control that opened it reads as a wrong turn. The subtitle carries what
+         a cohort is. */
+      title="Courses"
+      subtitle="By cohort — a semester, and the courses inside it"
       width="list"
       actions={
         <AddAction testID="cohorts-add" label="Add a cohort" title="Add a cohort">

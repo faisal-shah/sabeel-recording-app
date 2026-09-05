@@ -65,20 +65,37 @@ export const SIGNED_URL_TTL_MS = 12 * 60 * 60 * 1000;
 export const SIGNED_URL_REFRESH_MS = 60 * 60 * 1000;
 
 /**
- * The public privacy policy, served as a STATIC page by Firebase Hosting
- * outside the authenticated app.
+ * Where the public privacy policy WILL live.
  *
  * Required in two places and for two different reasons: in the store listing,
  * and reachable from INSIDE the app (Apple 5.1.1(i) — store metadata alone does
  * not satisfy it). It must answer an anonymous fetch, because reviewers and
  * store crawlers do not sign in and a client-side route behind auth looks empty
- * to them.
+ * to them — which means a static page plus a Hosting rewrite ahead of the
+ * catch-all, since `**` currently rewrites everything to the SPA.
+ *
+ * THE PAGE DOES NOT EXIST YET. The link is live in the More menu, so until it
+ * does, following it lands on the app. Tracked in `TODO.md`; it is a release
+ * blocker, not a nice-to-have.
  *
  * Absolute, not a relative path: it is opened from the native apps as well as
  * the browser, where there is no origin to be relative to.
  */
 export const PRIVACY_URL = 'https://recordings.oursabeel.com/privacy';
 
-/** Where an account-deletion request goes. Named in the policy, per the store
- *  rules — one address across all three Sabeel apps. */
-export const PRIVACY_CONTACT = 'privacy@oursabeel.com';
+/**
+ * How many courses the staff work queue may span in one query, per role.
+ *
+ * TWO DIFFERENT CEILINGS, because the two roles pay different prices for the
+ * same query. Firestore's `in` operator takes at most 30 values, which is the
+ * whole of an ADMIN's constraint — their arm of the sessions and recordings
+ * rules reads no documents. A MANAGER's arm resolves `get(courses/{id})` for
+ * every document returned, against a per-evaluation cap on document-access
+ * calls, so their ceiling is lower and has nothing to do with `in`.
+ *
+ * MEASURED, not assumed: `rules.sessions.test.ts` sends exactly this query at
+ * exactly `QUEUE_SCOPE.manager` and asserts it is served. At 30 it is refused;
+ * at 20 it is served; 15 is the value with margin. Raise either number only
+ * with that test green at the new one.
+ */
+export const QUEUE_SCOPE = { admin: 30, manager: 15 } as const;

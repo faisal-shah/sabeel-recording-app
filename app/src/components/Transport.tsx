@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { SKIP_BACK_MS, SKIP_FORWARD_MS } from '../playback';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -11,6 +12,21 @@ const t = getTheme();
  * triangle in the middle of the brand palette — the `expo-firebase-stack` skill
  * calls this out. A bordered triangle and two bars are deterministic everywhere.
  */
+/**
+ * The play/pause mark, drawn. Exported so the docked now-playing bar draws the
+ * same one at a smaller size instead of typing `▶` — see the note above.
+ */
+export function PlayPauseGlyph({ playing, disabled }: { playing: boolean; disabled?: boolean }) {
+  return playing ? (
+    <View style={styles.pauseGlyph}>
+      <View style={styles.pauseBar} />
+      <View style={styles.pauseBar} />
+    </View>
+  ) : (
+    <View style={[styles.playGlyph, disabled ? styles.playGlyphDisabled : null]} />
+  );
+}
+
 export function Transport({
   playing,
   disabled,
@@ -26,7 +42,13 @@ export function Transport({
 }) {
   return (
     <View style={styles.row}>
-      <Skip label="15" direction="back" disabled={disabled} onPress={onBack} testID="player-back" />
+      <Skip
+        label={String(SKIP_BACK_MS / 1000)}
+        direction="back"
+        disabled={disabled}
+        onPress={onBack}
+        testID="player-back"
+      />
 
       <Pressable
         testID="player-play"
@@ -41,24 +63,23 @@ export function Transport({
           disabled ? styles.playDisabled : null,
         ]}
       >
-        {playing ? (
-          <View style={styles.pauseGlyph}>
-            <View style={styles.pauseBar} />
-            <View style={styles.pauseBar} />
-          </View>
-        ) : (
-          // Nudged right: a triangle's visual centre sits left of its bounding
-          // box, so centring the box leaves it looking off-centre.
-          <View style={[styles.playGlyph, disabled ? styles.playGlyphDisabled : null]} />
-        )}
+        {/* Nudged right inside `playGlyph`: a triangle's visual centre sits
+            left of its bounding box, so centring the box looks off-centre. */}
+        <PlayPauseGlyph playing={playing} disabled={disabled} />
       </Pressable>
 
-      <Skip label="30" direction="forward" disabled={disabled} onPress={onForward} testID="player-forward" />
+      <Skip
+        label={String(SKIP_FORWARD_MS / 1000)}
+        direction="forward"
+        disabled={disabled}
+        onPress={onForward}
+        testID="player-forward"
+      />
     </View>
   );
 }
 
-function Skip({
+export function Skip({
   label,
   direction,
   disabled,

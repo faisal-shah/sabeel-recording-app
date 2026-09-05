@@ -29,11 +29,34 @@ const tap = (p, id) => p.getByTestId(id).click();
 const sawText = (p, t, to = 20000) => p.getByText(t, { exact: false }).first().waitFor({ timeout: to });
 const home = async (p) => { await p.goto(WEB, { waitUntil: 'domcontentloaded' }); await p.waitForTimeout(2500); };
 
-async function pair(p, name, { viewportOnly = false } = {}) {
-  await p.setViewportSize(PHONE); await p.waitForTimeout(500);
-  await p.screenshot({ path: `${DIR}/${name}-phone.png`, fullPage: !viewportOnly });
-  await p.setViewportSize(DESKTOP); await p.waitForTimeout(700);
-  await p.screenshot({ path: `${DIR}/${name}-desktop.png`, fullPage: !viewportOnly });
+/**
+ * How far down to cut a capture, when something below that point must not ship.
+ *
+ * The sign-in screen carries the emulator dev-sign-in panel ("as faisal.shah
+ * (first admin)", "as manager", "as outsider (gets deleted)"), because these
+ * shots are taken against a DEV server — that panel is what every suite here
+ * uses to reach an authenticated screen at all. It is also the first figure in
+ * a manual written for institute staff, so it cannot appear in it. Cutting
+ * above the panel is honest: everything the reader is shown is real, there is
+ * simply less of it.
+ */
+async function heightAbove(p, testId) {
+  const box = await p.getByTestId(testId).boundingBox().catch(() => null);
+  if (!box) return null;
+  // Back up past the panel's own dashed border and the gap above it.
+  return Math.max(200, Math.round(box.y - 40));
+}
+
+async function pair(p, name, { cutAbove = null } = {}) {
+  for (const [size, suffix] of [[PHONE, 'phone'], [DESKTOP, 'desktop']]) {
+    await p.setViewportSize(size);
+    await p.waitForTimeout(size === PHONE ? 500 : 700);
+    const height = cutAbove ? await heightAbove(p, cutAbove) : null;
+    await p.screenshot({
+      path: `${DIR}/${name}-${suffix}.png`,
+      ...(height ? { clip: { x: 0, y: 0, width: size.width, height } } : { fullPage: true }),
+    });
+  }
   await p.setViewportSize(PHONE); await p.waitForTimeout(300);
   console.log('  ✓', name);
 }
@@ -56,7 +79,7 @@ async function openHikam(p) {
 console.log('Student');
 const stu = await newPage(PHONE);
 await stu.getByTestId('signin-email').waitFor({ timeout: 30000 });
-await pair(stu, '01-signin', { viewportOnly: true });
+await pair(stu, '01-signin', { cutAbove: 'dev-signin-first-admin' });
 await stu.getByTestId('signin-email').fill('fatima.ahmed@example.com');
 await stu.getByTestId('signin-password').fill('HikamStudent1');
 await tap(stu, 'signin-student');

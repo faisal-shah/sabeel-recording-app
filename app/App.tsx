@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -50,6 +50,7 @@ import { useSessionState } from './src/sessions';
 import { useRecordingState } from './src/recordings';
 import { useStudent } from './src/students';
 import { useCourse, useCourseState } from './src/structure';
+import { closePlayback } from './src/playback';
 import { useStaffQueue, type TodayQueue } from './src/today';
 import { Empty, Screen, ScreenOwnsTopInset, Segmented } from './src/components/ui';
 import { getTheme } from './src/theme';
@@ -255,13 +256,15 @@ export default function App() {
           linking={isStudent ? STUDENT_LINKING : STAFF_LINKING}
         >
           <Stack.Navigator screenOptions={{ headerTintColor: t.text.primary }}>
-            {/* Every screen inside the navigator keeps its header: it carries the
-                back affordance on pushed screens, and on Home it is what provides
-                the status-bar inset. Hiding it here put the title under the clock. */}
-            <Stack.Screen name="Home" options={{ title: 'Class Recordings', headerShown: false }}>
+            {/* A PUSHED screen keeps its header, which is the only thing
+                carrying Back. A tab root runs without one — it is never pushed,
+                and its own heading already names it — so `Screen` takes over the
+                status-bar inset there instead. One list decides which is which:
+                `HEADERLESS`, read by `screenOptions` below. */}
+            <Stack.Screen name="Home" options={screenOptions('Home', 'Class Recordings')}>
               {() => <Landing role={role} uid={user.uid} />}
             </Stack.Screen>
-            <Stack.Screen name="Notifications" options={{ title: 'Notifications' }}>
+            <Stack.Screen name="Notifications" options={screenOptions('Notifications', 'Notifications')}>
               {() => <NotificationsScreen uid={user.uid} isStudent={isStudent} />}
             </Stack.Screen>
             {/* THE ROLE SPLIT IS THE BOUNDARY, not a tidy-up. A screen registered
@@ -270,70 +273,77 @@ export default function App() {
                 screen to both arms puts it back within reach of both populations. */}
             {isStudent ? (
               <>
-                <Stack.Screen name="MyClasses" options={{ title: 'Your classes', headerShown: false }}>
+                <Stack.Screen name="MyClasses" options={screenOptions('MyClasses', 'Your classes')}>
                   {() => <MyClasses uid={user.uid} />}
                 </Stack.Screen>
-                <Stack.Screen name="MyClassRecord" options={{ title: 'Attendance' }}>
+                <Stack.Screen name="MyClassRecord" options={screenOptions('MyClassRecord', 'Attendance')}>
                   {() => <MyClassRecord uid={user.uid} />}
                 </Stack.Screen>
               </>
             ) : (
               <>
-                <Stack.Screen name="Students" options={{ title: 'People', headerShown: false }}>
+                <Stack.Screen name="Students" options={screenOptions('Students', 'People')}>
                   {() => <People isAdmin={isAdmin} uid={user.uid} />}
                 </Stack.Screen>
-                <Stack.Screen name="StudentDetail" options={{ title: 'Student' }}>
+                <Stack.Screen name="StudentDetail" options={screenOptions('StudentDetail', 'Student')}>
                   {() => <StudentDetail isAdmin={isAdmin} uid={user.uid} />}
                 </Stack.Screen>
-                <Stack.Screen name="Cohorts" options={{ title: 'Cohorts', headerShown: false }}>
+                <Stack.Screen name="Cohorts" options={screenOptions('Cohorts', 'Courses')}>
                   {() => <Cohorts />}
                 </Stack.Screen>
                 {/* Titled for what the screen IS — one cohort: its settings and the
                     courses inside it. The route keeps its name until the id-param
                     conversion renames routes wholesale. */}
-                <Stack.Screen name="Courses" options={{ title: 'Cohort' }}>
+                <Stack.Screen name="Courses" options={screenOptions('Courses', 'Cohort')}>
                   {() => <Courses />}
                 </Stack.Screen>
-                <Stack.Screen name="CourseDetail" options={{ title: 'Course' }}>
+                <Stack.Screen name="CourseDetail" options={screenOptions('CourseDetail', 'Course')}>
                   {() => <CourseDetail isAdmin={isAdmin} />}
                 </Stack.Screen>
-                <Stack.Screen name="CourseAttendance" options={{ title: 'Attendance' }}>
+                <Stack.Screen name="CourseAttendance" options={screenOptions('CourseAttendance', 'Attendance')}>
                   {() => <CourseAttendance />}
                 </Stack.Screen>
-                <Stack.Screen name="Sessions" options={{ title: 'Sessions' }}>
+                <Stack.Screen name="Sessions" options={screenOptions('Sessions', 'Sessions')}>
                   {() => <Sessions />}
                 </Stack.Screen>
-                <Stack.Screen name="SessionDetail" options={{ title: 'Session' }}>
+                <Stack.Screen name="SessionDetail" options={screenOptions('SessionDetail', 'Session')}>
                   {() => <SessionDetail isAdmin={isAdmin} />}
                 </Stack.Screen>
-                <Stack.Screen name="RecordingLedger" options={{ title: 'Listening progress' }}>
+                <Stack.Screen name="RecordingLedger" options={screenOptions('RecordingLedger', 'Listening progress')}>
                   {() => <RecordingLedger />}
                 </Stack.Screen>
-                <Stack.Screen name="StudentLedger" options={{ title: 'Student progress' }}>
+                <Stack.Screen name="StudentLedger" options={screenOptions('StudentLedger', 'Student progress')}>
                   {() => <StudentLedger />}
                 </Stack.Screen>
-                <Stack.Screen name="Library" options={{ title: 'Library', headerShown: false }}>
+                <Stack.Screen name="Library" options={screenOptions('Library', 'Library')}>
                   {() => <Library uid={user.uid} isAdmin={isAdmin} />}
                 </Stack.Screen>
-                <Stack.Screen name="ZoomImport" options={{ title: 'Import from Zoom' }}>
+                <Stack.Screen name="ZoomImport" options={screenOptions('ZoomImport', 'Import from Zoom')}>
                   {() => <ZoomImport />}
                 </Stack.Screen>
-                <Stack.Screen name="Audit" options={{ title: 'Audit' }}>
+                <Stack.Screen name="Audit" options={screenOptions('Audit', 'Audit')}>
                   {() => <Audit />}
                 </Stack.Screen>
-                {/* The courses a MANAGER is assigned — staff, despite the name. */}
-                <Stack.Screen name="MyCourses" options={{ title: 'My courses', headerShown: false }}>
-                  {() => <MyCourses uid={user.uid} />}
-                </Stack.Screen>
+                {/* MANAGERS ONLY, and registered rather than merely unlinked:
+                    it is their Courses tab, and it queries `array-contains` on
+                    their own uid — so for an admin the same URL would render a
+                    permanently empty screen. A path belonging to a role the
+                    reader does not have matches no screen and falls back to
+                    their own home, which is the right answer. */}
+                {isAdmin ? null : (
+                  <Stack.Screen name="MyCourses" options={screenOptions('MyCourses', 'My courses')}>
+                    {() => <MyCourses uid={user.uid} />}
+                  </Stack.Screen>
+                )}
                 <Stack.Screen
                   name="Tokens"
                   component={TokensScreen}
-                  options={{ title: 'Design tokens' }}
+                  options={screenOptions('Tokens', 'Design tokens')}
                 />
               </>
             )}
             {/* Both: staff open the player from the library and from a session. */}
-            <Stack.Screen name="Player" options={{ title: 'Listen' }}>
+            <Stack.Screen name="Player" options={screenOptions('Player', 'Listen')}>
               {() => <Play studentUid={isStudent ? user.uid : null} />}
             </Stack.Screen>
           </Stack.Navigator>
@@ -424,8 +434,8 @@ function Shell({
     navRef.reset({ index: 0, routes: [{ name } as never] });
   }, []);
 
-  const openPlayer = useCallback((recordingId: string) => {
-    if (navRef.isReady()) navRef.navigate('Player', { recordingId });
+  const openPlayer = useCallback((recordingId: string, dueDate: string | null) => {
+    if (navRef.isReady()) navRef.navigate('Player', { recordingId, dueDate });
   }, []);
 
   const nav = (variant: 'bar' | 'rail') => (
@@ -483,6 +493,8 @@ const QueueContext = createContext<TodayQueue>({
   items: [],
   blocking: 0,
   loading: true,
+  failed: false,
+  scoped: false,
   truncated: false,
 });
 
@@ -509,6 +521,19 @@ const HEADERLESS = new Set<keyof RootStackParamList>([
   'Library',
   'MyClasses',
 ]);
+
+/**
+ * Every screen's options, with `headerShown` DERIVED from `HEADERLESS` rather
+ * than restated beside it.
+ *
+ * The set and the flags were two copies of the same list, and they drift
+ * silently in both directions: a root whose header nobody hid gets a duplicate
+ * title and a doubled inset, and one whose inset nobody took over puts its
+ * heading under the status bar. One list, consulted once per screen.
+ */
+function screenOptions(name: keyof RootStackParamList, title: string) {
+  return { title, headerShown: !HEADERLESS.has(name) } as const;
+}
 
 /** Lets the NavigationContainer report state changes up to the Shell above it. */
 const NavStateContext = createContext<() => void>(() => {});
@@ -539,20 +564,6 @@ function Navigator({
   );
 }
 
-function Today({ uid, queue }: { uid: string; queue: TodayQueue }) {
-  const navigation = useNavigation<Nav>();
-  return (
-    <TodayScreen
-      uid={uid}
-      queue={queue}
-      onOpenSession={(sessionId, courseId) =>
-        navigation.navigate('SessionDetail', { sessionId, courseId })
-      }
-      onOpenLedger={(recordingId) => navigation.navigate('RecordingLedger', { recordingId })}
-    />
-  );
-}
-
 /**
  * What the bare URL resolves to, per population and per design.
  *
@@ -579,7 +590,16 @@ function Landing({ role, uid }: { role: Role; uid: string }) {
       />
     );
   }
-  return <Today uid={uid} queue={queue} />;
+  return (
+    <TodayScreen
+      uid={uid}
+      queue={queue}
+      onOpenSession={(sessionId, courseId) =>
+        navigation.navigate('SessionDetail', { sessionId, courseId })
+      }
+      onOpenLedger={(recordingId) => navigation.navigate('RecordingLedger', { recordingId })}
+    />
+  );
 }
 
 function Cohorts() {
@@ -752,6 +772,19 @@ function Play({ studentUid }: { studentUid: string | null }) {
   // on screen rather than waiting for the listener to be torn down.
   const recording = useRecordingState(recordingId);
   const cls = useCourseState(recording.value?.courseId ?? null);
+  const gone = recording.resolved && !recording.value;
+  /*
+   * STOP THE AUDIO WHEN THE RECORDING GOES AWAY.
+   *
+   * Playback outlives this screen now, so unmounting no longer ends it. Unpublish
+   * a recording — or archive its course with listening off — while a student is
+   * listening and, without this, the screen says it is gone while the audio keeps
+   * running off a signed URL good for another twelve hours. The hook version got
+   * this for free from its cleanup; the hoisted session has to be told.
+   */
+  useEffect(() => {
+    if (gone) closePlayback();
+  }, [gone]);
   const gate = resolve(recording, 'recording') ?? resolve(cls, 'course');
   if (gate || !recording.value || !cls.value) return gate;
   return (
@@ -839,7 +872,10 @@ function Library({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
   );
 }
 function Audit() {
-  const { courseId } = useRoute<RouteProp<RootStackParamList, 'Audit'>>().params;
+  // `?? {}`: React Navigation attaches no params object at all for a path with
+  // no parameters in it, so destructuring the result crashes on a cold load of
+  // `/audit` — which is now a More-menu destination people land on and reload.
+  const { courseId } = useRoute<RouteProp<RootStackParamList, 'Audit'>>().params ?? {};
   // The heading is derived rather than passed: a title in the params would ride
   // in the URL's query string, and would be a stale copy of the course's name.
   const cls = useCourse(courseId ?? null);
