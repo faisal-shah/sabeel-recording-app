@@ -18,7 +18,7 @@ import {
 import { CONTENT_MAX_WIDTH, LAYOUT_WIDTHS, getTheme, spacing, type LayoutWidth } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useListenerError } from '../liveQuery';
-import { useWide } from '../useWidth';
+import { useRoomy, useWide } from '../useWidth';
 import { KbScroll } from './KbScroll';
 import { Sheet } from './Sheet';
 
@@ -86,9 +86,14 @@ export function Screen({ title, subtitle, status, parent, width = 'read', action
   const heading =
     title || subtitle || parent ? (
       <View style={styles.headRow}>
-        {status ? <StatusLight status={status} /> : null}
         <View style={styles.headText}>
+          {/* THE TITLE STARTS AT THE MARGIN. The status lamp used to hold a 56px
+              gutter to its left, which pushed the H1 68px right of every section
+              label beneath it — the page read as indented from its own content.
+              It rides the lede line instead, where it is still the first thing
+              under the name. */}
           {title ? <Text style={styles.h1}>{title}</Text> : null}
+          {status ? <StatusLight status={status} /> : null}
           {parent || subtitle ? (
             <Text style={styles.lede}>
               {parent ? (
@@ -182,7 +187,7 @@ export function Button({
   testID?: string;
 }) {
   const isDisabled = disabled || busy;
-  const wide = useWide();
+  const roomy = useRoomy();
   const style =
     variant === 'primary'
       ? styles.btnPrimary
@@ -202,9 +207,9 @@ export function Button({
         compact ? styles.btnCompact : null,
         // A button laid out as a column child stretches to the column on a
         // phone, which is the right primary-action shape there and a bar across
-        // the window on a laptop. Inside a Row it is already content-width, so
-        // this only changes the stretched case.
-        (hug || wide) && !compact && !block ? styles.btnWide : null,
+        // the window on anything larger. Inside a Row it is already
+        // content-width, so this only changes the stretched case.
+        (hug || roomy) && !compact && !block ? styles.btnWide : null,
         style,
         pressed && !isDisabled ? styles.btnPressed : null,
         isDisabled ? styles.btnDisabled : null,
@@ -396,9 +401,9 @@ export function Field({
   multiline?: boolean;
   testID?: string;
 }) {
-  const wide = useWide();
+  const roomy = useRoomy();
   return (
-    <View style={[styles.field, wide ? styles.fieldWide : null]}>
+    <View style={[styles.field, roomy ? styles.fieldWide : null]}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
         testID={testID}
@@ -516,19 +521,30 @@ function StatusLight({ status }: { status: string }) {
  * like a different component.
  */
 export function Grid({ min = 300, children }: { min?: number; children: ReactNode }) {
-  const wide = useWide();
   const [width, setWidth] = useState(0);
   const cells = Children.toArray(children);
-  if (!wide) return <>{cells}</>;
 
-  // MEASURED, not left to flex-grow. `flexBasis` + `flexGrow` shares the row
-  // evenly, which is right until the last row is short: one leftover card then
-  // grows to the full width and reads as a different, more important component
-  // than the ones above it. Computing the column count and giving every cell the
-  // same fixed width makes the last row line up with the rest and simply end.
+  /*
+   * MEASURED, and measured against THE SPACE THIS GRID HAS — not against the
+   * app's navigation breakpoint.
+   *
+   * Two things follow, and both were bugs. Gating on `useWide()` meant a 720px
+   * window got one column however much room a cell needed, because the rail
+   * appears at 900 — a number about navigation that has nothing to say about
+   * whether two cards fit. And returning a bare fragment in that case put the
+   * children at a different tree position, so dragging a window across 900px
+   * unmounted and remounted every cell — which for cells holding live listeners
+   * flashes an empty state across the whole list. One shape, always.
+   *
+   * `flexBasis` + `flexGrow` would share the row evenly, which is right until
+   * the last row is short: a single leftover card grows to the full width and
+   * reads as a different, more important component than the ones above it. So
+   * the column count is computed and every cell gets the same fixed width, and
+   * the last row lines up with the rest and simply ends.
+   */
   const gap = spacing(3);
   const cols = width > 0 ? Math.max(1, Math.floor((width + gap) / (min + gap))) : 1;
-  const cell = width > 0 ? (width - gap * (cols - 1)) / cols : undefined;
+  const cell = width > 0 && cols > 1 ? (width - gap * (cols - 1)) / cols : undefined;
 
   return (
     <View style={styles.grid} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
@@ -545,7 +561,11 @@ export function Grid({ min = 300, children }: { min?: number; children: ReactNod
          */
         <View
           key={(isValidElement(child) && child.key) || i}
-          style={[styles.gridCell, cell ? { width: cell } : null]}
+          // One column: a full-width BASIS, so the cell takes the line and the
+          // next one wraps beneath it. A percentage `width` on a flex item does
+          // not reliably resolve against a wrapping row — the cards came out
+          // sized to their own text, each a different width.
+          style={[styles.gridCell, cell ? { width: cell } : styles.gridCellFull]}
         >
           {child}
         </View>
@@ -666,7 +686,7 @@ export function Segmented<T extends string>({
  * is not allowed to crush a control below the width of its own text.
  */
 export function Row({ children }: { children: ReactNode }) {
-  const wide = useWide();
+  const roomy = useRoomy();
   return (
     <View style={styles.row}>
       {Children.map(children, (child) =>
@@ -684,7 +704,7 @@ export function Row({ children }: { children: ReactNode }) {
            * primitive rather than in any screen, which is why it appeared on
            * five screens at once.
            */
-          <View style={[styles.rowItem, wide ? styles.rowItemWide : null]}>{child}</View>
+          <View style={[styles.rowItem, roomy ? styles.rowItemWide : null]}>{child}</View>
         ) : null,
       )}
     </View>
@@ -913,7 +933,19 @@ const styles = StyleSheet.create({
   segmentPressed: { opacity: 0.7 },
   segmentText: { fontSize: 14, fontWeight: '600', color: t.text.secondary },
   segmentTextOn: { color: t.text.primary },
-  gridCell: { flexGrow: 0, flexShrink: 0 },
+  /*
+   * `minWidth: 0` IS LOAD-BEARING. A flex item's automatic minimum size is its
+   * min-content width, and that beats any width set on it — so at 320px, where
+   * one cell is the whole row, a cell grew to whatever its longest unbreakable
+   * row needed and pushed its own actions past the right edge. As plain block
+   * children, which is what the narrow case used to be, the question never came
+   * up; as flex items it has to be answered.
+   */
+  gridCell: { flexShrink: 0, minWidth: 0 },
+  // `flexBasis: '100%'`, not 0. With `flexWrap` a zero basis never fills a line,
+  // so every cell landed on the SAME line — thirteen 21px slivers. A full-width
+  // basis is what makes one item per line and fills it.
+  gridCellFull: { flexGrow: 1, flexBasis: '100%' },
   lede: { fontSize: 15, color: t.text.secondary, marginTop: spacing(1) },
   // Raspberry is the primary action's colour, and this IS the header's action.
   // #83114F on the ivory canvas is far past 4.5:1, so it carries at 15pt.
@@ -980,6 +1012,9 @@ const styles = StyleSheet.create({
     color: t.text.secondary,
   },
   card: {
+    // Fills the grid cell it is given, so a row of these ends level instead
+    // of ragged with its actions at three different heights.
+    flexGrow: 1,
     backgroundColor: t.bg.surface,
     borderRadius: 10,
     borderWidth: 1,
@@ -1087,13 +1122,21 @@ const styles = StyleSheet.create({
     marginBottom: spacing(4),
   },
   headText: { flexShrink: 1, flexGrow: 1 },
-  light: { alignItems: 'center', width: 56 },
+  light: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(2),
+    alignSelf: 'flex-start',
+    marginTop: spacing(1),
+  },
   // Bigger than the chip's 8pt dot — at a page heading this is the thing you
   // look for first.
-  lightDot: { width: 16, height: 16, borderRadius: 8 },
+  lightDot: { width: 12, height: 12, borderRadius: 6 },
   // secondary, not muted: the status word is content, and true taupe is ~2.7:1.
   lightText: { fontSize: 11, color: t.text.secondary, marginTop: spacing(1), textAlign: 'center' },
   rowCard: {
+    // Fills its grid cell — see the note on `card`.
+    flexGrow: 1,
     backgroundColor: t.bg.surface,
     borderRadius: 12,
     paddingVertical: spacing(2),

@@ -177,6 +177,20 @@ export function useMyCourses(uid: string | null): CourseRow[] {
  * its staff arm resolves a class lookup per row, and only a single-class query
  * lets that resolve one cached path.
  */
+/**
+ * A roster comes back in DOCUMENT ID ORDER, which is arbitrary.
+ *
+ * Firestore cannot order these: the name lives on `students`, not on the
+ * enrolment. So every consumer sorts once it has resolved the names — and every
+ * one of them must, because the two screens this feeds are the attendance
+ * register (marked once per student, per session, by hand) and the roster with
+ * a remove button on each row. An arbitrary order there is a real chance of
+ * marking or removing the wrong person.
+ */
+export function sortByName<T>(rows: T[], nameOf: (row: T) => string): T[] {
+  return [...rows].sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+}
+
 export function useRoster(courseId: string | null): EnrollmentRow[] {
   return useLiveQuery<EnrollmentRow[]>(
     () =>

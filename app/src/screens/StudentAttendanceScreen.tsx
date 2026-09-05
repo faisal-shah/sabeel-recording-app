@@ -141,6 +141,9 @@ const styles = StyleSheet.create({
     marginTop: spacing(1),
   },
   row: {
+    // Fills the grid cell it is given, so a row of these ends level instead
+    // of ragged with its actions at three different heights.
+    flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: t.bg.surface,

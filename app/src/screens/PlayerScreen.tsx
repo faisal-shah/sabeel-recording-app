@@ -15,7 +15,6 @@ import { useCompletion, setCompleted } from '../completion';
 import { useListenerError } from '../liveQuery';
 import { useCohortName, type CourseRow } from '../structure';
 import type { RecordingRow } from '../recordings';
-import { useWide } from '../useWidth';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -67,7 +66,6 @@ export function PlayerScreen({
   // describe the PREVIOUS recording. Read it only once it is about this one;
   // otherwise the scrubber shows another lecture's position for a frame.
   const state = session.now?.recordingId === recording.id ? session : IDLE_VIEW;
-  const wide = useWide();
   const { play, pause, seek, setRate } = playback;
   // Opening the session is an EFFECT, not a render-time call: this screen is one
   // view onto app-wide playback, and re-entering it for something already
@@ -114,26 +112,20 @@ export function PlayerScreen({
   const listened = listenedFraction(state.listenedMs, recording.durationSec);
 
   return (
-    <ScrollView
-      style={styles.canvas}
-      contentContainerStyle={[styles.content, wide ? styles.contentWide : null]}
-    >
+    <ScrollView style={styles.canvas} contentContainerStyle={styles.content}>
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {state.error ? <Notice tone="error">{state.error}</Notice> : null}
 
       {/*
-        TWO COLUMNS ON A WIDE SCREEN.
+        ONE COLUMN, CAPPED — at every width.
 
-        A phone has to stack this: the transport owns the first screenful and
-        everything else — the listening bar, the completion control, the shared
-        notes — sits below the fold. That ordering is right when there is one
-        column and wrong when there are two: on a laptop the notes a teacher
-        wrote for the session end up two scrolls below a play button, in a window
-        with 700px of unused space beside it. Side by side, the whole recording
-        is one screen and nothing is hidden behind a scroll.
+        A two-column split was tried and is worse: a lecture's panel, transport
+        and rate chips do not fill half a 1400px window, so the controls ended up
+        trapped in a 480px gutter with the other half empty below the notes. The
+        player is a single object read top to bottom, like a podcast episode
+        page, and 560px is the width it wants. The room a desktop has to spare is
+        margin, not a second column.
       */}
-      <View style={wide ? styles.columns : undefined}>
-      <View style={wide ? styles.columnMain : undefined}>
       <Hero recording={recording} courseName={cls.name} cohortName={cohortName} />
 
       <Scrubber
@@ -182,11 +174,9 @@ export function PlayerScreen({
       </View>
 
       {!state.ready && !state.error ? <Text style={styles.preparing}>Preparing…</Text> : null}
-      </View>
 
-      {/* ---- below the fold on a phone; beside it on a laptop ---- */}
-      <View style={wide ? styles.columnSide : undefined}>
-      {wide ? null : <View style={styles.divider} />}
+      {/* ---- below the fold ---- */}
+      <View style={styles.divider} />
 
       {/* Staff reach this player to preview/reference audio; there is no student
           to track, so the listening bar and completion control are student-only.
@@ -230,8 +220,6 @@ export function PlayerScreen({
           {studentUid ? `Available to listen until ${dueDate}` : `Due ${dueDate}`}
         </Text>
       ) : null}
-      </View>
-      </View>
     </ScrollView>
   );
 }
@@ -336,12 +324,6 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
-  // Wider than the phone column and still capped: two 480px columns plus a
-  // gutter. Past that the notes run to line lengths nobody reads.
-  contentWide: { maxWidth: 1060, paddingHorizontal: spacing(8), paddingTop: spacing(7) },
-  columns: { flexDirection: 'row', gap: spacing(8), alignItems: 'flex-start' },
-  columnMain: { flex: 1, minWidth: 0 },
-  columnSide: { flex: 1, minWidth: 0 },
   hero: {
     backgroundColor: t.bg.sage,
     borderRadius: 16,

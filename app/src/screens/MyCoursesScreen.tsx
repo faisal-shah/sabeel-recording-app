@@ -1,4 +1,4 @@
-import { Empty, Grid, Notice, Screen, SectionTitle } from '../components/ui';
+import { Empty, Notice, Screen, SectionTitle } from '../components/ui';
 import { useMyCourses, type CourseRow } from '../structure';
 import { CourseCard } from './CoursesScreen';
 
@@ -18,7 +18,7 @@ export function MyCoursesScreen({
 }) {
   const courses = useMyCourses(uid);
   return (
-    <Screen title="Your courses" subtitle="Everything you run, and the way in to each" width="list">
+    <Screen title="Your courses" subtitle="Everything you run, and the way in to each">
       <SectionTitle>Courses ({courses.length})</SectionTitle>
       {courses.length === 0 ? (
         <>
@@ -29,11 +29,7 @@ export function MyCoursesScreen({
           </Notice>
         </>
       ) : (
-        <Grid min={320}>
-          {courses.map((c) => (
-            <CourseCard key={c.id} cls={c} onOpen={onOpen} />
-          ))}
-        </Grid>
+        courses.map((c) => <CourseCard key={c.id} cls={c} onOpen={onOpen} />)
       )}
     </Screen>
   );

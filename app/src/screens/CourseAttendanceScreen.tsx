@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { INSTITUTE_TIMEZONE, todayInZone } from '@sabeel/shared';
-import { Button, Card, Empty, Notice, Screen, Segmented } from '../components/ui';
+import { Button, Card, Empty, Grid, Notice, Screen, Segmented } from '../components/ui';
 import { useCourseAttendance } from '../ledger';
 import { exportCsv } from '../exportCsv';
 import { useListenerError } from '../liveQuery';
@@ -81,7 +81,6 @@ export function CourseAttendanceScreen({
 
   return (
     <Screen
-      title="Attendance"
       parent={{ label: cls.name, testID: 'up-to-course-from-attendance', onPress: onOpenCourse }}
       subtitle={`${report.sessionsWithAttendance} of ${report.totalSessions} sessions taken`}
       width="list"
@@ -114,7 +113,8 @@ export function CourseAttendanceScreen({
         report.sessions.length === 0 ? (
           <Empty>No sessions in this course yet.</Empty>
         ) : (
-          report.sessions.map((s) => (
+          <Grid min={330}>
+          {report.sessions.map((s) => (
             <Card key={s.sessionId}>
               <Pressable
                 testID={`attendance-session-${s.title}`}
@@ -137,12 +137,14 @@ export function CourseAttendanceScreen({
                 )}
               </Pressable>
             </Card>
-          ))
+          ))}
+          </Grid>
         )
       ) : studentRows.length === 0 ? (
         <Empty>Nobody is enrolled in this course yet.</Empty>
       ) : (
-        studentRows.map((s) => (
+        <Grid min={330}>
+        {studentRows.map((s) => (
           <Card key={s.studentUid}>
             <Pressable
               testID={`attendance-student-${nameOf(s.studentUid)}`}
@@ -169,7 +171,8 @@ export function CourseAttendanceScreen({
               )}
             </Pressable>
           </Card>
-        ))
+        ))}
+        </Grid>
       )}
     </Screen>
   );

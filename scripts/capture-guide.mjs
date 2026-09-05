@@ -47,15 +47,51 @@ async function heightAbove(p, testId) {
   return Math.max(200, Math.round(box.y - 40));
 }
 
-async function pair(p, name, { cutAbove = null } = {}) {
+/**
+ * How tall the viewport must be to show the whole screen.
+ *
+ * `fullPage: true` IS A NO-OP HERE, and that is not obvious. It grows the
+ * capture to the DOCUMENT height, and react-native-web pins its root to the
+ * viewport — the page never scrolls, an inner ScrollView does. So every figure
+ * was silently the top 900px of its screen, which sliced "Submit attendance" in
+ * half in the session figure. Measuring the scroller and growing the viewport to
+ * it is what actually captures the screen.
+ */
+async function contentHeight(p, fallback) {
+  const h = await p.evaluate(() => {
+    const scrollers = [...document.querySelectorAll('div')].filter((el) => {
+      const cs = getComputedStyle(el);
+      return /auto|scroll/.test(cs.overflowY) && el.scrollHeight > el.clientHeight;
+    });
+    if (!scrollers.length) return 0;
+    scrollers.sort((a, b) => b.clientHeight * b.clientWidth - a.clientHeight * a.clientWidth);
+    const el = scrollers[0];
+    // The chrome outside the scroller — header, tab bar, now-playing strip.
+    return Math.ceil(el.scrollHeight + (window.innerHeight - el.clientHeight));
+  });
+  // Capped: a fourteen-student roster at full length is a figure nobody reads,
+  // and a 6000px PNG in a PDF is worse than a scrolled one.
+  return Math.min(Math.max(h || fallback, fallback), 2400);
+}
+
+/**
+ * `prepare` runs again at EACH size. Anything transient — an open editor, an
+ * expanded section — closes when the viewport changes, so a figure of one has to
+ * be re-opened rather than captured once and resized around.
+ */
+async function pair(p, name, { cutAbove = null, prepare = null } = {}) {
   for (const [size, suffix] of [[PHONE, 'phone'], [DESKTOP, 'desktop']]) {
     await p.setViewportSize(size);
     await p.waitForTimeout(size === PHONE ? 500 : 700);
-    const height = cutAbove ? await heightAbove(p, cutAbove) : null;
-    await p.screenshot({
-      path: `${DIR}/${name}-${suffix}.png`,
-      ...(height ? { clip: { x: 0, y: 0, width: size.width, height } } : { fullPage: true }),
-    });
+    if (prepare) {
+      await prepare(p);
+      await p.waitForTimeout(600);
+    }
+    const cut = cutAbove ? await heightAbove(p, cutAbove) : null;
+    const height = cut ?? (await contentHeight(p, size.height));
+    await p.setViewportSize({ width: size.width, height });
+    await p.waitForTimeout(400);
+    await p.screenshot({ path: `${DIR}/${name}-${suffix}.png` });
   }
   await p.setViewportSize(PHONE); await p.waitForTimeout(300);
   console.log('  ✓', name);
@@ -152,8 +188,20 @@ await pair(adm, '18-recording-ledger');
 
 // Override form on the first not-complete accountable student.
 await tap(adm, 'ledger-filter-notComplete'); await adm.waitForTimeout(600);
-const ovBtn = adm.locator('[data-testid^="override-open-"]').first();
-if (await ovBtn.count()) { await ovBtn.click(); await adm.waitForTimeout(700); await pair(adm, '19-override-form'); }
+// Re-opened at EACH size: changing the viewport closes the editor, so capturing
+// once and resizing around it produced a "form" figure with no form in it.
+if (await adm.locator('[data-testid^="override-open-"]').first().count()) {
+  await pair(adm, '19-override-form', {
+    prepare: async (p) => {
+      // Only if none is open. `prepare` runs once per size, and the editor
+      // survives the phone shot — so clicking blindly opened a SECOND one at
+      // desktop width, and the figure showed two half-filled forms.
+      if (await p.locator('[data-testid^="override-reason-"]').count()) return;
+      const btn = p.locator('[data-testid^="override-open-"]').first();
+      if (await btn.count()) await btn.click();
+    },
+  });
+}
 
 // Attendance report (toggle: by session / by student).
 await openHikam(adm);

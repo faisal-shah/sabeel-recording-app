@@ -438,11 +438,11 @@ function Shell({
     if (navRef.isReady()) navRef.navigate('Player', { recordingId, dueDate });
   }, []);
 
-  const nav = (variant: 'bar' | 'rail') => (
+  const nav = (
     <AppNav
       role={role}
       email={email}
-      variant={variant}
+      variant={wide ? 'rail' : 'bar'}
       active={routeName}
       blocking={queue.blocking}
       onNavigate={go}
@@ -457,22 +457,26 @@ function Shell({
     <NavStateContext.Provider value={onStateChange}>
       <QueueContext.Provider value={queue}>
       <ScreenOwnsTopInset.Provider value={HEADERLESS.has(routeName)}>
-      <View style={[styles.shell, wide ? styles.shellWide : null]}>
-        {wide ? nav('rail') : null}
+      {/*
+        ONE TREE POSITION FOR THE CHROME, at both widths.
+        `row` puts it down the left as a rail; `column-reverse` puts it across
+        the bottom as a bar — same child, same slot, so crossing 900px reflows
+        instead of unmounting it and discarding an open More sheet mid-edit.
+
+        AND IT IS ON EVERY SCREEN, not only the tab roots. The sibling kanban app
+        hides its bar on the immersive board and the reflex is to copy that; it
+        is wrong here, because this app is navigated WHILE SOMETHING IS PLAYING,
+        and hiding the bar on the player makes the screen people spend the most
+        time on a cul-de-sac they can only leave through Back. Every audio app on
+        either store keeps the bar and the now-playing strip together. The cost
+        is real and it is the right trade: about 112px of a small phone on a tab
+        root, and 56px more where a pushed screen adds its header.
+      */}
+      <View style={[styles.shell, wide ? styles.shellWide : styles.shellNarrow]}>
+        {nav}
         <View style={styles.stack}>
           {children}
           {mini}
-          {/* ON EVERY SCREEN, not only the tab roots.
-              The sibling kanban app hides its bar on the immersive board, and
-              the reflex is to copy that. It is wrong here: this app is navigated
-              WHILE SOMETHING IS PLAYING, and hiding the bar on the player makes
-              the one screen people spend the most time on a cul-de-sac they can
-              only leave through Back. Every audio app on either store keeps the
-              bar and the now-playing strip together, and this is why.
-              The cost is real and it is the right trade: on a tab root the bar
-              and the strip take about 112px of a small phone, and on a pushed
-              screen the header takes 56px more. */}
-          {!wide ? nav('bar') : null}
         </View>
       </View>
       </ScreenOwnsTopInset.Provider>
@@ -900,7 +904,10 @@ function MyCourses({ uid }: { uid: string }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: t.bg.canvas },
   centre: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  shell: { flex: 1, flexDirection: 'column', backgroundColor: t.bg.canvas },
+  shell: { flex: 1, backgroundColor: t.bg.canvas },
+  // `column-reverse`, so the chrome is the FIRST child in both directions and
+  // still paints at the bottom. See the note at the render site.
+  shellNarrow: { flexDirection: 'column-reverse' },
   shellWide: { flexDirection: 'row' },
   stack: { flex: 1 },
 });

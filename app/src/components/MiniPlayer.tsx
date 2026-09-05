@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   SKIP_BACK_MS,
@@ -7,8 +8,9 @@ import {
   playback,
   usePlayback,
 } from '../playback';
+import { useRecordingState } from '../recordings';
 import { PlayPauseGlyph, Skip } from './Transport';
-import { getTheme, spacing } from '../theme';
+import { LAYOUT_WIDTHS, getTheme, spacing } from '../theme';
 import { useWide } from '../useWidth';
 
 const t = getTheme();
@@ -26,9 +28,12 @@ const t = getTheme();
  * Two shapes, and the difference is not decoration:
  *
  *  - NARROW it sits directly on top of the tab bar as a single compact row —
- *    artwork-less: the title, play/pause, and a dismiss — because that is
- *    all the vertical space a phone can give up. Tapping the row reopens the
- *    full player.
+ *    artwork-less: the title, play/pause, and a dismiss. NO SKIP CONTROLS, and
+ *    that is deliberate rather than a width that ran out: the whole strip is
+ *    one tap from the full transport, and three more targets on a 320px row
+ *    would leave the title too short to identify the lecture, which is the one
+ *    thing the strip has to do. Pause is the control you reach for without
+ *    looking; skipping is a control you look at.
  *  - WIDE it spans the content area beneath the rail with the transport laid
  *    out inline: back 15 · play/pause · forward 30, elapsed and remaining, and
  *    a full-width progress line. There is room for the controls, so putting
@@ -48,6 +53,26 @@ export function MiniPlayer({
   const state = usePlayback();
   const wide = useWide();
   const now = state.now;
+
+  /*
+   * STOP THE AUDIO IF THE RECORDING IS REVOKED WHILE THIS BAR IS SHOWING.
+   *
+   * The player screen already does this for the case where it is on screen, and
+   * this covers the other half: playback outlives that screen now, so a student
+   * listening from their class list would otherwise keep hearing a recording
+   * that was unpublished — for as long as the signed URL lasts, with nothing on
+   * screen saying anything changed.
+   *
+   * One document listener, and only while something is loaded. The two are
+   * complementary rather than redundant: this bar is not rendered on the player
+   * screen, and the player screen is not mounted anywhere else.
+   */
+  const loaded = useRecordingState(now?.recordingId ?? null);
+  const revoked = !!now && loaded.resolved && !loaded.value;
+  useEffect(() => {
+    if (revoked) closePlayback();
+  }, [revoked]);
+
   if (!now) return null;
 
   const pct = now.durationMs > 0 ? Math.min(1, state.positionMs / now.durationMs) : 0;
@@ -59,6 +84,11 @@ export function MiniPlayer({
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${pct * 100}%` }]} />
       </View>
+      {/* CAPPED AND CENTRED, like the content above it. Left to span a 1400px
+          window the title and the transport ended up an 800px canyon apart, and
+          the controls sat outside the column every other control on the page
+          lines up with. */}
+      <View style={styles.inner}>
       <Pressable
         testID="mini-player-open"
         accessibilityRole="button"
@@ -114,11 +144,12 @@ export function MiniPlayer({
         testID="mini-player-close"
         accessibilityRole="button"
         accessibilityLabel="Stop listening"
-        onPress={() => void closePlayback()}
+        onPress={closePlayback}
         style={styles.close}
       >
         <Text style={styles.closeGlyph}>×</Text>
       </Pressable>
+      </View>
     </View>
   );
 }
@@ -126,9 +157,6 @@ export function MiniPlayer({
 
 const styles = StyleSheet.create({
   bar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(3),
     paddingHorizontal: spacing(4),
     paddingVertical: spacing(2),
     minHeight: 56,
@@ -137,6 +165,14 @@ const styles = StyleSheet.create({
     borderTopColor: t.border.strong,
   },
   barWide: { paddingHorizontal: spacing(6), minHeight: 64 },
+  inner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(3),
+    width: '100%',
+    maxWidth: LAYOUT_WIDTHS.list,
+    alignSelf: 'center',
+  },
   progressTrack: {
     position: 'absolute',
     top: 0,

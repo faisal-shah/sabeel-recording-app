@@ -7,6 +7,7 @@ import {
   Card,
   Empty,
   Field,
+  Grid,
   Notice,
   Screen,
   SectionTitle,
@@ -135,7 +136,9 @@ export function SessionsScreen({
 
   return (
     <Screen
-      title="Sessions"
+      /* No title: the header above already says "Sessions", and the parent link
+         carries the course. A pushed screen repeating its own header is a line
+         of chrome that tells the reader nothing. */
       parent={{ label: courseName, testID: 'up-to-course-from-sessions', onPress: onOpenCourse }}
       width="list"
       actions={
@@ -148,7 +151,8 @@ export function SessionsScreen({
       {sessions.length === 0 ? (
         <Empty>No sessions yet. Add one for each class meeting.</Empty>
       ) : (
-        sessions.map((s) => (
+        <Grid min={340}>
+        {sessions.map((s) => (
           <Pressable
             key={s.id}
             testID={`session-open-${s.title}`}
@@ -167,7 +171,8 @@ export function SessionsScreen({
               </View>
             </Card>
           </Pressable>
-        ))
+        ))}
+        </Grid>
       )}
     </Screen>
   );

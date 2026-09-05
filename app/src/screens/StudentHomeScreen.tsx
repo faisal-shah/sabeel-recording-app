@@ -115,7 +115,15 @@ export function StudentHomeScreen({
    * what `Screen` does by default.
    */
   return (
-    <Screen title="Your listening" subtitle="Recordings you were excused from, most urgent first">
+    <Screen
+      title="Your listening"
+      /* NOT "recordings you were excused from". Being excused is what grants
+         these — but read plainly it says "recordings you do not have to listen
+         to", which is the opposite of what this list is, and it borrows a
+         staff-side attendance word into the student's vocabulary. Say what the
+         list is for. */
+      subtitle="Classes to catch up on, soonest first"
+    >
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
 
       {/* Top of the content, below the listener error only. Same place in all

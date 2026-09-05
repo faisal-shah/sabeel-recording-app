@@ -21,6 +21,7 @@ import {
   createEnrollment,
   setCourseManagers,
   setEnrollmentActive,
+  sortByName,
   updateCourse,
   useRoster,
   type CourseRow,
@@ -254,8 +255,12 @@ export function CourseDetailScreen({
         <Empty>Nobody is enrolled in this course yet.</Empty>
       ) : (
         <Grid min={320}>
-        {roster
-          .filter((r) => r.active)
+        {/* By name. The list carries a remove button on every row, so an
+            arbitrary order is a real chance of removing the wrong person. */}
+        {sortByName(
+          roster.filter((r) => r.active),
+          (r) => byUid.get(r.studentUid)?.displayName ?? r.studentUid,
+        )
           .map((r) => {
             const s = byUid.get(r.studentUid);
             const who = s?.displayName ?? r.studentUid;

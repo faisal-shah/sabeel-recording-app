@@ -32,6 +32,8 @@ const mintUrl = (recordingId: string) =>
  * retry handler.
  */
 const cache = new Map<string, Minted>();
+/** Bumped by `forgetPlaybackUrls`; a mint from an older epoch is discarded. */
+let cacheEpoch = 0;
 
 /**
  * Drop every cached URL. Called on sign-out.
@@ -43,13 +45,18 @@ const cache = new Map<string, Minted>();
  */
 export function forgetPlaybackUrls(): void {
   cache.clear();
+  // The epoch, not just the map: a mint started moments before sign-out resolves
+  // afterwards and would otherwise re-seed the cache with a URL good for another
+  // twelve hours — the exact hole clearing it is meant to close.
+  cacheEpoch += 1;
 }
 
 async function playbackUrl(recordingId: string): Promise<string> {
   const hit = cache.get(recordingId);
   if (hit && hit.expiresAt - Date.now() > SIGNED_URL_REFRESH_MS) return hit.url;
+  const epoch = cacheEpoch;
   const fresh = await mintUrl(recordingId);
-  cache.set(recordingId, fresh);
+  if (epoch === cacheEpoch) cache.set(recordingId, fresh);
   return fresh.url;
 }
 
@@ -162,7 +169,12 @@ async function persistFor(
     const existing = (await getDoc(ref)).data() as ListeningProgressDoc | undefined;
     const merged = existing ? mergeProgress(mine, existing) : mine;
     await setDoc(ref, { studentUid, recordingId, courseId, ...merged });
-    if (generation === gen) listened = merged.listenedMs;
+    // ADVANCE BY THE JUMP, never assign the merged total. `mine` was captured
+    // before two round trips, and the ticks that arrived during them are already
+    // in `listened` — assigning would throw them away on every write, which over
+    // a two-hour lecture silently under-reports the number the ledger presents
+    // as evidence. Only the amount another device was ahead by is news here.
+    if (generation === gen) listened += merged.listenedMs - mine.listenedMs;
   } catch {
     // A failed write must not break playback. The next tick retries — but only
     // for the session that is still open; a session already ended has had its
@@ -184,6 +196,7 @@ function persist(): void {
   );
 }
 
+
 /**
  * Start (or re-focus) a playback session.
  *
@@ -196,10 +209,17 @@ export function openPlayback(
   studentUid: string | null,
   courseId: string,
 ): void {
-  // `player` as well as `owner`: an owner with no player is a session that has
-  // been torn down, and treating that as "already open" would return without
-  // ever creating one — a play button that does nothing, for good.
-  if (player && owner?.recordingId === now.recordingId) {
+  /*
+   * Re-entering the screen for what is ALREADY PLAYING must not restart it —
+   * and must not be mistaken for a session that cannot play.
+   *
+   * `player` as well as `owner`, because an owner with no player is a torn-down
+   * session and returning early would leave a play button that never works. And
+   * `!state.error`, because a failed mint leaves the player assigned but never
+   * loaded: without it, coming back to retry hits this branch and the transport
+   * is disabled for good, with no way back but closing the docked bar.
+   */
+  if (player && !state.error && owner?.recordingId === now.recordingId) {
     // Same recording — refresh only the metadata the caller may know better
     // (a staff visit has no due date; the student's own grant does).
     set({ now });
@@ -274,7 +294,10 @@ export function openPlayback(
 /**
  * End the session and release the audio. Safe to call when nothing is open.
  *
- * SYNCHRONOUS, AND IT HAS TO BE. This used to `await persist()` in the middle
+ * EVERY STATE CHANGE IS SYNCHRONOUS, AND IT HAS TO BE. The returned promise is
+ * only the final progress write, for the one caller that must not race it —
+ * signing out drops the credential, and a write still in flight is refused. Fire
+ * and forget everywhere else. This used to `await persist()` in the middle
  * and null `owner` and `state` afterwards — which meant `openPlayback` calling
  * it and then setting up the next recording ran to completion first, and the
  * continuation woke up and wiped the session that had just started. The symptom
@@ -287,13 +310,22 @@ export function openPlayback(
  * snapshot and fired detached. A session that has ended can no longer reach the
  * one that replaced it.
  */
-export function closePlayback(): void {
+export function closePlayback(): Promise<void> {
   const p = player;
   const dying = owner;
   const finalPosition = position;
   const finalListened = listened;
-  const unsaved = dirty;
-  const gen = ++generation;
+  /*
+   * A GENERATION THAT CAN NEVER MATCH AGAIN.
+   *
+   * Take the current one for the dying session and then move past it, so the
+   * final write's `generation === gen` guard is false however this was reached.
+   * Capturing the POST-increment value made the guard true for a bare close —
+   * the mini player's ×, sign-out, a revoked recording — and the comment here
+   * claimed the opposite.
+   */
+  const gen = generation;
+  generation += 1;
 
   player = null;
   owner = null;
@@ -307,17 +339,16 @@ export function closePlayback(): void {
 
   if (p) p.unload();
   // Whatever happened since the last tick would otherwise be lost exactly at the
-  // moment someone stops listening. Best effort, and it can no longer write the
-  // wrong session's numbers: `gen` is already stale, so `persistFor` will not
-  // touch anything module-level when it lands.
-  if (unsaved && dying?.studentUid) {
-    void persistFor(
-      gen,
-      { studentUid: dying.studentUid, recordingId: dying.recordingId, courseId: dying.courseId },
-      finalPosition,
-      finalListened,
-    );
-  }
+  // moment someone stops listening. It cannot write the wrong session's numbers:
+  // `gen` is stale by construction, so nothing module-level is touched when it
+  // lands.
+  if (!dying?.studentUid) return Promise.resolve();
+  return persistFor(
+    gen,
+    { studentUid: dying.studentUid, recordingId: dying.recordingId, courseId: dying.courseId },
+    finalPosition,
+    finalListened,
+  );
 }
 
 /**
@@ -373,8 +404,13 @@ export const playback = {
   // Clamped here rather than at each call site, so neither view has to know the
   // duration or the amounts.
   skipBack: () => playback.seek(Math.max(0, state.positionMs - SKIP_BACK_MS)),
-  skipForward: () =>
-    playback.seek(Math.min(state.now?.durationMs ?? 0, state.positionMs + SKIP_FORWARD_MS)),
+  skipForward: () => {
+    // `durationSec` is genuinely nullable — a phone upload supplies none — and
+    // clamping to a zero duration turned "forward 30" into "back to the start".
+    const end = state.now?.durationMs ?? 0;
+    const target = state.positionMs + SKIP_FORWARD_MS;
+    playback.seek(end > 0 ? Math.min(end, target) : target);
+  },
 };
 
 /** Subscribe a component to the one session. */

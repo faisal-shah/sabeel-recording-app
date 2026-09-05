@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   Empty,
+  Grid,
   Notice,
   Row,
   Screen,
@@ -50,7 +51,8 @@ export function StaffScreen({ selfUid, header }: { selfUid: string; header?: Rea
       {pending.length === 0 ? (
         <Empty>Nobody is waiting.</Empty>
       ) : (
-        pending.map((s) => (
+        <Grid min={340}>
+        {pending.map((s) => (
           <Card key={s.uid}>
             <Person row={s} />
             <Row>
@@ -68,14 +70,16 @@ export function StaffScreen({ selfUid, header }: { selfUid: string; header?: Rea
               />
             </Row>
           </Card>
-        ))
+        ))}
+        </Grid>
       )}
 
       <SectionTitle>Everyone else ({decided.length})</SectionTitle>
       {decided.length === 0 ? (
         <Empty>No staff accounts yet.</Empty>
       ) : (
-        decided.map((s) => {
+        <Grid min={340}>
+        {decided.map((s) => {
           const isSelf = s.uid === selfUid;
           return (
             <Card key={s.uid}>
@@ -118,7 +122,8 @@ export function StaffScreen({ selfUid, header }: { selfUid: string; header?: Rea
               )}
             </Card>
           );
-        })
+        })}
+        </Grid>
       )}
     </Screen>
   );

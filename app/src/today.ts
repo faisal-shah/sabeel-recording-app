@@ -11,7 +11,7 @@ import {
   type SessionDoc,
 } from '@sabeel/shared';
 import { db } from './firebase';
-import { useListenerError, useLiveQuery } from './liveQuery';
+import { useListenerFailed, useLiveQuery } from './liveQuery';
 import { useAllCourses, useMyCourses, type CourseRow } from './structure';
 
 export type TodayKind = 'attendance' | 'recording' | 'publish' | 'closing';
@@ -149,7 +149,16 @@ function useTodayQueue(courses: CourseRow[], max: number): TodayQueue {
   // A refused listener leaves both queries on their `empty` value for ever, and
   // `empty` is the same `null` that means "nothing has arrived yet" — so without
   // this the landing screen sits on "Checking your courses…" with no way out.
-  const failed = useListenerError() !== null;
+  //
+  // THESE TWO LABELS, not the app-wide signal: another screen's denial must not
+  // make this one claim it could not read the courses, and this one's denial
+  // must not clear because something unrelated recovered.
+  //
+  // Spelled out rather than referenced from the calls below, because
+  // `firestoreIndexes.test.ts` parses `label:` out of every `useLiveQuery` call
+  // site and a computed one is a call site it cannot read — a guard that stops
+  // seeing a query is worse than the duplication. They are twenty lines apart.
+  const failed = useListenerFailed(['todaySessions', 'todayRecordings']);
 
   // OUTSIDE the memo: a browser left open past midnight would otherwise keep
   // saying "Met today" until the next snapshot happened to arrive.

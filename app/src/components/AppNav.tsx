@@ -149,6 +149,7 @@ export function AppNav({
   const insets = useSafeAreaInsets();
   const [menuOpen, setMenuOpen] = useState(false);
   const [sent, setSent] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
   const rail = variant === 'rail';
   const isStudent = role === 'student';
   const isAdmin = role === 'admin';
@@ -211,12 +212,21 @@ export function AppNav({
           offering to change something this app does not own. */}
       {isStudent ? (
         <SheetOption
-          label={sent ? 'Reset link sent' : 'Change password'}
-          detail={sent ? `Check ${email}` : 'We email you a link to set a new one'}
+          label={resetError ? 'Could not send the link' : sent ? 'Reset link sent' : 'Change password'}
+          detail={
+            resetError ?? (sent ? `Check ${email}` : 'We email you a link to set a new one')
+          }
+          tone={resetError ? 'danger' : 'normal'}
           testID="more-password"
           onPress={() => {
-            void sendMyPasswordReset(email).catch(() => undefined);
-            setSent(true);
+            // Reported only once it has actually gone. Saying "sent" the instant
+            // the button is pressed says it whether or not anything was sent,
+            // and the person then waits for an email that is not coming.
+            setSent(false);
+            setResetError(null);
+            void sendMyPasswordReset(email)
+              .then(() => setSent(true))
+              .catch((e: Error) => setResetError(e.message));
           }}
         />
       ) : null}
@@ -369,7 +379,11 @@ const styles = StyleSheet.create({
   railMark: { height: 40, justifyContent: 'center', marginBottom: spacing(2) },
   railTabs: { alignItems: 'center', gap: spacing(1), flex: 1 },
   item: { alignItems: 'center', gap: 2, borderRadius: 10, paddingVertical: spacing(2) },
-  itemBar: { flex: 1, paddingHorizontal: spacing(1) },
+  // The CELL fills its share of the bar so the touch target is the full width;
+  // the highlight inside it does not. Painting the cell made the active pill a
+  // third of a 720px screen — one pink slab flush into the corner — while at
+  // 390px it looked right, which is why it survived a phone-only review.
+  itemBar: { flex: 1, paddingHorizontal: spacing(1), maxWidth: 120, alignSelf: 'center' },
   itemRail: { width: 62, paddingHorizontal: spacing(1) },
   itemActive: { backgroundColor: t.bg.accentSoft },
   itemPressed: { opacity: 0.6 },

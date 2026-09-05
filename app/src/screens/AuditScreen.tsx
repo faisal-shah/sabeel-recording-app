@@ -15,7 +15,7 @@ export function AuditScreen({ courseId, title }: { courseId: string | null; titl
   const entries = useAudit(courseId);
 
   return (
-    <Screen title="Audit" subtitle={title} width="list">
+    <Screen subtitle={title} width="list">
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {entries.length === 0 ? (
         <Empty>No audit entries yet.</Empty>
@@ -88,6 +88,9 @@ const ACTION_LABELS: Record<string, string> = {
 
 const styles = StyleSheet.create({
   row: {
+    // Fills the grid cell it is given, so a row of these ends level instead
+    // of ragged with its actions at three different heights.
+    flexGrow: 1,
     backgroundColor: t.bg.surface,
     borderRadius: 12,
     padding: spacing(4),

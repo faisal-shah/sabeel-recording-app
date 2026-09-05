@@ -104,6 +104,9 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 13, fontWeight: '600', color: t.text.secondary },
   chipTextOn: { color: t.accent.onAccent },
   row: {
+    // Fills the grid cell it is given, so a row of these ends level instead
+    // of ragged with its actions at three different heights.
+    flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: t.bg.surface,

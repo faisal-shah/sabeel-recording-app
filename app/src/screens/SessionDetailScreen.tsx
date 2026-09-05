@@ -38,7 +38,7 @@ import {
   type RecordingRow,
 } from '../recordings';
 import { retryZoomImport } from '../zoom';
-import { useRoster } from '../structure';
+import { sortByName, useRoster } from '../structure';
 import { useStudents } from '../students';
 import { canPickAudio, pickAudioFile } from '../filePicker';
 import { useWide } from '../useWidth';
@@ -230,9 +230,14 @@ function AttendanceSection({ session }: { session: SessionRow }) {
     for (const s of students) m.set(s.uid, s.displayName);
     return m;
   }, [students]);
+  // Sorted by name: this is a register, marked by hand, once per student.
   const activeUids = useMemo(
-    () => roster.filter((e) => e.active).map((e) => e.studentUid),
-    [roster],
+    () =>
+      sortByName(
+        roster.filter((e) => e.active),
+        (e) => nameByUid.get(e.studentUid) ?? e.studentUid,
+      ).map((e) => e.studentUid),
+    [roster, nameByUid],
   );
 
   // Local marks: default present, seeded from a prior submit. Cleared whenever

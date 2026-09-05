@@ -418,18 +418,18 @@ export async function seedWorld({ db, auth, browser, base }) {
         'one by al-Shurnubi; a scan is in the shared folder, and the pages for this session ' +
         'are 1 through 24. Bring your questions about the second hikma in particular.' });
   const dueSoon = await seedSession('sw-s2', 'sw-s2r', 'Session 2 — Knowledge and Certainty',
-    { daysAgo: 5, dueOffset: 3, present: 5 });
+    { daysAgo: 21, dueOffset: 3, present: 5 });
   // Not bound to anything: nothing navigates to it by name. It is here so the
   // student home has an "Upcoming" group at all — the four bucket headings ARE
   // that screen's layout, and a home missing one is a quarter untested.
   await seedSession('sw-s3', 'sw-s3r', 'Session 3 — Patience in Hardship',
-    { daysAgo: 2, dueOffset: 20, present: 4 });
+    { daysAgo: 14, dueOffset: 20, present: 4 });
   const done = await seedSession('sw-s4', 'sw-s4r', 'Session 4 — Sincerity of Intention',
-    { daysAgo: 12, dueOffset: 14, present: 3 });
+    { daysAgo: 9, dueOffset: 14, present: 3 });
   /** Published, attendance NOT taken: nobody is granted anything. The state the
    *  `attendanceMissing` notification exists for, and a real staff screen. */
   await seedSession('sw-s5', 'sw-s5r', 'Session 5 — Reliance and Trust',
-    { daysAgo: 1, dueOffset: 7, attendance: null });
+    { daysAgo: 4, dueOffset: 7, attendance: null });
   /** A session with NO RECORDING — the only route to the Zoom import screen. */
   await db.collection('sessions').doc('sw-s6').set({
     courseId: COURSE, cohortId: COHORT, date: iso(now), title: 'Session 6 — Today (recording pending)',

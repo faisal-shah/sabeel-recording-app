@@ -88,7 +88,8 @@ export function RecordingLedgerScreen({
   return (
     <Screen
       title={recording.title}
-      subtitle={`${cohortName ? `${cls.name} · ${cohortName}` : cls.name} · listening progress`}
+      // Not "· listening progress": the header above already says it.
+      subtitle={cohortName ? `${cls.name} · ${cohortName}` : cls.name}
       width="list"
     >
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}

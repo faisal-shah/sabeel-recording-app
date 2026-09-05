@@ -150,6 +150,39 @@ export function useListenerError(): string | null {
   }, []);
   return err;
 }
+
+/**
+ * Are THESE subscriptions failing right now?
+ *
+ * `useListenerError` answers "is anything in the app failing", which is the
+ * right question for the banner every screen shows and the wrong one for a hook
+ * deciding what its own data means. A screen that must tell "no snapshot yet"
+ * from "refused" cannot use the app-wide signal: another screen's denial would
+ * make it claim its own query failed, and its own denial would clear the moment
+ * some unrelated listener recovered.
+ *
+ * Named by label, matching `subscriptionKey` — a label with a `scope` is stored
+ * as `label:scope`, so this matches on the label part.
+ */
+export function useListenerFailed(labels: readonly string[]): boolean {
+  const key = labels.join(',');
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const wanted = key ? key.split(',') : [];
+    const check = () =>
+      setFailed(
+        [...listenerErrors.keys()].some((k) => wanted.includes(k.split(':')[0])),
+      );
+    check();
+    // The registry changes whenever any listener fails or recovers, and that is
+    // exactly when the aggregate is republished.
+    errorWatchers.add(check);
+    return () => {
+      errorWatchers.delete(check);
+    };
+  }, [key]);
+  return failed;
+}
 // ---------------------------------------------------------------------------
 
 export interface LiveQueryOptions<T> {

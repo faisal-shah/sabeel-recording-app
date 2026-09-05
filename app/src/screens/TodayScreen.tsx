@@ -174,6 +174,9 @@ const styles = StyleSheet.create({
   groupBlurb: { fontSize: 13, color: t.text.muted, marginTop: 2 },
   note: { fontSize: 13, color: t.text.muted, marginBottom: spacing(3) },
   card: {
+    // Fills the grid cell it is given, so a row of these ends level instead
+    // of ragged with its actions at three different heights.
+    flexGrow: 1,
     backgroundColor: t.bg.surface,
     borderRadius: 10,
     borderWidth: 1,
