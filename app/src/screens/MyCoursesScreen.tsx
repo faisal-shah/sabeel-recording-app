@@ -1,5 +1,5 @@
 import { Empty, Grid, Notice, Screen, SectionTitle } from '../components/ui';
-import { useMyCourses, type CourseRow } from '../structure';
+import { useMyCoursesState, type CourseRow } from '../structure';
 import { CourseCard } from './CoursesScreen';
 
 /**
@@ -16,11 +16,23 @@ export function MyCoursesScreen({
   uid: string;
   onOpen: (cls: CourseRow) => void;
 }) {
-  const courses = useMyCourses(uid);
+  /*
+   * THE `State` VARIANT, so "none have arrived" is not rendered as "there are
+   * none". The `?? []` wrapper reads identically on a cold load and on an
+   * unassigned account — and this screen answers the second with a heading
+   * saying `Courses (0)`, "You are not assigned to any courses yet" and a
+   * notice about waiting for an administrator. Shown to a manager whose access
+   * was granted an hour ago, for the length of every load, that reads as their
+   * access being broken.
+   */
+  const loaded = useMyCoursesState(uid);
+  const courses = loaded ?? [];
   return (
     <Screen title="Your courses" subtitle="Everything you run, and the way in to each" width="list">
-      <SectionTitle>Courses ({courses.length})</SectionTitle>
-      {courses.length === 0 ? (
+      <SectionTitle>Courses{loaded === null ? '' : ` (${courses.length})`}</SectionTitle>
+      {loaded === null ? (
+        <Empty>Checking your courses…</Empty>
+      ) : courses.length === 0 ? (
         <>
           <Empty>You are not assigned to any courses yet.</Empty>
           <Notice tone="info">

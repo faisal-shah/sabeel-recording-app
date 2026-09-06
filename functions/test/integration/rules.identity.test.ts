@@ -183,14 +183,28 @@ describe('students', () => {
 
 describe('collections not yet opened', () => {
   it('stay denied even to an admin', async () => {
-    // What is STILL fully closed to everyone, including an admin: the
-    // notifications and backend-stats collections, opened by Phases 7 and 8.
-    // (The Phase 5b ledger opened staff reads on completions / completionEvents /
-    // listeningProgress, so those are no longer here.)
+    /*
+     * Two different closures, and calling them one thing was already wrong.
+     *
+     * `backendStats` is unopened — Phase 8 — and denied to everybody by the
+     * catch-all. `notifications` IS open, but only ever to the OWNER of the
+     * document: `notifications/{uid}` and its devices are the person's own
+     * preferences, so an admin is refused there not because the collection is
+     * shut but because an admin is not that person. The two assertions below
+     * each fail on their own guard, so either could be dropped and this stayed
+     * green while it read as a claim about the collection.
+     */
     for (const name of [COLLECTIONS.notifications, COLLECTIONS.backendStats]) {
       await assertFails(getDocs(collection(admin(), name)));
       await assertFails(setDoc(doc(admin(), name, 'x'), { any: 'thing' }));
     }
+  });
+
+  it('opens a person’s notification preferences to that person and nobody else', async () => {
+    // The other half of the pair above: this is what makes the admin denial a
+    // statement about OWNERSHIP rather than about a shut collection.
+    await assertSucceeds(getDoc(doc(admin(), COLLECTIONS.notifications, ADMIN)));
+    await assertFails(getDoc(doc(admin(), COLLECTIONS.notifications, 'someone-else')));
   });
 
   it('stay WRITE-denied on the collections opened for reading', async () => {

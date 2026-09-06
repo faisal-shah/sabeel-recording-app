@@ -231,6 +231,38 @@ describe('completions: self-only client writes', () => {
     );
   });
 
+  /*
+   * THE ID IS PART OF THE ROW — see the matching case in
+   * `rules.recordings.test.ts` for the shape of the attack. A create under
+   * another student's id carrying the writer's OWN uid passes every content
+   * check, and locks the rightful owner out of marking that recording complete
+   * for ever: their write becomes an update, `resource.data.studentUid` is
+   * somebody else, and `delete: if false` leaves no way back.
+   */
+  it('a student cannot plant an honest completion under someone else’s id', async () => {
+    await assertFails(
+      setDoc(doc(outsider().firestore(), COLLECTIONS.completions, completionId(STUDENT, 'rNew')), {
+        studentUid: OUTSIDER,
+        recordingId: 'rNew',
+        courseId: CLASS_MINE,
+        completed: true,
+        completedAt: 2,
+        updatedAt: 2,
+      }),
+    );
+    // And the rightful owner can still create theirs.
+    await assertSucceeds(
+      setDoc(doc(student().firestore(), COLLECTIONS.completions, completionId(STUDENT, 'rNew')), {
+        studentUid: STUDENT,
+        recordingId: 'rNew',
+        courseId: CLASS_MINE,
+        completed: true,
+        completedAt: 2,
+        updatedAt: 2,
+      }),
+    );
+  });
+
   it('a student cannot forge a completion in someone else’s name', async () => {
     await assertFails(
       setDoc(doc(outsider().firestore(), COLLECTIONS.completions, completionId(STUDENT, 'rNew')), {
@@ -280,6 +312,47 @@ describe('completionEvents: append-only', () => {
   it('a student cannot masquerade as a staff actor', async () => {
     await assertFails(
       setDoc(doc(student().firestore(), COLLECTIONS.completionEvents, 'e3'), event('staff', STUDENT)),
+    );
+  });
+
+  /*
+   * THE ROW IS TIED TO A REAL GRANT, and it has to be: nothing here can be
+   * updated or deleted, so whatever a student writes is a permanent entry in
+   * the collection this file calls the audit of every mark. Unchecked, that
+   * accepted any class, any recording and any action from any student — a
+   * forged row in a class the writer is not in, readable by that class's
+   * managers.
+   */
+  it('a student cannot append an event for a class they have no grant in', async () => {
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.completionEvents, 'e4'), {
+        ...event('student', STUDENT),
+        courseId: CLASS_THEIRS,
+      }),
+    );
+  });
+
+  it('a student cannot append an event for a recording they were never granted', async () => {
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.completionEvents, 'e5'), {
+        ...event('student', STUDENT),
+        recordingId: THEIR_REC,
+      }),
+    );
+  });
+
+  it('a student cannot invent an action, or carry a field the shape has no room for', async () => {
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.completionEvents, 'e6'), {
+        ...event('student', STUDENT),
+        action: 'excused',
+      }),
+    );
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.completionEvents, 'e7'), {
+        ...event('student', STUDENT),
+        overrideReason: 'because I said so',
+      }),
     );
   });
 

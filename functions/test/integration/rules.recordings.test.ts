@@ -339,6 +339,32 @@ describe('listeningProgress', () => {
     );
   });
 
+  /*
+   * THE ID IS PART OF THE ROW, and the lockout is why.
+   *
+   * A create carrying the writer's OWN uid under ANOTHER student's document id
+   * passes every content check — the uid in the body is honestly theirs. The
+   * victim's first write is then an update whose `resource.data.studentUid` is
+   * somebody else, denied from every device for ever, with `delete: if false`
+   * leaving no way back. The row grants the writer nothing; it is pure denial
+   * of service against one student and one recording.
+   */
+  it('does NOT let a student plant an honest row under someone else\'s id', async () => {
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, theirsId), row(STUDENT)),
+    );
+    // And the victim can still write their own row afterwards.
+    await assertSucceeds(
+      setDoc(doc(outsider().firestore(), COLLECTIONS.listeningProgress, theirsId), row(OUTSIDER)),
+    );
+  });
+
+  it('does NOT let a student write their row under an id for another RECORDING', async () => {
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, `${STUDENT}_somethingElse`), row(STUDENT)),
+    );
+  });
+
   it('does NOT let a student overwrite a row that is already someone else\'s', async () => {
     await testEnv.withSecurityRulesDisabled(async (c) => {
       await setDoc(doc(c.firestore(), COLLECTIONS.listeningProgress, theirsId), row(OUTSIDER));

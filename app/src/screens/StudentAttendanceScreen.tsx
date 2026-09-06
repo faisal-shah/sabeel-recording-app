@@ -8,7 +8,6 @@ import {
   type AttendanceStatus,
 } from '@sabeel/shared';
 import { Card, Empty, Grid, Notice, Screen, SectionTitle } from '../components/ui';
-import { useListenerError } from '../liveQuery';
 import { useMyAttendance } from '../attendance';
 import { useMyAssignments, useMyCompletions } from '../completion';
 import type { CourseRow } from '../structure';
@@ -42,7 +41,6 @@ export function StudentAttendanceScreen({
   uid: string;
   cls: CourseRow;
 }) {
-  const listenerError = useListenerError();
   const today = todayInZone(INSTITUTE_TIMEZONE);
   const marks = useMyAttendance(uid, cls.id);
   const assignments = useMyAssignments(uid);
@@ -90,7 +88,6 @@ export function StudentAttendanceScreen({
        window grew: 680px of phone layout fits two cards, and crossing the 900px
        breakpoint capped the column at 656 and dropped it to one. */
     <Screen title={cls.name} subtitle="Your attendance" width="list">
-      {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
 
       {/* WHAT THEY STILL OWE COMES FIRST, and in their words. Three attendance
           counts are the register a teacher keeps; the number an adult student

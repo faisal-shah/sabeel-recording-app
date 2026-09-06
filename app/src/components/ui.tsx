@@ -523,11 +523,23 @@ const STATUS_WORD: Record<string, string> = {
   needsAttention: 'needs attention',
 };
 
+/**
+ * A status field value as a person reads it — lower case, spaced.
+ *
+ * Exported because the library screen writes the same six words twice over: on
+ * the chip of every card, and on the filter above them. Those were two maps,
+ * each carrying its own `needsAttention: 'needs attention'`, so a status added
+ * to one appeared raw in the other.
+ */
+export function statusWord(status: string): string {
+  return STATUS_WORD[status] ?? status;
+}
+
 export function StatusChip({ status }: { status: string }) {
   return (
-    <View style={styles.chip}>
-      <View style={[styles.chipDot, { backgroundColor: statusColour(status) }]} />
-      <Text style={styles.chipText}>{STATUS_WORD[status] ?? status}</Text>
+    <View style={styles.tag}>
+      <View style={[styles.tagDot, { backgroundColor: statusColour(status) }]} />
+      <Text style={styles.tagText}>{statusWord(status)}</Text>
     </View>
   );
 }
@@ -700,6 +712,61 @@ const AddActionContext = createContext<() => void>(() => {});
 /** Close the sheet from inside the form, once the thing is created. */
 export function useAddAction(): () => void {
   return useContext(AddActionContext);
+}
+
+/**
+ * The filter pills that sit above a list — one of N, always exactly one chosen.
+ *
+ * ONE COMPONENT, BECAUSE FOUR COPIES HAD ALREADY DRIFTED. The recording ledger,
+ * a student's ledger, the library and the Zoom import each carried the same
+ * twelve lines of `Pressable` and the same six style keys, and by the time they
+ * were collected they announced themselves three different ways — one a
+ * `button` with `aria-pressed`, two `radio`s with `aria-checked`, one of those
+ * with no label at all — and drew their text at two different sizes. Nothing
+ * could have caught that: every copy passes every check on its own.
+ *
+ * A RADIO GROUP, which is what the control is. Exactly one option is chosen and
+ * choosing another releases the first, so `aria-pressed` on independent buttons
+ * was the wrong shape — it says four things are each on or off, and a screen
+ * reader gives no hint that they are one choice.
+ *
+ * DISTINCT FROM `Segmented`, which is a switch between two views of the same
+ * subject (Students / Staff). These narrow a list without changing what the
+ * screen is about, and they share their row with the control that acts on the
+ * result — Export CSV, usually — so they wrap rather than sitting in a box.
+ */
+export function Chips<T extends string>({
+  value,
+  options,
+  testIdPrefix,
+  onChange,
+}: {
+  value: T;
+  options: { value: T; label: string }[];
+  /** Each pill gets `${testIdPrefix}-${value}`. */
+  testIdPrefix: string;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <View style={styles.chips} accessibilityRole="radiogroup">
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <Pressable
+            key={o.value}
+            testID={`${testIdPrefix}-${o.value}`}
+            accessibilityRole="radio"
+            aria-checked={on}
+            accessibilityLabel={o.label}
+            onPress={() => onChange(o.value)}
+            style={[styles.chip, on ? styles.chipOn : null]}
+          >
+            <Text style={[styles.chipText, on ? styles.chipTextOn : null]}>{o.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
 }
 
 /**
@@ -1010,6 +1077,32 @@ const styles = StyleSheet.create({
   headActions: { flexDirection: 'row', gap: spacing(2), alignItems: 'flex-start' },
   h1: { fontSize: 26, fontWeight: '700', color: t.text.primary },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3) },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing(2) },
+  /*
+   * 44 TALL, like every other target in the app. A filter pill is a control
+   * people tap on a phone, and at 24px two wrapped rows of them sat a
+   * finger-width apart. The sweep reports small targets and never fails them,
+   * which is how four screens' worth stayed at half size.
+   *
+   * And carrying the same top margin `styles.btn` does, because on the two
+   * ledger screens a Button shares this row. `btn`'s `marginTop` is a COLUMN
+   * affordance ("space above me when I follow something"); in a centred row it
+   * shifts the button's border box down by half of it, and the toolbar came out
+   * four pixels out of true.
+   */
+  chip: {
+    marginTop: spacing(2),
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingVertical: spacing(2),
+    paddingHorizontal: spacing(4),
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: t.border.strong,
+  },
+  chipOn: { backgroundColor: t.accent.base, borderColor: t.accent.base },
+  chipText: { fontSize: 13, fontWeight: '600', color: t.text.secondary },
+  chipTextOn: { color: t.accent.onAccent },
   segmented: {
     flexDirection: 'row',
     alignSelf: 'flex-start',
@@ -1212,9 +1305,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing(3),
   },
   errorText: { fontSize: 13, color: t.text.danger },
-  chip: { flexDirection: 'row', alignItems: 'center' },
-  chipDot: { width: 8, height: 8, borderRadius: 4, marginRight: spacing(1.5) },
-  chipText: { fontSize: 13, color: t.text.secondary },
+  // `StatusChip`'s inline tag — a dot and a word inside a list row. Named apart
+  // from the filter pills above, which are a control; these are not tappable.
+  tag: { flexDirection: 'row', alignItems: 'center' },
+  tagDot: { width: 8, height: 8, borderRadius: 4, marginRight: spacing(1.5) },
+  tagText: { fontSize: 13, color: t.text.secondary },
   row: {
     flexDirection: 'row',
     // `stretch`, so every cell is as tall as the tallest — see `rowItem`, which

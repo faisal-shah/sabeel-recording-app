@@ -119,18 +119,18 @@ export function canPublish(recording: {
 }
 
 /**
- * A recording that holds nothing yet: no audio, and not live.
+ * A recording that holds nothing right now: no audio, and not live.
  *
- * Such a recording provably has NO dependent history — `publishBlockers` refuses
- * to publish without audio, and assignments only fan out once published — so
- * there is no completion, progress or assignment doc that could point at it.
- * That is what makes discarding one non-destructive, and why it does not need
- * the admin-only guard that permanent deletion otherwise carries: whoever had
- * the course scope to create it may discard it.
+ * NOT A PROOF THAT IT NEVER HELD ANYTHING, and it used to be read as one. A
+ * recording that was published and then walked back — `published →
+ * unpublished → draft`, then `clearAudio` — arrives at exactly this shape with
+ * a full term of assignments, completions and progress still pointing at it. So
+ * this says "needs audio", which is what the UI keys off: a normal, recoverable
+ * state (a just-created draft mid-upload, an upload that failed, audio removed
+ * for replacement), not an error.
  *
- * Also what the UI keys "needs audio" off: this is a normal, recoverable state
- * (a just-created draft mid-upload, an upload that failed, audio removed for
- * replacement), not an error.
+ * The delete gate asks `hasRecordingHistory` as well, because only the
+ * collections can answer whether there is anything to destroy.
  */
 export function isEmptyDraft(recording: {
   audioPath: string | null;

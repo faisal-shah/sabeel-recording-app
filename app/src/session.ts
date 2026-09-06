@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { onAuthStateChanged, signOut as fbSignOut, type User } from 'firebase/auth';
 import { closePlayback, forgetPlaybackUrls } from './playback';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
@@ -110,12 +110,33 @@ function isStale(claims: TokenClaims, profile: Profile): boolean {
  */
 export function useSession(): Session {
   const [session, setSession] = useState<Session>({ phase: 'loading' });
-  const latest = useRef<{ profile: Profile | null }>({ profile: null });
 
   useEffect(() => {
     let unsubDoc: (() => void) | null = null;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
     let cancelled = false;
+    /*
+     * WHICH SIGN-IN THE WORK IN FLIGHT BELONGS TO.
+     *
+     * Every path into `publish` is asynchronous — the poll force-refreshes a
+     * token and reads a document, the listener awaits `getIdTokenResult` — and
+     * the credential can drop while they are in the air. `cancelled` does not
+     * cover that: it is the effect's cleanup, and this hook lives in `App`, so
+     * it is never true in a running app.
+     *
+     * The consequence was a session that could not be left. Sign out from a
+     * gate screen with a poll tick in flight, and its continuation published
+     * `signedIn` over the sign-in screen and re-armed the three-second timer;
+     * the ticks after it read Firestore with no credential and threw into the
+     * catch, so nothing ever corrected it. Pressing Sign out again did nothing,
+     * because `auth.currentUser` was already null and the observer never fired.
+     * The only way out was killing the app — from the screen that tells people
+     * to sign out and try again.
+     *
+     * Same counter as `playback.ts` uses for the same reason: work started for
+     * one owner must not land on the next.
+     */
+    let generation = 0;
 
     const stopPoll = () => {
       if (pollTimer) {
@@ -125,10 +146,10 @@ export function useSession(): Session {
     };
 
     const unsubAuth = onAuthStateChanged(auth, (user) => {
+      const gen = (generation += 1);
       unsubDoc?.();
       unsubDoc = null;
       stopPoll();
-      latest.current = { profile: null };
       // FIRST, before anything awaits. Firestore reacts to the same credential
       // change by re-issuing every live listen, and the refusals come back while
       // the screens holding them are still mounted; this is what marks those
@@ -164,8 +185,8 @@ export function useSession(): Session {
       };
 
       const publish = (profile: Profile | null, claims: TokenClaims) => {
-        if (cancelled) return;
-        latest.current = { profile };
+        // The observer has moved on — signed out, or a different account.
+        if (cancelled || gen !== generation) return;
         const ready = isReady(claims, profile);
         // A gated account — pending, disabled, or not yet provisioned — is
         // denied by every rule, so denials while it is in that state say

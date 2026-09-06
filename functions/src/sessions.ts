@@ -10,7 +10,7 @@ import {
   type SessionDoc,
 } from '@sabeel/shared';
 import { auditedCall } from './audited';
-import { requireCourseScope } from './guards';
+import { requireAdmin, requireCourseScope } from './guards';
 import { applyDeleteRecording } from './recordings';
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -293,10 +293,20 @@ export const submitAttendance = auditedCall('submitAttendance', async (req, audi
 // --------------------------------------------------------- archive/delete --
 
 /**
- * PERMANENTLY delete a session and its recording. Refuses a session whose
- * recording is published (unpublish/archive first) so a delete can never pull a
- * live recording out from under students. Cascades the recording (and its
- * assignments/completions/progress) then the session.
+ * PERMANENTLY delete a session and its recording.
+ *
+ * ADMIN-ONLY, like every other permanent deletion — a session carries the whole
+ * class's attendance for that day, and `onSessionWritten` clears every student's
+ * projection of it on the way out. Course scope alone was the gate here, and
+ * with a recording attached it cascaded straight into `applyDeleteRecording`,
+ * which authorizes nothing itself: deleting the SESSION was a way for a manager
+ * to destroy a recording's entire ledger without ever meeting the admin check
+ * that `deleteRecording` applies. The client had it right all along
+ * (`SessionDetailScreen` offers this to admins only); the boundary did not.
+ *
+ * Refuses a session whose recording is published (unpublish/archive first) so a
+ * delete can never pull a live recording out from under students. Cascades the
+ * recording (and its assignments/completions/progress) then the session.
  */
 export const deleteSession = auditedCall('deleteSession', async (req, audit) => {
   const d = req.data as { sessionId?: unknown };
@@ -309,6 +319,7 @@ export const deleteSession = auditedCall('deleteSession', async (req, audit) => 
   if (!snap.exists) throw new HttpsError('not-found', 'No such session.');
   const session = snap.data() as SessionDoc;
   await requireCourseScope(req, session.courseId);
+  requireAdmin(req);
   audit.courseId = session.courseId;
 
   if (session.recordingId) {

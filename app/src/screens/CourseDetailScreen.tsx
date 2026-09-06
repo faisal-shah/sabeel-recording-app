@@ -85,8 +85,6 @@ export function CourseDetailScreen({
     [students, enrolled],
   );
 
-  const managerWriteInFlight = busy?.startsWith('mgr-') ?? false;
-
   const run = async (key: string, fn: () => Promise<void>) => {
     setBusy(key);
     setError(null);
@@ -96,6 +94,33 @@ export function CourseDetailScreen({
       setError(errorText(e));
     } finally {
       setBusy(null);
+    }
+  };
+
+  /*
+   * ITS OWN SLOT, not a prefix on the shared one.
+   *
+   * `setCourseManagers` sends the WHOLE array, so a second tap computed from the
+   * pre-write list silently undoes the first — which is why the rows lock while
+   * one is in flight. Reading that lock off `busy` broke it, because `busy` is
+   * one slot every action on the page shares: tick a manager, then tap an "Add a
+   * student" row before the write returns, and `busy` becomes `add-…`, every
+   * manager row re-enables, and the spinner reverts to an unchecked tick because
+   * `cls.managerUids` has not updated yet. Ticking a second manager then sends
+   * `[...old, M2]`, which lands after the first write and drops M1's assignment
+   * with no error anywhere.
+   */
+  const [managerBusy, setManagerBusy] = useState<string | null>(null);
+  const managerWriteInFlight = managerBusy !== null;
+  const runManager = async (uid: string, fn: () => Promise<void>) => {
+    setManagerBusy(uid);
+    setError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setManagerBusy(null);
     }
   };
 
@@ -213,7 +238,7 @@ export function CourseDetailScreen({
             ) : (
               assignableManagers.map((s) => {
                   const on = cls.managerUids.includes(s.uid);
-                  const pending = busy === `mgr-${s.uid}`;
+                  const pending = managerBusy === s.uid;
                   return (
                     <Pressable
                       key={s.uid}
@@ -231,7 +256,7 @@ export function CourseDetailScreen({
                       // list would silently undo the first.
                       disabled={managerWriteInFlight}
                       onPress={() =>
-                        void run(`mgr-${s.uid}`, () =>
+                        void runManager(s.uid, () =>
                           setCourseManagers({
                             courseId: cls.id,
                             managerUids: on

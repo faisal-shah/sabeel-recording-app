@@ -49,6 +49,27 @@ export async function setNotificationPref(
 }
 
 /**
+ * How long a device-registration write is waited on before the caller moves on.
+ *
+ * FIRESTORE DOES NOT SETTLE A WRITE UNTIL THE BACKEND ACKNOWLEDGES IT. On a
+ * phone with no signal that is never — and both of the writes below were
+ * awaited unbounded by callers that show a spinner meanwhile. Offline, "Enable
+ * notifications" spun for ever on a device whose permission had just been
+ * granted, and Sign out never reached `signOut(auth)` at all, leaving somebody
+ * signed in on a shared device: the exact case that call exists to prevent.
+ *
+ * GIVING UP ON THE WAIT IS NOT GIVING UP ON THE WRITE. The SDK keeps it queued
+ * and sends it when the connection returns; all that ends here is the caller's
+ * blocking on it. Both writes are bookkeeping — nothing downstream reads the
+ * result — so a second is long enough on a working connection and short enough
+ * that nobody is stuck on a broken one.
+ */
+const WRITE_GRACE_MS = 1000;
+
+const bounded = (write: Promise<unknown>): Promise<unknown> =>
+  Promise.race([write, new Promise((resolve) => setTimeout(resolve, WRITE_GRACE_MS))]);
+
+/**
  * Register this device to receive push, if it can.
  *
  * Returns the token, or null when this build has no way to obtain one — no
@@ -74,7 +95,7 @@ export async function registerThisDevice(uid: string, prompt: boolean): Promise<
     platform: pushPlatform,
     registeredAt: Date.now(),
   };
-  await setDoc(doc(db, COLLECTIONS.notifications, uid, 'devices', token), row);
+  await bounded(setDoc(doc(db, COLLECTIONS.notifications, uid, 'devices', token), row));
   return token;
 }
 
@@ -94,5 +115,5 @@ export async function registerThisDevice(uid: string, prompt: boolean): Promise<
 export async function unregisterThisDevice(uid: string): Promise<void> {
   const token = await devicePushToken(false);
   if (!token) return;
-  await deleteDoc(doc(db, COLLECTIONS.notifications, uid, 'devices', token));
+  await bounded(deleteDoc(doc(db, COLLECTIONS.notifications, uid, 'devices', token)));
 }

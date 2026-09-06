@@ -89,6 +89,7 @@ interface Fake {
     onProgress: (ms: number) => void;
     onEnded: () => void;
     onError: (m: string) => void;
+    onPlayingChanged: (playing: boolean) => void;
   };
   loaded: string | null;
   /** The position `load` was asked to start at. */
@@ -919,5 +920,76 @@ describe('formatClock', () => {
     const { formatClock } = await load();
     expect(formatClock(1_999)).toBe('0:01');
     expect(formatClock(-500)).toBe('0:00');
+  });
+});
+
+/**
+ * The transport moving without this app asking.
+ *
+ * Android's notification and lock-screen controls drive the player directly, and
+ * so does the OS taking audio focus for a call. None of it goes through
+ * `playback.pause()`, and the session's own flag is what `toggle` reads — so
+ * these assert through `toggle`, which is what the play/pause button on both
+ * surfaces actually calls.
+ */
+describe('a transport change from outside the app', () => {
+  it('leaves the next tap RESUMING after the player pauses itself', async () => {
+    const pb = await load();
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    pb.playback.play();
+    expect(players[0].playing).toBe(true);
+
+    // The lock-screen pause: the player stopped, the session was not told.
+    players[0].playing = false;
+    players[0].events.onPlayingChanged(false);
+
+    pb.playback.toggle();
+    // Without the correction the session still believed it was playing, so this
+    // called `pause()` on an already-paused player — a no-op — and resuming took
+    // two taps with a pause glyph shown over silence in between.
+    expect(players[0].playing).toBe(true);
+  });
+
+  it('leaves the next tap PAUSING after the player resumes itself', async () => {
+    const pb = await load();
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    players[0].playing = true;
+    players[0].events.onPlayingChanged(true);
+
+    pb.playback.toggle();
+    expect(players[0].playing).toBe(false);
+  });
+
+  it('ignores a report from a session that has already been replaced', async () => {
+    const pb = await load();
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    const stale = players[0].events;
+    pb.openPlayback(recording('rec-b'));
+    await flush();
+    pb.playback.play();
+    expect(players[1].playing).toBe(true);
+
+    // The old player winding down reports a pause. It is not this session's.
+    stale.onPlayingChanged(false);
+    pb.playback.toggle();
+    expect(players[1].playing).toBe(false);
+  });
+
+  it('stops claiming to play when the source fails', async () => {
+    const pb = await load();
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    pb.playback.play();
+    // A source that never loads: the error arrives on the status stream.
+    players[0].events.onError('audio error 4');
+
+    players[0].playing = false;
+    pb.playback.toggle();
+    // A transport that thinks it is playing over a dead source answers the next
+    // tap with a pause, so the student cannot even try again.
+    expect(players[0].playing).toBe(true);
   });
 });

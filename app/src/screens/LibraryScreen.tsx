@@ -1,28 +1,36 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { isVisibleToStudents, type RecordingStatus } from '@sabeel/shared';
-import { Button, Card, Empty, Grid, Notice, Row, Screen, SectionTitle, StatusChip } from '../components/ui';
+import {
+  Button,
+  Card,
+  Chips,
+  Empty,
+  Grid,
+  Row,
+  Screen,
+  SectionTitle,
+  StatusChip,
+  statusWord,
+} from '../components/ui';
 import { useAllRecordings, useCourseRecordings, type RecordingRow } from '../recordings';
-import { useAllCourses, useCohortName, useMyCourses, type CourseRow } from '../structure';
-import { useListenerError } from '../liveQuery';
+import { useAllCoursesState, useCohortName, useMyCoursesState, type CourseRow } from '../structure';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
 type StatusFilter = 'all' | RecordingStatus;
-const STATUSES: StatusFilter[] = ['all', 'published', 'draft', 'archived', 'unpublished', 'needsAttention'];
-
 /**
- * The filter words a person reads. `needsAttention` is the FIELD VALUE, and it
- * was being printed raw — one camelCase chip sitting in a row of plain words.
+ * The filter, and the words a person reads on it.
+ *
+ * THE LABELS COME FROM `statusWord`, not from a second map beside this one. A
+ * recording's status is written in two places on this screen — the filter and
+ * the chip on every card — and they were two independent spellings of the same
+ * six values, each carrying its own `needsAttention: 'needs attention'`. Lower
+ * case throughout, because that is how `StatusChip` renders the same words.
  */
-const STATUS_LABEL: Record<StatusFilter, string> = {
-  all: 'all',
-  published: 'published',
-  draft: 'draft',
-  archived: 'archived',
-  unpublished: 'unpublished',
-  needsAttention: 'needs attention',
-};
+const STATUSES: { value: StatusFilter; label: string }[] = (
+  ['all', 'published', 'draft', 'archived', 'unpublished', 'needsAttention'] as StatusFilter[]
+).map((value) => ({ value, label: statusWord(value) }));
 
 /**
  * The cross-cohort recording library with status counts (deferred from Phase 3).
@@ -40,9 +48,12 @@ export function LibraryScreen({
   onPlay: (recording: RecordingRow, cls: CourseRow) => void;
   onOpenProgress: (recording: RecordingRow, cls: CourseRow) => void;
 }) {
-  const listenerError = useListenerError();
   const [status, setStatus] = useState<StatusFilter>('all');
-  const myCourses = useMyCourses(isAdmin ? null : uid);
+  // The `State` variant: before the first snapshot "you are not assigned to any
+  // courses" is not the answer, it is the absence of one — and it reads to a
+  // manager as their access having been revoked.
+  const myCoursesLoaded = useMyCoursesState(isAdmin ? null : uid);
+  const myCourses = myCoursesLoaded ?? [];
   // A course name alone is ambiguous across cohorts; this library spans them.
   const cohortNameOf = useCohortName();
 
@@ -52,25 +63,8 @@ export function LibraryScreen({
       subtitle={isAdmin ? 'Every recording, across every cohort' : 'Recordings in the courses you run'}
       width="list"
     >
-      {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
-      <View style={styles.chips}>
-        {STATUSES.map((s) => (
-          <Pressable
-            key={s}
-            testID={`library-filter-${s}`}
-            // One of a set, so `radio` — and with a role at all, which
-            // these chips had never had.
-            accessibilityRole="radio"
-            aria-checked={status === s}
-            accessibilityLabel={STATUS_LABEL[s]}
-            onPress={() => setStatus(s)}
-            style={[styles.chip, status === s ? styles.chipOn : null]}
-          >
-            <Text style={[styles.chipText, status === s ? styles.chipTextOn : null]}>
-              {STATUS_LABEL[s]}
-            </Text>
-          </Pressable>
-        ))}
+      <View style={styles.filter}>
+        <Chips value={status} testIdPrefix="library-filter" options={STATUSES} onChange={setStatus} />
       </View>
 
       {isAdmin ? (
@@ -80,6 +74,8 @@ export function LibraryScreen({
           onPlay={onPlay}
           onOpenProgress={onOpenProgress}
         />
+      ) : myCoursesLoaded === null ? (
+        <Empty>Checking your courses…</Empty>
       ) : myCourses.length === 0 ? (
         <Empty>You are not assigned to any courses.</Empty>
       ) : (
@@ -113,8 +109,8 @@ function AdminLibrary({
   // Real course rows so the flat list can show which course each recording is in,
   // and the ledger it opens shows the course NAME — not the raw id (which is what
   // a placeholder `{ name: courseId }` row leaked into the ledger subtitle).
-  const courses = useAllCourses(true);
-  const courseById = useMemo(() => new Map(courses.map((c) => [c.id, c])), [courses]);
+  const courses = useAllCoursesState(true);
+  const courseById = useMemo(() => new Map((courses ?? []).map((c) => [c.id, c])), [courses]);
   const filtered = useMemo(
     () => (status === 'all' ? all : all.filter((r) => r.status === status)),
     [all, status],
@@ -127,7 +123,14 @@ function AdminLibrary({
   return (
     <>
       <Counts recordings={all} />
-      {filtered.length === 0 ? (
+      {/* THE COURSES, NOT THE RECORDINGS, ARE WHAT THIS WAITS FOR. Every row
+          names its course, and `clsFor`'s fallback — meant for a recording
+          whose course was deleted — otherwise fires for EVERY row on a cold
+          load, printing a raw Firestore id where the course name goes and
+          carrying it into the ledger this list opens. */}
+      {courses === null ? (
+        <Empty>Loading the library…</Empty>
+      ) : filtered.length === 0 ? (
         <Empty>No recordings with that status.</Empty>
       ) : (
         <Grid min={330}>
@@ -262,23 +265,7 @@ function RecordingLine({
 
 const styles = StyleSheet.create({
   actions: { marginTop: 'auto' },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginBottom: spacing(4) },
-  // 44 TALL, like every other target in the app. A filter chip is a control
-  // people tap on a phone, and at 24px two wrapped rows of them sat a
-  // finger-width apart. The sweep reports small targets and never fails them,
-  // which is how four screens' worth stayed at half size.
-  chip: {
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingVertical: spacing(2),
-    paddingHorizontal: spacing(4),
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: t.border.strong,
-  },
-  chipOn: { backgroundColor: t.accent.base, borderColor: t.accent.base },
-  chipText: { fontSize: 12, fontWeight: '600', color: t.text.secondary },
-  chipTextOn: { color: t.accent.onAccent },
+  filter: { marginBottom: spacing(4) },
   counts: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(2) },
   title: { fontSize: 16, fontWeight: '600', color: t.text.primary },
   courseName: { fontSize: 13, color: t.text.secondary, marginTop: 2 },

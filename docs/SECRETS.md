@@ -30,9 +30,11 @@ firebase functions:secrets:set ZOOM_CLIENT_SECRET
 ```
 
 Then bind them in the function definition, and redeploy — a secret that is set
-but not bound is not available at runtime. `SENTRY_DSN` is already bound (every
-callable via `reportedCall`, plus the two triggers), so once it is set, the next
-functions deploy turns on server error reporting. Until then the binding is inert
+but not bound is not available at runtime. `SENTRY_DSN` is already bound on every
+entry point: audited callables via `auditedCall`, the rest via `reportedCall`,
+the auth trigger, the two assignment triggers, and the notification trigger and
+its daily schedule. So once it is set, the next functions deploy turns on server
+error reporting. Until then the binding is inert
 and the functions run normally. Locally, `functions/.secret.local` (gitignored)
 holds `SENTRY_DSN=disabled` so the emulator does not probe Secret Manager and
 reporting stays off in tests.

@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import { collection, orderBy, query, where } from 'firebase/firestore';
+import { collection, limit, orderBy, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import {
+  AUDIT_PAGE,
   COLLECTIONS,
   attendanceGroups,
   attendanceReport,
@@ -97,6 +98,26 @@ function useScopedMap<T, V>(
   );
 }
 
+/**
+ * The one-of-three filter both ledgers offer, and its words.
+ *
+ * ONE DECLARATION, because the two screens are the same question asked of a
+ * recording and of a student, and the pair had drifted before: a label spelled
+ * in a ternary on each screen, with the note "the same order as the recording
+ * ledger's" standing in for anything that would notice if it stopped being.
+ *
+ * "Missed", never "overdue": once the deadline passes access has closed, so the
+ * work is not still outstanding. The word matches the course detail, the
+ * student's own home and the CSV export.
+ */
+export type LedgerFilter = 'all' | 'notComplete' | 'missed';
+
+export const LEDGER_FILTERS: { value: LedgerFilter; label: string }[] = [
+  { value: 'notComplete', label: 'Not complete' },
+  { value: 'missed', label: 'Missed' },
+  { value: 'all', label: 'All' },
+];
+
 export interface LedgerRow {
   studentUid: string;
   name: string;
@@ -119,6 +140,13 @@ export interface LedgerRow {
 export type RequiredRow = LedgerRow & { dueDate: string };
 
 export interface RecordingLedger {
+  /**
+   * No grant snapshot has arrived yet — so every group below is provisional.
+   *
+   * Distinct from "nobody holds this recording", which is news and is what the
+   * screen says when this is false and `accountable` is empty.
+   */
+  loading: boolean;
   /** Excused, so granted the recording and required to listen — the only people
    *  who can open it at all. */
   accountable: RequiredRow[];
@@ -156,7 +184,20 @@ export function useRecordingLedger(
   const rid = recording.id;
   // The course scope every read below carries — see the note on useScopedMap.
   const cid = recording.courseId;
-  const assignments = useLiveQuery<Map<string, AssignmentDoc>>(
+  /*
+   * `null` UNTIL THE FIRST SNAPSHOT — not an empty Map.
+   *
+   * THE GRANTS ARE WHAT THIS SCREEN IS. `accountable` is built from them and
+   * `lapsed` is everyone excused who is NOT in them, so an empty Map standing in
+   * for "nothing has arrived yet" does not read as a blank screen: it reads as
+   * `Required 0 / Completed 0 / Missed 0`, "Nobody holds this recording now —
+   * every grant from this session has lapsed", and an "Excused, access closed"
+   * section naming the whole class and explaining they were unenrolled or the
+   * recording was pulled. A confident, fully-formed, wrong answer, shown for the
+   * length of every cold load on the one screen staff consult to decide who to
+   * chase.
+   */
+  const assignments = useLiveQuery<Map<string, AssignmentDoc> | null>(
     () =>
       query(
         collection(db, COLLECTIONS.assignments),
@@ -168,7 +209,7 @@ export function useRecordingLedger(
     {
       label: 'ledgerAssignments',
       map: (snap) => new Map(snap.docs.map((d) => [(d.data() as AssignmentDoc).studentUid, d.data() as AssignmentDoc])),
-      empty: new Map(),
+      empty: null,
     },
   );
   const completions = useScopedMap<CompletionDoc, { completed: boolean; completedAt: number | null; pending: boolean }>(
@@ -224,10 +265,12 @@ export function useRecordingLedger(
       };
     };
 
+    const loading = assignments === null;
+    const granted = assignments ?? new Map<string, AssignmentDoc>();
     const status = session.attendance;
     // Re-stating dueDate after the spread is what narrows the row to a
     // RequiredRow: the grant it came from always carries one.
-    const accountable: RequiredRow[] = [...assignments.values()]
+    const accountable: RequiredRow[] = [...granted.values()]
       .map((a) => ({ ...row(a.studentUid, a.dueDate, status[a.studentUid] ?? 'excused'), dueDate: a.dueDate }))
       // Not-yet-complete first, then by name. Every row here is excused, so
       // there is no longer a second attendance status to order within.
@@ -241,20 +284,29 @@ export function useRecordingLedger(
     // reads only ACTIVE assignments, so unenrolling a student or unpublishing the
     // recording drops them out of it while the session still says they were
     // excused — and they belong to neither present nor absent.
-    const lapsed = excused
-      .filter((uid) => !assignments.has(uid))
-      .map((uid) => row(uid, null, 'excused'))
-      .sort(byName);
+    // EMPTY UNTIL THE GRANTS ARRIVE. Both this group and `otherListeners` are
+    // defined by ABSENCE from `granted`, so before the first snapshot they are
+    // "everyone" — and each carries a notice stating a cause ("unenrolled, or
+    // this recording was unpublished") that has not happened. A section that is
+    // briefly missing is a loading screen; a section that briefly accuses the
+    // whole class of having lost access is not.
+    const lapsed = loading
+      ? []
+      : excused
+          .filter((uid) => !granted.has(uid))
+          .map((uid) => row(uid, null, 'excused'))
+          .sort(byName);
 
     // Anyone with real listening/completion who holds no current grant and is
     // not in the snapshot — e.g. excused and listening, then corrected out.
-    const known = new Set<string>([...assignments.keys(), ...present, ...absent, ...excused]);
+    const known = new Set<string>([...granted.keys(), ...present, ...absent, ...excused]);
     const otherUids = new Set<string>();
     for (const [uid, c] of completions.entries()) if (c.completed && !known.has(uid)) otherUids.add(uid);
     for (const uid of progress.keys()) if (!known.has(uid)) otherUids.add(uid);
-    const otherListeners = [...otherUids].map((uid) => row(uid, null, null));
+    const otherListeners = loading ? [] : [...otherUids].map((uid) => row(uid, null, null));
 
     return {
+      loading,
       accountable,
       attendees,
       absentees,
@@ -476,11 +528,12 @@ export function useAudit(courseId: string | null): AuditRow[] {
   return useLiveQuery<AuditRow[]>(
     () =>
       courseId === null
-        ? query(collection(db, COLLECTIONS.auditLog), orderBy('at', 'desc'))
+        ? query(collection(db, COLLECTIONS.auditLog), orderBy('at', 'desc'), limit(AUDIT_PAGE))
         : query(
             collection(db, COLLECTIONS.auditLog),
             where('courseId', '==', courseId),
             orderBy('at', 'desc'),
+            limit(AUDIT_PAGE),
           ),
     [courseId],
     {

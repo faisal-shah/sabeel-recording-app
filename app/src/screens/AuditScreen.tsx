@@ -1,7 +1,10 @@
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { AUDIT_PAGE, INSTITUTE_TIMEZONE, stampInZone } from '@sabeel/shared';
+import { useDecidedStaff } from '../staff';
+import { useStudents } from '../students';
 import { Empty, Grid, Notice, Screen } from '../components/ui';
 import { useAudit, type AuditRow } from '../ledger';
-import { useListenerError } from '../liveQuery';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -11,25 +14,55 @@ const t = getTheme();
  * passes null for the global view.
  */
 export function AuditScreen({ courseId, title }: { courseId: string | null; title: string }) {
-  const listenerError = useListenerError();
   const entries = useAudit(courseId);
+  /*
+   * NAMES, NOT UIDS — on the one screen whose whole job is "who did what".
+   *
+   * Every row read `by admin IeW87L…` over `uid=HV70w7jevZ1X5VgqucMt4v6xt2Ev`,
+   * which answers the question with a string nobody can match to a person
+   * without going to another screen and comparing prefixes. Both directories
+   * are already readable by everyone who can reach this screen — the ledger
+   * resolves student names the same way, and staff can list `staffUsers` — so
+   * the id was never the only thing available, just the only thing rendered.
+   *
+   * An id that resolves to nothing is still printed: a deleted account, or the
+   * `seed-admin` an import writes, is better shown as itself than as blank.
+   */
+  const staff = useDecidedStaff(true);
+  const students = useStudents(true);
+  const people = useMemo(
+    () =>
+      new Map<string, string>([
+        ...staff.map((r) => [r.uid, r.displayName] as const),
+        ...students.map((r) => [r.uid, r.displayName] as const),
+      ]),
+    [staff, students],
+  );
 
   return (
     <Screen title={title} subtitle="Every change, who made it and when" width="list">
-      {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {/* A handle for "the log rendered", which the layout sweep anchors on —
           this screen is a read-only list and has no control of its own to wait
           for. NAMED BY WHAT IT FOUND: anchoring on a wrapper around both states
           made a manager's course-scoped read failing closed indistinguishable
           from a course with no history, on a screen the sweep also excuses from
           the starvation guard. */}
+      {/* SAYS SO WHEN IT IS FULL. The query stops at `AUDIT_PAGE`, and a list
+          that simply ends reads as "this is the whole history" — which on the
+          one screen people consult to establish what happened is the wrong
+          answer given confidently. */}
+      {entries.length >= AUDIT_PAGE ? (
+        <Notice tone="info">
+          The most recent {AUDIT_PAGE} changes. Older history is kept but is not shown here.
+        </Notice>
+      ) : null}
       <View testID={entries.length === 0 ? 'audit-empty' : 'audit-list'}>
         {entries.length === 0 ? (
           <Empty>No audit entries yet.</Empty>
         ) : (
           <Grid min={330}>
             {entries.map((e) => (
-              <AuditCard key={e.id} entry={e} />
+              <AuditCard key={e.id} entry={e} people={people} />
             ))}
           </Grid>
         )}
@@ -38,20 +71,36 @@ export function AuditScreen({ courseId, title }: { courseId: string | null; titl
   );
 }
 
-function AuditCard({ entry: e }: { entry: AuditRow }) {
+/** Which target keys name a PERSON, and what to call them in the row. */
+const PERSON_TARGETS: Record<string, string> = {
+  studentUid: 'student',
+  uid: 'account',
+};
+
+function AuditCard({ entry: e, people }: { entry: AuditRow; people: Map<string, string> }) {
   const detail = e.detail ? Object.entries(e.detail).map(([k, v]) => `${k}: ${String(v)}`).join(' · ') : '';
   const targets = Object.entries(e.targets ?? {})
-    .map(([k, v]) => `${k}=${v}`)
-    .join(' ');
+    .map(([k, v]) =>
+      PERSON_TARGETS[k] ? `${PERSON_TARGETS[k]}: ${people.get(String(v)) ?? v}` : `${k}=${v}`,
+    )
+    .join(' · ');
+  // A name when the directory has one; the raw uid when it does not — a deleted
+  // account is still evidence, and a shortened id is worse than a full one when
+  // it is the only handle left.
+  const actor =
+    e.actorRole === 'system'
+      ? 'system'
+      : `${e.actorRole} ${people.get(e.actorUid) ?? e.actorUid}`;
   return (
     <View style={styles.row}>
       <View style={styles.head}>
         <Text style={styles.action}>{ACTION_LABELS[e.action] ?? e.action}</Text>
-        <Text style={styles.time}>{new Date(e.at).toLocaleString()}</Text>
+        {/* The institute's clock, not the reader's — see `stampInZone`. This
+            log is the record of when something happened, and a manager abroad
+            reading their own zone dates an override to the wrong day. */}
+        <Text style={styles.time}>{stampInZone(INSTITUTE_TIMEZONE, e.at)}</Text>
       </View>
-      <Text style={styles.by}>
-        by {e.actorRole === 'system' ? 'system' : `${e.actorRole} ${e.actorUid.slice(0, 6)}…`}
-      </Text>
+      <Text style={styles.by}>by {actor}</Text>
       {targets ? <Text style={styles.targets}>{targets}</Text> : null}
       {detail ? <Text style={styles.detail}>{detail}</Text> : null}
     </View>
@@ -65,6 +114,13 @@ function AuditCard({ entry: e }: { entry: AuditRow }) {
  * camelCase function name in a list of English sentences — `submitAttendance`
  * sat between "Created course" and "Changed recording status" for exactly that
  * reason. Adding an `auditedCall` means adding a line here.
+ *
+ * CHECKED, because the rule above was already broken in both directions and
+ * nothing noticed: every Zoom import rendered as `importZoomRecording`, while
+ * `assignCatchup` and `updateRecording` labelled actions no callable had
+ * written since the catch-up concept was removed.
+ * `functions/test/unit/auditLabels.test.ts` compares this map with the actions
+ * the server actually writes, in both directions.
  */
 const ACTION_LABELS: Record<string, string> = {
   createCohort: 'Created cohort',
@@ -83,10 +139,10 @@ const ACTION_LABELS: Record<string, string> = {
   createRecording: 'Created recording',
   deleteRecording: 'Deleted recording',
   finalizeRecordingUpload: 'Uploaded audio',
-  updateRecording: 'Edited recording',
   setRecordingStatus: 'Changed recording status',
   clearRecordingAudio: 'Removed audio',
-  assignCatchup: 'Assigned catch-up',
+  importZoomRecording: 'Imported from Zoom',
+  retryZoomImport: 'Retried a Zoom import',
   setStaffAccess: 'Changed staff access',
   overrideCompletion: 'Overrode completion',
   clearCompletionOverride: 'Removed override',

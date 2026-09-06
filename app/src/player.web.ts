@@ -29,16 +29,28 @@ export function createPlayer(events: PlayerEvents): Player {
   el.addEventListener('error', () =>
     events.onError(el.error ? `audio error ${el.error.code}` : 'audio error'),
   );
+  // The element pauses itself at the end of the media and when the browser's own
+  // media keys are used, neither of which goes through `playback.pause()`.
+  el.addEventListener('play', () => events.onPlayingChanged(true));
+  el.addEventListener('pause', () => events.onPlayingChanged(false));
 
   return {
     async load(url, startMs) {
       el.src = url;
-      // Seeking before metadata has loaded is silently dropped, so wait for it.
+      /*
+       * Seeking before metadata has loaded is silently dropped, so wait for it —
+       * but SETTLE ON FAILURE TOO. A request that stalls or 403s fires `error`
+       * and never `loadedmetadata`, so waiting on that alone left this promise
+       * pending for ever and the session stuck on "Preparing…" with no way to
+       * retry. The `error` listener above has already reported it; this only has
+       * to stop blocking.
+       */
       await new Promise<void>((resolve) => {
         if (el.readyState >= 1) return resolve();
         el.addEventListener('loadedmetadata', () => resolve(), { once: true });
+        el.addEventListener('error', () => resolve(), { once: true });
       });
-      if (startMs > 0) el.currentTime = startMs / 1000;
+      if (startMs > 0 && el.readyState >= 1) el.currentTime = startMs / 1000;
     },
     play: () => void el.play(),
     pause: () => el.pause(),

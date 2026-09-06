@@ -62,8 +62,23 @@ const STUDENT = 'stu1';
 const CLASSMATE = 'stu2';
 const CLASS_MINE = 'classMine';
 const CLASS_THEIRS = 'classTheirs';
-const SESS_MINE = 'sessMine';
-const SESS_THEIRS = 'sessTheirs';
+/*
+ * IDS THIS FILE ALONE USES, and the prefix is load-bearing.
+ *
+ * `rules.sessions.test.ts` seeded `sessions/sessMine`, and this file's
+ * `clearFirestore()` deletes it — which fires `onSessionWritten`, whose
+ * `reconcileAttendanceRecords` deletes every `attendanceRecords` row with that
+ * `sessionId`. The Functions emulator delivers that asynchronously, so it
+ * landed AFTER this file had seeded its own `stu1_sessMine`, and the first
+ * assertion read a document that had just been swept away by another file's
+ * cleanup. It failed about one run in five, always on the first test, always
+ * with a rules evaluation error on a null `resource` — which reads exactly like
+ * a broken rule.
+ *
+ * Anything a trigger keys on has to be unique per file, or the suite is timing.
+ */
+const SESS_MINE = 'attSessMine';
+const SESS_THEIRS = 'attSessTheirs';
 
 beforeEach(async () => {
   await testEnv.clearFirestore();

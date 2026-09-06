@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import {
   INSTITUTE_TIMEZONE,
   isOverdue,
@@ -7,16 +7,17 @@ import {
   todayInZone,
   type DueBucket,
 } from '@sabeel/shared';
-import { Button, Empty, Field, Grid, Notice, Row, Screen, SectionTitle } from '../components/ui';
+import { Button, Chips, Empty, Field, Grid, Notice, Row, Screen, SectionTitle } from '../components/ui';
 import {
+  LEDGER_FILTERS,
   overrideCompletion,
   clearCompletionOverride,
   useRecordingLedger,
+  type LedgerFilter,
   type LedgerRow,
   type RequiredRow,
 } from '../ledger';
 import { exportCsv } from '../exportCsv';
-import { useListenerError } from '../liveQuery';
 import { useCohortName, type CourseRow } from '../structure';
 import type { SessionRow } from '../sessions';
 import type { RecordingRow } from '../recordings';
@@ -24,7 +25,6 @@ import { getTheme, spacing } from '../theme';
 import { errorText } from '../errors';
 
 const t = getTheme();
-type Filter = 'all' | 'notComplete' | 'missed';
 
 /**
  * Recording ledger: the accountable roster for one recording, action-first.
@@ -40,16 +40,15 @@ export function RecordingLedgerScreen({
   session: SessionRow;
   cls: CourseRow;
 }) {
-  const listenerError = useListenerError();
   const today = todayInZone(INSTITUTE_TIMEZONE);
   // Reached from the cross-cohort library, where the course name alone is ambiguous.
   const cohortName = useCohortName()(cls.cohortId);
-  const { accountable, attendees, absentees, lapsed, otherListeners, rollup } = useRecordingLedger(
+  const { loading, accountable, attendees, absentees, lapsed, otherListeners, rollup } = useRecordingLedger(
     recording,
     session,
     today,
   );
-  const [filter, setFilter] = useState<Filter>('notComplete');
+  const [filter, setFilter] = useState<LedgerFilter>('notComplete');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,7 +92,6 @@ export function RecordingLedgerScreen({
       subtitle={cohortName ? `${cls.name} · ${cohortName}` : cls.name}
       width="list"
     >
-      {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
 
       <View style={styles.summary}>
@@ -110,21 +108,8 @@ export function RecordingLedgerScreen({
         <Stat label="Missed" value={rollup.missed} tone={rollup.missed > 0 ? 'danger' : undefined} />
       </View>
 
-      <View style={styles.chips}>
-        {(['notComplete', 'missed', 'all'] as Filter[]).map((f) => (
-          <Pressable
-            key={f}
-            testID={`ledger-filter-${f}`}
-            accessibilityRole="button"
-            aria-pressed={filter === f}
-            onPress={() => setFilter(f)}
-            style={[styles.chip, filter === f ? styles.chipOn : null]}
-          >
-            <Text style={[styles.chipText, filter === f ? styles.chipTextOn : null]}>
-              {f === 'notComplete' ? 'Not complete' : f === 'missed' ? 'Missed' : 'All'}
-            </Text>
-          </Pressable>
-        ))}
+      <View style={styles.toolbar}>
+        <Chips value={filter} testIdPrefix="ledger-filter" options={LEDGER_FILTERS} onChange={setFilter} />
         <View style={{ flex: 1 }} />
         <Button
           testID="ledger-export"
@@ -137,16 +122,21 @@ export function RecordingLedgerScreen({
 
       {rows.length === 0 ? (
         <Empty>
-          {/* An empty accountable list is answered before the filter is: with
-              nobody granted the recording at all, "everyone has completed this"
-              would be congratulating staff on nothing having happened. */}
-          {accountable.length === 0
-            ? lapsed.length > 0
-              ? 'Nobody holds this recording now — every grant from this session has lapsed. See below.'
-              : 'No one was excused from this session, so nobody has been granted this recording.'
-            : filter === 'missed'
-              ? 'Nobody missed the deadline — nice.'
-              : 'Everyone required has completed this — nice.'}
+          {/* WHAT IT KNOWS, IN ORDER. Until the grants arrive nothing below is
+              settled — and every sentence after this one is a conclusion about
+              a roster that has not loaded. An empty accountable list is then
+              answered before the filter is: with nobody granted the recording
+              at all, "everyone has completed this" would be congratulating
+              staff on nothing having happened. */}
+          {loading
+            ? 'Checking who holds this recording…'
+            : accountable.length === 0
+              ? lapsed.length > 0
+                ? 'Nobody holds this recording now — every grant from this session has lapsed. See below.'
+                : 'No one was excused from this session, so nobody has been granted this recording.'
+              : filter === 'missed'
+                ? 'Nobody missed the deadline — nice.'
+                : 'Everyone required has completed this — nice.'}
         </Empty>
       ) : (
         <Grid min={330}>
@@ -272,7 +262,26 @@ function LedgerRowCard({
   onRun: (key: string, fn: () => Promise<unknown>) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState(r.overrideReason ?? '');
+  /*
+   * EMPTY EVERY TIME IT OPENS, never prefilled from the existing override.
+   *
+   * The reason is required because it goes into the audit log as the
+   * justification for THIS action. Seeded with the reason that justified the
+   * original grant, `disabled={!reason.trim()}` was already satisfied the moment
+   * the editor opened, so "Remove override" could be pressed without typing
+   * anything — and the log recorded the removal as justified by the sentence
+   * that had justified the grant. The existing reason is on the row above
+   * either way ("Override: …"), so nothing is lost by asking again.
+   *
+   * `useState`'s initialiser runs once, so an abandoned draft also survived
+   * Cancel and re-armed both buttons on the next open. `close` is what both
+   * exits go through.
+   */
+  const [reason, setReason] = useState('');
+  const close = () => {
+    setReason('');
+    setOpen(false);
+  };
   const bucket = ledgerBucket(r.dueDate, r.completed, today);
 
   return (
@@ -316,7 +325,7 @@ function LedgerRowCard({
               onPress={() =>
                 onRun(`ov-${r.studentUid}`, async () => {
                   await overrideCompletion({ studentUid: r.studentUid, recordingId, completed: true, reason: reason.trim() });
-                  setOpen(false);
+                  close();
                 })
               }
             />
@@ -329,7 +338,7 @@ function LedgerRowCard({
               onPress={() =>
                 onRun(`ov-${r.studentUid}`, async () => {
                   await overrideCompletion({ studentUid: r.studentUid, recordingId, completed: false, reason: reason.trim() });
-                  setOpen(false);
+                  close();
                 })
               }
             />
@@ -344,12 +353,12 @@ function LedgerRowCard({
               onPress={() =>
                 onRun(`rm-${r.studentUid}`, async () => {
                   await clearCompletionOverride({ studentUid: r.studentUid, recordingId, reason: reason.trim() });
-                  setOpen(false);
+                  close();
                 })
               }
             />
           ) : null}
-          <Button label="Cancel" variant="quiet" onPress={() => setOpen(false)} />
+          <Button label="Cancel" variant="quiet" onPress={close} />
         </View>
       ) : (
         <View>
@@ -391,9 +400,18 @@ function statusStyle(bucket: DueBucket) {
   return styles.warn;
 }
 
+/**
+ * When a student last played the recording, in the institute's timezone.
+ *
+ * NOT `toLocaleDateString()`. This sits in a row beside a listen-by date that
+ * is a civil date in `INSTITUTE_TIMEZONE`, and the two have to be comparable:
+ * a play at 23:30 the night before a deadline dated to the morning after it —
+ * which is what the reader's own zone does further east — is the ledger giving
+ * the wrong answer to the only question it is asked.
+ */
 function fmtDate(ms: number | null): string {
   if (!ms) return '';
-  return new Date(ms).toLocaleDateString();
+  return todayInZone(INSTITUTE_TIMEZONE, ms);
 }
 
 const styles = StyleSheet.create({
@@ -426,27 +444,13 @@ const styles = StyleSheet.create({
   ok: { color: t.feedback.success },
   bad: { color: t.feedback.danger },
   warn: { color: t.feedback.warning },
-  chips: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginBottom: spacing(4), flexWrap: 'wrap' },
-  /*
-   * 44 tall, like every other target — see `LibraryScreen` — and carrying the
-   * same top margin the Button beside it does. `styles.btn`'s `marginTop` is a
-   * COLUMN affordance ("space above me when I follow something"); in a centred
-   * row it shifts the button's border box down by half of it, and the toolbar
-   * came out four pixels out of true.
-   */
-  chip: {
-    marginTop: spacing(2),
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingVertical: spacing(2),
-    paddingHorizontal: spacing(4),
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: t.border.strong,
+  toolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(2),
+    marginBottom: spacing(4),
+    flexWrap: 'wrap',
   },
-  chipOn: { backgroundColor: t.accent.base, borderColor: t.accent.base },
-  chipText: { fontSize: 13, fontWeight: '600', color: t.text.secondary },
-  chipTextOn: { color: t.accent.onAccent },
   row: {
     // Fills its grid cell, so a row of these ends level — and so an open
     // override editor stretches its neighbours instead of leaving a hole.

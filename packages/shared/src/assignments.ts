@@ -128,6 +128,38 @@ export function todayInZone(timeZone: string, now: number = Date.now()): string 
 }
 
 /**
+ * A moment in a timezone, as `YYYY-MM-DD HH:MM` on a 24-hour clock.
+ *
+ * THE INSTITUTE'S CLOCK, NOT THE READER'S — which is the whole reason this
+ * exists rather than `toLocaleString()`. Every date this app shows is a civil
+ * date in `INSTITUTE_TIMEZONE`: a session's date, a listen-by date, the
+ * rollover that closes access. A timestamp rendered in the viewer's zone sits
+ * beside those in the same list and answers a different question, so an
+ * override recorded at 23:30 the night before a deadline reads as the morning
+ * after it to anyone further east — on the one screen whose entire purpose is
+ * to be the record of what happened.
+ *
+ * THE SHAPE COMES FROM ASSEMBLING THE PARTS, not from the locale — unlike
+ * `todayInZone`, which formats directly and gets ISO out of `en-CA`. What the
+ * locale tag still decides here is the CALENDAR and the NUMERALS: the same
+ * instant is `1405-06-13` under `fa-IR` and `٢٠٢٦-٠٩-٠٤` under `ar-SA`. So it
+ * is pinned, and the tests assert the exact string rather than its shape.
+ */
+export function stampInZone(timeZone: string, ms: number): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(ms));
+  const at = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${at('year')}-${at('month')}-${at('day')} ${at('hour')}:${at('minute')}`;
+}
+
+/**
  * `date` shifted by whole calendar days, as `YYYY-MM-DD`.
  *
  * Parsed as UTC midnight for the same reason `daysUntilDue` is: this is civil

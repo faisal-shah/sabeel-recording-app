@@ -21,6 +21,7 @@ import {
   clearAudio,
   createRecordingDraft,
   finalizeRecording,
+  requireDeleteRights,
   validateCreateRecording,
   validateFinalize,
   validateSetStatus,
@@ -44,9 +45,10 @@ async function clearAll() {
 }
 
 let courseId = '';
+let cohortId = '';
 beforeEach(async () => {
   await clearAll();
-  const { id: cohortId } = await createCohortRecord(ADMIN, 'C');
+  ({ id: cohortId } = await createCohortRecord(ADMIN, 'C'));
   ({ id: courseId } = await createCourseRecord(ADMIN, { cohortId, name: 'K' }));
 });
 
@@ -96,7 +98,9 @@ describe('createRecordingDraft', () => {
     // Student-facing display copy is denormalized from the session.
     expect(d).toMatchObject({ title: 'Session 1', date: '2026-07-06', notes: '' });
     expect(d.audioPath).toBeNull(); // stays null until the upload is CONFIRMED
-    expect(d.cohortId).toBeTruthy();
+    // EXACT. `toBeTruthy` passed just as happily on `cohortId: session.courseId`
+    // — the denormalization it exists to check, copied from the wrong field.
+    expect(d.cohortId).toBe(cohortId);
     expect(audioPath).toBe(audioStoragePath(id));
     // The session points back at its recording (0..1).
     expect((await session(sessionId)).recordingId).toBe(id);
@@ -240,6 +244,90 @@ describe('applyDeleteRecording', () => {
     expect(await recExists(id)).toBe(false);
     expect(await depCount(id)).toBe(0);
     expect((await session(sessionId)).recordingId).toBeNull(); // session freed for a new recording
+  });
+
+  /*
+   * WHO MAY DESTROY LISTENING HISTORY — asked of the collections, not inferred
+   * from the recording's shape.
+   *
+   * `isEmptyDraft` was the whole gate, and it is a proxy that only holds for a
+   * recording that was NEVER published. `published → unpublished → draft` is a
+   * legal pair of moves, `clearAudio` accepts a draft, and the recording then
+   * looks exactly like one created five minutes ago while a term of assignments
+   * and completions still points at it. Four course-scoped calls in a row turned
+   * a manager into an admin for the one irreversible act in the product.
+   */
+  describe('requireDeleteRights', () => {
+    const manager = (uid: string) =>
+      ({ auth: { uid, token: { role: 'manager', status: 'active' } } }) as never;
+    const admin = () =>
+      ({ auth: { uid: ADMIN, token: { role: 'admin', status: 'active' } } }) as never;
+
+    /** The manager this course actually names, so only the recording is at issue. */
+    async function scopedManager(uid: string) {
+      await getFirestore()
+        .collection(COLLECTIONS.courses)
+        .doc(courseId)
+        .update({ managerUids: [uid] });
+      return manager(uid);
+    }
+
+    it('lets the manager who made an empty draft discard it', async () => {
+      const { id } = await newDraft();
+      const req = await scopedManager('mgr-1');
+      await expect(requireDeleteRights(req, await rec(id), id)).resolves.toBeUndefined();
+    });
+
+    it('refuses a manager once the draft has a single dependent row', async () => {
+      const { id } = await newDraft();
+      const req = await scopedManager('mgr-1');
+      await seedDeps(id);
+      await expect(requireDeleteRights(req, await rec(id), id)).rejects.toMatchObject({
+        code: 'permission-denied',
+      });
+      // And an admin still may — this is a question of WHO, not of whether.
+      await expect(requireDeleteRights(admin(), await rec(id), id)).resolves.toBeUndefined();
+    });
+
+    it('refuses a manager a recording walked back to an empty draft after publishing', async () => {
+      const id = await ready();
+      await applyRecordingStatus({ recordingId: id, status: 'published' });
+      await seedDeps(id); // what publishing fans out
+      await applyRecordingStatus({ recordingId: id, status: 'unpublished' });
+      await applyRecordingStatus({ recordingId: id, status: 'draft' });
+      await clearAudio(id);
+
+      const walkedBack = await rec(id);
+      // Indistinguishable by shape from a brand-new draft — which is the bug.
+      expect(walkedBack.audioPath).toBeNull();
+      expect(walkedBack.status).toBe('draft');
+
+      const req = await scopedManager('mgr-1');
+      await expect(requireDeleteRights(req, walkedBack, id)).rejects.toMatchObject({
+        code: 'permission-denied',
+      });
+    });
+
+    it('refuses a manager an archived recording outright', async () => {
+      const id = await ready();
+      await applyRecordingStatus({ recordingId: id, status: 'published' });
+      await applyRecordingStatus({ recordingId: id, status: 'archived' });
+      const req = await scopedManager('mgr-1');
+      await expect(requireDeleteRights(req, await rec(id), id)).rejects.toMatchObject({
+        code: 'permission-denied',
+      });
+    });
+
+    it('refuses a manager scoped to a DIFFERENT class even for an empty draft', async () => {
+      const { id } = await newDraft();
+      await getFirestore()
+        .collection(COLLECTIONS.courses)
+        .doc(courseId)
+        .update({ managerUids: ['someone-else'] });
+      await expect(requireDeleteRights(manager('mgr-1'), await rec(id), id)).rejects.toMatchObject({
+        code: 'permission-denied',
+      });
+    });
   });
 
   it('REFUSES a published recording and removes nothing (unpublish/archive first)', async () => {

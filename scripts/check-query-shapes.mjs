@@ -18,6 +18,7 @@
  * different fields, add the shape here in the same change.
  */
 import { createRequire } from 'node:module';
+import { AUDIT_PAGE } from '@sabeel/shared';
 
 // Resolved from the functions workspace, which already depends on the Admin SDK.
 // Adding it at the root would be a second copy of a large package for one
@@ -150,13 +151,19 @@ const shapes = [
     "assignments — a student's rows in a class (student ledger, manager)",
     () => db.collection('assignments').where('studentUid', '==', ID).where('courseId', '==', ID),
   ],
+  // Both carry AUDIT_PAGE, because both are sent that way: the audit log is the
+  // one collection here that only grows, and an unlimited live subscription to
+  // it is a download of every change ever made. A `limit` does not change which
+  // index a shape needs, so it is here to keep the list honest rather than to
+  // exercise anything new.
   [
     'auditLog — a class, newest first (manager audit view)',
-    () => db.collection('auditLog').where('courseId', '==', ID).orderBy('at', 'desc'),
+    () =>
+      db.collection('auditLog').where('courseId', '==', ID).orderBy('at', 'desc').limit(AUDIT_PAGE),
   ],
   [
     'auditLog — global, newest first (admin audit view)',
-    () => db.collection('auditLog').orderBy('at', 'desc'),
+    () => db.collection('auditLog').orderBy('at', 'desc').limit(AUDIT_PAGE),
   ],
   // ---- Phase 5c: recording-ledger reads ----
   //

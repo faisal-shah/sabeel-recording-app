@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { INSTITUTE_TIMEZONE, todayInZone } from '@sabeel/shared';
-import { Button, Card, Empty, Grid, Notice, Screen, Segmented } from '../components/ui';
+import { Button, Card, Empty, Grid, Screen, Segmented } from '../components/ui';
 import { useCourseAttendance } from '../ledger';
 import { exportCsv } from '../exportCsv';
-import { useListenerError } from '../liveQuery';
 import { useStudents } from '../students';
 import type { CourseRow } from '../structure';
 import { getTheme, spacing } from '../theme';
@@ -30,7 +29,6 @@ export function CourseAttendanceScreen({
   onOpenSession: (sessionId: string) => void;
   onOpenStudent: (studentUid: string) => void;
 }) {
-  const listenerError = useListenerError();
   const today = todayInZone(INSTITUTE_TIMEZONE);
   const report = useCourseAttendance(cls.id, today);
   const students = useStudents(true);
@@ -85,7 +83,6 @@ export function CourseAttendanceScreen({
       subtitle={`${report.sessionsWithAttendance} of ${report.totalSessions} sessions taken`}
       width="list"
     >
-      {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
 
       <View style={styles.toggleRow}>
         {/* The shared control, not a local twin. This one predates `Segmented`

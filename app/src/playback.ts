@@ -352,7 +352,16 @@ export function openPlayback(now: NowPlaying): void {
       persist();
     },
     onError: (message) => {
-      if (generation === gen) set({ error: message });
+      if (generation === gen) set({ error: message, playing: false });
+    },
+    onPlayingChanged: (playing) => {
+      // The lock screen, the notification controls, a phone call taking audio
+      // focus. `playback.play`/`pause` already set this optimistically, so this
+      // is only ever correcting it — never the other way round.
+      if (generation === gen && state.playing !== playing) {
+        if (!playing) lastTick = null;
+        set({ playing });
+      }
     },
   });
   player = p;

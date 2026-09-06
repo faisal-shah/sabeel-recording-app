@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { AppState, StyleSheet, View } from 'react-native';
 import {
   NOTIFICATION_DESCRIPTION,
   PUSH_DEVICE_MESSAGE,
@@ -10,7 +10,6 @@ import {
   type NotificationKind,
 } from '@sabeel/shared';
 import { Button, Card, Notice, Screen, SectionTitle, SwitchRow } from '../components/ui';
-import { useListenerError } from '../liveQuery';
 import { registerThisDevice, setNotificationPref, useNotificationPrefs } from '../notifications';
 import { canOpenPushSettings, openPushSettings, pushPromptState } from '../push';
 import { getTheme } from '../theme';
@@ -36,29 +35,46 @@ type DeviceState = 'checking' | 'ready' | 'canAsk' | 'blocked' | 'unavailable';
  * identical, and the second one is a lie.
  */
 export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent: boolean }) {
-  const listenerError = useListenerError();
   const prefs = useNotificationPrefs(uid);
   const [device, setDevice] = useState<DeviceState>('checking');
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /*
+   * ON EVERY RETURN TO THE APP, not only on mount.
+   *
+   * The blocked branch's only control is "Open settings", which sends people
+   * out to the OS — and permission is not re-askable from in here, so coming
+   * back is the whole of the recovery path. A mount-only check meant they
+   * returned to a screen still saying "blocked", with the one button that had
+   * just worked and nothing that would claim the token. `AppState`, not
+   * `useFocusEffect`: this screen never loses focus within the navigator,
+   * because the trip is out of the app entirely.
+   */
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      const state = await pushPromptState();
-      if (cancelled) return;
-      if (state !== 'granted') {
-        setDevice(state === 'default' ? 'canAsk' : state === 'denied' ? 'blocked' : 'unavailable');
-        return;
-      }
-      // Already permitted: claim the token silently so a device that granted
-      // permission in an earlier visit keeps receiving without being asked
-      // again.
-      const token = await registerThisDevice(uid, false).catch(() => null);
-      if (!cancelled) setDevice(token ? 'ready' : 'unavailable');
-    })();
+    const check = () =>
+      void (async () => {
+        const state = await pushPromptState();
+        if (cancelled) return;
+        if (state !== 'granted') {
+          setDevice(state === 'default' ? 'canAsk' : state === 'denied' ? 'blocked' : 'unavailable');
+          return;
+        }
+        // Already permitted: claim the token silently so a device that granted
+        // permission in an earlier visit — or in the settings app a moment ago —
+        // keeps receiving without being asked again.
+        const token = await registerThisDevice(uid, false).catch(() => null);
+        if (!cancelled) setDevice(token ? 'ready' : 'unavailable');
+      })();
+
+    check();
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') check();
+    });
     return () => {
       cancelled = true;
+      sub.remove();
     };
   }, [uid]);
 
@@ -98,7 +114,6 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
     // straight onto its own subtitle in secondary text, so the header bar's
     // "Notifications" was the only thing naming it — and that scrolls away.
     <Screen title="Notifications" subtitle="What this app may send you">
-      {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
 
       {device === 'canAsk' ? (

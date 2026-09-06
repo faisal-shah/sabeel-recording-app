@@ -2,7 +2,9 @@ rules_version = '2';
 
 // This bucket holds class audio. Clients NEVER read it through the Storage SDK:
 // playback goes through a 12-hour V4 signed URL minted by a callable that has
-// already checked enrolment, and signed URLs bypass these rules entirely.
+// already checked the student's active assignment and its listen-by date, and
+// signed URLs bypass these rules entirely. NOT enrolment — being marked excused
+// is the whole of the entitlement, and the assignment is what records it.
 //
 // So `read: false` is not a temporary state to be relaxed later — it is the
 // intended end state. There is exactly one hole, for staff uploading audio to a

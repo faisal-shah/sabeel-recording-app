@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ZoomImportRow } from '@sabeel/shared';
-import { Button, Card, Empty, Field, Notice, Screen } from '../components/ui';
+import { Button, Card, Chips, Empty, Field, Notice, Screen } from '../components/ui';
 import { DateField } from '../components/DateField';
 import { listZoomRecordings, importZoomRecording } from '../zoom';
 import type { SessionRow } from '../sessions';
@@ -18,6 +18,14 @@ function defaultFrom(): string {
 }
 
 type StatusFilter = 'available' | 'imported' | 'all';
+
+// Lower case, like the library's status filter — the other screen that narrows
+// a list by a state rather than by a phrase.
+const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: 'available', label: 'available' },
+  { value: 'imported', label: 'imported' },
+  { value: 'all', label: 'all' },
+];
 
 /**
  * The Zoom import picker, scoped to ONE session.
@@ -88,22 +96,8 @@ export function ZoomImportScreen({
       </Card>
 
       <Field label="Search by title" value={search} onChangeText={setSearch} placeholder="topic…" />
-      <View style={styles.chips}>
-        {(['available', 'imported', 'all'] as StatusFilter[]).map((s) => (
-          <Pressable
-            key={s}
-            testID={`zoom-filter-${s}`}
-            // One of a set, so `radio` — and with a role at all, which
-            // these chips had never had.
-            accessibilityRole="radio"
-            aria-checked={status === s}
-            accessibilityLabel={s}
-            onPress={() => setStatus(s)}
-            style={[styles.chip, status === s ? styles.chipOn : null]}
-          >
-            <Text style={[styles.chipText, status === s ? styles.chipTextOn : null]}>{s}</Text>
-          </Pressable>
-        ))}
+      <View style={styles.filter}>
+        <Chips value={status} testIdPrefix="zoom-filter" options={STATUS_FILTERS} onChange={setStatus} />
       </View>
 
       {/* ITS OWN ROW, AND ITS OWN SHAPE. This is an independent toggle, not a
@@ -193,20 +187,7 @@ function ZoomRow({
 }
 
 const styles = StyleSheet.create({
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginTop: spacing(2), marginBottom: spacing(2) },
-  // 44 TALL, like every other target in the app. A filter chip is a control
-  // people tap on a phone, and at 24px two wrapped rows of them sat a
-  // finger-width apart. The sweep reports small targets and never fails them,
-  // which is how four screens' worth stayed at half size.
-  chip: {
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingVertical: spacing(2),
-    paddingHorizontal: spacing(4),
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: t.border.strong,
-  },
+  filter: { marginTop: spacing(2), marginBottom: spacing(2) },
   toggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -226,9 +207,6 @@ const styles = StyleSheet.create({
   boxOn: { backgroundColor: t.accent.base, borderColor: t.accent.base },
   tick: { fontSize: 14, fontWeight: '700', color: t.accent.onAccent, lineHeight: 16 },
   toggleText: { fontSize: 14, color: t.text.primary },
-  chipOn: { backgroundColor: t.accent.base, borderColor: t.accent.base },
-  chipText: { fontSize: 12, fontWeight: '600', color: t.text.secondary },
-  chipTextOn: { color: t.accent.onAccent },
   title: { fontSize: 16, fontWeight: '600', color: t.text.primary },
   sub: { fontSize: 13, color: t.text.secondary, marginTop: 2, marginBottom: spacing(2) },
   imported: { fontSize: 14, color: t.feedback.success, fontWeight: '600', marginTop: spacing(2) },

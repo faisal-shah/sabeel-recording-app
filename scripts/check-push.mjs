@@ -20,8 +20,9 @@
  *      and loudly.
  *
  * The same call pins the pruning logic to reality: the code FCM returns for a
- * dead token is the first entry in DEAD_TOKEN_CODES — confirmed, not guessed
- * from documentation.
+ * dead token is one `functions/src/messaging.ts` would prune on — read out of
+ * that file, so it is confirmed rather than guessed from documentation or
+ * restated here.
  *
  * WHAT IT CANNOT DO is mint a browser token. Playwright's Chromium is the
  * open-source build, which ships without the Google API keys needed to reach
@@ -73,12 +74,36 @@ const res = await admin.messaging().sendEachForMulticast({
   notification: { title: 'reachability probe', body: 'never delivered to anyone' },
 });
 
+/*
+ * THE PRUNING CODES, READ FROM THE PRUNER — not restated here.
+ *
+ * The point of this probe is that the code FCM actually returns for a dead token
+ * is one the app would prune on. Comparing against a literal typed into this
+ * file proved only that the literal matched itself: drop
+ * `messaging/registration-token-not-registered` from `DEAD_TOKEN_CODES` and
+ * `isDeadToken` stops pruning the one code FCM really sends, while this script
+ * still printed "the send path is ready". `firebase-config.ts` is already read
+ * from source a few lines up for the same reason.
+ */
+const messagingSrc = readFileSync(new URL('functions/src/messaging.ts', ROOT), 'utf8');
+const deadCodes = [
+  ...(messagingSrc
+    .match(/const DEAD_TOKEN_CODES = new Set\(\[([\s\S]*?)\]\)/)?.[1]
+    .matchAll(/'([^']+)'/g) ?? []),
+].map((m) => m[1]);
+if (deadCodes.length === 0) {
+  failed = true;
+  console.log('  FAIL  DEAD_TOKEN_CODES is no longer readable from functions/src/messaging.ts');
+}
+
 const code = res.responses[0].error?.code;
-if (code === 'messaging/registration-token-not-registered') {
-  console.log('  ok    FCM authenticated us, and rejected the bogus token as it should');
+if (deadCodes.includes(code)) {
+  console.log(`  ok    FCM authenticated us, and rejected the bogus token as ${code}`);
+  console.log('        — a code isDeadToken() prunes on, so stale registrations are cleaned up');
 } else {
   failed = true;
   console.log(`  FAIL  unexpected answer from FCM: ${code ?? 'the bogus token was ACCEPTED'}`);
+  console.log(`        isDeadToken() prunes on: ${deadCodes.join(', ') || '(nothing)'}`);
   console.log('\n        An auth or permission code here means Cloud Messaging is off,');
   console.log('        or these credentials are not this project.');
 }

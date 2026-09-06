@@ -12,10 +12,9 @@ import {
   type DueBucket,
   type RecordingDoc,
 } from '@sabeel/shared';
-import { Empty, Grid, Notice, Screen } from '../components/ui';
+import { Empty, Grid, Screen } from '../components/ui';
 import { PushNudge } from '../components/PushNudge';
 import { db } from '../firebase';
-import { useListenerError } from '../liveQuery';
 import { captureError } from '../sentry';
 import { useMyAssignments, useMyCompletions } from '../completion';
 import { drainCompletionOutbox } from '../completionOutbox';
@@ -46,7 +45,6 @@ export function StudentHomeScreen({
   uid: string;
   onOpen: (recording: RecordingRow, cls: CourseRow, dueDate: string) => void;
 }) {
-  const listenerError = useListenerError();
   const assignments = useMyAssignments(uid);
   const completions = useMyCompletions(uid);
   const resolved = useResolvedRecordings(assignments.map((a) => a.recordingId));
@@ -120,14 +118,22 @@ export function StudentHomeScreen({
        */
       width="list"
       title="Your listening"
-      /* NOT "recordings you were excused from". Being excused is what grants
-         these — but read plainly it says "recordings you do not have to listen
-         to", which is the opposite of what this list is, and it borrows a
-         staff-side attendance word into the student's vocabulary. Say what the
-         list is for. */
-      subtitle="Classes to catch up on, soonest first"
+      /*
+       * NOT "recordings you were excused from". Being excused is what grants
+       * these — but read plainly it says "recordings you do not have to listen
+       * to", which is the opposite of what this list is, and it borrows a
+       * staff-side attendance word into the student's vocabulary.
+       *
+       * AND NOT "classes to catch up on", which was wrong twice over. Every row
+       * is one session's recording, not a class — the class name is the line
+       * under it. And "catch up" is what STAFF do about a latecomer (re-take the
+       * register, mark them excused, move the listen-by date), so the student's
+       * own standing list of required listening was borrowing the word for the
+       * exception. It also does not describe the Upcoming or Completed groups,
+       * which are two of the four this list has.
+       */
+      subtitle="Required listening, soonest first"
     >
-      {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
 
       {/* Top of the content, below the listener error only. Same place in all
           three apps: first thing after anything that needs acting on today. */}
@@ -169,7 +175,7 @@ export function StudentHomeScreen({
         groups
           .filter((g) => g.rows.length > 0)
           .map((g) => (
-            <View key={g.bucket} style={styles.group}>
+            <View key={g.bucket} testID={`group-${g.bucket}`} style={styles.group}>
               {/* No special treatment. Alarm red on the one group a student
                   can do nothing about — sitting over cards deliberately quieted
                   for the same reason — made one of four peer headings read as an

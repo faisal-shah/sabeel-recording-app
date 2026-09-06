@@ -51,8 +51,26 @@ export function createPlayer(events: PlayerEvents): Player {
 
   const player = createAudioPlayer(null);
 
+  let playing: boolean | null = null;
   const sub = player.addListener('playbackStatusUpdate', (status) => {
+    /*
+     * THE ERROR FIELD, WHICH NOTHING WAS READING. `onError` was reachable only
+     * from the audio-mode setup below, so a source that failed to load — the
+     * ordinary outcome of opening a lecture on a flaky connection — reported
+     * nothing at all. `load` does not await `replace`, so the session went
+     * `ready: true` with a fully enabled transport, no error notice, and a play
+     * button that did nothing; and `openPlayback`'s idempotency guard keys on
+     * `!state.error`, so leaving the screen and coming back took the
+     * early-return branch and could not retry. The only way out was the × on
+     * the docked bar.
+     */
+    if (status.error) events.onError(status.error);
     if (status.currentTime != null) events.onProgress(status.currentTime * 1000);
+    // Only on a CHANGE: this fires several times a second.
+    if (status.playing !== playing) {
+      playing = status.playing;
+      events.onPlayingChanged(status.playing);
+    }
     if (status.didJustFinish) events.onEnded();
   });
   const detach = () => sub.remove();
@@ -60,7 +78,22 @@ export function createPlayer(events: PlayerEvents): Player {
 
   void (async () => {
     try {
-      await setAudioModeAsync({ shouldPlayInBackground: true, playsInSilentMode: true });
+      /*
+       * `doNotMix` — EXCLUSIVE AUDIO FOCUS, and the default is not it.
+       *
+       * expo-audio defaults to `mixWithOthers`, which its own docs describe as
+       * "no audio focus is requested… best suited for sound effects, UI feedback,
+       * or short audio clips". A two-hour lecture is the opposite of that: it
+       * played over whatever else was going, did not duck or pause for a phone
+       * call, and had no claim on the transport the OS hands to the app that
+       * owns focus — which is the same focus `setActiveForLockScreen` needs for
+       * the lock-screen controls to bind.
+       */
+      await setAudioModeAsync({
+        shouldPlayInBackground: true,
+        playsInSilentMode: true,
+        interruptionMode: 'doNotMix',
+      });
       await requestNotificationPermissionsAsync();
       player.setActiveForLockScreen(true);
     } catch (e) {

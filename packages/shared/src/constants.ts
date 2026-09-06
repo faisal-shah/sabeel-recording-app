@@ -113,3 +113,22 @@ export const PRIVACY_URL = 'https://recordings.oursabeel.com/privacy';
  * real project.
  */
 export const QUEUE_SCOPE = { admin: 30, manager: 10 } as const;
+
+/**
+ * How many audit entries one screen reads.
+ *
+ * THE ONE COLLECTION IN THIS PRODUCT THAT ONLY EVER GROWS. Everything else a
+ * screen subscribes to is bounded by the institute — students, courses,
+ * sessions, a course's assignments — and gets smaller when a term is archived.
+ * The audit log is append-only by design ("never updated or deleted"), so a
+ * query with no limit is a live subscription to every change ever made,
+ * re-downloaded on every visit, growing for the life of the deployment. Three
+ * years of attendance submissions, publishes and overrides is tens of thousands
+ * of documents streamed to a phone to render the first screenful.
+ *
+ * 200 is roughly a term's activity for one course and several weeks across all
+ * of them — enough that "what happened recently" is answered on the page, and
+ * the screen says so when it is full rather than implying the log ends there.
+ * Anything older is a data question, not a screen question.
+ */
+export const AUDIT_PAGE = 200;

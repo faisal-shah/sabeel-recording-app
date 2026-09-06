@@ -31,8 +31,12 @@ export function Sheet({
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={styles.backdrop} onPress={onClose} focusable={false}>
-        {/* Absorbs taps so a press inside does not dismiss via the backdrop. */}
-        <Pressable style={styles.panel} onPress={() => {}}>
+        {/* Absorbs taps so a press inside does not dismiss via the backdrop.
+            The testID is what the layout sweep scopes to: RNW portals a Modal
+            out of the app root without hiding it, so a whole-document query
+            measures the SCREEN BEHIND the sheet — the panel would have to lose
+            its width cap entirely before anything noticed. */}
+        <Pressable testID="sheet-panel" style={styles.panel} onPress={() => {}}>
           <Text style={styles.title}>{title}</Text>
           <ScrollView
             style={styles.body}

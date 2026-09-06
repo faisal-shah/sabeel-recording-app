@@ -229,6 +229,18 @@ if (!PLAYER_MAX_WIDTH) throw new Error('the player column cap is no longer in Pl
 const COLUMN_CAPS = [PLAYER_MAX_WIDTH, CONTENT_MAX_WIDTH, LIST_MAX_WIDTH];
 
 /**
+ * The dialog's own cap — a different measurement from the screen columns, read
+ * from the component rather than restated.
+ *
+ * A sheet is not a column in a scroll view: it is a panel centred over one, and
+ * `Sheet.tsx` bounds it at a width narrower than every screen cap. So the six
+ * screens toured with a sheet OPEN are checked against this instead.
+ */
+const sheetSrc = await readFile(resolve(ROOT, 'app/src/components/Sheet.tsx'), 'utf8');
+const SHEET_MAX_WIDTH = Number(sheetSrc.match(/maxWidth:\s*(\d+)/)?.[1]);
+if (!SHEET_MAX_WIDTH) throw new Error('the panel width cap is no longer in Sheet.tsx');
+
+/**
  * The width the chrome changes shape at — read, like the caps, rather than
  * restated. The sweep has to straddle it or it silently stops exercising the
  * rail, which is half the layouts in the app.
@@ -541,6 +553,16 @@ const escapes = (page) =>
     };
     const label = (e) => (e.getAttribute('aria-label') || e.textContent || '').trim();
     /*
+     * WITHIN THE SHEET, when a sheet is open.
+     *
+     * react-native-web portals a `Modal` to the body and leaves the app root
+     * rendered and queryable underneath it, so a whole-document search finds the
+     * BACKGROUND screen's Back arrow and its tab bar — neither of which a person
+     * looking at a modal dialog can reach. A create sheet that lost its Cancel
+     * button entirely still passed.
+     */
+    const scope = document.querySelector('[data-testid="sheet-panel"]') ?? document;
+    /*
      * The header Back is an <a>, NOT a <button>.
      *
      * `PlatformPressable` renders `role="link"` whenever it has an `href`, and
@@ -550,7 +572,7 @@ const escapes = (page) =>
      * failing on its own query rather than on the thing it is checking.
      */
     const controls = [
-      ...document.querySelectorAll('[role="button"], [role="link"], button, a[href]'),
+      ...scope.querySelectorAll('[role="button"], [role="link"], button, a[href]'),
     ].filter(shown);
     return {
       // "Go back" when there is no previous title, "<Title>, back" when there
@@ -563,6 +585,9 @@ const escapes = (page) =>
       // it as its ONLY exit — and it has to be VISIBLE, like the others: a bar
       // rendered at zero height would otherwise satisfy "has a way out".
       nav: controls.some((e) => e.getAttribute('data-testid') === 'tab-more'),
+      // Whether this screen is a sheet at all, so the caller knows which
+      // question it just answered.
+      sheet: scope !== document,
     };
   });
 
@@ -582,6 +607,32 @@ const escapes = (page) =>
  */
 const contentColumn = (page) =>
   page.evaluate(() => {
+    /*
+     * THE PANEL, when a sheet is open — a different shape with a different rule.
+     *
+     * `Modal` is portaled to the body with the app root left rendered beneath
+     * it, and the sheet's own ScrollView is `flexGrow: 0` inside a 420px panel,
+     * so the largest-scroller-by-area sort always picked the SCREEN BEHIND THE
+     * SHEET. Six of this tour's visits exist precisely to measure a sheet, and
+     * all six were measuring the page they were opened from: a panel that lost
+     * its width cap and went full-bleed at 1440 produced no failure at all.
+     */
+    const panel = document.querySelector('[data-testid="sheet-panel"]');
+    if (panel) {
+      const box = panel.getBoundingClientRect();
+      // MEASURED off the backdrop, not restated: the gutter it holds the panel
+      // off the edges by is what "all the room there is" means at a width below
+      // the cap.
+      const pad = parseFloat(getComputedStyle(panel.parentElement).paddingLeft) || 0;
+      return {
+        sheet: true,
+        pad,
+        outerLeft: 0,
+        outerWidth: document.documentElement.clientWidth,
+        left: box.left,
+        width: box.width,
+      };
+    }
     const scrollers = [...document.querySelectorAll('div')].filter((el) => {
       const cs = getComputedStyle(el);
       return /auto|scroll/.test(cs.overflowY) && el.firstElementChild && el.clientHeight > 80;
@@ -604,6 +655,34 @@ const contentColumn = (page) =>
 function columnFault(col, caps) {
   if (!col) return 'no scrolling content column found';
   const { outerLeft, outerWidth, left, width } = col;
+  /*
+   * A SHEET IS BOUNDED AND CENTRED, not capped-or-full-bleed.
+   *
+   * It floats over the page rather than filling a scroll view, so the column
+   * rules below do not describe it: there is no "reach the cap" to satisfy, and
+   * the backdrop's padding means it is never full-bleed even on a phone. What it
+   * owes is that it stays inside its declared maximum, inside the viewport, and
+   * centred.
+   */
+  if (col.sheet) {
+    /*
+     * ITS CAP, OR ALL THE ROOM THERE IS — both directions, like the column
+     * checks below. Only the ceiling would let a panel that shrank to 200px on
+     * a laptop pass; only the floor would let one that lost its cap pass.
+     *
+     * `SHEET_MAX_WIDTH` is parsed out of `Sheet.tsx`, so this cannot judge
+     * whether 420 is a sensible dialog width — a cap raised to 2000 moves both
+     * sides of this comparison at once. That is `app/src/theme/layout.test.ts`'s
+     * job, and it is the same division of labour as `COLUMN_CAPS`: measurement
+     * here, argument there.
+     */
+    const expected = Math.min(SHEET_MAX_WIDTH, outerWidth - 2 * col.pad);
+    if (Math.abs(width - expected) > 2) {
+      return `sheet is ${Math.round(width)}px where ${Math.round(expected)}px was the room it had`;
+    }
+    const off = left - (outerWidth - width) / 2;
+    return Math.abs(off) > 2 ? `sheet sits ${Math.round(off)}px off centre` : '';
+  }
   const smallest = Math.min(...caps);
   const largest = Math.max(...caps);
   // Narrower than every cap: the column must fill it. Nothing to centre.
@@ -777,11 +856,18 @@ function visitor(page, tag, homeMarker, counter) {
     check(`${tag} / ${name}`, top.faults.length === 0, top.faults.join('; ').slice(0, 200));
 
     const out = await escapes(page);
+    // A sheet's only exit is its OWN dismiss — the Back arrow and the tab bar
+    // behind it are unreachable while the modal is up, and are no longer what
+    // this asks about. A tab root's exit is the bar; a pushed screen's is Back.
     const root = TAB_ROOTS.has(name);
     check(
       `${tag} / ${name} has a way out`,
-      root ? out.nav : out.back || out.cancel,
-      root ? 'a tab root with no navigation bar' : 'no Back in the header and no way to dismiss',
+      out.sheet ? out.cancel : root ? out.nav : out.back || out.cancel,
+      out.sheet
+        ? 'a sheet with nothing in it that dismisses the sheet'
+        : root
+          ? 'a tab root with no navigation bar'
+          : 'no Back in the header and no way to dismiss',
     );
 
     const fault = columnFault(await contentColumn(page), COLUMN_CAPS);

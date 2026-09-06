@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { KIND_ORDER, buildTodayQueue, queueScope } from './todayQueue';
-import type { RecordingDoc, SessionDoc } from '@sabeel/shared';
+import { DUE_SOON_DAYS, type RecordingDoc, type SessionDoc } from '@sabeel/shared';
 
 /**
  * The staff work queue's derivation.
@@ -113,6 +113,17 @@ describe('what becomes work', () => {
     expect(q.items[0].detail).toBe('Met 3 days ago.');
   });
 
+  /*
+   * A SESSION STILL TO COME does not need its audio yet, and the guard saying so
+   * had no test that reached it: the only future-dated fixture also had no
+   * attendance, so it returned two branches earlier and the missing-recording
+   * branch was never entered with a future date at all.
+   */
+  it('a session still to come is not asked for its audio', () => {
+    const q = build([session('s1', { metDaysAgo: -2 })]);
+    expect(q.items).toHaveLength(0);
+  });
+
   it('an archived session is not work at all', () => {
     const q = build([session('s1', { archived: true, attendanceSubmittedAt: null })]);
     expect(q.items).toHaveLength(0);
@@ -133,6 +144,30 @@ describe('what becomes work', () => {
     );
     expect(q.items[0].kind).toBe('closing');
     expect(q.items[0].detail).toBe('Access closes in 2 days.');
+  });
+
+  /*
+   * THE WINDOW ITSELF, at both edges — the one thing the fixtures around it
+   * could not pin.
+   *
+   * Every other "closing soon" case here uses a day comfortably inside or
+   * outside the week, so `left <= DUE_SOON_DAYS` could become `left <` — or the
+   * constant could become anything from 6 to 29 — with all of them still green.
+   * The shared copy of the same seven days IS pinned exactly
+   * (`packages/shared/test/assignments.test.ts`), which left this the free one.
+   */
+  it('includes the last day of the window and excludes the first day outside it', () => {
+    const inside = build(
+      [session('s1', { recordingId: 'r1', dueInDays: DUE_SOON_DAYS })],
+      [recording('r1', 'published')],
+    );
+    expect(inside.items.map((i) => i.kind)).toEqual(['closing']);
+
+    const outside = build(
+      [session('s1', { recordingId: 'r1', dueInDays: DUE_SOON_DAYS + 1 })],
+      [recording('r1', 'published')],
+    );
+    expect(outside.items).toHaveLength(0);
   });
 
   it('a deadline already past is not work — nothing can be done about it', () => {

@@ -9,6 +9,7 @@ import {
   hasRecordingAccess,
   canPlayNow,
   isOverdue,
+  stampInZone,
   unbreakableDate,
   todayInZone,
   type DueBucket,
@@ -32,6 +33,35 @@ describe('todayInZone', () => {
     expect(todayInZone('America/Chicago', Date.parse('2026-07-25T04:30:00Z'))).toBe('2026-07-24');
     // One hour later it has ticked over.
     expect(todayInZone('America/Chicago', Date.parse('2026-07-25T05:30:00Z'))).toBe('2026-07-25');
+  });
+});
+
+describe('stampInZone', () => {
+  it('reads as an ISO date and a 24-hour clock', () => {
+    expect(stampInZone('America/Chicago', Date.parse('2026-09-04T18:05:00Z'))).toBe(
+      '2026-09-04 13:05',
+    );
+  });
+
+  /*
+   * THE POINT OF THE FUNCTION. A play at 23:30 the night before a deadline is
+   * inside it; rendered in a reader's own zone further east it dates to the
+   * morning after, and the ledger says a student missed something they did not.
+   */
+  it('is the institute clock, not the reader’s', () => {
+    const lateNight = Date.parse('2026-09-05T04:30:00Z');
+    expect(stampInZone('America/Chicago', lateNight)).toBe('2026-09-04 23:30');
+    expect(stampInZone('Asia/Karachi', lateNight)).toBe('2026-09-05 09:30');
+  });
+
+  it('pads a single-digit hour rather than dropping to a 12-hour clock', () => {
+    expect(stampInZone('America/Chicago', Date.parse('2026-09-04T13:05:00Z'))).toBe(
+      '2026-09-04 08:05',
+    );
+    // Midnight is 00, not 24 — `hourCycle: 'h23'` rather than 'h24'.
+    expect(stampInZone('America/Chicago', Date.parse('2026-09-04T05:00:00Z'))).toBe(
+      '2026-09-04 00:00',
+    );
   });
 });
 

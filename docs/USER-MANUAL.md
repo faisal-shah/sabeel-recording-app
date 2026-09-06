@@ -509,7 +509,7 @@ student's own listening says. Every override, and every removal, is audited.
 ## 2.8 One student's ledger
 
 From a course's **Roster**, tap a student to see *their* view: the recordings
-they're required to catch up on in that course, each with its status, the same
+they're required to listen to in that course, each with its status, the same
 action-first filters, and its own **Export CSV**. It's the per-person counterpart
 to the per-recording ledger in 2.6 — the right screen when a parent or student
 asks "where do I stand?"
@@ -672,6 +672,11 @@ You can reach it two ways: **globally** from **More → Audit history** (admins,
 all courses), or **scoped to one course** from that course's page (managers see
 their own courses' history). It's there so that "who marked this complete, and
 why?" always has an answer.
+
+Times are the institute's, not your device's — the same clock as every **Listen
+by** date, so the two are comparable wherever you are reading from. The screen
+shows the most recent 200 changes and says so when it is full; nothing is
+deleted, and older history is still in the record.
 
 ## 3.4 Disable and archive — don't delete
 

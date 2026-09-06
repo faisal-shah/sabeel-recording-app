@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Empty, Grid, Notice, Screen } from '../components/ui';
-import { useListenerError } from '../liveQuery';
+import { Empty, Grid, Screen } from '../components/ui';
 import { useMyAttendance } from '../attendance';
 import { useCourse, useStudentEnrollments } from '../structure';
 import { getTheme, spacing } from '../theme';
@@ -23,7 +22,6 @@ export function StudentCoursesScreen({
   uid: string;
   onOpen: (courseId: string) => void;
 }) {
-  const listenerError = useListenerError();
   const enrollments = useStudentEnrollments(uid);
   const courseIds = useMemo(
     () => enrollments.filter((e) => e.active).map((e) => e.courseId),
@@ -37,7 +35,6 @@ export function StudentCoursesScreen({
       title="Your classes"
       subtitle="Your attendance and required listening, class by class"
     >
-      {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {/* IN A GRID, like every other collection. Asking for the list width and
           then stacking full-width rows is the worst of both: a card holding a
           class name and one caption line ran to 1114px with 640px of it empty,

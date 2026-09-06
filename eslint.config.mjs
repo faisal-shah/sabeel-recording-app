@@ -109,13 +109,21 @@ export default tseslint.config(
     plugins: { 'react-hooks': reactHooks },
     rules: {
       'react-hooks/rules-of-hooks': 'error',
-      // useLiveQuery is the app's subscription primitive and therefore the
-      // single most valuable thing to check — every live screen's freshness
-      // depends on its `deps` argument listing what `make` reads. The rule can
-      // only find the callback at argument 0 and the deps at argument 1, which
-      // is why useLiveQuery takes them in that order; with any other shape it
-      // reports "dependencies are unknown" and silently checks nothing.
-      'react-hooks/exhaustive-deps': ['error', { additionalHooks: '(useLiveQuery)' }],
+      // The app's subscription primitives, and therefore the single most
+      // valuable thing to check — every live screen's freshness depends on the
+      // `deps` argument listing what `make` reads. The rule can only find the
+      // callback at argument 0 and the deps at argument 1, which is why both
+      // hooks take them in that order; with any other shape it reports
+      // "dependencies are unknown" and silently checks nothing.
+      //
+      // BOTH NAMES, not just one. The pattern is matched against the callee, so
+      // `(useLiveQuery)` covered `useLiveQuery` alone — while `useLiveDocState`,
+      // whose own docblock states its argument order exists for this rule, was
+      // unchecked. Half a mechanical guard reads exactly like a whole one.
+      'react-hooks/exhaustive-deps': [
+        'error',
+        { additionalHooks: '(useLiveQuery|useLiveDocState)' },
+      ],
     },
   },
   {

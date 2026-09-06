@@ -243,7 +243,10 @@ skip the browser check.
   the run, yesterday's build stays on the device and every screenshot after it is
   a lie. Confirm with
   `adb shell dumpsys package com.sabeelinstitute.classrecordings | grep versionName`
-  against `app/app.json`.
+  against **`app/android/app/build.gradle`**, which is the file that produces it
+  — `android/` is committed, not prebuilt, so `app.json` does not feed it.
+  `functions/test/unit/appVersion.test.ts` asserts the two agree, so in practice
+  either will do; the gradle file is the one that cannot be wrong.
 - **A native debug build takes `EXPO_PUBLIC_*` from the environment that started
   METRO**, not from the APK. If a flag looks unset, restart Metro with `--clear`.
 

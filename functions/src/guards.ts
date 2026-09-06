@@ -48,10 +48,13 @@ export function requireAdmin(req: CallableRequest): string {
 /**
  * Staff authorization for one class: an admin, or a manager assigned to it.
  *
- * Server-side, and deliberately not expressible in security rules — rules gate
- * *reads*, but every write in this app goes through a callable, so this is where
- * "may you touch this class's roster?" is actually decided. Reads the class
- * fresh rather than trusting anything the caller sent.
+ * Server-side, and deliberately not expressible in security rules. Every write
+ * a STAFF member makes goes through a callable — the rules deny staff writes to
+ * every structural collection outright — so this is where "may you touch this
+ * class's roster?" is actually decided. (Students write four collections of
+ * their own directly; those are gated in `firestore.rules`, which is the right
+ * place for them, and none of them grants anything.) Reads the class fresh
+ * rather than trusting anything the caller sent.
  */
 export async function requireCourseScope(
   req: CallableRequest,

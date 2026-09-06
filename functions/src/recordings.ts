@@ -1,4 +1,4 @@
-import { HttpsError } from 'firebase-functions/v2/https';
+import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import { auditedCall } from './audited';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
@@ -310,6 +310,58 @@ const RECORDING_DEPENDENTS = [
 ] as const;
 
 /**
+ * Whether anything at all points at this recording — asked of the DATA.
+ *
+ * `isEmptyDraft` is a proxy for "there is nothing here to destroy", and the
+ * proxy is only sound for a recording that was NEVER published. It is not sound
+ * for one that was: `published → unpublished → draft` is a legal pair of
+ * transitions, `clearAudio` accepts a draft and nulls `audioPath`, and the
+ * recording is then indistinguishable by shape from one created five minutes
+ * ago — while every assignment, completion, listening-progress row and override
+ * from its term is still sitting there. Four course-scoped calls in a row turned
+ * a manager into an admin for the one irreversible act in the product.
+ *
+ * So the gate asks the collections instead. One document from each is enough,
+ * and the cost is only paid on the delete path.
+ */
+async function hasRecordingHistory(recordingId: string): Promise<boolean> {
+  const db = getFirestore();
+  const probes = await Promise.all(
+    RECORDING_DEPENDENTS.map((coll) =>
+      db.collection(coll).where('recordingId', '==', recordingId).limit(1).get(),
+    ),
+  );
+  return probes.some((q) => !q.empty);
+}
+
+/**
+ * The authorization for permanently deleting a recording, in one place.
+ *
+ * ADMIN-ONLY BECAUSE IT DESTROYS LISTENING HISTORY — the invariant in
+ * `CLAUDE.md` and the manual. The single exception is a draft that has none:
+ * whoever had the course scope to create it may discard it, which is what lets
+ * a manager clean up their own failed upload rather than leaving an unusable
+ * draft parked on the session until an admin appears.
+ *
+ * `applyDeleteRecording` itself authorizes NOTHING — it is the cascade, and
+ * `deleteSession` calls it too. That path is gated by `requireAdmin` at its own
+ * entry rather than by this function, because deleting a session destroys the
+ * class's attendance for that day as well; it used to check course scope alone,
+ * which made deleting the SESSION a way past everything below.
+ */
+export async function requireDeleteRights(
+  req: CallableRequest,
+  rec: RecordingDoc,
+  recordingId: string,
+): Promise<void> {
+  if (isEmptyDraft(rec) && !(await hasRecordingHistory(recordingId))) {
+    await requireCourseScope(req, rec.courseId);
+    return;
+  }
+  requireAdmin(req);
+}
+
+/**
  * PERMANENTLY delete a recording — the one destructive path (everything else is
  * archive/unpublish, which is reversible). Reclaiming storage is the only real
  * reason to reach for it. Refuses a live (published) recording: unpublish or
@@ -373,17 +425,7 @@ export const deleteRecording = auditedCall('deleteRecording', async (req, audit)
   const snap = await getFirestore().collection(COLLECTIONS.recordings).doc(d.recordingId).get();
   if (!snap.exists) throw new HttpsError('not-found', 'No such recording.');
   const rec = snap.data() as RecordingDoc;
-
-  // Permanent deletion is admin-only BECAUSE it destroys listening history. An
-  // empty draft has none to destroy (see `isEmptyDraft`), so discarding one is
-  // not the same act: whoever had the course scope to create it may discard it —
-  // which is what lets a manager clean up their own failed upload rather than
-  // leaving an unusable draft parked on the session until an admin appears.
-  if (isEmptyDraft(rec)) {
-    await requireCourseScope(req, rec.courseId);
-  } else {
-    requireAdmin(req);
-  }
+  await requireDeleteRights(req, rec, d.recordingId);
 
   const res = await applyDeleteRecording(d.recordingId);
   audit.courseId = res.courseId; // recordingId target is auto-picked from req.data

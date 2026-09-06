@@ -224,17 +224,31 @@ service cloud.firestore {
     // ---- Listening progress ----
     // Document id is `${studentUid}_${recordingId}`.
     match /listeningProgress/{progressId} {
-      // The ONLY client-written collection in this app, and the exception needs
-      // its reason recorded: a callable every 15 seconds per listening student
-      // is pure overhead, and the stakes are low. Listened time is audit
+      // ONE OF FOUR CLIENT-WRITTEN COLLECTIONS, and the first — the others are
+      // `completions` and `completionEvents` below, and a student's own device
+      // registrations. All four belong to a STUDENT and grant nothing; every
+      // structural write is still a callable. The exception needs its reason
+      // recorded: a callable every 15 seconds per listening student is pure
+      // overhead, and the stakes are low. Listened time is audit
       // EVIDENCE, not the gate — completion is student-attested and blocked
       // only if the student never played, so inflating this gains nothing that
       // letting the audio run would not.
       //
       // Everything privilege-adjacent is still denied: a student can only touch
       // their own row, and cannot change whose it is.
+      // THE DOCUMENT ID IS PART OF THE RULE, not just a convention the client
+      // happens to follow. Without this a student could create
+      // `<someone else's uid>_<recordingId>` carrying their OWN uid in the body:
+      // the create passes (`studentUid` is honestly theirs), and the rightful
+      // owner's first write is then an UPDATE whose `resource.data.studentUid`
+      // is somebody else — denied from every device, for ever, with
+      // `delete: if false` leaving no way back. A row that grants the writer
+      // nothing, and permanently silences another student.
       function mine() {
-        return isStudent() && request.resource.data.studentUid == request.auth.uid;
+        return isStudent()
+          && request.resource.data.studentUid == request.auth.uid
+          && progressId == request.resource.data.studentUid + '_'
+              + request.resource.data.recordingId;
       }
 
       // `resource` is NULL when the document does not exist, and dereferencing
@@ -280,15 +294,20 @@ service cloud.firestore {
 
     // ---- Completions ----
     // Document id is `${studentUid}_${recordingId}`. Current completion STATE,
-    // client-written — the second client-written collection, and for the same
-    // reason as listeningProgress: marking complete must work OFFLINE, which a
+    // client-written for the same reason as listeningProgress: marking complete must work OFFLINE, which a
     // callable cannot. The "never played" precondition is enforced in the app,
     // not here (planning decision #5): requiring the progress doc to exist would
     // false-reject a completion whose queued progress write has not yet synced.
     // Everything privilege-adjacent is still denied — self-only, no forging uid.
     match /completions/{completionId} {
+      // Id bound to content, for the same reason as `listeningProgress` above:
+      // otherwise one student can plant a row under another student's id and
+      // lock them out of marking that recording complete, permanently.
       function mineC() {
-        return isStudent() && request.resource.data.studentUid == request.auth.uid;
+        return isStudent()
+          && request.resource.data.studentUid == request.auth.uid
+          && completionId == request.resource.data.studentUid + '_'
+              + request.resource.data.recordingId;
       }
       allow get: if (isStudent()
           && (resource == null || resource.data.studentUid == request.auth.uid))
@@ -307,9 +326,27 @@ service cloud.firestore {
     // read their own; nothing may update or delete one, so the history cannot be
     // rewritten. Staff reading is the Phase 5 ledger.
     match /completionEvents/{eventId} {
+      /** The class a student's own grant for this recording belongs to. */
+      function grantedCourse(recordingId) {
+        return get(/databases/$(database)/documents/assignments/$(request.auth.uid + '_' + recordingId)).data.courseId;
+      }
+
+      // AUTO-IDS, so there is no id to bind — the shape has to be checked
+      // instead. Unvalidated, this accepted any `courseId`, any `recordingId`
+      // and any `action` from any student, and `update, delete: if false` makes
+      // whatever lands permanent: a forged row in a class the writer is not in,
+      // in the collection described here as the audit of every mark. Tying
+      // `courseId` to the student's OWN assignment for that recording settles
+      // both — the grant must exist, and the class is the grant's, not the
+      // caller's to choose. One `get`, on a path the caller already knows.
       allow create: if isStudent()
+        && request.resource.data.keys().hasOnly(
+             ['studentUid', 'recordingId', 'courseId', 'action', 'actor', 'at'])
         && request.resource.data.studentUid == request.auth.uid
-        && request.resource.data.actor == 'student';
+        && request.resource.data.actor == 'student'
+        && request.resource.data.action in ['complete', 'uncomplete']
+        && request.resource.data.at is int
+        && request.resource.data.courseId == grantedCourse(request.resource.data.recordingId);
       // Staff read a student's mark/unmark history for the ledger, class-scoped.
       allow get, list: if (isStudent() && resource.data.studentUid == request.auth.uid)
         || staffManagesCourse(resource.data.courseId);

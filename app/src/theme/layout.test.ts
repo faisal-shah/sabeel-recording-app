@@ -69,3 +69,11 @@ describe('the desktop breakpoint', () => {
     expect(WIDE_BREAKPOINT).toBeLessThanOrEqual(1024);
   });
 });
+
+/*
+ * THE DIALOG'S CAP IS ARGUED TOO, but not here: `Sheet.tsx` keeps its own
+ * maximum — deliberately, for the same reason the player keeps its 560 — so
+ * checking it means reading that file, and this workspace's tsconfig carries no
+ * node types. It lives in `functions/test/unit/dialogWidth.test.ts`, next to the
+ * repo's other cross-file readers.
+ */

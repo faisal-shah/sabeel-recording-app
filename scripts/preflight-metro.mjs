@@ -45,13 +45,22 @@ function cwdOf(pid) {
   }
 }
 
+/*
+ * FAILS CLOSED. `cwdOf` returns null when `/proc/<pid>/cwd` cannot be read —
+ * which on this machine is exactly the case of a process belonging to ANOTHER
+ * USER, so `cwd &&` dropped precisely the processes most likely to be foreign.
+ * That is the same shape as the `lsof` bug this file's own header describes: a
+ * guard whose failure mode is "all clear".
+ */
 const foreign = pidsOnPort(PORT)
   .map((pid) => ({ pid, cwd: cwdOf(pid) }))
-  .filter(({ cwd }) => cwd && !cwd.startsWith(APP_DIR));
+  .filter(({ cwd }) => cwd === null || !cwd.startsWith(APP_DIR));
 
 if (foreign.length > 0) {
   console.error(`\n✖ Port ${PORT} is held by a Metro from another project:\n`);
-  for (const { pid, cwd } of foreign) console.error(`    pid ${pid}  ${cwd}`);
+  for (const { pid, cwd } of foreign) {
+    console.error(`    pid ${pid}  ${cwd ?? '(cwd unreadable — another user’s process)'}`);
+  }
   console.error(
     `\n  The Android emulator reaches Metro at 10.0.2.2:${PORT}, so that server would\n` +
       `  serve ITS bundle to this app — the red screen you'd get is misleading.\n\n` +

@@ -25,8 +25,8 @@ and commit messages, and renaming them would strand every one of those.
 | 5b | Staff ledger reads + completion override | **complete** (2026-07-22) |
 | 5c | Ledger + library + audit UI | **complete** (2026-07-22) |
 | 5d | CSV export + polish | **complete** (2026-07-22) |
-| 4 | Assignments, progress, completion | not started |
-| 5 | Staff ledger, reporting, audit | not started |
+| 4 | Assignments, progress, completion | **complete** — see 4a–4d above |
+| 5 | Staff ledger, reporting, audit | **complete** — see 5a–5d above |
 | A | Excused-only access, with a deadline | **complete** (2026-08-14) |
 | B | The student's own attendance record | **complete** (2026-08-14) |
 | 6 | Zoom import | **built** — waiting on institute credentials and its first live import |

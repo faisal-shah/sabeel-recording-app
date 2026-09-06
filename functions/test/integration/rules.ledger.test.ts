@@ -107,6 +107,24 @@ describe('Phase 5 staff ledger reads', () => {
         await assertSucceeds(getDocs(collection(admin().firestore(), name)));
       });
 
+      /*
+       * A `get`, NOT A LIST — and the positive case, which was missing.
+       *
+       * `listeningProgress` and `completions` declare `get` and `list` as
+       * separate statements, and every staff assertion in this file was a
+       * `getDocs`. So the staff arm of `allow get` was covered only by the
+       * denial below: deleting `|| (resource != null &&
+       * staffManagesCourse(resource.data.courseId))` from it left this whole
+       * suite green while the ledger's per-row reads broke.
+       */
+      it('a manager reads a single row in their own class', async () => {
+        await assertSucceeds(getDoc(doc(mgrMine().firestore(), name, `${STUDENT}_${REC}`)));
+      });
+
+      it('an admin reads a single row', async () => {
+        await assertSucceeds(getDoc(doc(admin().firestore(), name, `${STUDENT}_${REC}`)));
+      });
+
       it('a manager cannot read another class’s row', async () => {
         await assertFails(getDoc(doc(mgrTheirs().firestore(), name, `${STUDENT}_${REC}`)));
       });

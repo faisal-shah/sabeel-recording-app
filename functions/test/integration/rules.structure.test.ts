@@ -329,13 +329,19 @@ describe('enrollments', () => {
 
 describe('query cost: the arm-ordering property', () => {
   /**
-   * These two are the reason the enrollments rule is ordered the way it is.
+   * These two are the reason the enrollments rule is SHAPED the way it is.
    *
    * Firestore caps document-access calls per query. The staff arm resolves a
    * class get() from each row's data, so it is only affordable when every row
    * shares one courseId — which a roster query guarantees and a student's
-   * cross-class query does not. If the zero-read student arm were not first,
-   * the second test here would fail once a student is in enough courses.
+   * cross-class query does not.
+   *
+   * NOT the ORDER of the arms, which this docblock used to claim: `&&`
+   * short-circuits, so the `isStaff() &&` guard is what keeps a student's
+   * cross-class query read-free, and reordering the arms leaves both of these
+   * green. `firestore.rules` records the same finding, and records that it was
+   * measured. Read-free arms are still written first as defence in depth — but
+   * the property under test here is the ROLE GUARD.
    *
    * Both are sized past the limit deliberately: at three rows they pass either
    * way, which is exactly how this ships broken.

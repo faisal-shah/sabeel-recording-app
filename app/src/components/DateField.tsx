@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRoomy } from '../useWidth';
@@ -22,6 +22,30 @@ interface DateFieldProps {
 export function DateField({ label, value, onChange }: DateFieldProps) {
   const roomy = useRoomy();
   const [show, setShow] = useState(false);
+
+  /*
+   * STABLE HANDLERS, or the open dialog resets itself.
+   *
+   * `DateTimePicker`'s Android effect lists `onValueChange` and `onDismiss` in
+   * its dependencies and calls `DateTimePickerAndroid.open()` again when either
+   * changes — and the library's own note says a presented dialog ignores every
+   * updated prop EXCEPT `value`. So an inline arrow here meant any re-render of
+   * the parent while the calendar was open re-opened it at `value`, throwing
+   * away whatever month the person had navigated to. A screen with a request in
+   * flight re-renders on its own; the Zoom import's mount-effect load is enough
+   * to do it while its From picker is up.
+   *
+   * The ref is what keeps the identity constant regardless of what the PARENT
+   * passes: `onChange` is an inline arrow at most call sites, so a `useCallback`
+   * depending on it would be no more stable than the arrow it replaced.
+   */
+  const latestChange = useRef(onChange);
+  latestChange.current = onChange;
+  const handleValue = useCallback((_event: unknown, date?: Date) => {
+    setShow(false);
+    if (date) latestChange.current(toYmd(date));
+  }, []);
+  const handleDismiss = useCallback(() => setShow(false), []);
   // Parse as LOCAL midnight so the picker opens on the stored day; a due date is
   // a plain calendar date, never a UTC instant.
   const current = value ? new Date(`${value}T00:00:00`) : new Date();
@@ -57,12 +81,9 @@ export function DateField({ label, value, onChange }: DateFieldProps) {
           mode="date"
           // onValueChange fires on OK with the chosen date; onDismiss on cancel.
           // (Replaces the deprecated single onChange.) Either way, unmount the
-          // dialog by clearing `show`.
-          onValueChange={(_event, date) => {
-            setShow(false);
-            if (date) onChange(toYmd(date));
-          }}
-          onDismiss={() => setShow(false)}
+          // dialog by clearing `show`. Both are memoised — see above.
+          onValueChange={handleValue}
+          onDismiss={handleDismiss}
         />
       ) : null}
     </View>

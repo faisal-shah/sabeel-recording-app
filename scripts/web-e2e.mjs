@@ -808,8 +808,22 @@ check('the player reflects completion and offers unmark', true);
 // something still to do) and joins the grouped list under Completed.
 await goHome(student);
 await student.getByTestId('task-Session 1').waitFor({ timeout: 8000 });
-const homeText = await bodyText(student);
-check('the student home moves the recording to Completed', /Completed/.test(homeText));
+/*
+ * THE GROUP, not the word.
+ *
+ * `/Completed/` over the page text could only ever match the row's own chip:
+ * the heading is `textTransform: 'uppercase'`, so it renders as COMPLETED and
+ * the regex never saw it. The chip is present the moment the mark lands, so a
+ * recording that stayed in "Due soon" — the regression this names — passed.
+ * The group carries a testID for exactly this; asking whether the row is
+ * INSIDE it is the actual claim.
+ */
+const completedGroup = student.getByTestId('group-done');
+await completedGroup.waitFor({ timeout: 8000 });
+check(
+  'the student home moves the recording to Completed',
+  await completedGroup.getByTestId('task-Session 1').isVisible(),
+);
 await shot(student, '14-home-completed');
 
 // ---------------------------------------- the student's own attendance record --

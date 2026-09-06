@@ -22,6 +22,18 @@ emulator — not your diff.
 | `npm run test:screens` | The multi-width layout sweep — starts its own emulators and dev server (see below) |
 | `npm run web:export -w @sabeel/app` | The web bundle that actually ships |
 | `scripts/emulator.sh headless` | Boots the `tb_emu` AVD with no window |
+| `npm run check:queries` | **Against the REAL project.** Every query shape the app sends, checked for a missing composite index |
+| `npm run check:push` | **Against the REAL project.** FCM credentials, the VAPID key, and that the code FCM returns for a dead token is one the app prunes on |
+
+The last two are **pre-release checks, not part of the loop**: both authenticate
+against production with the Admin SDK, so neither can run in CI or against the
+emulators. `check:queries` exists because the Firestore emulator builds indexes
+on demand and never returns `FAILED_PRECONDITION` — every query passes locally
+whether `firestore.indexes.json` contains anything at all, which is exactly how
+this repo once shipped an empty index file and two admin screens that failed the
+moment a real user opened them. Run both before a release, and `check:queries`
+again whenever a `where` + `orderBy` pair changes.
+
 
 ## Setting up a machine
 
@@ -183,14 +195,11 @@ Two more things that cost time here:
   element and hang until timeout. `innerText()` is safe for assertions because it
   returns only visible text.
 
-  **`getByTestId` is not the cure, and this suite's helpers do not yet have it.**
-  A testID selector is plain CSS and matches inside a `display:none` subtree just
-  as happily; only `.filter({ visible: true })` actually excludes the screen
-  underneath. `tap()` and `sawText()` here take no visible filter, which is the
-  shape that fails the sibling time-tracker's equivalent suite about one run in
-  two. `scripts/screens-e2e.mjs` routes every locator through helpers that carry
-  the filter; porting the same two lines into `tap()`/`sawText()` is the fix, and
-  wants one full run of `npm run test:e2e` behind it before being trusted.
+  **`getByTestId` is not the cure.** A testID selector is plain CSS and matches
+  inside a `display:none` subtree just as happily; only `.filter({ visible: true })`
+  actually excludes the screen underneath. Both suites now route every locator
+  through helpers that carry the filter — `tap()` and `sawText()` in each file —
+  which is what makes a wait fail on the app rather than on document order.
 
 ## The screens sweep
 
@@ -288,9 +297,8 @@ that it is good.
   on screen". `getByRole` happens to be immune because role selectors skip
   `display:none` subtrees the way a screen reader does; `getByTestId` is a plain
   CSS attribute selector and is **not**. Diagnosed in the sibling time-tracker's
-  flow suite, at clean HEAD, failing about one run in two. **`web-e2e.mjs` still
-  carries this shape** — its `tap()` and `sawText()` helpers (lines 152–159) take
-  no visible filter; see the note under "The e2e harness" above.
+  flow suite, at clean HEAD, failing about one run in two. Both suites' `tap()`
+  and `sawText()` helpers carry `.filter({ visible: true })` for this reason.
 - **The header Back is an `<a>`, not a `<button>`.** `PlatformPressable` renders
   `role="link"` when it has an `href`, and the navigator gives it one because
   this app has a linking config. A query for buttons alone reports every pushed

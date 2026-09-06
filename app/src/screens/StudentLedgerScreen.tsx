@@ -1,19 +1,14 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { INSTITUTE_TIMEZONE, isOverdue, todayInZone, unbreakableDate } from '@sabeel/shared';
-import { Button, Empty, Grid, Notice, Screen } from '../components/ui';
-import { useStudentLedger, type StudentLedgerItem } from '../ledger';
+import { Button, Chips, Empty, Grid, Screen } from '../components/ui';
+import { LEDGER_FILTERS, useStudentLedger, type LedgerFilter, type StudentLedgerItem } from '../ledger';
 import { useCourseRecordings } from '../recordings';
 import { exportCsv } from '../exportCsv';
-import { useListenerError } from '../liveQuery';
 import type { CourseRow } from '../structure';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
-// "Missed", never "overdue": once the deadline passes access has closed, so the
-// work is not still outstanding. The word matches the recording ledger, the
-// course detail, the student's own home and the CSV export.
-type Filter = 'all' | 'notComplete' | 'missed';
 
 /** One student's required listening in one course. */
 export function StudentLedgerScreen({
@@ -25,12 +20,11 @@ export function StudentLedgerScreen({
   studentName: string;
   cls: CourseRow;
 }) {
-  const listenerError = useListenerError();
   const today = todayInZone(INSTITUTE_TIMEZONE);
   const items = useStudentLedger(studentUid, cls.id);
   const recordings = useCourseRecordings(cls.id);
   const titleById = useMemo(() => new Map(recordings.map((r) => [r.id, r.title])), [recordings]);
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<LedgerFilter>('all');
 
   const rows = useMemo(() => {
     const withTitle = items.map((it) => ({ ...it, title: titleById.get(it.recordingId) ?? it.recordingId }));
@@ -47,26 +41,10 @@ export function StudentLedgerScreen({
 
   return (
     <Screen title={studentName} subtitle={`${cls.name} · required listening`} width="list">
-      {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
-      <View style={styles.chips}>
-        {/* The same order as the recording ledger's, which is the other screen
-            with these three words on it. */}
-        {(['notComplete', 'missed', 'all'] as Filter[]).map((f) => (
-          <Pressable
-            key={f}
-            testID={`student-filter-${f}`}
-            // One of a set, so `radio` — and with a role at all, which
-            // these chips had never had.
-            accessibilityRole="radio"
-            aria-checked={filter === f}
-            onPress={() => setFilter(f)}
-            style={[styles.chip, filter === f ? styles.chipOn : null]}
-          >
-            <Text style={[styles.chipText, filter === f ? styles.chipTextOn : null]}>
-              {f === 'notComplete' ? 'Not complete' : f === 'missed' ? 'Missed' : 'All'}
-            </Text>
-          </Pressable>
-        ))}
+      <View style={styles.toolbar}>
+        {/* The same options object as the recording ledger's, not a second copy
+            of the same three words in the same order. */}
+        <Chips value={filter} testIdPrefix="student-filter" options={LEDGER_FILTERS} onChange={setFilter} />
         <View style={{ flex: 1 }} />
         <Button testID="student-export" label="Export CSV" variant="secondary" disabled={rows.length === 0} onPress={exportRows} />
       </View>
@@ -112,26 +90,13 @@ function styleFor(r: StudentLedgerItem, today: string) {
 }
 
 const styles = StyleSheet.create({
-  chips: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginBottom: spacing(4), flexWrap: 'wrap' },
-  // 44 TALL, like every other target in the app. A filter chip is a control
-  // people tap on a phone, and at 24px two wrapped rows of them sat a
-  // finger-width apart. The sweep reports small targets and never fails them,
-  // which is how four screens' worth stayed at half size.
-  chip: {
-    // The same top margin the Export button beside it carries — see the note in
-    // `RecordingLedgerScreen`. Without it this toolbar sat four pixels out.
-    marginTop: spacing(2),
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingVertical: spacing(2),
-    paddingHorizontal: spacing(4),
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: t.border.strong,
+  toolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(2),
+    marginBottom: spacing(4),
+    flexWrap: 'wrap',
   },
-  chipOn: { backgroundColor: t.accent.base, borderColor: t.accent.base },
-  chipText: { fontSize: 13, fontWeight: '600', color: t.text.secondary },
-  chipTextOn: { color: t.accent.onAccent },
   row: {
     // Fills the grid cell it is given, so a row of these ends level instead
     // of ragged with its actions at three different heights.
