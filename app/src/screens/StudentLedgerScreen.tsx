@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { INSTITUTE_TIMEZONE, isOverdue, todayInZone } from '@sabeel/shared';
+import { INSTITUTE_TIMEZONE, isOverdue, todayInZone, unbreakableDate } from '@sabeel/shared';
 import { Button, Empty, Grid, Notice, Screen } from '../components/ui';
 import { useStudentLedger, type StudentLedgerItem } from '../ledger';
 import { useCourseRecordings } from '../recordings';
@@ -103,7 +103,7 @@ function statusLabel(r: StudentLedgerItem, today: string): string {
   if (isOverdue(r.dueDate, today)) return 'Missed';
   // "Listen by", the same words the student sees on their own screens — not a
   // staff-only synonym for the same date.
-  return `Listen by ${r.dueDate}`;
+  return `Listen by ${unbreakableDate(r.dueDate)}`;
 }
 function styleFor(r: StudentLedgerItem, today: string) {
   if (r.completed) return styles.ok;

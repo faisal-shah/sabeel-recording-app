@@ -220,6 +220,18 @@ async function more(page, option) {
 
 const shot = (page, name) => page.screenshot({ path: `${SHOTS}/${name}.png` });
 
+/**
+ * A page's visible text, with non-breaking punctuation normalised.
+ *
+ * Dates inside a sentence are rendered with non-breaking hyphens so a narrow
+ * card cannot split "listen by 2026-" from "09-26" (`unbreakableDate`). They
+ * look identical and read identically; they are simply not the characters an
+ * assertion types. Normalising here keeps every check written the way a person
+ * would write the date.
+ */
+const bodyText = async (page) =>
+  (await page.locator('body').innerText()).replace(/\u2011/g, '-').replace(/\u00A0/g, ' ');
+
 rmSync(SHOTS, { recursive: true, force: true });
 mkdirSync(SHOTS, { recursive: true });
 ensureAudioFixture();
@@ -229,7 +241,7 @@ await reset();
 console.log('\nIdentity');
 const admin = await newSession();
 await shot(admin, '01-signin');
-check('sign-in screen renders', (await admin.locator('body').innerText()).includes('Sign in with Google'));
+check('sign-in screen renders', (await bodyText(admin)).includes('Sign in with Google'));
 
 await tap(admin, 'dev-signin-first-admin');
 await sawText(admin, 'Waiting for approval');
@@ -306,7 +318,7 @@ await outsiderDevRow.waitFor({ state: 'hidden', timeout: 30000 }).catch(() => {}
 await outsiderDevRow.waitFor({ state: 'visible', timeout: 30000 }).catch(() => {});
 check(
   'an off-domain sign-in is deleted and lands back at sign-in',
-  (await outsider.locator('body').innerText()).includes('Emulator sign-in'),
+  (await bodyText(outsider)).includes('Emulator sign-in'),
 );
 
 // A stranger self-registering with email/password must also be deleted.
@@ -410,7 +422,7 @@ await admin.goto(courseUrl, { waitUntil: 'domcontentloaded' });
 await admin.waitForTimeout(5000);
 check(
   'a course URL opened cold renders that course',
-  (await admin.locator('body').innerText()).toLowerCase().includes('hikam foundations'),
+  (await bodyText(admin)).toLowerCase().includes('hikam foundations'),
   path(),
 );
 // A URL whose subject is gone must SAY so. The screens resolve their subject
@@ -422,7 +434,7 @@ await admin.goto(`${WEB}courses/no-such-course-id`, { waitUntil: 'domcontentload
 await admin.waitForTimeout(6000);
 check(
   'a URL pointing at something deleted says so instead of loading for ever',
-  (await admin.locator('body').innerText()).toLowerCase().includes('not available'),
+  (await bodyText(admin)).toLowerCase().includes('not available'),
 );
 
 // Leave the browser back on the cohort, where the next section starts from.
@@ -458,7 +470,7 @@ await mgr.getByTestId('course-open-Hikam Foundations').waitFor({ timeout: 20000 
 await mgr.waitForTimeout(1500);
 // innerText returns only VISIBLE text, so retained nodes from the previous
 // screen cannot make this pass spuriously.
-const mgrSees = await mgr.locator('body').innerText();
+const mgrSees = await bodyText(mgr);
 // These two are UI checks, NOT security checks, and the distinction matters.
 // useMyCourses() filters with array-contains in the QUERY, so this list would
 // look correct even if the rule let any staff member read any course — verified
@@ -535,7 +547,7 @@ check('a create sheet closes itself on success', true);
  */
 await goHome(admin);
 await admin.getByTestId('tab-today-badge').waitFor({ timeout: 20000 });
-const queueText = await admin.locator('body').innerText();
+const queueText = await bodyText(admin);
 check(
   'Today counts a session whose attendance is not taken, and names it',
   (await admin.getByTestId('tab-today-badge').innerText()).trim() === '1' &&
@@ -573,7 +585,7 @@ check(
   'the blocking count clears once attendance is submitted',
   (await admin.getByTestId('tab-today').count()) === 1 &&
     (await admin.getByTestId('tab-today-badge').count()) === 0,
-  (await admin.locator('body').innerText()).replace(/\n+/g, ' | ').slice(0, 160),
+  (await bodyText(admin)).replace(/\n+/g, ' | ').slice(0, 160),
 );
 // Back to the session — the upload continues from there.
 await openHikam(admin);
@@ -796,7 +808,7 @@ check('the player reflects completion and offers unmark', true);
 // something still to do) and joins the grouped list under Completed.
 await goHome(student);
 await student.getByTestId('task-Session 1').waitFor({ timeout: 8000 });
-const homeText = await student.locator('body').innerText();
+const homeText = await bodyText(student);
 check('the student home moves the recording to Completed', /Completed/.test(homeText));
 await shot(student, '14-home-completed');
 
@@ -810,7 +822,7 @@ await tap(student, 'tab-classes');
 await student.getByTestId('myclass-Hikam Foundations').waitFor({ timeout: 20000 });
 // innerText returns RENDERED text, and SectionTitle uppercases via CSS — so this
 // compares case-insensitively rather than against the source string.
-const classesText = (await student.locator('body').innerText()).toLowerCase();
+const classesText = (await bodyText(student)).toLowerCase();
 check(
   'a student sees their own classes — the course doc listener is permitted',
   classesText.includes('hikam foundations'),
@@ -827,7 +839,7 @@ await student.getByTestId('attendance-Session 1').waitFor({ timeout: 20000 });
  * kind of race that passes on a fast day and fails on a slow one.
  */
 await sawText(student, 'Recording required · completed', 20000);
-const recordText = await student.locator('body').innerText();
+const recordText = await bodyText(student);
 // Their own mark, out of a session document they can never read: this can only
 // have come from the attendanceRecords projection the trigger wrote.
 check(
@@ -907,7 +919,7 @@ await tap(admin, 'recording-ledger');
 await admin.getByTestId('ledger-filter-all').waitFor({ timeout: 10000 });
 await tap(admin, 'ledger-filter-all');
 await admin.waitForTimeout(1000);
-let ledgerText = await admin.locator('body').innerText();
+let ledgerText = await bodyText(admin);
 check(
   'the recording ledger lists the accountable roster (Fatima + Bilal, both absent)',
   /Fatima Ahmed/.test(ledgerText) && /Bilal Khan/.test(ledgerText),
@@ -941,7 +953,7 @@ check(
 
 await tap(admin, 'ledger-filter-all');
 await admin.waitForTimeout(1000);
-ledgerText = await admin.locator('body').innerText();
+ledgerText = await bodyText(admin);
 check(
   'the overridden student now shows Completed (override) on the ledger',
   /Completed \(override\)/.test(ledgerText),
@@ -982,7 +994,7 @@ await tap(mgr, 'recording-ledger');
 await mgr.getByTestId('ledger-filter-all').waitFor({ timeout: 10000 });
 await tap(mgr, 'ledger-filter-all');
 await mgr.waitForTimeout(1500);
-const mgrLedger = await mgr.locator('body').innerText();
+const mgrLedger = await bodyText(mgr);
 check(
   'a MANAGER sees the accountable roster on the recording ledger',
   /Fatima Ahmed/.test(mgrLedger) && /Bilal Khan/.test(mgrLedger),
@@ -1004,7 +1016,7 @@ await tap(admin, 'nav-attendance');
 // Defaults to the "By session" view; the two cuts are a toggle, not stacked.
 await admin.getByTestId('attendance-tab-sessions').waitFor({ timeout: 10000 });
 await admin.waitForTimeout(1000);
-const sessionsView = await admin.locator('body').innerText();
+const sessionsView = await bodyText(admin);
 check(
   'the by-session view shows the session and the taken state',
   /Session 1/.test(sessionsView) && /1 of 1 sessions taken/.test(sessionsView),
@@ -1015,7 +1027,7 @@ await shot(admin, '17-attendance-by-session');
 await tap(admin, 'attendance-tab-students');
 await admin.getByTestId('attendance-export-students').waitFor({ timeout: 10000 });
 await admin.waitForTimeout(800);
-const studentsView = await admin.locator('body').innerText();
+const studentsView = await bodyText(admin);
 check(
   'toggling to by-student shows required listening (Bilal caught up via override)',
   /Bilal Khan/.test(studentsView) && /Required listening/.test(studentsView),
@@ -1047,7 +1059,7 @@ const stuCard = admin
 const stuName = (await stuCard.innerText()).split('\n')[0].trim();
 await stuCard.click();
 await admin.waitForTimeout(2500);
-let drill = await admin.locator('body').innerText();
+let drill = await bodyText(admin);
 check(
   'a by-student card opens THAT student’s listening progress',
   /required listening/i.test(drill) && drill.includes(stuName),
@@ -1064,7 +1076,7 @@ const sesCard = admin
 const sesName = (await sesCard.innerText()).split('\n')[0].trim();
 await sesCard.click();
 await admin.waitForTimeout(2500);
-drill = await admin.locator('body').innerText();
+drill = await bodyText(admin);
 check(
   'a by-session card opens THAT session',
   /ATTENDANCE/i.test(drill) && drill.includes(sesName),
@@ -1075,7 +1087,7 @@ check(
 await openHikam(admin);
 await tap(admin, 'nav-audit');
 await admin.waitForTimeout(1500);
-const auditText = await admin.locator('body').innerText();
+const auditText = await bodyText(admin);
 check(
   'the course audit view shows the override with its reason',
   /Overrode completion/.test(auditText) && /Attended the class live/.test(auditText),
@@ -1147,14 +1159,14 @@ await goHome(admin);
 await tap(admin, 'tab-people');
 await tap(admin, 'student-open-bilal@example.com');
 await admin.getByTestId('student-course-open-Hikam Foundations').waitFor({ timeout: 20000 });
-const stuPage = (await admin.locator('body').innerText()).toLowerCase();
+const stuPage = (await bodyText(admin)).toLowerCase();
 check('the student page names the student and their address', stuPage.includes('bilal khan') && stuPage.includes('bilal@example.com'));
 check('it lists the courses they are enrolled in', stuPage.includes('hikam foundations'));
 await shot(admin, '20-student-page');
 
 await tap(admin, 'student-course-open-Hikam Foundations');
 await admin.waitForTimeout(2500);
-const stuLedger = (await admin.locator('body').innerText()).toLowerCase();
+const stuLedger = (await bodyText(admin)).toLowerCase();
 check(
   'tapping a course opens THAT student\'s progress for it',
   stuLedger.includes('bilal khan') && stuLedger.includes('hikam foundations'),
@@ -1193,7 +1205,7 @@ await goHome(mgr);
 await tap(mgr, 'tab-people');
 await tap(mgr, 'student-open-fatima@example.com');
 await mgr.waitForTimeout(3500);
-const mgrStudent = (await mgr.locator('body').innerText()).toLowerCase();
+const mgrStudent = (await bodyText(mgr)).toLowerCase();
 check('a manager can open a student page', mgrStudent.includes('fatima ahmed'));
 check(
   'it is scoped to the courses they manage, and says so',
@@ -1231,7 +1243,7 @@ await goHome(mgr);
 await tap(mgr, 'tab-people');
 await tap(mgr, 'student-open-zayd@example.com');
 await mgr.waitForTimeout(3500);
-const mgrNoMatch = (await mgr.locator('body').innerText()).toLowerCase();
+const mgrNoMatch = (await bodyText(mgr)).toLowerCase();
 check(
   'a student in none of their courses says so, rather than showing a bare heading',
   mgrNoMatch.includes('is not in any of the courses you manage'),
@@ -1325,7 +1337,7 @@ const staffPath =
 
 await student.goto(staffPath, { waitUntil: 'domcontentloaded' });
 await student.waitForTimeout(3500);
-const stuOnStaffUrl = (await student.locator('body').innerText()).toLowerCase();
+const stuOnStaffUrl = (await bodyText(student)).toLowerCase();
 check(
   'a student asking for a staff URL gets their OWN home, not the staff screen',
   // The negative has to name something ONLY SessionDetailScreen renders. It was
@@ -1339,7 +1351,7 @@ check('…so nothing on it is denied', !stuOnStaffUrl.includes('live data error'
 
 await mgr.goto(`${WEB}my-classes`, { waitUntil: 'domcontentloaded' });
 await mgr.waitForTimeout(3500);
-const mgrOnStudentUrl = (await mgr.locator('body').innerText()).toLowerCase();
+const mgrOnStudentUrl = (await bodyText(mgr)).toLowerCase();
 check(
   'a manager asking for a student URL gets their own home too',
   // Their home is the work queue, and `Today` is a staff-only word — it is the
@@ -1379,7 +1391,7 @@ check(
 // missed it would be both wrong and the tone the brief rules out.
 await goHome(student);
 await student.getByTestId('task-Session 1').waitFor({ timeout: 20000 });
-const doneHome = await student.locator('body').innerText();
+const doneHome = await bodyText(student);
 // Case-insensitive: innerText returns RENDERED text, and the group label is
 // uppercased by CSS — so /Missed/ would silently never match and this would pass
 // for the wrong reason.
@@ -1430,7 +1442,7 @@ await shot(student, '24-past-due-player');
 await patchField('completions', `${stuToken.localId}_${recId}`, 'completed', false, 'booleanValue');
 await goHome(student);
 await student.getByTestId('task-Session 1').waitFor({ timeout: 20000 });
-const missedHome = await student.locator('body').innerText();
+const missedHome = await bodyText(student);
 check(
   'a grant past its due date reads as Missed, with the date it closed',
   /missed/i.test(missedHome) && /Closed 2020-01-01/.test(missedHome),
@@ -1453,7 +1465,7 @@ console.log('\nNotifications');
 await goHome(student);
 await more(student, 'more-notifications');
 await student.getByTestId('notify-lastDay').waitFor({ timeout: 20000 });
-const notifyText = await student.locator('body').innerText();
+const notifyText = await bodyText(student);
 check(
   'a student sees their own two switches and not the staff one',
   /A recording is ready for me/.test(notifyText) &&
@@ -1484,7 +1496,7 @@ await shot(student, '26-notifications');
 await goHome(mgr);
 await more(mgr, 'more-notifications');
 await mgr.getByTestId('notify-attendanceMissing').waitFor({ timeout: 20000 });
-const mgrNotify = await mgr.locator('body').innerText();
+const mgrNotify = await bodyText(mgr);
 check(
   'staff see the attendance reminder and not the student switches',
   /Attendance still not taken/.test(mgrNotify) && !/Last day to listen/.test(mgrNotify),

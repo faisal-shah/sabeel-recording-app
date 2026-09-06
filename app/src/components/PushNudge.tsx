@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
+import { PUSH_DEVICE_MESSAGE } from '@sabeel/shared';
 import { Button, Card } from './ui';
 import { usePushNudge } from '../pushNudge';
 import { getTheme } from '../theme';
@@ -20,10 +21,12 @@ export function PushNudge({ uid }: { uid: string }) {
   if (!visible) return null;
   return (
     <Card>
+      {/* The same sentences the notifications screen uses, from the same place.
+          Held as literals here they were a second copy of two strings the layout
+          sweep asserts on — so a reword would have followed on one surface and
+          silently not on the other. */}
       <Text style={styles.text}>
-        {failed
-          ? "This device can't show notifications."
-          : 'Notifications are not enabled on this device.'}
+        {failed ? PUSH_DEVICE_MESSAGE.unavailable : PUSH_DEVICE_MESSAGE.canAsk}
       </Text>
       {/* No Enable button once it has failed — pressing again would do the same
           nothing. Dismissing is the only useful action left. */}

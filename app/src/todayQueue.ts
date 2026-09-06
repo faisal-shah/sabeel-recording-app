@@ -196,26 +196,40 @@ export function buildTodayQueue({
       continue;
     }
 
-    // `unpublished` belongs here as much as `draft` does — and it is the more
-    // urgent of the two, because unpublishing REVOKES access every excused
-    // student already had. Leaving it out was a hole in exactly the lockout
-    // this queue exists to make visible.
-    if (rec.status === 'needsAttention' || rec.status === 'draft' || rec.status === 'unpublished') {
+    /*
+     * NOT OUT YET, AND THE THREE REASONS ARE NOT EQUALLY URGENT.
+     *
+     * A draft and a needs-attention import have granted nobody anything, so
+     * they are work without being a lockout. Unpublishing and ARCHIVING both
+     * revoke what every excused student already had — the fan-out reads
+     * `status === 'published'` and nothing else (`assignmentsFanout.ts`), so the
+     * two are identical to a student.
+     *
+     * Archiving is offered as a terminal filing decision, which is why it is
+     * only surfaced WHILE THE DEADLINE IS STILL OPEN: archived after the date,
+     * it took away nothing anyone could still use, and nagging about it would
+     * make the queue a list of finished terms. Archived before it, students are
+     * locked out of listening they are still accountable for, and nothing else
+     * on any screen says so.
+     */
+    const revoked = rec.status === 'unpublished' || rec.status === 'archived';
+    const stillOwed = daysUntilDue(s.dueDate, today) >= 0;
+    if (rec.status !== 'published' && !(rec.status === 'archived' && !stillOwed)) {
       out.push({
         ...base,
         key: `pub-${s.id}`,
         kind: 'publish',
         recordingId: rec.id,
         age: met,
-        // Unpublishing REVOKES access every excused student had; a draft has
-        // granted nothing yet.
-        blocking: rec.status === 'unpublished',
+        blocking: revoked,
         detail:
           rec.status === 'needsAttention'
             ? 'The import needs attention before it can be published.'
             : rec.status === 'unpublished'
               ? 'Unpublished, so nobody excused can open it.'
-              : 'A draft is waiting to be published.',
+              : rec.status === 'archived'
+                ? 'Archived before its listen-by date, so nobody excused can open it.'
+                : 'A draft is waiting to be published.',
       });
       continue;
     }

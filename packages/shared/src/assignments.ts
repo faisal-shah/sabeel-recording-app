@@ -162,6 +162,22 @@ export function isOverdue(dueDate: string, today: string): boolean {
 }
 
 /**
+ * A `YYYY-MM-DD` date that will not break across two lines.
+ *
+ * Non-breaking spaces around it are not enough: the hyphens inside it are
+ * themselves break opportunities, so a narrow card split "listen by 2026-" from
+ * "09-26" — one token later than the fix that was reached for, and on the one
+ * value a student's whole entitlement turns on. U+2011 is the non-breaking
+ * hyphen; it renders identically to U+002D.
+ *
+ * Use it wherever a date sits INSIDE a sentence. A date on a line of its own
+ * cannot break and does not need it.
+ */
+export function unbreakableDate(date: string): string {
+  return date.replace(/-/g, '\u2011');
+}
+
+/**
  * MAY THIS RECORDING STILL BE PLAYED? One rule, for every surface that asks.
  *
  * Two of them do — the player screen and the docked bar — and each held its own

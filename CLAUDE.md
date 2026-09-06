@@ -7,7 +7,8 @@ Foundations classes, in-app listening for adult students, and an accountability
 ledger for staff. Faisal is the developer; the institute's staff are the
 admins/managers.
 
-**Still being built** — phases 6, 8 and 9 are not started. Source of truth:
+**Still being built** — the admin backend-stats surface and the release itself
+are not started; Zoom import is built and waiting on institute credentials. Source of truth:
 `docs/PRODUCT_BRIEF.md` (product decisions & data model), `PLAN.md` (the build
 order and locked architecture decisions), `docs/PHASE_STATUS.md` (live status),
 `docs/DEV-TOOLING.md` (what each script guards against, and which failures are

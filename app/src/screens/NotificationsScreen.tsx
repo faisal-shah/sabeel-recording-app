@@ -116,22 +116,22 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
         <Notice tone="info">{PUSH_DEVICE_MESSAGE.ready}</Notice>
       ) : null}
 
+      {/* THE FIX GOES IN THE BOX, not under it. The problem was tinted and the
+          remedy was a grey line outside the notice — emphasis on the half
+          nobody can act on. One block, and it ends with what to do.
+
+          Native can open its own settings page and gets a card to group the
+          notice with the button; a browser cannot, so there the card would wrap
+          a tinted block in an empty one and contribute nothing but a ring. */}
       {device === 'blocked' ? (
-        <Card>
-          {/* THE FIX GOES IN THE BOX, not under it. The problem was tinted and
-              the remedy was a grey line outside the notice — emphasis on the
-              half nobody can act on. One block, and it ends with what to do. */}
-          <Notice tone="info">
-            {canOpenPushSettings
-              ? PUSH_DEVICE_MESSAGE.blockedNative
-              : PUSH_DEVICE_MESSAGE.blockedWeb}
-          </Notice>
-          {/* Native can open its own settings page; a browser cannot, so there
-              it is instructions or nothing. */}
-          {canOpenPushSettings ? (
+        canOpenPushSettings ? (
+          <Card>
+            <Notice tone="info">{PUSH_DEVICE_MESSAGE.blockedNative}</Notice>
             <Button label="Open settings" variant="secondary" onPress={openPushSettings} />
-          ) : null}
-        </Card>
+          </Card>
+        ) : (
+          <Notice tone="info">{PUSH_DEVICE_MESSAGE.blockedWeb}</Notice>
+        )
       ) : null}
 
       {device === 'unavailable' ? (

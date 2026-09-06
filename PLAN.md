@@ -78,7 +78,7 @@ skeleton. Phase 0 forks it rather than inventing a new one:
 | Audio format | Store audio-only **M4A/AAC** only; reject video | Keeps the whole thing inside free quota even at 128 kbps. Video is the single biggest cost cliff. |
 | Playback library | `expo-audio` (not `expo-av`, deprecated) native; HTML5 `<audio>` on web, behind a seam | Background audio + lock-screen controls are first-class requirements, and `expo-av` is end-of-life. |
 | Offline downloads | `expo-file-system` into app-private storage, native only; web streams only | Brief forbids external file export. App-private dirs are not user-browsable. |
-| Progress writes | Throttled: every ~15 s of playback, plus on pause/seek/background/unmount. Conflict resolution = **max listened, latest position wins** | Naive per-second writes would blow past Firestore quotas and drain battery for zero accountability value. |
+| Progress writes | Throttled: every ~15 s of playback, plus on pause, on seek, and when the session ends. Conflict resolution = **max listened, latest position wins** | Naive per-second writes would blow past Firestore quotas and drain battery for zero accountability value. |
 | Due-date timezone | One institute-wide timezone constant in `@sabeel/shared` | Due dates are date-only. Per-student timezones buy nothing here and complicate the overdue job. Contrast with the time tracker, where per-entry timezone is load-bearing. |
 | Audit log | Written **server-side only** (Functions), never from the client | A client-writable audit log is not an audit log. |
 | Roles | Firebase custom claims for `admin` / `manager`; class scopes in Firestore, read by rules | Claims are cheap in rules; scopes change too often to live in claims. |

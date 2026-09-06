@@ -7,11 +7,12 @@ import {
   bucketRank,
   dueBucket,
   todayInZone,
+  unbreakableDate,
   type CourseDoc,
   type DueBucket,
   type RecordingDoc,
 } from '@sabeel/shared';
-import { Empty, Notice, Screen } from '../components/ui';
+import { Empty, Grid, Notice, Screen } from '../components/ui';
 import { PushNudge } from '../components/PushNudge';
 import { db } from '../firebase';
 import { useListenerError } from '../liveQuery';
@@ -105,21 +106,18 @@ export function StudentHomeScreen({
   ];
   for (const row of listed) groups.find((g) => g.bucket === row.bucket)?.rows.push(row);
 
-  /*
-   * A READING COLUMN, not a card grid.
-   *
-   * This is a short, ordered task list — usually one or two items — and flowing
-   * it into columns froze every row at a third of a 1400px window while leaving
-   * the rest of the page empty and wrapping the titles to five lines. A capped,
-   * centred column is the right shape for a list read top to bottom, and it is
-   * what `Screen` does by default.
-   */
   return (
     <Screen
-      // LIST, like every other collection in the app. Omitting `width` took the
-      // reading default, so a student's whole desktop experience was two cards
-      // in a 656px ribbon down the middle of a 1364px pane while every staff
-      // list beside it used the room.
+      /*
+       * LIST, AND A GRID INSIDE IT, like every other collection in the app.
+       *
+       * The reading width was tried first, on the argument that a short ordered
+       * task list is read top to bottom. It is — but at 1440 it put a student's
+       * whole app in a 656px ribbon down the middle of a 1364px pane while every
+       * staff list beside it used the room, and the full-width rows it left
+       * behind set the title and the date 700px apart. Grouped card lists are
+       * what `Grid` is for; the grouping is what keeps the order legible.
+       */
       width="list"
       title="Your listening"
       /* NOT "recordings you were excused from". Being excused is what grants
@@ -177,13 +175,18 @@ export function StudentHomeScreen({
                   for the same reason — made one of four peer headings read as an
                   error state. "Missed" is already the word. */}
               <Text style={styles.groupLabel}>{g.label}</Text>
-              {g.rows.map((row) => (
-                <TaskCard
-                  key={row.key}
-                  row={row}
-                  onOpen={() => onOpen(row.recording, row.cls, row.dueDate)}
-                />
-              ))}
+              {/* A grid per group, like every other collection. The rows are
+                  cards, and stacking them full-width at the list cap left the
+                  title and the date 700px apart. */}
+              <Grid min={330}>
+                {g.rows.map((row) => (
+                  <TaskCard
+                    key={row.key}
+                    row={row}
+                    onOpen={() => onOpen(row.recording, row.cls, row.dueDate)}
+                  />
+                ))}
+              </Grid>
             </View>
           ))
       )}
@@ -224,7 +227,9 @@ function TaskCard({ row, onOpen }: { row: TaskRow; onOpen: () => void }) {
           <Text style={styles.doneChip}>Completed</Text>
         ) : (
           <Text style={[styles.due, missed ? styles.missed : null]}>
-            {missed ? `Closed ${row.dueDate}` : `Listen by ${row.dueDate}`}
+            {missed
+              ? `Closed ${unbreakableDate(row.dueDate)}`
+              : `Listen by ${unbreakableDate(row.dueDate)}`}
           </Text>
         )}
       </View>

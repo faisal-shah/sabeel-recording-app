@@ -15,8 +15,6 @@ import {
   Text,
   TextInput,
   View,
-  type StyleProp,
-  type ViewStyle,
 } from 'react-native';
 import { LAYOUT_WIDTHS, getTheme, spacing, type LayoutWidth } from '../theme';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -150,11 +148,8 @@ export function Screen({ title, subtitle, status, parent, width = 'read', action
   );
 }
 
-export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
-  // `style` for the one thing a caller may say about a card: how wide it is
-  // allowed to get. A screen laid out for a roster still has cards on it that
-  // hold prose or a form, and those want a reading measure.
-  return <View style={[styles.card, style]}>{children}</View>;
+export function Card({ children }: { children: ReactNode }) {
+  return <View style={styles.card}>{children}</View>;
 }
 
 export function SectionTitle({ children }: { children: ReactNode }) {
@@ -252,9 +247,11 @@ export function Button({
  * A single-glyph action for a list row — remove, disable, re-enable.
  *
  * Glyphs are TEXT-presentation characters (`×`, `↺`), never emoji: an emoji
- * renders as a colour bitmap that ignores `color`, so a destructive control
- * would not read as destructive. There is no icon font in this app, and adding
- * one to draw two shapes is not worth the bundle.
+ * renders as a colour bitmap that ignores `color`, so a control that should
+ * read as destructive would not. The app does carry MaterialIcons — for the
+ * navigation, the transport and the disclosure carets — but `×` and `↺` are
+ * typographic marks rather than pictograms, and the icon set draws them worse
+ * than the font does.
  *
  * Icon-only means the label is invisible, so `label` is required and becomes the
  * accessibility name — a screen reader gets "Remove Fatima Ahmed from the
@@ -489,13 +486,17 @@ export function Notice({ tone, children }: { tone: 'info' | 'error' | 'success';
 const STATUS_TONE: Record<string, 'good' | 'bad' | 'attention' | 'neutral'> = {
   active: 'good',
   published: 'good',
-  disabled: 'bad',
   needsAttention: 'attention',
   pending: 'attention',
   draft: 'neutral',
   unpublished: 'neutral',
   archived: 'neutral',
   inactive: 'neutral',
+  // NEUTRAL, with its siblings. A disabled account is a reversible
+  // administrative off-state, exactly like an archived course or an unpublished
+  // recording — and this app reserves the alarm colour for permanent deletion,
+  // which is the same call already made for the Disable button itself.
+  disabled: 'neutral',
 };
 
 /** One place decides what a status colour means; chip and light both read it. */

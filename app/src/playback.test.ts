@@ -251,6 +251,37 @@ describe('opening and closing', () => {
    * the NEWER positionMs — so a zero written on the way out wins, and the
    * student's place in a two-hour lecture is gone.
    */
+  /*
+   * A CLOSE LANDING MID-LOAD LEAVES THE SESSION RE-OPENABLE.
+   *
+   * `load` is the second slow leg, and closing during it is ordinary — the
+   * mini-player's × while the audio is still spooling up. What must not happen
+   * is the state the failed mint used to produce: an owner and no player, where
+   * re-opening takes the "already playing" path and hands back a transport that
+   * drives nothing.
+   *
+   * (The generation check after `await p.load` is defence in depth rather than
+   * the thing under test: with `state.now` null after a close, nothing reads
+   * the `ready` it would set. It is held here by argument, not by assertion.)
+   */
+  it('re-opens cleanly after a close lands mid-load', async () => {
+    const pb = await load();
+    holdLoad = true;
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    await pb.closePlayback();
+    players[0].finishLoad?.();
+    await flush();
+
+    // Nothing is loaded, so re-opening builds a NEW player rather than taking
+    // the "already playing" path — which it would not if the closed session had
+    // been left looking ready.
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    expect(players).toHaveLength(2);
+    expect(players[1].loaded).toBe('https://signed/audio.m4a');
+  });
+
   it('closing before the audio loads keeps the stored position', async () => {
     const pb = await load();
     stored = { positionMs: 3_540_000, listenedMs: 3_540_000, updatedAt: 1 };
@@ -575,15 +606,6 @@ describe('counting listening', () => {
   });
 
   /*
-   * AND WHEN THE FILE NEVER ENDS, BECAUSE THE SEEK HAPPENED WHILE PAUSED.
-   *
-   * `onEnded` only fires when the end is reached WHILE PLAYING, so a forward
-   * skip past the real end from a paused player leaves a target no tick can
-   * ever match. Every later tick was then discarded and the session froze at a
-   * position that does not exist in the file — which is both the resume point
-   * and the number the ledger presents as evidence.
-   */
-  /*
    * AND HOLDS UNTIL IT DOES. Between the seek and the hold expiring, the player
    * keeps reporting where it WAS for a beat; showing those would snap the thumb
    * backwards the instant it is dropped.
@@ -604,6 +626,15 @@ describe('counting listening', () => {
     expect(stored?.positionMs).toBe(60_000);
   });
 
+  /*
+   * AND WHEN THE FILE NEVER ENDS, BECAUSE THE SEEK HAPPENED WHILE PAUSED.
+   *
+   * `onEnded` only fires when the end is reached WHILE PLAYING, so a forward
+   * skip past the real end from a paused player leaves a target no tick can
+   * ever match. Every later tick was then discarded and the session froze at a
+   * position that does not exist in the file — which is both the resume point
+   * and the number the ledger presents as evidence.
+   */
   it('gives up on a seek target the player never reaches', async () => {
     const pb = await load();
     // No duration, so `skipForward` cannot clamp — a phone upload supplies none.
@@ -633,14 +664,6 @@ describe('counting listening', () => {
   });
 });
 
-/*
- * THE CLAMPS, which were argued for in a comment and exercised by nothing.
- *
- * `durationSec` is genuinely nullable — a phone upload supplies none — and
- * clamping to a zero duration turns "forward 30" into "back to the start",
- * which is the note above `skipForward`. Neither skip was called anywhere in
- * this file.
- */
 /*
  * ONE WRITE AT A TIME. `writeProgress` is read-modify-write, and `pause` and
  * `seek` both persist without the throttle, so two in flight against one
@@ -673,6 +696,14 @@ describe('the write queue', () => {
   });
 });
 
+/*
+ * THE CLAMPS, which were argued for in a comment and exercised by nothing.
+ *
+ * `durationSec` is genuinely nullable — a phone upload supplies none — and
+ * clamping to a zero duration turns "forward 30" into "back to the start",
+ * which is the note above `skipForward`. Neither skip was called anywhere in
+ * this file.
+ */
 describe('the skip controls', () => {
   it('skips forward by 30 seconds', async () => {
     const pb = await load();

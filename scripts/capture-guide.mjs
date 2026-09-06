@@ -223,18 +223,16 @@ await tap(adm, 'ledger-filter-notComplete'); await adm.waitForTimeout(600);
 if (!(await adm.locator('[data-testid^="override-open-"]').first().count())) {
   throw new Error('no not-complete student to open an override on — figure 19 would be stale');
 }
-{
-  await pair(adm, '19-override-form', {
-    prepare: async (p) => {
-      // Only if none is open. The editor survives the resize between the two
-      // shots, so clicking blindly opened a SECOND one at desktop width and the
-      // figure showed two half-filled forms.
-      if (await p.locator('[data-testid^="override-reason-"]').count()) return;
-      const btn = p.locator('[data-testid^="override-open-"]').first();
-      if (await btn.count()) await btn.click();
-    },
-  });
-}
+await pair(adm, '19-override-form', {
+  prepare: async (p) => {
+    // Only if none is open. The editor survives the resize between the two
+    // shots, so clicking blindly opened a SECOND one at desktop width and the
+    // figure showed two half-filled forms.
+    if (await p.locator('[data-testid^="override-reason-"]').count()) return;
+    const btn = p.locator('[data-testid^="override-open-"]').first();
+    if (await btn.count()) await btn.click();
+  },
+});
 
 // Attendance report (toggle: by session / by student).
 await openHikam(adm);

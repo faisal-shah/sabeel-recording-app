@@ -56,10 +56,6 @@ export function PlayerScreen({
   // otherwise the scrubber shows another lecture's position for a frame.
   const state = session.now?.recordingId === recording.id ? session : IDLE;
   const { play, pause, seek, setRate } = playback;
-  // Opening the session is an EFFECT, not a render-time call: this screen is one
-  // view onto app-wide playback, and re-entering it for something already
-  // playing must re-focus rather than restart. `openPlayback` is idempotent for
-  // the loaded recording, so a re-render costs nothing.
   /*
    * THE GATE CLOSES ON A SESSION ALREADY PLAYING, not only on one about to
    * start.
@@ -74,6 +70,10 @@ export function PlayerScreen({
     if (!allowed && session.now?.recordingId === recording.id) void closePlayback();
   }, [allowed, session.now?.recordingId, recording.id]);
 
+  // Opening the session is an EFFECT, not a render-time call: this screen is one
+  // view onto app-wide playback, and re-entering it for something already
+  // playing must re-focus rather than restart. `openPlayback` is idempotent for
+  // the loaded recording, so a re-render costs nothing.
   useEffect(() => {
     if (!allowed) return;
     openPlayback({

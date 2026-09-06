@@ -9,6 +9,7 @@ import {
   hasRecordingAccess,
   canPlayNow,
   isOverdue,
+  unbreakableDate,
   todayInZone,
   type DueBucket,
 } from '../src';
@@ -168,5 +169,18 @@ describe('canPlayNow', () => {
 
   it('a student with no deadline at all is not closed out', () => {
     expect(canPlayNow(live, null, 'stu-1', TODAY)).toBe(true);
+  });
+});
+
+describe('unbreakableDate', () => {
+  it('replaces every hyphen with a non-breaking one', () => {
+    expect(unbreakableDate('2026-09-26')).toBe('2026\u201109\u201126');
+  });
+
+  it('renders the same characters a reader sees', () => {
+    // Same length, same digits — only the break opportunities are gone.
+    const out = unbreakableDate('2026-09-26');
+    expect(out).toHaveLength(10);
+    expect(out.replace(/\u2011/g, '-')).toBe('2026-09-26');
   });
 });

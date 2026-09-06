@@ -177,6 +177,31 @@ describe('what the badge counts', () => {
     expect(q.blocking).toBe(0);
   });
 
+  /*
+   * ARCHIVING REVOKES EXACTLY AS UNPUBLISHING DOES — the fan-out reads
+   * `status === 'published'` and nothing else — so while students are still
+   * accountable it is a lockout, and after the deadline it is filing.
+   */
+  it('counts a recording archived while its listen-by date is still open', () => {
+    const q = build(
+      [session('s1', { recordingId: 'r1', dueInDays: 5 })],
+      [recording('r1', 'archived')],
+    );
+    expect(q.items[0].kind).toBe('publish');
+    expect(q.items[0].detail).toBe(
+      'Archived before its listen-by date, so nobody excused can open it.',
+    );
+    expect(q.blocking).toBe(1);
+  });
+
+  it('says nothing about one archived after the deadline had passed', () => {
+    const q = build(
+      [session('s1', { recordingId: 'r1', dueInDays: -1 })],
+      [recording('r1', 'archived')],
+    );
+    expect(q.items).toHaveLength(0);
+  });
+
   it('does not count an import that needs attention', () => {
     const q = build(
       [session('s1', { recordingId: 'r1' })],
@@ -196,19 +221,33 @@ describe('what the badge counts', () => {
 });
 
 describe('the order', () => {
+  /*
+   * TITLED SO THAT ALPHABETICAL ORDER DISAGREES WITH `KIND_ORDER`.
+   *
+   * With names that happened to sort the same way, the comparator's fallback —
+   * age, then title — produced the right sequence on its own, and deleting the
+   * cross-kind term left this green. The fixtures now spell the opposite order,
+   * so only `RANK` can put them right.
+   */
   it('sorts by kind first, in KIND_ORDER', () => {
     const q = build(
       [
-        session('closing', { recordingId: 'r1', dueInDays: 3 }),
-        session('norec'),
-        session('draft', { recordingId: 'r2' }),
-        session('att', { attendanceSubmittedAt: null }),
+        session('alpha-closing', { recordingId: 'r1', dueInDays: 3 }),
+        session('bravo-norec'),
+        session('charlie-draft', { recordingId: 'r2' }),
+        session('delta-attendance', { attendanceSubmittedAt: null }),
       ],
       [recording('r1', 'published'), recording('r2', 'draft')],
     );
     // All four, in KIND_ORDER — the length matters as much as the sequence, or
     // an expectation derived from the actual passes when a kind is dropped.
     expect(q.items.map((i) => i.kind)).toEqual([...KIND_ORDER]);
+    expect(q.items.map((i) => i.title)).toEqual([
+      'delta-attendance',
+      'charlie-draft',
+      'bravo-norec',
+      'alpha-closing',
+    ]);
   });
 
   it('within a kind, the longest outstanding comes first', () => {
@@ -286,6 +325,15 @@ describe('an empty queue', () => {
   it('a refused listener reports failure rather than loading for ever', () => {
     const q = build([], [], { courses: null, settled: false, scope: [], failed: true });
     expect(q).toMatchObject({ loading: false, failed: true });
+  });
+
+  it('carries the truncation flag through a loaded queue', () => {
+    const q = build([session('s1', { attendanceSubmittedAt: null })], [], { truncated: true });
+    // The notice this drives — "Some are not counted here" — belongs to the
+    // NORMAL case: a manager with more live courses than one `in` clause holds,
+    // everything loaded, a queue on screen that is only part of the answer.
+    expect(q).toMatchObject({ loading: false, truncated: true });
+    expect(q.items).toHaveLength(1);
   });
 
   it('carries the truncation flag through every early return', () => {

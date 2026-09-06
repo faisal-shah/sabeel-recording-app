@@ -4,6 +4,7 @@ import {
   INSTITUTE_TIMEZONE,
   isOverdue,
   todayInZone,
+  unbreakableDate,
   type AttendanceStatus,
 } from '@sabeel/shared';
 import { Card, Empty, Grid, Notice, Screen, SectionTitle } from '../components/ui';
@@ -151,11 +152,13 @@ export function StudentAttendanceScreen({
  * they "missed" it would be both wrong and the punitive tone the brief rules out.
  */
 function listeningLine(completed: boolean, dueDate: string, today: string): string {
-  // Non-breaking spaces around the date: it is the whole point of the line, and
-  // it was the one token a wrap split — "listen by 2026-" / "09-26".
+  // Non-breaking spaces around the date AND non-breaking hyphens inside it: it
+  // is the whole point of the line, and it is the one token a wrap split — see
+  // `unbreakableDate`.
+  const when = unbreakableDate(dueDate);
   if (completed) return 'Recording required · completed';
-  if (isOverdue(dueDate, today)) return `Recording required · not\u00A0listened, closed\u00A0${dueDate}`;
-  return `Recording required · listen\u00A0by\u00A0${dueDate}`;
+  if (isOverdue(dueDate, today)) return `Recording required · not\u00A0listened, closed\u00A0${when}`;
+  return `Recording required · listen\u00A0by\u00A0${when}`;
 }
 
 function Tally({ label, value }: { label: string; value: number }) {

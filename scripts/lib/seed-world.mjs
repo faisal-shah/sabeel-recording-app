@@ -429,7 +429,7 @@ export async function seedWorld({ db, auth, browser, base }) {
     { daysAgo: 9, dueOffset: 14, present: 3 });
   /** Published, attendance NOT taken: nobody is granted anything. The state the
    *  `attendanceMissing` notification exists for, and a real staff screen. */
-  await seedSession('sw-s5', 'sw-s5r', 'Session 5 — Reliance and Trust',
+  const blocking = await seedSession('sw-s5', 'sw-s5r', 'Session 5 — Reliance and Trust',
     { daysAgo: 4, dueOffset: 7, attendance: null });
   /** A session with NO RECORDING — the only route to the Zoom import screen. */
   await db.collection('sessions').doc('sw-s6').set({
@@ -505,7 +505,7 @@ export async function seedWorld({ db, auth, browser, base }) {
   // WHAT A TOUR NEEDS TO NAME A THING, and nothing else. Twelve handles were
   // returned and four were read; the rest were a standing invitation to reach
   // past the fixture's own vocabulary into its internals.
-  return { STUDENT, DISABLED_STUDENT, STUDENT_PASSWORD, missed, dueSoon };
+  return { STUDENT, DISABLED_STUDENT, STUDENT_PASSWORD, missed, dueSoon, blocking };
 }
 
 export { byId, byName, backButton, tap };

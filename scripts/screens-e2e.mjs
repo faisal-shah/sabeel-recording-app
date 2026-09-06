@@ -246,7 +246,7 @@ const auth = admin.auth();
 await resetEmulators();
 const browser = await chromium.launch();
 const world = await seedWorld({ db, auth, browser, base: BASE });
-const { STUDENT, DISABLED_STUDENT, STUDENT_PASSWORD, missed, dueSoon } = world;
+const { STUDENT, DISABLED_STUDENT, STUDENT_PASSWORD, missed, dueSoon, blocking } = world;
 
 // ---- assertions ------------------------------------------------------------
 
@@ -493,11 +493,10 @@ const layoutFaults = (page, readOnly = false) =>
 /**
  * Can you LEAVE this screen without the browser's Back?
  *
- * The answer changed when the app grew persistent navigation. It used to be a
- * pure stack with no bar anywhere, so a pushed screen had exactly one exit and
- * losing the header Back stranded it. Now every screen also carries the bar (on
- * a phone) or the rail (on a wide screen), so the question is whether it has
- * EITHER — and a tab root, which is never pushed, correctly has no Back at all.
+ * Every screen carries the bar (on a phone) or the rail (on a wide screen), and
+ * a pushed one carries the header's Back as well — so the question is whether it
+ * has EITHER, and a tab root, which is never pushed, correctly has no Back at
+ * all. A sheet is not a screen and has no header; its exit is its own dismiss.
  *
  * Both halves still matter. `nav` alone would pass a pushed screen that lost
  * its Back, leaving no way back to where you came from — only a way to start
@@ -813,8 +812,11 @@ async function tourStaff(page, tag) {
   };
 
   // The work queue: attendance not taken, drafts waiting, deadlines closing.
-  // It is the landing screen, so it is also what `home` means for staff.
-  await visit('home', async () => {});
+  // It is the landing screen, so it is also what `home` means for staff — and
+  // its failure modes ("Could not read your courses", "Checking your courses…")
+  // are well-formed layouts that pass every geometric check, so it needs the
+  // anchor more than any screen the tour pushes to.
+  await visit('home', async () => {}, `today-att-${blocking.id}`);
   await visit('people', () => tap(byId(page, 'tab-people')), 'students-add');
   // The staff half of the People tab. A SEGMENT, not a route: same screen, other
   // list, so it is toured as its own screen and asks for no Back.
@@ -916,7 +918,7 @@ async function tourStaff(page, tag) {
     await openSession();
     await tap(byId(page, 'recording-ledger'));
     await tap(byId(page, `override-open-${STUDENT.name}`));
-  }, `override-reason-${STUDENT.name}`)
+  }, `override-reason-${STUDENT.name}`);
   await visit('student-ledger', async () => {
     await openCourse();
     await tap(byId(page, `student-ledger-${STUDENT.email}`));
@@ -972,7 +974,7 @@ async function tourManager(page, tag) {
     await tap(byId(page, 'course-open-Hikam Foundations'));
   };
 
-  await visit('home', async () => {});
+  await visit('home', async () => {}, `today-att-${blocking.id}`);
   await visit('my-courses', () => tap(byId(page, 'tab-courses')), 'course-open-Hikam Foundations');
   await visit('course', openCourse, 'nav-sessions');
   await visit('audit-scoped', async () => {
@@ -1008,7 +1010,7 @@ async function tourManager(page, tag) {
     await openSession();
     await tap(byId(page, 'recording-ledger'));
     await tap(byId(page, `override-open-${STUDENT.name}`));
-  }, `override-reason-${STUDENT.name}`)
+  }, `override-reason-${STUDENT.name}`);
 
   check(`${tag} toured as many manager screens as the tour lists`, counter.seen === MANAGER_SCREENS,
     `${counter.seen}/${MANAGER_SCREENS}`);
@@ -1022,7 +1024,7 @@ async function tourStudent(page, tag) {
 
   // The task list, with all four buckets on it — Missed, Due soon, Upcoming,
   // Completed. Those group headings ARE the layout.
-  await visit('home', async () => {});
+  await visit('home', async () => {}, `next-up-${dueSoon.title}`);
   await visit('my-classes', () => tap(byId(page, 'tab-classes')), 'myclass-Hikam Foundations');
   await visit('class-record', async () => {
     await tap(byId(page, 'tab-classes'));

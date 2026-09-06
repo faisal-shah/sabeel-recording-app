@@ -267,16 +267,20 @@ the thing.
   register. This is first and it's the one entry the screen tints, because until
   it's submitted **nobody in that class has access to the recording** — and
   nothing else on any screen would tell you.
-- **Waiting to publish** — a recording is added but still a draft, or an import
-  needs attention before it can go out.
+- **Waiting to publish** — a recording is added but not out: still a draft, an
+  import that needs attention, or one that was published and has since been
+  unpublished or archived.
 - **No recording yet** — attendance is in, the audio isn't.
 - **Closing soon** — access to a recording ends within the week; a good moment
   to see who still hasn't listened.
 
 The number on the **Today** tab counts everything that is blocking access right
 now: a register not yet submitted, and a recording that was published and has
-since been unpublished. A draft that has never been published is waiting on you
-but is blocking nobody, so it is in the list without being in the count.
+since been taken back — unpublished, or archived before its Listen by date. A
+draft that has never been published is waiting on you but is blocking nobody, so
+it is in the list without being in the count. Archiving *after* the Listen by
+date took nothing away from anyone, so it is simply filing and says nothing
+here.
 
 A card disappears the moment you close the gap, and the count goes with it. An
 empty Today is the answer, not a blank screen: it means attendance is in, every
@@ -545,8 +549,12 @@ see everything; managers see their assigned courses.
 </div>
 
 **People** holds both populations. Admins get a **Students / Staff** switch above
-the list; managers see the students in their courses and no switch, because
-approving staff isn't theirs to do.
+the list; managers see the student directory and no switch, because approving
+staff isn't theirs to do. The directory is the whole institute for every staff
+member — a manager can look someone up before enrolling them, which they could
+not do if the list were cut to the courses they already run. What a manager
+cannot see is anyone's *progress* outside their own courses: open a student and
+the page shows only the courses that manager runs.
 
 To add a student, tap **Add a student**, enter their **full name** and **email**,
 optionally **enrol them in a course** right away, and tap **Create account**. The

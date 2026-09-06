@@ -221,10 +221,13 @@ Still yours, once the web build is deployed:
 
 ### 3. Reword the password-reset email
 
-Authentication → **Templates → Password reset**. Students receive it for an
-account they have never had a password on, so the default "reset your password"
-wording reads as though something has gone wrong. "Set your password for Sabeel
-Class Recordings" or similar.
+Authentication → **Templates → Password reset**. One template serves two
+journeys: a student receiving it for an account that has never had a password,
+where the default "reset your password" reads as though something has gone
+wrong, and a student who asked for it themselves from **More → Change
+password**, where it is exactly right. Wording that covers both — "Set your
+password for Sabeel Class Recordings" or similar — is what to aim for; there is
+no way to send two different templates from one Firebase project.
 
 ### ✅ 4. Android app registered — DONE (2026-07-23)
 
