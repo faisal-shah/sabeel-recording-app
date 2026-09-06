@@ -148,7 +148,10 @@ describe('sessions rules', () => {
    * returned, and that the same query at a wider scope is refused for a manager
    * and not for an admin. It does NOT establish the ceiling: the emulator does
    * not enforce Firestore's per-request document-access limit, and its own
-   * ceiling sits higher than production's. `QUEUE_SCOPE.manager` comes from the
+   * ceiling is only BRACKETED by this pair, somewhere between the width served
+   * here and the width refused below. A rule change that spent one more `get()`
+   * per row could land inside that band with both halves still green, so treat
+   * this as a guard on the rule's shape and read the ceiling off the docs. `QUEUE_SCOPE.manager` comes from the
    * documented limit; see the note on the constant.
    *
    * If this ever goes red, lower `QUEUE_SCOPE.manager`; do not widen the rule.

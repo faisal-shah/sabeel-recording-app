@@ -22,9 +22,9 @@ const HEADING: Record<TodayKind, { label: string; blurb: string }> = {
  * The staff landing screen: what is waiting, most urgent first.
  *
  * The argument for leading with this rather than with the cohort hierarchy is
- * the shape of the job. Everything a teacher does here
- * runs on a fixed cycle: a class meets, attendance is taken, the recording is
- * added and published, and a week later access closes. Every one of those steps
+ * the shape of the job. Everything a teacher does here runs on a fixed cycle: a
+ * class meets, attendance is taken, the recording is added and published, and a
+ * week later access closes. Every one of those steps
  * is dated, every one has an owner, and every one is invisible until somebody
  * goes looking for it course by course. A hierarchy answers "where is X"; this
  * answers "what is waiting", which is the question actually being asked on a

@@ -483,7 +483,7 @@ export function Notice({ tone, children }: { tone: 'info' | 'error' | 'success';
  * that is working exactly as intended. Amber is reserved for states a human
  * has to act on.
  */
-const STATUS_TONE: Record<string, 'good' | 'bad' | 'attention' | 'neutral'> = {
+const STATUS_TONE: Record<string, 'good' | 'attention' | 'neutral'> = {
   active: 'good',
   published: 'good',
   needsAttention: 'attention',
@@ -502,13 +502,14 @@ const STATUS_TONE: Record<string, 'good' | 'bad' | 'attention' | 'neutral'> = {
 /** One place decides what a status colour means; chip and light both read it. */
 function statusColour(status: string): string {
   const tone = STATUS_TONE[status] ?? 'neutral';
+  // NO 'bad'. Every off-state this app has — archived, inactive, unpublished,
+  // disabled — is reversible administration, and the danger colour is reserved
+  // for permanent deletion. A status dot is never the place it is spent.
   return tone === 'good'
     ? t.feedback.success
-    : tone === 'bad'
-      ? t.feedback.danger
-      : tone === 'attention'
-        ? t.feedback.warning
-        : t.text.muted;
+    : tone === 'attention'
+      ? t.feedback.warning
+      : t.text.muted;
 }
 
 /**

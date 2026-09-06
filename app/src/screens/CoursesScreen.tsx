@@ -21,6 +21,7 @@ import {
   type CourseRow,
 } from '../structure';
 import { getTheme, spacing } from '../theme';
+import { errorText } from '../errors';
 
 const t = getTheme();
 
@@ -97,7 +98,7 @@ export function CoursesScreen({
     try {
       await fn();
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorText(e));
     } finally {
       setBusy(null);
     }

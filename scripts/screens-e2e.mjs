@@ -203,7 +203,19 @@ if (!CONTENT_MAX_WIDTH) throw new Error('CONTENT_MAX_WIDTH is no longer in app/s
  */
 const LIST_MAX_WIDTH = Number(themeSrc.match(/list:\s*(\d+)/)?.[1]);
 if (!LIST_MAX_WIDTH) throw new Error('LAYOUT_WIDTHS.list is no longer in app/src/theme/index.ts');
-const COLUMN_CAPS = [CONTENT_MAX_WIDTH, LIST_MAX_WIDTH];
+/*
+ * THE PLAYER'S THIRD WIDTH, read from the player rather than restated.
+ *
+ * It does not use `Screen` at all: a transport, a scrub bar and a rate row are a
+ * media column, narrower than prose, and `theme/index.ts` calls it out as a
+ * deliberate third maximum with exactly one member. The floor check below needs
+ * it or the one screen in the app that is meant to be narrow reads as the one
+ * screen that failed to take the room.
+ */
+const playerSrc = await readFile(resolve(ROOT, 'app/src/screens/PlayerScreen.tsx'), 'utf8');
+const PLAYER_MAX_WIDTH = Number(playerSrc.match(/maxWidth:\s*(\d+)/)?.[1]);
+if (!PLAYER_MAX_WIDTH) throw new Error('the player column cap is no longer in PlayerScreen.tsx');
+const COLUMN_CAPS = [PLAYER_MAX_WIDTH, CONTENT_MAX_WIDTH, LIST_MAX_WIDTH];
 
 /**
  * The width the chrome changes shape at — read, like the caps, rather than
@@ -317,7 +329,15 @@ const layoutFaults = (page, readOnly = false) =>
       return document.body;
     };
 
-    const SELECTOR = '[role="button"], [role="switch"], [role="radio"], [role="link"], button';
+    // `role="tab"` IS IN THE LIST, and its absence was a hole rather than an
+    // omission: react-native-web maps most roles onto real elements but has none
+    // for `tab`, so a `Segmented` renders a bare <div role="tab"> that matched
+    // nothing here. Two of this app's switches — People's Students/Staff and the
+    // attendance report's by-session/by-student — moved into that hole when they
+    // adopted the shared control, and stopped being measured for overlap, right-
+    // edge clipping and touch size on four toured screens.
+    const SELECTOR =
+      '[role="button"], [role="switch"], [role="radio"], [role="tab"], [role="link"], button';
     const els = [...document.querySelectorAll(SELECTOR)].filter((e) => area(visibleRect(e)) > 4);
     /*
      * STARVATION IS A FAULT, PER SCREEN.
@@ -584,6 +604,19 @@ function columnFault(col, caps) {
   if (width > largest + 1) {
     return `column is ${Math.round(width)}px, past the widest ${largest}px cap`;
   }
+  /*
+   * AND IT HAS TO REACH ONE OF THEM. Only the ceiling was checked, so a column
+   * could be any width at all below the smallest cap and still pass: dropping
+   * `CONTENT_MAX_WIDTH` from 720 to 420 would render every reading screen as a
+   * 420px ribbon in a 1364px window, green at all five widths — and green
+   * because `COLUMN_CAPS` is parsed out of the theme, so the expectation moves
+   * with the defect. A column that had the room and did not take it is the
+   * "stretched phone layout" failure seen from the other side.
+   */
+  const nearest = caps.reduce((a, c) => (Math.abs(c - width) < Math.abs(a - width) ? c : a));
+  if (width < Math.min(nearest, outerWidth) - 2) {
+    return `column is ${Math.round(width)}px in a ${Math.round(outerWidth)}px viewport — short of the ${nearest}px cap it should reach`;
+  }
   // Between two caps, a screen using the wider one is legitimately full-bleed.
   if (width > outerWidth - 2) return '';
   const offset = left - outerLeft;
@@ -623,7 +656,9 @@ const laidOutAt = (page) =>
 const smallTargets = (page) =>
   page.evaluate(() => [
     ...new Set(
-      [...document.querySelectorAll('[role="button"], [role="switch"], [role="radio"], button')]
+      [...document.querySelectorAll(
+        '[role="button"], [role="switch"], [role="radio"], [role="tab"], button',
+      )]
         .map((e) => ({
           n: (e.getAttribute('aria-label') || e.textContent || '?').trim().slice(0, 18),
           r: e.getBoundingClientRect(),
@@ -1045,11 +1080,10 @@ async function tourStudent(page, tag) {
     await openDueSoon();
     await page.waitForTimeout(1500);
     await tap(byId(page, 'tab-classes'));
-    // ASSERTED, not just photographed. Without this the "screen" is byte-
-    // identical to `my-classes` if the bar stops rendering, every geometric
-    // check passes, and the tour still reports having reached every screen.
-    await byId(page, 'mini-player').waitFor({ timeout: 15_000 });
-  });
+    // The anchor is what asserts it. Without it this "screen" is byte-identical
+    // to `my-classes` if the bar stops rendering, every geometric check passes,
+    // and the tour still reports having toured it.
+  }, 'mini-player');
   // A student's More is a different sheet: no audit row, and a password reset
   // staff do not get.
   await visit('more', () => tap(byId(page, 'tab-more')), 'more-password');

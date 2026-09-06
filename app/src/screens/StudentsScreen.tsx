@@ -18,6 +18,7 @@ import { createStudent, useStudents } from '../students';
 import { useAllCourses, useCohorts, useMyCourses } from '../structure';
 import { CAN_CREATE_ACCOUNTS } from '../accountCreation';
 import { getTheme, spacing } from '../theme';
+import { errorText } from '../errors';
 
 const t = getTheme();
 
@@ -184,7 +185,7 @@ function AddStudent({
       setCourseId(null);
       close();
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorText(e));
     } finally {
       setBusy(false);
     }

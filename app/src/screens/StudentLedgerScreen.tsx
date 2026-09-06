@@ -137,7 +137,11 @@ const styles = StyleSheet.create({
     // of ragged with its actions at three different heights.
     flexGrow: 1,
     flexDirection: 'row',
-    alignItems: 'center',
+    // TOP, not centre. Centred, the status floated to the middle of whatever
+    // its title happened to measure, so three cards in a row put "Missed" at
+    // three different heights — a 17px stagger the recording ledger, doing the
+    // same job, does not have.
+    alignItems: 'flex-start',
     // WRAPS AT 320. Side by side, a title of any length and a "Listen by
     // 2026-09-09" ran into each other with no gap at all — the words touching
     // on one baseline and the rest of the title wrapping under the date.

@@ -16,6 +16,7 @@ import {
 import { DateField } from '../components/DateField';
 import { createSession, useCourseSessions, type SessionRow } from '../sessions';
 import { getTheme, spacing } from '../theme';
+import { errorText } from '../errors';
 
 const t = getTheme();
 
@@ -76,7 +77,7 @@ function AddSession({ courseId }: { courseId: string }) {
         setDueDate(dueFor(date));
         close();
       } catch (e) {
-        setError((e as Error).message);
+        setError(errorText(e));
       } finally {
         setBusy(false);
       }

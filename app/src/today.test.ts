@@ -194,13 +194,23 @@ describe('what the badge counts', () => {
     expect(q.blocking).toBe(1);
   });
 
-  it('says nothing about one archived after the deadline had passed', () => {
-    const q = build(
-      [session('s1', { recordingId: 'r1', dueInDays: -1 })],
-      [recording('r1', 'archived')],
-    );
-    expect(q.items).toHaveLength(0);
-  });
+  /*
+   * AND NOTHING ABOUT ANY OF THEM ONCE THE DATE HAS GONE. The server refuses to
+   * publish past the listen-by date, so the row's own action would fail; nobody
+   * is locked out of anything they could still use; and a badge that never
+   * reaches zero is one people learn to ignore.
+   */
+  it.each(['archived', 'unpublished', 'draft', 'needsAttention'] as const)(
+    'says nothing about a %s recording once the deadline has passed',
+    (status) => {
+      const q = build(
+        [session('s1', { recordingId: 'r1', dueInDays: -1 })],
+        [recording('r1', status)],
+      );
+      expect(q.items).toHaveLength(0);
+      expect(q.blocking).toBe(0);
+    },
+  );
 
   it('does not count an import that needs attention', () => {
     const q = build(
@@ -320,6 +330,19 @@ describe('an empty queue', () => {
   it('waits for the sessions once there is something to subscribe to', () => {
     const q = build([], [], { sessions: null });
     expect(q).toMatchObject({ loading: true, scoped: true });
+  });
+
+  /*
+   * AND FOR THE RECORDINGS, which arrive on their own listener. In the window
+   * where the sessions have landed and the recordings have not, every session
+   * that HAS a recording looks like one that does not — so the landing screen
+   * would fill with "Attendance is in. The recording has not been added yet."
+   * for a page of recordings that exist.
+   */
+  it('waits for the recordings too, rather than reporting them missing', () => {
+    const q = build([session('s1', { recordingId: 'r1' })], [], { recordings: null });
+    expect(q).toMatchObject({ loading: true, scoped: true });
+    expect(q.items).toHaveLength(0);
   });
 
   it('a refused listener reports failure rather than loading for ever', () => {

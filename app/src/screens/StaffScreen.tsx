@@ -14,6 +14,7 @@ import {
 } from '../components/ui';
 import { setStaffAccess, useDecidedStaff, usePendingStaff, type StaffRow } from '../staff';
 import { getTheme, spacing } from '../theme';
+import { errorText } from '../errors';
 
 const t = getTheme();
 
@@ -36,7 +37,7 @@ export function StaffScreen({ selfUid, header }: { selfUid: string; header?: Rea
     try {
       await setStaffAccess(change);
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorText(e));
     } finally {
       setBusyUid(null);
     }

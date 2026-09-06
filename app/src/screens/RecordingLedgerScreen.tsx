@@ -21,6 +21,7 @@ import { useCohortName, type CourseRow } from '../structure';
 import type { SessionRow } from '../sessions';
 import type { RecordingRow } from '../recordings';
 import { getTheme, spacing } from '../theme';
+import { errorText } from '../errors';
 
 const t = getTheme();
 type Filter = 'all' | 'notComplete' | 'missed';
@@ -64,7 +65,7 @@ export function RecordingLedgerScreen({
     try {
       await fn();
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorText(e));
     } finally {
       setBusy(null);
     }

@@ -19,8 +19,11 @@ export function AuditScreen({ courseId, title }: { courseId: string | null; titl
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {/* A handle for "the log rendered", which the layout sweep anchors on —
           this screen is a read-only list and has no control of its own to wait
-          for. Wraps both states, so an empty log is an arrival too. */}
-      <View testID="audit-list">
+          for. NAMED BY WHAT IT FOUND: anchoring on a wrapper around both states
+          made a manager's course-scoped read failing closed indistinguishable
+          from a course with no history, on a screen the sweep also excuses from
+          the starvation guard. */}
+      <View testID={entries.length === 0 ? 'audit-empty' : 'audit-list'}>
         {entries.length === 0 ? (
           <Empty>No audit entries yet.</Empty>
         ) : (
@@ -61,7 +64,7 @@ function AuditCard({ entry: e }: { entry: AuditRow }) {
  * EVERY action a callable writes needs an entry, or the fallback prints a
  * camelCase function name in a list of English sentences — `submitAttendance`
  * sat between "Created course" and "Changed recording status" for exactly that
- * reason. Adding a `auditedCall` means adding a line here.
+ * reason. Adding an `auditedCall` means adding a line here.
  */
 const ACTION_LABELS: Record<string, string> = {
   createCohort: 'Created cohort',

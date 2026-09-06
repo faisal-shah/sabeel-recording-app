@@ -62,20 +62,30 @@ async function heightAbove(p, testId) {
  * it is what actually captures the screen.
  */
 async function contentHeight(p, fallback) {
+  // FAILS CLOSED, like `heightAbove`. Returning the viewport height when the
+  // measurement fails reproduces the exact bug this function was written for —
+  // every figure silently the top 900px of its screen — with nothing to show
+  // for it.
   const h = await p.evaluate(() => {
     const scrollers = [...document.querySelectorAll('div')].filter((el) => {
       const cs = getComputedStyle(el);
       return /auto|scroll/.test(cs.overflowY) && el.scrollHeight > el.clientHeight;
     });
+    // 0 means "nothing scrolls", which is a real answer: a short screen fits.
+    // -1 means the query found nothing at all, which is the failure this
+    // function exists to prevent, reported rather than rounded away.
+    if (!document.querySelector('div')) return -1;
     if (!scrollers.length) return 0;
     scrollers.sort((a, b) => b.clientHeight * b.clientWidth - a.clientHeight * a.clientWidth);
     const el = scrollers[0];
     // The chrome outside the scroller — header, tab bar, now-playing strip.
     return Math.ceil(el.scrollHeight + (window.innerHeight - el.clientHeight));
   });
+  if (h < 0) throw new Error('contentHeight: found no elements to measure — refusing to guess');
   // Capped: a fourteen-student roster at full length is a figure nobody reads,
-  // and a 6000px PNG in a PDF is worse than a scrolled one.
-  return Math.min(Math.max(h || fallback, fallback), 2400);
+  // and a 6000px PNG in a PDF is worse than a scrolled one. `h === 0` is the
+  // honest "nothing scrolls, the fallback is right" case.
+  return Math.min(Math.max(h, fallback), 2400);
 }
 
 /**

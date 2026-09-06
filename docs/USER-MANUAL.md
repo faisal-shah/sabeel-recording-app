@@ -415,6 +415,11 @@ Each recording moves through a few states:
   passed, because nobody would be able to open it.
 - **Needs attention** — flagged for a problem (for example, a Zoom import that
   needs review). Publish is blocked until it has audio.
+- **Unpublished** — pulled back from students after being live. It goes back to
+  Draft to be fixed, then out again.
+- **Archived** — filed away at the end of a term. Like unpublishing, it closes
+  the recording to everyone who was excused, so **Today** raises it if you
+  archive one whose Listen by date has not passed yet. One tap puts it back.
 
 ## 2.5 How a recording becomes required listening
 
@@ -670,7 +675,9 @@ The app is built around **reversible** actions:
 
 - **Disable** a student or staff member to switch off access while keeping their
   history.
-- **Unpublish** a recording to pull it from students without losing it.
+- **Unpublish** a recording to pull it from students without losing it, or
+  **archive** it once a term is over. Both close it to the students who were
+  excused; archiving is the one you reach for when nothing is wrong.
 - **Archive** a course when a term ends — its history stays intact, and you
   decide whether students may still listen to it.
 

@@ -12,6 +12,7 @@ import {
   StatusChip,
 } from '../components/ui';
 import { resendPasswordSetup, setStudentAccess, useStudentState } from '../students';
+import { errorText } from '../errors';
 import {
   useAllCourses,
   useCohortName,
@@ -59,7 +60,7 @@ export function StudentDetailScreen({
     try {
       await fn();
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorText(e));
     } finally {
       setBusy(null);
     }

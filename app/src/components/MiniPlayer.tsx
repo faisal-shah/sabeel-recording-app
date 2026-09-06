@@ -112,7 +112,7 @@ export function MiniPlayer({
           window, the title and the transport ended up hundreds of pixels apart.
           It cannot match the column of the screen it happens to be docked under
           — it outlives every screen, and knowing which one is showing is not
-          its business — so it takes the widest and caps the title too. */}
+          its business — so it takes the widest one there is. */}
       <View style={[styles.inner, wide ? styles.innerWide : null]}>
         <Pressable
           testID="mini-player-open"
@@ -218,7 +218,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing(2),
     width: '100%',
-    maxWidth: LAYOUT_WIDTHS.list,
+    // MINUS THE BAR'S OWN PADDING, because `Screen` caps the column INSIDE its
+    // padding and this capped outside it — so the bar's title started 33px left
+    // of the cards above it at 1440, which reads as a mistake rather than as a
+    // different column.
+    maxWidth: LAYOUT_WIDTHS.list - spacing(6) * 2,
     alignSelf: 'center',
   },
   progressTrack: {

@@ -105,9 +105,10 @@ export const PRIVACY_URL = 'https://recordings.oursabeel.com/privacy';
  * `rules.sessions.test.ts` sends exactly this query at exactly
  * `QUEUE_SCOPE.manager` and asserts it is served with every row returned, then
  * sends it at `QUEUE_SCOPE.admin` and asserts a manager is refused while an
- * admin is not. That pair pins the EMULATOR's ceiling, which sits higher: the
- * emulator does not enforce production's document-access limit. Treat it as a
- * regression guard on the rule's shape, never as a licence to raise this number
- * — raising it needs a measurement against a real project.
+ * admin is not. That pair BRACKETS the emulator's ceiling — which sits higher,
+ * because the emulator does not enforce production's document-access limit — and
+ * brackets it loosely. Treat it as a regression guard on the rule's shape, never
+ * as a licence to raise this number: raising it needs a measurement against a
+ * real project.
  */
 export const QUEUE_SCOPE = { admin: 30, manager: 10 } as const;

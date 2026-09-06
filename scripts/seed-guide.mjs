@@ -103,8 +103,11 @@ await mkSession(H,'g-s3','g-s3r','Session 3 — Patience in Hardship', {dueOffse
 await mkSession(H,'g-s4','g-s4r','Session 4 — Sincerity of Intention', {dueOffset:5, daysAgo:2, attendance:attend(6)});
 // Session 5: recording published but attendance NOT taken yet — nobody assigned.
 await mkSession(H,'g-s5','g-s5r','Session 5 — Reliance and Trust', {status:'published', daysAgo:1, attendance:null});
-// Session 6: a Zoom import that needs review.
-await mkSession(H,'g-s6','g-s6r','Session 6 — (import needs review)', {status:'needsAttention', daysAgo:1, attention:'Audio file looks truncated — re-upload before publishing.'});
+// Session 6: a Zoom import that needs review, with attendance ALREADY IN — so
+// the work queue files it under "Waiting to publish" rather than swallowing it
+// into "Attendance not taken", which is the bucket the manual describes and
+// which no seeded session used to produce.
+await mkSession(H,'g-s6','g-s6r','Session 6 — (import needs review)', {status:'needsAttention', daysAgo:1, attendance:attend(4), attention:'Audio file looks truncated — re-upload before publishing.'});
 // Session 7: attendance taken TODAY, recording not added yet.
 await db.collection('sessions').doc('g-s7').set({ courseId:H, cohortId, date:iso(now), title:'Session 7 — Today (recording pending)', dueDate:iso(now+7*day), notes:'', recordingId:null, attendance:attend(5), attendanceSubmittedAt:now, archived:false, createdAt:now, createdBy:'seed', updatedAt:now });
 // Arabic I: two published sessions.

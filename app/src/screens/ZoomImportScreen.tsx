@@ -6,6 +6,7 @@ import { DateField } from '../components/DateField';
 import { listZoomRecordings, importZoomRecording } from '../zoom';
 import type { SessionRow } from '../sessions';
 import { getTheme, spacing } from '../theme';
+import { errorText } from '../errors';
 
 const t = getTheme();
 
@@ -52,7 +53,7 @@ export function ZoomImportScreen({
     try {
       setRows(await listZoomRecordings(range));
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorText(e));
     } finally {
       setLoading(false);
     }
@@ -74,7 +75,7 @@ export function ZoomImportScreen({
   );
 
   return (
-    <Screen subtitle={`${session.title} · ${cls.name}`}>
+    <Screen title="Import from Zoom" subtitle={`${session.title} · ${cls.name}`}>
       <Card>
         <DateField label="From" value={from} onChange={setFrom} />
         <DateField label="To" value={to} onChange={setTo} />
@@ -125,7 +126,10 @@ export function ZoomImportScreen({
       </Pressable>
 
       {error ? <Notice tone="error">{error}</Notice> : null}
-      {loading && rows === null ? (
+      {/* NOT BOTH. `rows` stays null when the request fails, so the empty state
+          fired alongside the error and told staff to widen a date range for a
+          request that never completed. */}
+      {error ? null : loading && rows === null ? (
         <Empty>Loading recordings…</Empty>
       ) : filtered.length === 0 ? (
         <Empty>No recordings match. Widen the date range or the filters, then Load.</Empty>
@@ -158,7 +162,7 @@ function ZoomRow({
         await importZoomRecording({ meetingUuid: row.meetingUuid, fileId: row.fileId, sessionId });
         onImported();
       } catch (e) {
-        setError((e as Error).message);
+        setError(errorText(e));
       } finally {
         setBusy(false);
       }

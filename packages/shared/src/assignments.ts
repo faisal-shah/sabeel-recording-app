@@ -183,9 +183,9 @@ export function unbreakableDate(date: string): string {
  * Two of them do — the player screen and the docked bar — and each held its own
  * copy of the composition. The copies had already drifted once: applying the
  * deadline unconditionally cut a manager off from anything more than a week old
- * the moment they left the player, because
- * the deadline closes a STUDENT's access and nobody else's. That is exactly the
- * shape of bug two spellings of one rule produce, and it is why `formatClock`
+ * the moment they left the player, because the deadline closes a STUDENT's
+ * access and nobody else's. That is exactly the shape of bug two spellings of
+ * one rule produce, and it is why `formatClock`
  * and `SKIP_BACK_MS` live in one place too.
  *
  * The server is still the authority: `getPlaybackUrl` checks the same facts

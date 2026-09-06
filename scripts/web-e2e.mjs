@@ -1302,9 +1302,9 @@ check(
 );
 
 // The case that has no Back at all — no header arrow, only the bar: a session
-// opened straight from its URL has
-// nothing beneath it in the stack, so the header draws no back arrow. That is
-// the whole reason this link exists rather than leaning on Back.
+// opened straight from its URL has nothing beneath it in the stack, so the
+// header draws no back arrow. That is the whole reason this link exists rather
+// than leaning on Back.
 await admin.goto(sessionUrl, { waitUntil: 'domcontentloaded' });
 await admin.waitForTimeout(3500);
 await tap(admin, 'up-to-course-from-session');

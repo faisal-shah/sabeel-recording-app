@@ -197,24 +197,24 @@ export function buildTodayQueue({
     }
 
     /*
-     * NOT OUT YET, AND THE THREE REASONS ARE NOT EQUALLY URGENT.
+     * NOT OUT YET, AND ONLY WHILE THERE IS STILL TIME TO PUT IT OUT.
      *
-     * A draft and a needs-attention import have granted nobody anything, so
-     * they are work without being a lockout. Unpublishing and ARCHIVING both
-     * revoke what every excused student already had — the fan-out reads
-     * `status === 'published'` and nothing else (`assignmentsFanout.ts`), so the
-     * two are identical to a student.
+     * The four not-published states differ in whether anyone is locked out — a
+     * draft and a needs-attention import granted nobody anything, while
+     * unpublishing and ARCHIVING both revoke what every excused student already
+     * had (`assignmentsFanout.ts` keys on `status === 'published'` and nothing
+     * else, so the two are identical to a student).
      *
-     * Archiving is offered as a terminal filing decision, which is why it is
-     * only surfaced WHILE THE DEADLINE IS STILL OPEN: archived after the date,
-     * it took away nothing anyone could still use, and nagging about it would
-     * make the queue a list of finished terms. Archived before it, students are
-     * locked out of listening they are still accountable for, and nothing else
-     * on any screen says so.
+     * But NONE of them is work once the listen-by date has gone. The server
+     * refuses to publish past it — "Move it before publishing, or nobody will be
+     * able to listen" — so the row's own action would fail, nobody is locked out
+     * of anything they could still use, and a queue that kept them would carry a
+     * permanent badge for lockouts that no longer exist. A badge that is never
+     * zero is one people learn to ignore.
      */
-    const revoked = rec.status === 'unpublished' || rec.status === 'archived';
     const stillOwed = daysUntilDue(s.dueDate, today) >= 0;
-    if (rec.status !== 'published' && !(rec.status === 'archived' && !stillOwed)) {
+    const revoked = rec.status === 'unpublished' || rec.status === 'archived';
+    if (rec.status !== 'published' && stillOwed) {
       out.push({
         ...base,
         key: `pub-${s.id}`,

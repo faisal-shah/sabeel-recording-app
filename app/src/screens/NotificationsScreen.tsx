@@ -14,6 +14,7 @@ import { useListenerError } from '../liveQuery';
 import { registerThisDevice, setNotificationPref, useNotificationPrefs } from '../notifications';
 import { canOpenPushSettings, openPushSettings, pushPromptState } from '../push';
 import { getTheme } from '../theme';
+import { errorText } from '../errors';
 
 const t = getTheme();
 
@@ -88,7 +89,7 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
       try {
         await setNotificationPref(uid, kind, next);
       } catch (e) {
-        setError((e as Error).message);
+        setError(errorText(e));
       }
     })();
 

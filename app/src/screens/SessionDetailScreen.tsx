@@ -43,6 +43,7 @@ import { useStudents } from '../students';
 import { canPickAudio, pickAudioFile } from '../filePicker';
 import { useWide } from '../useWidth';
 import { getTheme, spacing } from '../theme';
+import { errorText } from '../errors';
 
 const t = getTheme();
 const STATUSES: AttendanceStatus[] = ['present', 'absent', 'excused'];
@@ -152,7 +153,7 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
         await fn();
         setEditing(false);
       } catch (e) {
-        setError((e as Error).message);
+        setError(errorText(e));
       } finally {
         setBusy(null);
       }
@@ -285,7 +286,7 @@ function AttendanceSection({ session }: { session: SessionRow }) {
         setMarks({});
         setInfo(`Attendance submitted for ${res.marked} student${res.marked === 1 ? '' : 's'}.`);
       } catch (e) {
-        setError((e as Error).message);
+        setError(errorText(e));
       } finally {
         setBusy(false);
       }
@@ -401,7 +402,7 @@ function RecordingSection({
       try {
         await fn();
       } catch (e) {
-        setError((e as Error).message);
+        setError(errorText(e));
       } finally {
         setBusy(null);
       }
@@ -435,7 +436,7 @@ function RecordingSection({
         await uploadRecordingAudio(id, picked.blob, setProgress);
         await finalizeRecordingUpload({ recordingId: id, durationSec: picked.durationSec });
       } catch (e) {
-        setError((e as Error).message);
+        setError(errorText(e));
         // Roll back a draft this attempt created: it holds nothing, and leaving
         // it parked on the session would block the next attempt (a session takes
         // 0..1 recordings) behind a delete. A draft we were only retrying is left

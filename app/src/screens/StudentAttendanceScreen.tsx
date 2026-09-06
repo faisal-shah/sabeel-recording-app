@@ -84,11 +84,12 @@ export function StudentAttendanceScreen({
   );
 
   return (
-    /* READ, like the two student screens this is opened FROM. A student's home
-       and class list are both the reading width; leaving this one at the list
-       width slid the page 230px left and made it 460px wider on a routine tap,
-       under a rail that had not moved. */
-    <Screen title={cls.name} subtitle="Your attendance" width="read">
+    /* LIST, like the two student screens this is opened FROM — both of which
+       now hold card grids at the same width. Paired with the `Grid` below, the
+       reading cap made this the one screen in the app that LOST a column as the
+       window grew: 680px of phone layout fits two cards, and crossing the 900px
+       breakpoint capped the column at 656 and dropped it to one. */
+    <Screen title={cls.name} subtitle="Your attendance" width="list">
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
 
       {/* WHAT THEY STILL OWE COMES FIRST, and in their words. Three attendance
