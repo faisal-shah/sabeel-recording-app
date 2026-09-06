@@ -75,8 +75,11 @@ export function MiniPlayer({
    * THREE WAYS ACCESS ENDS, and the audio has to stop for all of them:
    *   - the recording is deleted or unpublished (its document goes);
    *   - the course is archived with listening off;
-   *   - the student's own deadline passes, which happens at midnight while
-   *     they are listening and nothing else would notice.
+   *   - the STUDENT's own deadline passes, which happens at midnight while they
+   *     are listening and nothing else would notice. Staff have no deadline —
+   *     a session's date rides in `dueDate` for them too, and applying it here
+   *     cut a manager off from anything more than a week old the moment they
+   *     left the player.
    * Watching only the first left the other two running off a signed URL good
    * for another twelve hours, with nothing on screen saying anything changed.
    */
@@ -85,7 +88,7 @@ export function MiniPlayer({
     !!now &&
     ((loaded.resolved && !loaded.value) ||
       (course.resolved && !!course.value && !canPlayFromCourse(course.value)) ||
-      (now.dueDate !== null && isOverdue(now.dueDate, today)));
+      (now.studentUid !== null && now.dueDate !== null && isOverdue(now.dueDate, today)));
   useEffect(() => {
     if (revoked) void closePlayback();
   }, [revoked]);
@@ -127,6 +130,12 @@ export function MiniPlayer({
           "30" read as inert tags, and a typed "▶" renders as a colour emoji on
           some Android builds — which is exactly why `Transport` draws its
           glyphs. Sharing them is how the two views cannot drift. */}
+      {/* The title is capped, so something has to take the slack — otherwise the
+          whole cluster packs left and leaves a hole where the dismiss should be.
+          A spacer, so the transport stays at the far end of the row it is
+          centred in rather than trailing the title. */}
+      <View style={styles.spacer} />
+
       {wide ? (
         <Skip
           label={String(SKIP_BACK_MS / 1000)}
@@ -205,7 +214,10 @@ const styles = StyleSheet.create({
   // Capped as well as flexed. The bar spans the widest content column, and an
   // uncapped title pushed the transport to the far end of it — several hundred
   // pixels of nothing between what is playing and the button that pauses it.
-  text: { flex: 1, maxWidth: 520, justifyContent: 'center', minHeight: 40 },
+  // Capped rather than left to flex: an uncapped title pushed the transport to
+  // the far end of a 1180px row, hundreds of pixels from what it controls.
+  text: { flexShrink: 1, maxWidth: 520, justifyContent: 'center', minHeight: 40 },
+  spacer: { flex: 1 },
   title: { fontSize: 14, fontWeight: '700', color: t.text.primary },
   sub: { fontSize: 12, color: t.text.secondary, marginTop: 1 },
   play: {

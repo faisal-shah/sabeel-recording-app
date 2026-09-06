@@ -51,14 +51,16 @@ export interface TodayQueue {
   /** A listener was refused. `loading` would otherwise be true for ever. */
   failed: boolean;
   /**
-   * Whether there are any courses to have a queue ABOUT.
+   * Whether there are any LIVE courses to have a queue about.
    *
-   * A manager an admin has not assigned anything to has an empty queue for a
-   * completely different reason than a manager who is on top of their work, and
-   * telling them "attendance is in, every recording is published" is a sentence
-   * about courses they do not have.
+   * An empty queue has three causes and they read as three different sentences:
+   * nothing is waiting, you have no courses yet, and your courses are all
+   * finished. Telling a manager at the end of term that an administrator will
+   * assign them something is the second answer given to the third question.
    */
   scoped: boolean;
+  /** Courses exist, but none of them is still running. */
+  allFinished: boolean;
   /** More courses than one `in` clause can carry; the queue is a partial view. */
   truncated: boolean;
 }
@@ -191,13 +193,14 @@ function useTodayQueue(
     // The COURSES have not arrived either — and an empty list of them reads on
     // screen as "you have no courses", which is a confident wrong answer to
     // show every staff member for the length of a cold load.
+    const pending = { items: [], blocking: 0, failed, scoped: true, allFinished: false, truncated };
     if (!settled && courses === null) {
-      return { items: [], blocking: 0, loading: !failed, failed, scoped: true, truncated };
+      return { ...pending, loading: !failed };
     }
 
     const subscribed = scope.length > 0;
     if (subscribed && (sessions === null || recordings === null)) {
-      return { items: [], blocking: 0, loading: !failed, failed, scoped: true, truncated };
+      return { ...pending, loading: !failed };
     }
 
     const out: TodayItem[] = [];
@@ -303,6 +306,7 @@ function useTodayQueue(
       loading: false,
       failed,
       scoped: subscribed,
+      allFinished: !subscribed && (courses ?? []).length > 0,
       truncated,
     };
   }, [sessions, recordings, names, truncated, scope, today, failed, courses, settled]);

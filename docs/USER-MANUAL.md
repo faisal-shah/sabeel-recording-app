@@ -381,6 +381,9 @@ well under 30 MB. (Uploading audio rather than a video file is the single bigges
 thing that keeps this app free to run.) The recording takes its title, date, and
 notes from the session, so you don't retype them.
 
+<figure class="ph"><img src="manual/img/17b-session-no-recording-phone.png" alt="A session with no recording yet, on a phone"><figcaption>On a phone</figcaption></figure>
+<figure class="wd"><img src="manual/img/17b-session-no-recording-desktop.png" alt="A session with no recording yet, on a computer"><figcaption>On a computer</figcaption></figure>
+
 Each recording moves through a few states:
 
 - **Draft** — added, not yet visible to students. You can replace its audio

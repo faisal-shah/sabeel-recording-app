@@ -5,14 +5,6 @@ import { getTheme, spacing } from '../theme';
 const t = getTheme();
 
 /**
- * Play / pause and the two skip controls.
- *
- * The glyphs are DRAWN, not typed. A "▶" character renders as a colour emoji on
- * some Android builds, which ignores the theme colour entirely and lands a blue
- * triangle in the middle of the brand palette — the `expo-firebase-stack` skill
- * calls this out. A bordered triangle and two bars are deterministic everywhere.
- */
-/**
  * The play/pause mark, drawn rather than typed — see the note above.
  *
  * `scale` because the docked bar's button is 44px against the player's 72px,
@@ -39,6 +31,14 @@ export function PlayPauseGlyph({
   );
 }
 
+/**
+ * Play / pause and the two skip controls.
+ *
+ * The glyphs are DRAWN, not typed. A "▶" character renders as a colour emoji on
+ * some Android builds, which ignores the theme colour entirely and lands a blue
+ * triangle in the middle of the brand palette — the `expo-firebase-stack` skill
+ * calls this out. A bordered triangle and two bars are deterministic everywhere.
+ */
 export function Transport({
   playing,
   disabled,

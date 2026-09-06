@@ -189,13 +189,6 @@ export function useMyCoursesState(uid: string | null): CourseRow[] | null {
 }
 
 /**
- * A class roster.
- *
- * Constrained to one courseId, which is also what makes the rule affordable:
- * its staff arm resolves a class lookup per row, and only a single-class query
- * lets that resolve one cached path.
- */
-/**
  * A roster comes back in DOCUMENT ID ORDER, which is arbitrary.
  *
  * Firestore cannot order these: the name lives on `students`, not on the
@@ -209,6 +202,13 @@ export function sortByName<T>(rows: T[], nameOf: (row: T) => string): T[] {
   return [...rows].sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
 }
 
+/**
+ * A class roster.
+ *
+ * Constrained to one courseId, which is also what makes the rule affordable:
+ * its staff arm resolves a class lookup per row, and only a single-class query
+ * lets that resolve one cached path.
+ */
 export function useRoster(courseId: string | null): EnrollmentRow[] {
   return useLiveQuery<EnrollmentRow[]>(
     () =>

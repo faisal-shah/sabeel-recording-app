@@ -351,6 +351,12 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
+    // WRAPS AT 320. Side by side, a title of any length gets 117px beside a
+    // one-line date — this app's real titles then break into seven lines
+    // against 140px of empty card. Wrapping drops the date under the title,
+    // where it has the whole width.
+    flexWrap: 'wrap',
+    rowGap: spacing(2),
     backgroundColor: t.bg.surface,
     borderRadius: 12,
     padding: spacing(4),
@@ -360,11 +366,13 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.85 },
   cardMissed: { backgroundColor: t.bg.inset },
-  cardMain: { flex: 1, paddingRight: spacing(3) },
+  // `minWidth` is what makes the wrap happen: below it the two blocks cannot
+  // share a line, so the date moves to its own.
+  cardMain: { flexGrow: 1, flexShrink: 1, flexBasis: 220, minWidth: 220, paddingRight: spacing(3) },
   title: { fontSize: 16, fontWeight: '600', color: t.text.primary },
   titleDone: { color: t.text.secondary },
   course: { fontSize: 13, color: t.text.secondary, marginTop: spacing(1) },
-  cardMeta: { alignItems: 'flex-end' },
+  cardMeta: { alignItems: 'flex-end', flexGrow: 1 },
   due: { fontSize: 13, color: t.text.secondary, fontVariant: ['tabular-nums'] },
   missed: { color: t.feedback.danger, fontWeight: '600' },
   doneChip: { fontSize: 13, color: t.feedback.success, fontWeight: '600' },

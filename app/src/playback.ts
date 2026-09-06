@@ -68,6 +68,15 @@ export interface NowPlaying {
   title: string;
   courseName: string;
   durationMs: number;
+  /**
+   * Whose deadline `dueDate` is, or null when staff are listening.
+   *
+   * The deadline closes a STUDENT's access and nobody else's — the server says
+   * the same, returning no due date for staff before it checks one. Any surface
+   * acting on `dueDate` has to consult this first, or a manager reviewing a
+   * lecture from last term is cut off the moment they leave the player.
+   */
+  studentUid: string | null;
   /** The listener's deadline, for the surfaces that state it. Null for staff. */
   dueDate: string | null;
 }
@@ -140,18 +149,6 @@ function set(next: Partial<PlaybackState>) {
 }
 
 /**
- * Write one session's progress. TAKES ITS SUBJECT, rather than reading the
- * module's.
- *
- * Every argument is captured by the caller before the first `await`, and the
- * generation is checked before anything module-level is touched again. That is
- * what makes a write belonging to the recording you just left unable to land on
- * the one you just opened: the round trip is two network calls long, and in that
- * window `owner`, `position` and `listened` can all belong to something else.
- * Writing the wrong `listenedMs` here is not a cosmetic bug — that number is the
- * audit evidence staff read on the ledger.
- */
-/**
  * The write queue for the current session's progress document.
  *
  * ONE AT A TIME. `persistFor` is read-modify-write, and two of them in flight
@@ -172,6 +169,18 @@ function persistFor(
   return writes;
 }
 
+/**
+ * Write one session's progress. TAKES ITS SUBJECT, rather than reading the
+ * module's.
+ *
+ * Every argument is captured by the caller before the first `await`, and the
+ * generation is checked before anything module-level is touched again. That is
+ * what makes a write belonging to the recording you just left unable to land on
+ * the one you just opened: the round trip is two network calls long, and in that
+ * window `owner`, `position` and `listened` can all belong to something else.
+ * Writing the wrong `listenedMs` here is not a cosmetic bug — that number is the
+ * audit evidence staff read on the ledger.
+ */
 async function writeProgress(
   gen: number,
   who: { studentUid: string; recordingId: string; courseId: string },
@@ -284,6 +293,12 @@ export function openPlayback(
     },
     onEnded: () => {
       if (generation !== gen) return;
+      // CLEAR THE SEEK HOLD. A forward skip past the real end — reachable when
+      // `durationSec` is null, or when the stored duration is longer than the
+      // file — leaves a target the player can never reach, and every later tick
+      // is then discarded as stale. Position and listened time freeze for the
+      // rest of the session, and the frozen number is what the ledger shows.
+      seekTarget = null;
       set({ playing: false });
       persist();
     },

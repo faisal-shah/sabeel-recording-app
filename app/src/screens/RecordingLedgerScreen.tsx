@@ -273,8 +273,11 @@ function LedgerRowCard({
         <Text style={[styles.status, statusStyle(bucket)]}>{statusLabel(r, today)}</Text>
       </View>
 
+      {/* Pushed to the foot of the card, like every other grid card: a name that
+          wraps to two lines used to drop its own Override 19px below the ones
+          beside it, inside a row whose outlines were already level. */}
       {open ? (
-        <View style={styles.overrideForm}>
+        <View style={[styles.overrideForm, styles.actions]}>
           <Field
             testID={`override-reason-${r.name}`}
             label="Reason (required, recorded in the audit log)"
@@ -327,12 +330,14 @@ function LedgerRowCard({
           <Button label="Cancel" variant="secondary" onPress={() => setOpen(false)} />
         </View>
       ) : (
-        <Button
-          testID={`override-open-${r.name}`}
-          label={r.source === 'override' ? 'Change override' : 'Override'}
-          variant="secondary"
-          onPress={() => setOpen(true)}
-        />
+        <View style={styles.actions}>
+          <Button
+            testID={`override-open-${r.name}`}
+            label={r.source === 'override' ? 'Change override' : 'Override'}
+            variant="secondary"
+            onPress={() => setOpen(true)}
+          />
+        </View>
       )}
     </View>
   );
@@ -370,6 +375,7 @@ function fmtDate(ms: number | null): string {
 }
 
 const styles = StyleSheet.create({
+  actions: { marginTop: 'auto' },
   /**
    * WRAPS, because four tiles across a phone cannot hold their own labels.
    * "Accountable" is 11 characters and a quarter of a 360dp screen leaves it

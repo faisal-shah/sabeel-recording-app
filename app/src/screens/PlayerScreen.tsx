@@ -94,12 +94,22 @@ export function PlayerScreen({
         title: recording.title,
         courseName: cls.name,
         durationMs: (recording.durationSec ?? 0) * 1000,
+        studentUid,
         dueDate,
       },
       studentUid,
       recording.courseId,
     );
-  }, [allowed, recording.id, recording.title, recording.durationSec, recording.courseId, cls.name, studentUid, dueDate]);
+  }, [
+    allowed,
+    recording.id,
+    recording.title,
+    recording.durationSec,
+    recording.courseId,
+    cls.name,
+    studentUid,
+    dueDate,
+  ]);
   // While the scrubber is being dragged it reports the previewed position; the
   // time readouts follow the thumb rather than the still-advancing playhead.
   const [scrubMs, setScrubMs] = useState<number | null>(null);

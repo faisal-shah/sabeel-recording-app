@@ -143,8 +143,10 @@ service cloud.firestore {
       // Same discipline as /courses and /enrollments: the admin arm reads no
       // documents, and the staff arm depends on resource.data, which is what
       // forces a staff query to be constrained. That arm resolves a course
-      // lookup PER ROW, so it is affordable only for a query constrained to one
-      // courseId — which every staff recordings list is.
+      // lookup per row, cached per distinct path, so it is affordable only for a
+      // query over a SMALL, BOUNDED set of courseIds — one for most staff lists,
+      // and at most `QUEUE_SCOPE.manager` for the work queue, which is measured
+      // rather than assumed (see rules.sessions.test.ts).
       allow get, list: if isAdmin()
         || (isStaff() && request.auth.uid in
             get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.managerUids);
@@ -204,6 +206,12 @@ service cloud.firestore {
     // A dated meeting: attendance lives here. Staff-only — students never read a
     // session or who attended (that is what makes attendance private). Managers
     // are scoped to their own courses; the admin arm reads no documents.
+    //
+    // The manager arm resolves a course lookup per row, cached per distinct
+    // path, so a manager query has to span a bounded set of courses. The widest
+    // one the app sends is the staff work queue's — `QUEUE_SCOPE.manager` ids in
+    // one `in` clause — and `rules.sessions.test.ts` sends exactly that query at
+    // exactly that width rather than trusting the arithmetic.
     match /sessions/{sessionId} {
       allow get, list: if isAdmin()
         || (isStaff() && request.auth.uid in

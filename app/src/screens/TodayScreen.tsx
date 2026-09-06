@@ -54,7 +54,7 @@ export function TodayScreen({
   onOpenSession: (sessionId: string, courseId: string) => void;
   onOpenLedger: (recordingId: string) => void;
 }) {
-  const { items, blocking, loading, failed, scoped, truncated } = queue;
+  const { items, blocking, loading, failed, scoped, allFinished, truncated } = queue;
   const today = todayInZone(INSTITUTE_TIMEZONE);
 
   return (
@@ -65,7 +65,9 @@ export function TodayScreen({
           ? 'Could not read your courses'
           : loading
           ? 'Checking your courses…'
-          : !scoped
+          : allFinished
+            ? 'No courses running'
+            : !scoped
             ? 'No courses yet'
             : items.length === 0
               ? `Nothing is waiting · ${today}`
@@ -98,9 +100,11 @@ export function TodayScreen({
           </Empty>
         ) : (
           <Notice tone="info">
-            {isAdmin
-              ? 'No courses yet. Add a cohort under Courses, then a course inside it — this is where the work waiting on you will appear.'
-              : 'You are not assigned to any courses yet. An administrator assigns them; once they do, this is where the work waiting on you appears.'}
+            {allFinished
+              ? 'Every course you can see has finished. Nothing is waiting; open Courses for the record of a past term.'
+              : isAdmin
+                ? 'No courses yet. Add a cohort under Courses, then a course inside it — this is where the work waiting on you will appear.'
+                : 'You are not assigned to any courses yet. An administrator assigns them; once they do, this is where the work waiting on you appears.'}
           </Notice>
         )
       ) : null}

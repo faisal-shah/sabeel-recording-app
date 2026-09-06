@@ -174,11 +174,25 @@ await pair(adm, '15-course-detail');
 await tap(adm, 'nav-sessions'); await adm.waitForTimeout(2500);
 await pair(adm, '16-sessions');
 
+// A session with NO recording yet, because that is the state the manual's "add
+// the recording" step is written for — Session 3 below already has a published
+// one, so the two buttons the text names appear in no other figure. Captured
+// off the sessions list and backed out of it: the parent breadcrumb PUSHES the
+// course, and a second course screen in the stack makes `nav-sessions` ambiguous.
+await tap(adm, 'session-open-Session 7 — Today (recording pending)');
+await adm.getByTestId('recording-upload').waitFor({ timeout: 15000 });
+await adm.waitForTimeout(600);
+await pair(adm, '17b-session-no-recording');
+await adm.goBack({ waitUntil: 'domcontentloaded' });
+await adm.getByTestId('sessions-add').waitFor({ timeout: 15000 });
+await adm.waitForTimeout(1200);
+
 // Session 3 — attendance taken (roster shown) + a published recording.
 await tap(adm, 'session-open-Session 3 — Patience in Hardship');
 await adm.getByTestId('recording-ledger').waitFor({ timeout: 15000 });
 await adm.waitForTimeout(800);
 await pair(adm, '17-session-detail');
+
 
 // Its ledger — the accountable/attendees split.
 await tap(adm, 'recording-ledger');

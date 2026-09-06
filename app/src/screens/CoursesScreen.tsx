@@ -24,7 +24,6 @@ import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
 
-/** Shared with the cohort list, which shows the same count per cohort. */
 /** The create form, in the sheet the header action opens. */
 function AddCourse({ cohortId }: { cohortId: string }) {
   const close = useAddAction();
@@ -64,6 +63,7 @@ function AddCourse({ cohortId }: { cohortId: string }) {
   );
 }
 
+/** Shared with the cohort list, which shows the same count per cohort. */
 export function courseLabel(n: number): string {
   return n === 1 ? '1 course' : `${n} courses`;
 }

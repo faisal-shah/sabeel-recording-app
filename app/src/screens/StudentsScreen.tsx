@@ -235,6 +235,7 @@ function AddStudent({
         label="Create account"
         busy={busy}
         disabled={!displayName.trim() || !email.includes('@')}
+        block
         onPress={() => void create()}
       />
       {error ? <Notice tone="error">{error}</Notice> : null}

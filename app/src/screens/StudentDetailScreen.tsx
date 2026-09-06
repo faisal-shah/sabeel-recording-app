@@ -5,6 +5,7 @@ import {
   Empty,
   ListRow,
   Notice,
+  Row,
   Screen,
   SectionTitle,
   StatusChip,
@@ -86,6 +87,10 @@ export function StudentDetailScreen({
         <>
           <SectionTitle>Access</SectionTitle>
           <Card>
+            {/* A Row, like every other action pair in the app. Straight into the
+                Card they stacked at the left of an 1114px card, two different
+                widths, while the equivalent pair on a course sits side by side. */}
+            <Row>
             <Button
               testID="student-resend"
               label="Resend password link"
@@ -127,6 +132,7 @@ export function StudentDetailScreen({
                   : 'Only an admin can disable an account.'}
               </Empty>
             )}
+            </Row>
           </Card>
 
           {isAdmin ? (

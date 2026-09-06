@@ -51,7 +51,6 @@ export function useCourseSessions(courseId: string | null): SessionRow[] {
   );
 }
 
-/** Live single session (for the session detail / attendance screen). */
 /**
  * One session, live, plus whether the listener has answered.
  *

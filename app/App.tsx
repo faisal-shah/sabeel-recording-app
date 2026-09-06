@@ -521,6 +521,7 @@ const QueueContext = createContext<TodayQueue>({
   loading: true,
   failed: false,
   scoped: false,
+  allFinished: false,
   truncated: false,
 });
 

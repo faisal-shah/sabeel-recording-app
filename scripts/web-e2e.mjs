@@ -155,8 +155,6 @@ async function newSession() {
   return page;
 }
 
-/** Tap by testID. Text locators are unreliable here: react-navigation keeps the
- *  previous screen mounted, so a text match can resolve to a hidden node. */
 /**
  * Tap by testID — the VISIBLE one.
  *
@@ -660,15 +658,6 @@ check(
 );
 await tap(student, 'player-play'); // pause, so the saved position settles
 
-/*
- * THE DOCKED NOW-PLAYING BAR — leaving the player must not stop the audio.
- *
- * This is the whole reason playback moved out of `PlayerScreen` into an
- * app-wide session, and it is the one behaviour no other check reaches: the
- * sweep photographs the bar but never asserts that the position kept moving,
- * and the unit suite does not touch playback at all. A two-hour lecture that
- * stops because someone checked their attendance record is the bug.
- */
 /*
  * THE DOCKED NOW-PLAYING BAR — leaving the player must not stop the audio.
  *

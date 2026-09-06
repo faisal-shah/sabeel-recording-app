@@ -41,7 +41,10 @@ export function Sheet({
           >
             {children}
           </ScrollView>
-          <Button label={closeLabel} variant="secondary" onPress={onClose} block />
+          {/* Quiet, and deliberately: this is the sheet's way OUT, sitting
+              under a form whose primary is the reason the sheet is open. Filled,
+              full width, it outweighed a disabled "Create account" above it. */}
+          <Button label={closeLabel} variant="quiet" onPress={onClose} block />
         </Pressable>
       </Pressable>
     </Modal>

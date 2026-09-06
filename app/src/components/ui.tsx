@@ -168,7 +168,7 @@ export function Button({
 }: {
   label: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: 'primary' | 'secondary' | 'danger' | 'quiet';
   busy?: boolean;
   disabled?: boolean;
   /** A row-level action sitting beside a name, not a full-width page action. */
@@ -193,8 +193,15 @@ export function Button({
       ? styles.btnPrimary
       : variant === 'danger'
         ? styles.btnDanger
-        : styles.btnSecondary;
-  const textStyle = variant === 'secondary' ? styles.btnSecondaryText : styles.btnPrimaryText;
+        : variant === 'quiet'
+          ? styles.btnQuiet
+          : styles.btnSecondary;
+  const textStyle =
+    variant === 'secondary'
+      ? styles.btnSecondaryText
+      : variant === 'quiet'
+        ? styles.btnQuietText
+        : styles.btnPrimaryText;
   return (
     <Pressable
       testID={testID}
@@ -417,7 +424,10 @@ export function Field({
         autoCorrect={false}
         keyboardType={keyboardType}
         multiline={multiline}
-        numberOfLines={multiline ? 4 : undefined}
+        // Three, to agree with `inputMultiline`'s minHeight. Android sizes the
+        // box from this and web from the style; disagreeing gives the same
+        // field two different heights on the two platforms.
+        numberOfLines={multiline ? 3 : undefined}
         textAlignVertical={multiline ? 'top' : undefined}
       />
     </View>
@@ -515,18 +525,14 @@ function StatusLight({ status }: { status: string }) {
  *
  * The single most visible difference between a designed desktop layout and a
  * stretched phone one: a list of cards down the middle of a 1500px window is
- * mostly empty space, and the same cards at 320px must be one per row. `min` is
- * the narrowest a cell may be before the row reflows — the cap on the SAME axis
- * stops a lone last card in a row from stretching to the full width and looking
- * like a different component.
- */
-/**
- * `min` IS THE NARROWEST A CELL MAY BE, and it decides where two columns start.
+ * mostly empty space, and the same cards at 320px must be one per row.
  *
- * The content box at a 720px viewport is 680px, so two cells plus the 12px gap
- * must fit in that: anything above 334 stays single-column across the whole
- * 720–899 band. Every grid in this app uses 320 or 330 for that reason; 340 was
- * off by twelve pixels and looked like a breakpoint bug.
+ * `min` IS THE NARROWEST A CELL MAY BE, and it is what decides where two
+ * columns start. The content box at a 720px viewport is 680px, so two cells
+ * plus the 12px gap have to fit in that: anything above 334 stays
+ * single-column across the whole 720–899 band. Every grid in this app passes
+ * 320 or 330 for that reason — 340 was off by twelve pixels and read as a
+ * broken breakpoint.
  */
 export function Grid({ min = 300, children }: { min?: number; children: ReactNode }) {
   const [width, setWidth] = useState(0);
@@ -695,7 +701,14 @@ export function Segmented<T extends string>({
  * Items GROW to share a line but never SHRINK (see `rowItem`). Shrinking is what
  * produced a Publish button squeezed to a third of its neighbour with its label
  * broken mid-word — "Publ / ish" — on a real phone. A row is allowed to wrap; it
- * is not allowed to crush a control below the width of its own text.
+ * is not allowed to crush a control.
+ *
+ * THE FLOOR IS THE 150px BASIS, NOT THE TEXT. Every cell on a line is the same
+ * width and at least 150px wide, and a label too long for that wraps onto a
+ * second line — which is why the buttons inside also stretch to the tallest.
+ * Letting the text set the floor instead sounds safer and is not: two cells then
+ * come out different widths, and a pair whose labels do not both fit overflows
+ * the card and lands one control on top of the other.
  */
 export function Row({ children }: { children: ReactNode }) {
   const roomy = useRoomy();
@@ -1035,6 +1048,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing(3),
   },
   btn: {
+    // Fills the cell `Row` gives it. Harmless anywhere else: as a column child
+    // there is no free main-axis space to grow into, and `btnWide` overrides the
+    // cross-axis stretch where a button should size to its label.
+    flexGrow: 1,
+    // AND shrinks into it. React Native defaults flexShrink to 0, unlike CSS, so
+    // growing alone left a 190px button sitting in the 154px cell it shares with
+    // its neighbour — the label clipped mid-word and the two controls drawn on
+    // top of each other. Shrinking lets the label wrap, which is what
+    // `numberOfLines={2}` was already there for.
+    flexShrink: 1,
     borderRadius: 8,
     paddingVertical: spacing(3),
     paddingHorizontal: spacing(4),
@@ -1046,6 +1069,10 @@ const styles = StyleSheet.create({
   btnWide: { alignSelf: 'flex-start', minWidth: 120 },
   btnPrimary: { backgroundColor: t.accent.base },
   btnSecondary: { backgroundColor: t.bg.sage },
+  // Unfilled, because weight should follow consequence. A full-width sage
+  // Cancel under a content-width primary is the loudest thing in the sheet and
+  // it is the one action that does nothing.
+  btnQuiet: { backgroundColor: 'transparent', borderWidth: 1, borderColor: t.border.subtle },
   btnDanger: { backgroundColor: t.feedback.danger },
   btnPressed: { opacity: 0.85 },
   // Neutral rather than a faded brand fill: a washed-out raspberry block still
@@ -1059,11 +1086,15 @@ const styles = StyleSheet.create({
   btnText: { fontSize: 15, fontWeight: '600', textAlign: 'center' },
   btnPrimaryText: { color: t.accent.onAccent },
   btnSecondaryText: { color: t.text.primary },
+  btnQuietText: { color: t.text.secondary },
   field: { marginTop: spacing(3) },
   // A single-line field stretched to 1100px is unreadable and looks unfinished;
   // the value in it is a name or an email, never a paragraph.
   fieldWide: { maxWidth: 440 },
-  inputMultiline: { minHeight: 96, paddingTop: spacing(3) },
+  // Three whole line boxes: 12 + 12 padding, 2 border, 3 x 22. A minHeight that
+  // is not a multiple of the line height leaves a stripe of half a line under
+  // the last one, which reads as a misaligned box rather than an empty one.
+  inputMultiline: { minHeight: 92, lineHeight: 22 },
   fieldLabel: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(1) },
   input: {
     backgroundColor: t.bg.inset,
@@ -1094,10 +1125,8 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 13, color: t.text.secondary },
   row: {
     flexDirection: 'row',
-    // `stretch`, not `flex-start`: a two-word label wraps and a one-word one does
-    // not, and top-aligned that leaves one button 14px shorter than the one
-    // beside it. At 320 they stack and at 720 they both fit on a line, so 390 —
-    // the commonest phone width — was the only place it showed.
+    // `stretch`, so every cell is as tall as the tallest — see `rowItem`, which
+    // is what passes that height on to the control inside it.
     alignItems: 'stretch',
     justifyContent: 'flex-start',
     flexWrap: 'wrap',
@@ -1109,7 +1138,27 @@ const styles = StyleSheet.create({
   // button breaks its label mid-word. Refusing to shrink means the line either
   // fits or wraps — both readable. maxWidth caps the one case shrink used to
   // cover: a basis wider than the container itself, on a very narrow screen.
-  rowItem: { flexGrow: 1, flexShrink: 0, flexBasis: 150, maxWidth: '100%' },
+  /*
+   * A ROW, not a column, and that is the whole fix.
+   *
+   * `alignItems: 'stretch'` on the outer row makes every CELL as tall as the
+   * tallest. As a column container the cell then stretched its child's WIDTH
+   * and left its height alone, so a button whose label wrapped stayed 58px
+   * beside a 44px one — the stretch went to an invisible wrapper and stopped
+   * there. As a row container the cross axis is vertical, so the control fills
+   * the cell it was given, and `btn`'s own `flexGrow` fills it the other way.
+   */
+  rowItem: {
+    // A row itself, so `alignItems: 'stretch'` has something to stretch: the
+    // button is its child, and a column cell would stretch only the invisible
+    // wrapper.
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    flexGrow: 1,
+    flexShrink: 0,
+    flexBasis: 150,
+    maxWidth: '100%',
+  },
   rowItemWide: { flexGrow: 0, flexBasis: 'auto' },
 
   // --- compact row actions -------------------------------------------------

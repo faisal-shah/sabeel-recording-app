@@ -194,10 +194,13 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
       {error ? <Notice tone="error">{error}</Notice> : null}
       {/* The listen-by date rides the heading line now — stating it again here
           was the same sentence twice on one screen. */}
+      {/* Capped like the register below it. The card takes the page's list
+          width because it holds a roster; prose inside it still wants a reading
+          measure, or a note runs to 150 characters a line. */}
       {session.notes ? (
-        <Text style={styles.notes}>{session.notes}</Text>
+        <Text style={[styles.notes, styles.prose]}>{session.notes}</Text>
       ) : (
-        <Text style={styles.meta}>No notes for this session.</Text>
+        <Text style={[styles.meta, styles.prose]}>No notes for this session.</Text>
       )}
       <ConfirmDanger
         // A session with a recording is deleted by removing the recording first,
@@ -723,6 +726,7 @@ const styles = StyleSheet.create({
   // one line at a time: left to fill 1180px it put every name and its control
   // 470px apart. Capped, and left-aligned under the heading.
   rosterWide: { maxWidth: 760 },
+  prose: { maxWidth: 760 },
   // 44pt: this is the single most-tapped control in the staff app — once per
   // student, per session — and it was 32px tall at phone width.
   segBtn: {
