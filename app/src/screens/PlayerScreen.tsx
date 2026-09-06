@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   INSTITUTE_TIMEZONE,
-  canPlayFromCourse,
+  canPlayNow,
   isOverdue,
   listenedFraction,
   todayInZone,
@@ -58,9 +58,9 @@ export function PlayerScreen({
   // listening off, or this student's own deadline has passed. Either way the
   // server refuses to mint a URL, so the transport must not be drawn — a play
   // button that does nothing reads as a broken app rather than a closed door.
-  const closed =
-    studentUid !== null && dueDate !== null && isOverdue(dueDate, todayInZone(INSTITUTE_TIMEZONE));
-  const allowed = canPlayFromCourse(cls) && !closed;
+  const today = todayInZone(INSTITUTE_TIMEZONE);
+  const closed = studentUid !== null && dueDate !== null && isOverdue(dueDate, today);
+  const allowed = canPlayNow(cls, dueDate, studentUid, today);
   const session = usePlayback();
   // The session is app-wide, so on the first render after arriving it may still
   // describe the PREVIOUS recording. Read it only once it is about this one;

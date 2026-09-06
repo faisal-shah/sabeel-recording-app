@@ -12,6 +12,8 @@ The app works the same on the website
 (<https://sabeel-class-recordings.web.app>) and the Android app — same account,
 same data, live everywhere. Every screen in this guide is shown twice: once **on
 a phone** and once **on a computer**, so you can recognize it wherever you are.
+Both are captures of the website, at a phone's width and a laptop's; the Android
+app draws the same screens, minus the one thing Section 2.11 calls out.
 
 ---
 
@@ -100,8 +102,9 @@ recording still open to you, shown as a large card so there is no hunting on the
 screen you open most. Everything else sits underneath it, grouped so nothing
 slips past you:
 
-- **Missed** — the date to listen by has passed. Shown in red, with the date it
-  closed.
+- **Missed** — the date to listen by has passed, with the date it closed.
+  Nothing can be done about these, so they are set quietly rather than as an
+  alarm.
 - **Due soon** — the date to listen by is within the next week.
 - **Upcoming** — opened to you, with more time.
 - **Completed** — recordings you've already marked done.
@@ -140,6 +143,11 @@ laptop at home — it remembers where you were.
 
 If the teacher left a note, it appears under **About this recording** — often
 "focus on this part" or "we'll discuss this next week."
+
+<div class="pair">
+<figure class="ph"><img src="manual/img/03b-mini-player-phone.png" alt="The now-playing bar on a phone"><figcaption>On a phone</figcaption></figure>
+<figure class="wd"><img src="manual/img/03b-mini-player-desktop.png" alt="The now-playing bar on a computer"><figcaption>On a computer</figcaption></figure>
+</div>
 
 **You can leave this screen without stopping the audio.** Go and check your
 attendance record or open another class — a slim bar keeps showing what's
@@ -314,8 +322,9 @@ The **course page** is your dashboard for that course:
   recordings live (Section 2.4).
 - **Attendance report** summarizes attendance and catch-up across the whole
   course (Section 2.9).
-- The counts card — *incomplete / missed of N required* — is the whole course's
-  catch-up at a glance, and links straight to the course **Audit history**.
+- The counts card — *N required listening / not complete / missed* — is the
+  whole course's required listening at a glance, and links straight to the
+  course **Audit history**.
 - **Settings** lets you rename the course, **archive** it when the term ends, and
   choose whether students may still listen to an archived course's recordings.
 - **Managers** lists the staff assigned to *this* course. Managers only ever see
@@ -543,8 +552,9 @@ To add a student, tap **Add a student**, enter their **full name** and **email**
 optionally **enrol them in a course** right away, and tap **Create account**. The
 app emails them a link to set their own password — you never handle passwords.
 
-**Creating accounts is done on the website, not in the phone apps.** The button
-is simply absent there. This is a store requirement rather than a limitation we
+**Creating accounts is done on the website, not in the phone apps.** The
+**Add a student** button in the figures above is a capture of the website at a
+phone's width; in the Android app it is simply absent. This is a store requirement rather than a limitation we
 chose, and it only affects *creating* — changing roles, disabling an account and
 enrolling someone all work everywhere.
 

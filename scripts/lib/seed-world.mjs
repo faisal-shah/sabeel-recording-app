@@ -444,7 +444,7 @@ export async function seedWorld({ db, auth, browser, base }) {
    * Every session above ends up either "attendance not taken" or "closing soon",
    * so the queue's other two sections — a recording waiting to be published, and
    * attendance in with no audio — were measured and photographed at zero widths,
-   * along with the `needsAttention` chip and the library's unpublished filter.
+   * along with the `needsAttention` chip and the library's draft filter.
    * The docblock at the top of this file claimed both states; nothing produced
    * them.
    */

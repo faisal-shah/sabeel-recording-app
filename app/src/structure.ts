@@ -150,7 +150,7 @@ export function useAllCourses(enabled: boolean): CourseRow[] {
  * of a cold load. `useAllCourses` keeps the simpler shape for the callers that
  * only render rows.
  */
-export function useAllCoursesState(enabled: boolean): CourseRow[] | null {
+export function useAllCoursesState(enabled: boolean, scope?: string): CourseRow[] | null {
   return useLiveQuery<CourseRow[] | null>(
     () =>
       enabled
@@ -159,6 +159,7 @@ export function useAllCoursesState(enabled: boolean): CourseRow[] | null {
     [enabled],
     {
       label: 'allCourses',
+      context: scope ? { scope } : undefined,
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CourseDoc) })),
       empty: null,
     },
@@ -178,7 +179,7 @@ export function useMyCourses(uid: string | null): CourseRow[] {
 }
 
 /** The same query, `null` until the first snapshot — see `useAllCoursesState`. */
-export function useMyCoursesState(uid: string | null): CourseRow[] | null {
+export function useMyCoursesState(uid: string | null, scope?: string): CourseRow[] | null {
   return useLiveQuery<CourseRow[] | null>(
     () =>
       uid
@@ -187,6 +188,7 @@ export function useMyCoursesState(uid: string | null): CourseRow[] | null {
     [uid],
     {
       label: 'myCourses',
+      context: scope ? { scope } : undefined,
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CourseDoc) })),
       empty: null,
     },

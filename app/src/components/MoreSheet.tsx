@@ -113,9 +113,13 @@ export function MoreSheet({
           onPress={() => onNavigate('Tokens')}
         />
       ) : null}
+      {/* NOT `danger`. Signing out is reversible, and this app reserves that
+          register for permanent deletion — the same call already settled for
+          Disable. In this very sheet `danger` also means a genuine failure
+          ("Could not send the link"), so spending it on the routine way out
+          left the two indistinguishable. */}
       <SheetOption
         label="Sign out"
-        tone="danger"
         testID="more-sign-out"
         onPress={() => {
           onClose();

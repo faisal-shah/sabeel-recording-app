@@ -424,8 +424,15 @@ const styles = StyleSheet.create({
   bad: { color: t.feedback.danger },
   warn: { color: t.feedback.warning },
   chips: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginBottom: spacing(4), flexWrap: 'wrap' },
-  // 44 tall, like every other target — see `LibraryScreen`.
+  /*
+   * 44 tall, like every other target — see `LibraryScreen` — and carrying the
+   * same top margin the Button beside it does. `styles.btn`'s `marginTop` is a
+   * COLUMN affordance ("space above me when I follow something"); in a centred
+   * row it shifts the button's border box down by half of it, and the toolbar
+   * came out four pixels out of true.
+   */
   chip: {
+    marginTop: spacing(2),
     minHeight: 44,
     justifyContent: 'center',
     paddingVertical: spacing(2),

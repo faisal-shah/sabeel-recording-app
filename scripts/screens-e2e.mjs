@@ -1095,9 +1095,9 @@ try {
   await browser.close();
 }
 
-// The app puts a `DateField` on four toured screens (SessionDetail, the session
-// editor, the `sessions-add` sheet and ZoomImport), so this is a real
-// expectation rather than a formality.
+// The app puts a `DateField` on three toured screens — the session EDITOR (the
+// read-only session screen has none), the `sessions-add` sheet, and ZoomImport —
+// so this is a real expectation rather than a formality.
 /*
  * `> 0`, not a threshold. The honest claim without a run is "it looked at
  * something"; anything larger would be a number reasoned to rather than

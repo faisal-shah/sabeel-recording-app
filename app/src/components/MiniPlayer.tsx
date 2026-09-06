@@ -8,7 +8,7 @@ import {
   playback,
   usePlayback,
 } from '../playback';
-import { INSTITUTE_TIMEZONE, canPlayFromCourse, isOverdue, todayInZone } from '@sabeel/shared';
+import { INSTITUTE_TIMEZONE, canPlayNow, todayInZone } from '@sabeel/shared';
 import { useRecordingState } from '../recordings';
 import { useCourseState } from '../structure';
 import { PlayPauseGlyph, Skip } from './Transport';
@@ -90,8 +90,9 @@ export function MiniPlayer({
   const revoked =
     !!now &&
     ((loaded.resolved && !loaded.value) ||
-      (course.resolved && !!course.value && !canPlayFromCourse(course.value)) ||
-      (now.studentUid !== null && now.dueDate !== null && isOverdue(now.dueDate, today)));
+      (course.resolved &&
+        !!course.value &&
+        !canPlayNow(course.value, now.dueDate, now.studentUid, today)));
   useEffect(() => {
     if (revoked) void closePlayback();
   }, [revoked]);

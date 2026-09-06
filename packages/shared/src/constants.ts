@@ -93,10 +93,21 @@ export const PRIVACY_URL = 'https://recordings.oursabeel.com/privacy';
  * every document returned, against a per-evaluation cap on document-access
  * calls, so their ceiling is lower and has nothing to do with `in`.
  *
- * MEASURED, not assumed, and in both directions: `rules.sessions.test.ts` sends
- * exactly this query at exactly `QUEUE_SCOPE.manager` and asserts it is served
- * with every row returned, then sends it at `QUEUE_SCOPE.admin` and asserts a
- * manager is refused while an admin is not. Raise either number only with both
- * of those green at the new one.
+ * 10 IS THE DOCUMENTED PRODUCTION CEILING, not a measured one — and this is the
+ * one number in the app that a green emulator suite cannot establish. Firestore
+ * allows ten `exists()`/`get()`/`getAfter()` calls per single-document or QUERY
+ * request (twenty only for transactions and batched writes), and repeated calls
+ * on the same path within a request are cached, so the cost here is exactly one
+ * per DISTINCT course in the result set. Eleven live courses would have made the
+ * staff landing screen fail closed for that manager, with the badge stuck at
+ * zero and a denial per session in Sentry.
+ *
+ * `rules.sessions.test.ts` sends exactly this query at exactly
+ * `QUEUE_SCOPE.manager` and asserts it is served with every row returned, then
+ * sends it at `QUEUE_SCOPE.admin` and asserts a manager is refused while an
+ * admin is not. That pair pins the EMULATOR's ceiling, which sits higher: the
+ * emulator does not enforce production's document-access limit. Treat it as a
+ * regression guard on the rule's shape, never as a licence to raise this number
+ * — raising it needs a measurement against a real project.
  */
-export const QUEUE_SCOPE = { admin: 30, manager: 15 } as const;
+export const QUEUE_SCOPE = { admin: 30, manager: 10 } as const;

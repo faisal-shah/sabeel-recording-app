@@ -156,10 +156,7 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
 
   if (editing) {
     return (
-      // The reading width, like the fields inside it. The screen is `list`-wide
-      // because it holds a roster; the editor holds four fields capped at 440,
-      // and left at the list width the card was 1115px of which 658 was empty.
-      <Card style={styles.editorCard}>
+      <Card style={styles.column}>
         {error ? <Notice tone="error">{error}</Notice> : null}
         <Field label="Title" value={title} onChangeText={setTitle} autoCapitalize="words" />
         <DateField label="Date" value={date} onChange={setDate} />
@@ -199,17 +196,14 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
   }
 
   return (
-    <Card>
+    <Card style={styles.column}>
       {error ? <Notice tone="error">{error}</Notice> : null}
       {/* The listen-by date rides the heading line now — stating it again here
           was the same sentence twice on one screen. */}
-      {/* Capped like the register below it. The card takes the page's list
-          width because it holds a roster; prose inside it still wants a reading
-          measure, or a note runs to 150 characters a line. */}
       {session.notes ? (
-        <Text style={[styles.notes, styles.prose]}>{session.notes}</Text>
+        <Text style={styles.notes}>{session.notes}</Text>
       ) : (
-        <Text style={[styles.meta, styles.prose]}>No notes for this session.</Text>
+        <Text style={styles.meta}>No notes for this session.</Text>
       )}
       <ConfirmDanger
         // A session with a recording is deleted by removing the recording first,
@@ -296,7 +290,7 @@ function AttendanceSection({ session }: { session: SessionRow }) {
   return (
     <>
       <SectionTitle>Attendance</SectionTitle>
-      <Card>
+      <Card style={styles.column}>
         {error ? <Notice tone="error">{error}</Notice> : null}
         {info ? <Notice tone="success">{info}</Notice> : null}
         {/* With nobody on the roster there is nothing to mark, so telling someone
@@ -329,7 +323,6 @@ function AttendanceSection({ session }: { session: SessionRow }) {
                 style={[
                   styles.rosterRow,
                   wide ? styles.rosterRowWide : null,
-                  wide ? styles.rosterWide : null,
                 ]}
               >
                 <Text style={[styles.rosterName, wide ? styles.rosterNameWide : null]}>
@@ -449,7 +442,7 @@ function RecordingSection({
   return (
     <>
       <SectionTitle>Recording</SectionTitle>
-      <Card>
+      <Card style={styles.column}>
         {error ? <Notice tone="error">{error}</Notice> : null}
 
         {/* Rendered outside the recording/no-recording branch on purpose: the
@@ -559,7 +552,7 @@ function RecordingCard({
   // that leaves Publish and Delete tappable underneath it is not a confirmation.
   if (confirmClear && canClearAudio) {
     return (
-      <Card>
+      <Card style={styles.column}>
         <Notice tone="error">
           Remove the audio from “{r.title}”? The file is deleted permanently. A Zoom
           recording would have to be imported again; an uploaded one needs the original
@@ -652,11 +645,16 @@ function RecordingCard({
           />
         ) : null}
         <Row>
+          {/* PRIMARY, as it is on the library card — unless Publish is on offer,
+              which outranks it. Listening to what was just published is the one
+              thing in this row that is not administration, and drawn like
+              Archive and Unpublish it was indistinguishable from the two
+              controls that take the recording away. Never two primaries. */}
           {r.audioPath ? (
             <Button
               testID="recording-listen"
               label="Listen"
-              variant="secondary"
+              variant={moves.includes('published') ? 'secondary' : 'primary'}
               disabled={uploading}
               onPress={() => onPlay(r, session)}
             />
@@ -731,12 +729,17 @@ const styles = StyleSheet.create({
   // Fixed, so every row's three states line up in a column the eye can run
   // down. Sized to the widest label rather than to the roster.
   segmentWide: { width: 330 },
-  // The page is `list`-wide because it holds a roster, but a REGISTER is read
-  // one line at a time: left to fill 1180px it put every name and its control
-  // 470px apart. Capped, and left-aligned under the heading.
-  rosterWide: { maxWidth: 760 },
-  prose: { maxWidth: 760 },
-  editorCard: { maxWidth: 760 },
+  /*
+   * ONE COLUMN FOR THE WHOLE SCREEN, and it is the CARDS that carry it.
+   *
+   * The page is `list`-wide because it holds a roster, but a REGISTER is read
+   * one line at a time: left to fill 1180px it put every name and its control
+   * 470px apart. Capping the ROWS instead fixed that and left a 339px strip of
+   * empty card to the right of every one of them, and the editor card capped
+   * separately gave one screen three right edges. The cards cap; everything
+   * inside them fills.
+   */
+  column: { maxWidth: 760 },
   // 44pt: this is the single most-tapped control in the staff app — once per
   // student, per session — and it was 32px tall at phone width.
   segBtn: {

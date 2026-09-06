@@ -145,8 +145,9 @@ service cloud.firestore {
       // forces a staff query to be constrained. That arm resolves a course
       // lookup per row, cached per distinct path, so it is affordable only for a
       // query over a SMALL, BOUNDED set of courseIds — one for most staff lists,
-      // and at most `QUEUE_SCOPE.manager` for the work queue, which is measured
-      // rather than assumed (see rules.sessions.test.ts).
+      // and at most `QUEUE_SCOPE.manager` for the work queue. That ceiling is
+      // Firestore's ten document-access calls per query request, and the
+      // emulator does not enforce it: see the note on QUEUE_SCOPE itself.
       allow get, list: if isAdmin()
         || (isStaff() && request.auth.uid in
             get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.managerUids);
@@ -210,8 +211,9 @@ service cloud.firestore {
     // The manager arm resolves a course lookup per row, cached per distinct
     // path, so a manager query has to span a bounded set of courses. The widest
     // one the app sends is the staff work queue's — `QUEUE_SCOPE.manager` ids in
-    // one `in` clause — and `rules.sessions.test.ts` sends exactly that query at
-    // exactly that width rather than trusting the arithmetic.
+    // one `in` clause, one document-access call each against Firestore's ten.
+    // `rules.sessions.test.ts` sends exactly that query at exactly that width;
+    // read the note on QUEUE_SCOPE for what that test can and cannot prove.
     match /sessions/{sessionId} {
       allow get, list: if isAdmin()
         || (isStaff() && request.auth.uid in

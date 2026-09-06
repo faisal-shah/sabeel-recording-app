@@ -128,10 +128,20 @@ await stu.getByTestId('player-play').waitFor({ timeout: 25000 });
 await tap(stu, 'player-play');
 await stu.waitForTimeout(2500);
 await pair(stu, '03-player');
-await home(stu);
-await sawText(stu, 'Your listening', 15000);
+
+/*
+ * THE DOCKED BAR, WHICH NEEDS A TAB TAP AND NOT A RELOAD.
+ *
+ * The manual describes it twice and no figure had ever shown it, because
+ * `home()` is a `goto` — a full reload, which destroys the module-level
+ * playback session the bar is a view onto. Leaving the player by tapping a tab
+ * is what a listener actually does, and it is the only way the bar renders.
+ */
 await tap(stu, 'tab-classes');
-await stu.getByTestId('myclass-Hikam Foundations').waitFor({ timeout: 20000 });
+await stu.getByTestId('mini-player').waitFor({ timeout: 20000 });
+await stu.waitForTimeout(1200);
+await pair(stu, '03b-mini-player');
+
 await tap(stu, 'myclass-Hikam Foundations');
 await stu.waitForTimeout(3000);
 await pair(stu, '04-attendance-record');

@@ -118,7 +118,15 @@ export function buildTodayQueue({
   today: string;
   /** Whether any listener this queue depends on was refused. */
   failed: boolean;
-  /** Whether the course listener has answered at least once. */
+  /**
+   * Whether nothing will ever be subscribed, so a null `courses` is the final
+   * answer rather than a cold load.
+   *
+   * True only for a reader who has no course query at all — a student, whose
+   * queue is never rendered. It is NOT "the course listener has answered": that
+   * listener reports by turning `courses` non-null, and until it does there is
+   * nothing to say.
+   */
   settled: boolean;
   /** Whether `scope` was cut to fit one `in` clause. */
   truncated: boolean;

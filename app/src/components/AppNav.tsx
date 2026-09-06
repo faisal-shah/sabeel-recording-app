@@ -283,10 +283,11 @@ const styles = StyleSheet.create({
   railMark: { height: 40, justifyContent: 'center', marginBottom: spacing(2) },
   railTabs: { alignItems: 'center', gap: spacing(1), flex: 1 },
   item: { alignItems: 'center', gap: 2, borderRadius: 10, paddingVertical: spacing(2) },
-  // The CELL fills its share of the bar so the touch target is the full width;
-  // the highlight inside it does not. Painting the cell made the active pill a
-  // third of a 720px screen — one pink slab flush into the corner — while at
-  // 390px it looked right, which is why it survived a phone-only review.
+  // `maxWidth` IS THE FIX, and it caps the touch target with it. A cell that
+  // simply took its share of the bar made the active pill a third of a 720px
+  // screen — one pink slab flush into the corner — while at 390px it looked
+  // right, which is why it survived a phone-only review. The pill and the target
+  // are the same box; 120 is as wide as either should get.
   itemBar: { flex: 1, paddingHorizontal: spacing(1), maxWidth: 120, alignSelf: 'center' },
   itemRail: { width: 62, paddingHorizontal: spacing(1) },
   itemActive: { backgroundColor: t.bg.accentSoft },

@@ -273,7 +273,7 @@ describe('an empty queue', () => {
     expect(q).toMatchObject({ loading: true, scoped: true });
   });
 
-  it('stops waiting once the course listener has answered', () => {
+  it('stops waiting for a reader who will never subscribe to anything', () => {
     const q = build([], [], { courses: null, settled: true, scope: [] });
     expect(q.loading).toBe(false);
   });

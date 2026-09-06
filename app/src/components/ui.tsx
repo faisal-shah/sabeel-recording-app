@@ -166,7 +166,6 @@ export function Button({
   variant = 'primary',
   busy,
   disabled,
-  compact,
   block,
   hug,
   testID,
@@ -176,8 +175,6 @@ export function Button({
   variant?: 'primary' | 'secondary' | 'danger' | 'quiet';
   busy?: boolean;
   disabled?: boolean;
-  /** A row-level action sitting beside a name, not a full-width page action. */
-  compact?: boolean;
   /**
    * Keep the phone's full-width shape at every width.
    *
@@ -217,13 +214,12 @@ export function Button({
       disabled={isDisabled}
       style={({ pressed }) => [
         styles.btn,
-        inRowCell && !compact ? styles.btnFill : null,
-        compact ? styles.btnCompact : null,
+        inRowCell ? styles.btnFill : null,
         // A button laid out as a column child stretches to the column on a
         // phone, which is the right primary-action shape there and a bar across
         // the window on anything larger. Inside a Row it is already
         // content-width, so this only changes the stretched case.
-        (hug || roomy) && !compact && !block ? styles.btnWide : null,
+        (hug || roomy) && !block ? styles.btnWide : null,
         style,
         pressed && !isDisabled ? styles.btnPressed : null,
         isDisabled ? styles.btnDisabled : null,
@@ -431,10 +427,10 @@ export function Field({
         autoCorrect={false}
         keyboardType={keyboardType}
         multiline={multiline}
-        // Three, to agree with `inputMultiline`'s minHeight. Android sizes the
+        // Four, to agree with `inputMultiline`'s minHeight. Android sizes the
         // box from this and web from the style; disagreeing gives the same
         // field two different heights on the two platforms.
-        numberOfLines={multiline ? 3 : undefined}
+        numberOfLines={multiline ? 4 : undefined}
         textAlignVertical={multiline ? 'top' : undefined}
       />
     </View>
@@ -661,8 +657,7 @@ export function AddAction({
       {/* CONTENT-WIDTH AT EVERY WIDTH, which is the one place `hug` is used.
           A full-width raspberry bar above the list is the first thing on a phone
           screen, and it spends the accent well past its share on a page whose
-          job is the list underneath. Not `compact` either: that shape belongs
-          inside a list row and lands under the 44pt touch minimum. */}
+          job is the list underneath. */}
       <Button testID={testID} label={label} hug onPress={() => setOpen(true)} />
       <Sheet visible={open} title={title} onClose={() => setOpen(false)} closeLabel="Cancel">
         {children}
@@ -1000,13 +995,19 @@ const styles = StyleSheet.create({
     paddingVertical: spacing(2),
     paddingHorizontal: spacing(4),
     borderRadius: 7,
-    minHeight: 36,
+    // 44, like every other target. This is a two-way switch between the halves
+    // of a screen, not a caption.
+    minHeight: 44,
     justifyContent: 'center',
   },
-  segmentOn: { backgroundColor: t.bg.surface },
+  // A RAISED THUMB, and one you can see. The surface fill alone differs from the
+  // inset track by a shade, so which half was on came down to reading two
+  // near-identical creams; the accent on the label is what makes it legible
+  // without turning a view switch into the brand's loudest control.
+  segmentOn: { backgroundColor: t.bg.surface, borderWidth: 1, borderColor: t.border.strong },
   segmentPressed: { opacity: 0.7 },
   segmentText: { fontSize: 14, fontWeight: '600', color: t.text.secondary },
-  segmentTextOn: { color: t.text.primary },
+  segmentTextOn: { color: t.text.accent, fontWeight: '700' },
   /*
    * `minWidth: 0` IS LOAD-BEARING. A flex item's automatic minimum size is its
    * min-content width, and that beats any width set on it — so at 320px, where
@@ -1148,10 +1149,15 @@ const styles = StyleSheet.create({
   // A single-line field stretched to 1100px is unreadable and looks unfinished;
   // the value in it is a name or an email, never a paragraph.
   fieldWide: { maxWidth: 440 },
-  // Three whole line boxes: 12 + 12 padding, 2 border, 3 x 22. A minHeight that
-  // is not a multiple of the line height leaves a stripe of half a line under
-  // the last one, which reads as a misaligned box rather than an empty one.
-  inputMultiline: { minHeight: 92, lineHeight: 22 },
+  /*
+   * A WHOLE NUMBER OF LINE BOXES, measured against the box the browser actually
+   * lays out. `minHeight` is the border box (`box-sizing: border-box`), so the
+   * text area inside it is minHeight − 24 padding − 2 border; at 92 that left
+   * 66px, three lines of 22 with the fourth sliced through its x-height. 90 is
+   * 64 ÷ 22 ≈ 2.9 — still ragged — so the padding comes off explicitly: four
+   * lines of 22 plus 26 is 114, and the fourth line ends where the field does.
+   */
+  inputMultiline: { minHeight: 114, lineHeight: 22, textAlignVertical: 'top' },
   fieldLabel: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(1) },
   input: {
     backgroundColor: t.bg.inset,
@@ -1218,8 +1224,7 @@ const styles = StyleSheet.create({
   },
   rowItemWide: { flexGrow: 0, flexBasis: 'auto' },
 
-  // --- compact row actions -------------------------------------------------
-  btnCompact: { paddingVertical: spacing(2), paddingHorizontal: spacing(3), minHeight: 40 },
+  // --- icon actions -------------------------------------------------
   iconBtn: {
     width: 44,
     height: 44, // minimum touch target, whatever the glyph's size
@@ -1234,7 +1239,9 @@ const styles = StyleSheet.create({
   iconGlyphDanger: { color: t.text.danger },
 
   // --- a person in a list --------------------------------------------------
-  // The heading: lamp on the left, title centred against it.
+  // The heading row: the text block on the left, the screen's actions on the
+  // right. The status lamp is inside the text block, on the lede line — see
+  // `Screen`'s note and `StatusLight`.
   headRow: {
     flexDirection: 'row',
     alignItems: 'center',

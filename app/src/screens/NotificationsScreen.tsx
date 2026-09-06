@@ -93,7 +93,10 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
     })();
 
   return (
-    <Screen subtitle="What this app may send you">
+    // A TITLE, like every other pushed screen. Without one the page opened
+    // straight onto its own subtitle in secondary text, so the header bar's
+    // "Notifications" was the only thing naming it — and that scrolls away.
+    <Screen title="Notifications" subtitle="What this app may send you">
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
 

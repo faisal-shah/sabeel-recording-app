@@ -140,9 +140,13 @@ describe('sessions rules', () => {
    * `get(courses/{id})`, and Firestore caps the document-access calls in a
    * single rules evaluation. That cap is the real constraint on how many
    * courses the queue may span, and it is not the `in` clause's own limit — so
-   * `QUEUE_SCOPE.manager` is pinned to what this test proves rather than to what
-   * the query builder allows: 15 is served here, and the test below shows the
-   * same query refused at `QUEUE_SCOPE.admin` width.
+   * WHAT THIS PROVES, AND WHAT IT DOES NOT. It proves the rule's SHAPE — that
+   * the manager arm serves the exact query the queue sends, with every row
+   * returned, and that the same query at a wider scope is refused for a manager
+   * and not for an admin. It does NOT establish the ceiling: the emulator does
+   * not enforce Firestore's per-request document-access limit, and its own
+   * ceiling sits higher than production's. `QUEUE_SCOPE.manager` comes from the
+   * documented limit; see the note on the constant.
    *
    * If this ever goes red, lower `QUEUE_SCOPE.manager`; do not widen the rule.
    */

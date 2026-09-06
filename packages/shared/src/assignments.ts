@@ -7,6 +7,7 @@
  * be tested with a fixed clock and no emulator. Same discipline as
  * `recordings.ts`.
  */
+import { canPlayFromCourse } from './structure';
 import { DUE_SOON_DAYS } from './constants';
 
 // -------------------------------------------------------------- documents --
@@ -158,6 +159,33 @@ export function daysUntilDue(dueDate: string, today: string): number {
  */
 export function isOverdue(dueDate: string, today: string): boolean {
   return today > dueDate;
+}
+
+/**
+ * MAY THIS RECORDING STILL BE PLAYED? One rule, for every surface that asks.
+ *
+ * Three of them do — the player screen, the docked bar, and the shell's stale-
+ * link guard — and each held its own copy of the composition. The copies had
+ * already drifted once: applying the deadline unconditionally cut a manager off
+ * from anything more than a week old the moment they left the player, because
+ * the deadline closes a STUDENT's access and nobody else's. That is exactly the
+ * shape of bug two spellings of one rule produce, and it is why `formatClock`
+ * and `SKIP_BACK_MS` live in one place too.
+ *
+ * The server is still the authority: `getPlaybackUrl` checks the same facts
+ * before it mints anything. This is the client saying the same thing, so a
+ * closed recording reads as closed rather than as a button that fails.
+ */
+export function canPlayNow(
+  cls: { effectiveActive: boolean; archivedAccess: boolean },
+  /** The listener's own deadline. Null for staff, who have none. */
+  dueDate: string | null,
+  /** Null when staff are listening — see `NowPlaying.studentUid`. */
+  studentUid: string | null,
+  today: string,
+): boolean {
+  if (!canPlayFromCourse(cls)) return false;
+  return !(studentUid !== null && dueDate !== null && isOverdue(dueDate, today));
 }
 
 /**

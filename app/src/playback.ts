@@ -118,9 +118,13 @@ const IDLE: PlaybackState = {
  * outlive the first; with the session itself held here there is only ever one
  * caller, so "at most one player" stops being a rule and becomes the shape.
  *
- * Teardown is now EXPLICIT (`closePlayback`), not a side effect of unmounting.
- * The only things that end a session are opening a different recording, signing
- * out, and the listener closing it.
+ * Teardown is EXPLICIT (`closePlayback`), not a side effect of unmounting — and
+ * that is a bill every involuntary end has to pay too. A session ends when a
+ * different recording is opened, when the listener closes it, when access is
+ * revoked under it (the recording unpublished, the course archived, the
+ * student's own deadline passing), and on every way out of an account: signing
+ * out, being disabled mid-lecture, or the credential being rejected. Miss one
+ * and a foreground service keeps streaming with nothing on screen to stop it.
  */
 let state: PlaybackState = IDLE;
 let player: Player | null = null;

@@ -7,6 +7,7 @@ import {
   daysUntilDue,
   dueBucket,
   hasRecordingAccess,
+  canPlayNow,
   isOverdue,
   todayInZone,
   type DueBucket,
@@ -120,5 +121,52 @@ describe('bucketRank orders the home', () => {
     const ranks = order.map(bucketRank);
     expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
     expect(new Set(ranks).size).toBe(order.length);
+  });
+});
+
+/*
+ * THE ONE GATE THREE SURFACES ASK. The player screen, the docked bar and the
+ * shell's stale-link guard all read this; the copies they used to hold had
+ * already drifted, and the drift cut a manager off from anything more than a
+ * week old the moment they left the player.
+ */
+describe('canPlayNow', () => {
+  const live = { effectiveActive: true, archivedAccess: false };
+  const archived = { effectiveActive: false, archivedAccess: false };
+  const archivedButOpen = { effectiveActive: false, archivedAccess: true };
+  const TODAY = '2026-07-25';
+
+  it('a student may play an open recording in a live course', () => {
+    expect(canPlayNow(live, '2026-07-25', 'stu-1', TODAY)).toBe(true);
+  });
+
+  it('the deadline closes it the day after the due date', () => {
+    expect(canPlayNow(live, '2026-07-24', 'stu-1', TODAY)).toBe(false);
+  });
+
+  it('an archived course closes it whatever the date', () => {
+    expect(canPlayNow(archived, '2026-12-31', 'stu-1', TODAY)).toBe(false);
+  });
+
+  it('an archived course that kept listening open stays open', () => {
+    expect(canPlayNow(archivedButOpen, '2026-12-31', 'stu-1', TODAY)).toBe(true);
+  });
+
+  /*
+   * STAFF HAVE NO DEADLINE. A session's date rides in `dueDate` for them too,
+   * so a gate that read the date without checking WHOSE it is stopped a manager
+   * reviewing last term's lecture — which is the bug two copies of this rule
+   * produced.
+   */
+  it('a past due date does not close it for staff', () => {
+    expect(canPlayNow(live, '2020-01-01', null, TODAY)).toBe(true);
+  });
+
+  it('but an archived course still does', () => {
+    expect(canPlayNow(archived, '2020-01-01', null, TODAY)).toBe(false);
+  });
+
+  it('a student with no deadline at all is not closed out', () => {
+    expect(canPlayNow(live, null, 'stu-1', TODAY)).toBe(true);
   });
 });

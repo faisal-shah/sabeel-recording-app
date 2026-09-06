@@ -1,3 +1,4 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SKIP_BACK_MS, SKIP_FORWARD_MS } from '../playback';
 import { getTheme, spacing } from '../theme';
@@ -123,9 +124,17 @@ export function Skip({
         disabled ? styles.skipDisabled : null,
       ]}
     >
-      <Text style={[styles.skipArrow, disabled ? styles.skipTextDisabled : null]}>
-        {direction === 'back' ? '‹' : '›'}
-      </Text>
+      {/* THE DIRECTION IS THE POINT, so it is drawn at the size of the number
+          rather than a typed guillemet three pixels wide. Two rings reading "15"
+          and "30" with a hairline mark above each say nothing about which way
+          they go, and the durations are asymmetric so the number cannot be read
+          as the cue either. */}
+      <MaterialIcons
+        name={direction === 'back' ? 'replay' : 'forward-30'}
+        size={18}
+        color={disabled ? t.text.muted : t.text.secondary}
+        style={direction === 'forward' ? styles.flip : undefined}
+      />
       <Text style={[styles.skipNumber, disabled ? styles.skipTextDisabled : null]}>{label}</Text>
     </Pressable>
   );
@@ -175,7 +184,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   skipDisabled: { borderColor: t.bg.inset },
-  skipArrow: { fontSize: 15, lineHeight: 16, color: t.text.secondary, fontWeight: '700' },
+  // `forward-30` is drawn with its own arrowhead; `replay` is the same mark
+  // mirrored, so the pair reads as one control in two directions.
+  flip: { transform: [{ scaleX: -1 }] },
   skipNumber: { fontSize: 14, lineHeight: 16, color: t.text.primary, fontWeight: '700' },
   skipTextDisabled: { color: t.text.muted },
 });

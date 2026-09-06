@@ -204,10 +204,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing(3),
     minHeight: 132,
   },
-  // The tint behind a blocking row. `goldSoft` is the app's "waiting on you"
-  // fill; `dangerSoft` is the tint of "remove this person", and wearing it on
-  // the card a teacher sees at the start of every class both overstated the
-  // problem and spent the colour that has to mean something worse.
+  // The tint behind an ATTENDANCE row — not behind every blocking one. An
+  // unpublished recording is blocking too and gets no tint, because it is a
+  // thing that was done and can be undone, while an un-taken register is the
+  // step nothing else on any screen mentions. `goldSoft` is the app's "waiting
+  // on you" fill; `dangerSoft` is the tint of "remove this person", and wearing
+  // it on the card a teacher sees at the start of every class both overstated
+  // the problem and spent the colour that has to mean something worse.
   cardUrgent: { borderColor: t.accent.gold, backgroundColor: t.bg.goldSoft },
   cardPressed: { opacity: 0.8 },
   course: { fontSize: 12, fontWeight: '700', color: t.text.secondary, letterSpacing: 0.4 },

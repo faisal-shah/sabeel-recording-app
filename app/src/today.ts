@@ -36,6 +36,7 @@ import { useAllCoursesState, useMyCoursesState, type CourseRow } from './structu
 function useTodayQueue(
   courses: CourseRow[] | null,
   max: number,
+  /** See `buildTodayQueue`: "nothing will ever be subscribed", not "loaded". */
   settled: boolean,
 ): TodayQueue {
   /*
@@ -155,8 +156,14 @@ function useTodayQueue(
  * no listener is ever opened.
  */
 export function useStaffQueue(isStaff: boolean, isAdmin: boolean, uid: string): TodayQueue {
-  const all = useAllCoursesState(isStaff && isAdmin);
-  const mine = useMyCoursesState(isStaff && !isAdmin ? uid : null);
+  // SCOPED, for the same reason the docked bar's listeners are: this one is
+  // mounted by the SHELL and outlives every screen, while five screens mount the
+  // same query under the same label. Unscoped, navigating away from one of them
+  // deletes the shell's error entry — and `useListenerFailed` below then goes
+  // false with `courses` still null, so the landing screen falls back from
+  // "Could not read your courses" to "Checking your courses…" for good.
+  const all = useAllCoursesState(isStaff && isAdmin, 'todayQueue');
+  const mine = useMyCoursesState(isStaff && !isAdmin ? uid : null, 'todayQueue');
   const courses = isAdmin ? all : mine;
   return useTodayQueue(
     courses,

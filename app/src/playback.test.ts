@@ -32,7 +32,16 @@ vi.mock('firebase/firestore', () => ({
   setDoc: (...args: [unknown, Record<string, unknown>]) => setDoc(...args),
 }));
 
-/** Every player handed out, so a test can drive the one it means. */
+/**
+ * Every player handed out, so a test can drive the one it means.
+ *
+ * IT RECORDS `startMs` AND CAN BE HELD OPEN, and both matter. Without the first
+ * nothing asserts that the stored position is handed to the player, so deleting
+ * the restore leaves the suite green. Without the second the window between
+ * `createPlayer` and `load` resolving is unreachable, and that window is where a
+ * native player emits its first tick — the one that used to write a zero over an
+ * hour of listening.
+ */
 interface Fake {
   events: {
     onProgress: (ms: number) => void;
@@ -40,18 +49,35 @@ interface Fake {
     onError: (m: string) => void;
   };
   loaded: string | null;
+  /** The position `load` was asked to start at. */
+  startedAt: number | null;
   unloaded: boolean;
   playing: boolean;
+  /** Resolves a `load` held open by `holdLoad`. */
+  finishLoad: (() => void) | null;
 }
 const players: Fake[] = [];
+/** When set, the next player's `load` waits for `fake.finishLoad()`. */
+let holdLoad = false;
 vi.mock('./player', () => ({
   createPlayer: (events: Fake['events']) => {
-    const fake: Fake = { events, loaded: null, unloaded: false, playing: false };
+    const fake: Fake = {
+      events,
+      loaded: null,
+      startedAt: null,
+      unloaded: false,
+      playing: false,
+      finishLoad: null,
+    };
     players.push(fake);
     return {
-      load: (url: string) => {
+      load: (url: string, startMs: number) => {
         fake.loaded = url;
-        return Promise.resolve();
+        fake.startedAt = startMs;
+        if (!holdLoad) return Promise.resolve();
+        return new Promise<void>((resolve) => {
+          fake.finishLoad = resolve;
+        });
       },
       play: () => {
         fake.playing = true;
@@ -74,6 +100,7 @@ type Playback = typeof import('./playback');
 async function load(): Promise<Playback> {
   vi.resetModules();
   players.length = 0;
+  holdLoad = false;
   stored = undefined;
   getDoc.mockClear();
   setDoc.mockClear();
@@ -246,11 +273,45 @@ describe('who the progress belongs to', () => {
     stored = { positionMs: 120_000, listenedMs: 90_000, updatedAt: 1 };
     pb.openPlayback(recording('rec-a'));
     await flush();
+    // HANDED TO THE PLAYER, which is the whole of "resumes": the document is
+    // read, and then the audio starts there rather than at the beginning.
     expect(players[0].loaded).toBe('https://signed/audio.m4a');
+    expect(players[0].startedAt).toBe(120_000);
     await pb.closePlayback();
-    // Resumed, not reset: the stored position survives a session that added
-    // nothing to it.
     expect(stored?.positionMs).toBe(120_000);
+  });
+
+  it('a session with nothing stored starts at the beginning', async () => {
+    const pb = await load();
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    expect(players[0].startedAt).toBe(0);
+  });
+
+  /*
+   * A TICK BEFORE THE AUDIO IS LOADED SAYS NOTHING ABOUT IT.
+   *
+   * Native emits a progress event from `replace()` before `seekTo()` lands. At
+   * that moment `position` is still the zero set at open and `lastWrite` is 0,
+   * so the very first tick persists immediately — and `mergeProgress` takes the
+   * NEWER positionMs, so the zero wins over an hour of listening.
+   */
+  it('ignores a tick that arrives before the audio has loaded', async () => {
+    const pb = await load();
+    stored = { positionMs: 3_540_000, listenedMs: 3_540_000, updatedAt: 1 };
+    holdLoad = true;
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+
+    players[0].events.onProgress(0);
+    await flush();
+    expect(setDoc).not.toHaveBeenCalled();
+
+    players[0].finishLoad?.();
+    await flush();
+    await pb.closePlayback();
+    await flush();
+    expect(stored?.positionMs).toBe(3_540_000);
   });
 });
 
@@ -348,7 +409,7 @@ describe('counting listening', () => {
    * tick is discarded — position and listened time freeze, and the frozen number
    * is what the ledger shows.
    */
-  it('resumes counting after a seek past the end', async () => {
+  it('resumes counting after a seek past the end, once the file ends', async () => {
     const pb = await load();
     pb.openPlayback(recording('rec-a'));
     await flush();
@@ -361,6 +422,38 @@ describe('counting listening', () => {
     players[0].events.onProgress(11_000);
     await pb.closePlayback();
     expect(stored?.positionMs).toBe(11_000);
+  });
+
+  /*
+   * AND WHEN THE FILE NEVER ENDS, BECAUSE THE SEEK HAPPENED WHILE PAUSED.
+   *
+   * `onEnded` only fires when the end is reached WHILE PLAYING, so a forward
+   * skip past the real end from a paused player leaves a target no tick can
+   * ever match. Every later tick was then discarded and the session froze at a
+   * position that does not exist in the file — which is both the resume point
+   * and the number the ledger presents as evidence.
+   */
+  it('gives up on a seek target the player never reaches', async () => {
+    const pb = await load();
+    // No duration, so `skipForward` cannot clamp — a phone upload supplies none.
+    pb.openPlayback({ ...recording('rec-a'), durationMs: 0 });
+    await flush();
+    players[0].events.onProgress(1_000);
+    pb.playback.seek(9_999_000);
+
+    // The player clamps at the real end and reports it. No `onEnded`.
+    wait(500);
+    players[0].events.onProgress(60_000);
+    expect(stored).toBeUndefined();
+
+    // Past the hold, the player's own position is believed again.
+    wait(2_500);
+    players[0].events.onProgress(61_000);
+    wait(1_000);
+    players[0].events.onProgress(62_000);
+    await pb.closePlayback();
+    await flush();
+    expect(stored?.positionMs).toBe(62_000);
   });
 });
 

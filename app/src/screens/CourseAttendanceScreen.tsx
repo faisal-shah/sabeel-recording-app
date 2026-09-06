@@ -91,6 +91,10 @@ export function CourseAttendanceScreen({
         {/* The shared control, not a local twin. This one predates `Segmented`
             and had drifted from it — `accessibilityRole="button"` where the
             shared one says `"tab"`, and its own colours. Same job, same widget. */}
+        {/* Wrapped to carry the same top margin `styles.btn` gives the Export
+            button beside it — a column affordance that, in a centred row, put
+            the two controls out of true. */}
+        <View style={styles.toolItem}>
         <Segmented
           value={tab}
           testIdPrefix="attendance-tab"
@@ -100,6 +104,7 @@ export function CourseAttendanceScreen({
           ]}
           onChange={setTab}
         />
+        </View>
         <Button
           testID={tab === 'sessions' ? 'attendance-export-sessions' : 'attendance-export-students'}
           label="Export CSV"
@@ -133,7 +138,9 @@ export function CourseAttendanceScreen({
                     <Text style={styles.countValue}>{s.excused}</Text> excused
                   </Text>
                 ) : (
-                  <Text style={styles.notTaken}>Attendance not taken</Text>
+                  <View style={styles.notTakenChip}>
+                    <Text style={styles.notTaken}>Attendance not taken</Text>
+                  </View>
                 )}
               </Pressable>
             </Card>
@@ -183,6 +190,7 @@ export function CourseAttendanceScreen({
 }
 
 const styles = StyleSheet.create({
+  toolItem: { marginTop: spacing(2) },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -202,7 +210,21 @@ const styles = StyleSheet.create({
    * that opens a recording and is the whole of a student's entitlement.
    */
   countValue: { color: t.text.primary, fontWeight: '700' },
-  notTaken: { fontSize: 14, color: t.text.secondary, fontStyle: 'italic', marginTop: spacing(1) },
+  // THE SAME CHIP THE SESSIONS LIST WEARS. This screen's only job is attendance
+  // coverage, and the state that blocks every student's access was set in the
+  // same italic grey as the neutral counts beside it — the quietest of three
+  // treatments, on the screen where it matters most.
+  notTakenChip: {
+    alignSelf: 'flex-start',
+    marginTop: spacing(2),
+    paddingVertical: spacing(1),
+    paddingHorizontal: spacing(3),
+    borderRadius: 999,
+    borderWidth: 1,
+    backgroundColor: t.bg.goldSoft,
+    borderColor: t.accent.gold,
+  },
+  notTaken: { fontSize: 12, fontWeight: '600', color: t.accent.goldText },
   catchup: { fontSize: 14, color: t.text.secondary, marginTop: spacing(2) },
   missed: { color: t.feedback.danger, fontWeight: '700' },
 });
