@@ -91,48 +91,52 @@ export function StudentDetailScreen({
                 Card they stacked at the left of an 1114px card, two different
                 widths, while the equivalent pair on a course sits side by side. */}
             <Row>
-            <Button
-              testID="student-resend"
-              label="Resend password link"
-              variant="secondary"
-              busy={busy === 'resend'}
-              onPress={() =>
-                void run('resend', async () => {
-                  await resendPasswordSetup(student.email);
-                  setInfo(`Password link sent to ${student.email}.`);
-                })
-              }
-            />
-            {/* Enable/disable is directory-level — it spans every course — so the
-                server keeps it admin-only. A manager sees the state, not a
-                control that would only fail. */}
-            {isAdmin ? (
               <Button
-                testID="student-access"
-                // Secondary in BOTH directions, like archiving a course.
-                // Disabling is the reversible, recommended action in this
-                // product; dressing it as destructive is how people learn to
-                // ignore the colour that marks the genuinely irreversible ones.
-                label={disabled ? 'Re-enable account' : 'Disable account'}
+                testID="student-resend"
+                label="Resend password link"
                 variant="secondary"
-                busy={busy === 'access'}
+                busy={busy === 'resend'}
                 onPress={() =>
-                  void run('access', () =>
-                    setStudentAccess({
-                      uid: studentUid,
-                      status: disabled ? 'active' : 'disabled',
-                    }),
-                  )
+                  void run('resend', async () => {
+                    await resendPasswordSetup(student.email);
+                    setInfo(`Password link sent to ${student.email}.`);
+                  })
                 }
               />
-            ) : (
+              {/* Enable/disable is directory-level — it spans every course — so
+                  the server keeps it admin-only. A manager sees the state, not a
+                  control that would only fail. */}
+              {isAdmin ? (
+                <Button
+                  testID="student-access"
+                  // Secondary in BOTH directions, like archiving a course.
+                  // Disabling is the reversible, recommended action in this
+                  // product; dressing it as destructive is how people learn to
+                  // ignore the colour that marks the genuinely irreversible ones.
+                  label={disabled ? 'Re-enable account' : 'Disable account'}
+                  variant="secondary"
+                  busy={busy === 'access'}
+                  onPress={() =>
+                    void run('access', () =>
+                      setStudentAccess({
+                        uid: studentUid,
+                        status: disabled ? 'active' : 'disabled',
+                      }),
+                    )
+                  }
+                />
+              ) : null}
+            </Row>
+            {/* BELOW the row, not inside it. A Row cell is 150px of action; a
+                sentence dropped into one is a paragraph squeezed into half a
+                card beside a button. */}
+            {isAdmin ? null : (
               <Empty>
                 {disabled
                   ? 'This account is disabled. An admin can re-enable it.'
                   : 'Only an admin can disable an account.'}
               </Empty>
             )}
-            </Row>
           </Card>
 
           {isAdmin ? (

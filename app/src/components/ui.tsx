@@ -1078,7 +1078,12 @@ const styles = StyleSheet.create({
   // Neutral rather than a faded brand fill: a washed-out raspberry block still
   // pulls the eye harder than the live control next to it.
   btnDisabled: { backgroundColor: t.bg.inset },
-  btnDisabledText: { color: t.text.muted },
+  // Secondary, not muted: muted on the inset fill is 2.3:1, and a disabled
+  // primary is the thing a person reads to find out what the form is FOR —
+  // "Create account" greyed out is the sheet's own explanation of why nothing
+  // has happened yet. The pale fill is what says disabled; the label still has
+  // to be readable. (5.1:1.)
+  btnDisabledText: { color: t.text.secondary },
   // textAlign, not just the container's alignItems: that centres the text BOX,
   // and a label short enough to fit on one line looks centred either way. The
   // moment it wraps ("Submit / attendance") the second line hangs left inside a

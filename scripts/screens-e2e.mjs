@@ -863,7 +863,7 @@ async function tourStaff(page, tag) {
     `${counter.seen}/${STAFF_SCREENS}`);
 }
 
-const MANAGER_SCREENS = 7;
+const MANAGER_SCREENS = 9;
 
 /**
  * A manager sees the same screens with fewer rows AND fewer controls, which is a
@@ -895,6 +895,16 @@ async function tourManager(page, tag) {
     await tap(byId(page, 'nav-audit'));
   });
   await visit('library', () => tap(byId(page, 'tab-library')));
+  // People, and one student's page. A manager's People tab is not an admin's
+  // with rows removed: the student page swaps a whole query for a per-course
+  // one, drops the Disable control for a sentence explaining who has it, and
+  // shows "Courses you manage" where an admin sees every enrolment. None of
+  // that renders in an admin's run, so none of it was ever photographed.
+  await visit('people', () => tap(byId(page, 'tab-people')));
+  await visit('student', async () => {
+    await tap(byId(page, 'tab-people'));
+    await tap(byId(page, `student-open-${STUDENT.email}`));
+  });
   // The ledger, which a manager reads through a DIFFERENT rule arm than an
   // admin: theirs resolves a course lookup from the row, so it is the only one
   // that can fail closed — and it did, silently, as an empty roster. A denial

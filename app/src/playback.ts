@@ -232,15 +232,16 @@ function persist(): void {
 /**
  * Start (or re-focus) a playback session.
  *
+ * ONE ARGUMENT, because `NowPlaying` already carries the course and the listener
+ * — passing them again alongside it gave the same two facts two sources that
+ * were free to disagree, and the session would then be owned by one student
+ * while every surface named another.
+ *
  * Idempotent for the recording already loaded, which is what lets the player
  * screen be opened, left and re-opened without interrupting the audio: arriving
  * at a screen for something already playing must not restart it at zero.
  */
-export function openPlayback(
-  now: NowPlaying,
-  studentUid: string | null,
-  courseId: string,
-): void {
+export function openPlayback(now: NowPlaying): void {
   /*
    * Re-entering the screen for what is ALREADY PLAYING must not restart it —
    * and must not be mistaken for a session that cannot play.
@@ -260,7 +261,7 @@ export function openPlayback(
   closePlayback();
 
   const gen = ++generation;
-  owner = { studentUid, recordingId: now.recordingId, courseId };
+  owner = { studentUid: now.studentUid, recordingId: now.recordingId, courseId: now.courseId };
   listened = 0;
   position = 0;
   lastTick = null;
@@ -312,8 +313,10 @@ export function openPlayback(
     try {
       const [url, saved] = await Promise.all([
         playbackUrl(now.recordingId),
-        studentUid
-          ? getDoc(doc(db, COLLECTIONS.listeningProgress, progressId(studentUid, now.recordingId)))
+        now.studentUid
+          ? getDoc(
+              doc(db, COLLECTIONS.listeningProgress, progressId(now.studentUid, now.recordingId)),
+            )
           : Promise.resolve(null),
       ]);
       if (generation !== gen) return;

@@ -87,19 +87,15 @@ export function PlayerScreen({
 
   useEffect(() => {
     if (!allowed) return;
-    openPlayback(
-      {
-        recordingId: recording.id,
-        courseId: recording.courseId,
-        title: recording.title,
-        courseName: cls.name,
-        durationMs: (recording.durationSec ?? 0) * 1000,
-        studentUid,
-        dueDate,
-      },
+    openPlayback({
+      recordingId: recording.id,
+      courseId: recording.courseId,
+      title: recording.title,
+      courseName: cls.name,
+      durationMs: (recording.durationSec ?? 0) * 1000,
       studentUid,
-      recording.courseId,
-    );
+      dueDate,
+    });
   }, [
     allowed,
     recording.id,
