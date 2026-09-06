@@ -115,7 +115,7 @@ export function RecordingLedgerScreen({
             key={f}
             testID={`ledger-filter-${f}`}
             accessibilityRole="button"
-            accessibilityState={{ selected: filter === f }}
+            aria-selected={filter === f}
             onPress={() => setFilter(f)}
             style={[styles.chip, filter === f ? styles.chipOn : null]}
           >

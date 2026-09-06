@@ -2,6 +2,7 @@ import {
   Children,
   createContext,
   isValidElement,
+  useCallback,
   useContext,
   useEffect,
   useState,
@@ -26,9 +27,6 @@ import { KbScroll } from './KbScroll';
 import { Sheet } from './Sheet';
 
 const t = getTheme();
-
-/** A multiline field's own padding and borders, added to its measured content. */
-const MULTILINE_CHROME = spacing(3) * 2 + 2;
 
 /**
  * Shared primitives. Brand rules live here rather than in each screen:
@@ -418,6 +416,24 @@ export function Field({
   // The measured height of a multiline field's content, once it has one. Null
   // until then, so the field opens at `inputMultiline`'s four-line floor.
   const [grown, setGrown] = useState<number | null>(null);
+  /*
+   * THE REPORTED HEIGHT, USED AS-IS. It already includes the padding — on the
+   * web it is the textarea's `scrollHeight`, on Android the view's — so adding
+   * the padding again made every measurement 24px taller than the height it had
+   * just applied, and the handler fed itself until `maxHeight` stopped it: every
+   * note, however short, pinned to the 312px ceiling with a screenful of dead
+   * space under four lines of text.
+   *
+   * `useCallback`, because react-native-web memoises its content-size plumbing
+   * on this function's identity and re-measures whenever it changes — an inline
+   * arrow re-measures on every render, which is what turned a one-off overshoot
+   * into a loop.
+   */
+  const onGrow = useCallback(
+    (e: { nativeEvent: { contentSize: { height: number } } }) =>
+      setGrown(Math.ceil(e.nativeEvent.contentSize.height)),
+    [],
+  );
   return (
     <View style={[styles.field, roomy ? styles.fieldWide : null]}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -441,11 +457,7 @@ export function Field({
         // box from this and web from the style; disagreeing gives the same
         // field two different heights on the two platforms.
         numberOfLines={multiline ? 4 : undefined}
-        onContentSizeChange={
-          multiline
-            ? (e) => setGrown(Math.ceil(e.nativeEvent.contentSize.height) + MULTILINE_CHROME)
-            : undefined
-        }
+        onContentSizeChange={multiline ? onGrow : undefined}
         textAlignVertical={multiline ? 'top' : undefined}
       />
     </View>
@@ -718,7 +730,7 @@ export function Segmented<T extends string>({
             key={o.value}
             testID={`${testIdPrefix}-${o.value}`}
             accessibilityRole="tab"
-            accessibilityState={{ selected: on }}
+            aria-selected={on}
             accessibilityLabel={o.label}
             onPress={() => onChange(o.value)}
             style={({ pressed }) => [

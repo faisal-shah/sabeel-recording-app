@@ -32,6 +32,8 @@ export function StudentCoursesScreen({
 
   return (
     <Screen
+      // LIST, like every other collection — see `StudentHomeScreen`.
+      width="list"
       title="Your classes"
       subtitle="Your attendance and required listening, class by class"
     >

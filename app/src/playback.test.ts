@@ -358,6 +358,25 @@ describe('counting listening', () => {
     expect(stored?.positionMs).toBe(3_000);
   });
 
+  /*
+   * ONE WRITE PER INTERVAL, not one per tick. The player reports progress several
+   * times a second; persisting each would be a Firestore read AND write per tick,
+   * for every listener, for the length of a two-hour lecture.
+   */
+  it('throttles the writes a run of ticks produces', async () => {
+    const pb = await load();
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    // The first tick always persists — there is no previous write to space it
+    // from. The four after it fall inside one interval.
+    for (const at of [1_000, 2_000, 3_000, 4_000, 5_000]) {
+      players[0].events.onProgress(at);
+      wait(1_000);
+    }
+    await flush();
+    expect(setDoc).toHaveBeenCalledTimes(1);
+  });
+
   it('a forward SEEK manufactures no listening', async () => {
     const pb = await load();
     pb.openPlayback(recording('rec-a'));
@@ -496,6 +515,8 @@ describe('counting listening', () => {
     await flush();
     players[0].events.onProgress(1_000);
     pb.playback.seek(9_999_000);
+    // (Reached through `seek` rather than `skipForward`, which is exercised on
+    // its own below — this test is about the hold, not the clamp.)
 
     // The player clamps at the real end and reports it. No `onEnded`.
     wait(500);
@@ -513,7 +534,78 @@ describe('counting listening', () => {
   });
 });
 
+/*
+ * THE CLAMPS, which were argued for in a comment and exercised by nothing.
+ *
+ * `durationSec` is genuinely nullable — a phone upload supplies none — and
+ * clamping to a zero duration turns "forward 30" into "back to the start",
+ * which is the note above `skipForward`. Neither skip was called anywhere in
+ * this file.
+ */
+describe('the skip controls', () => {
+  it('skips forward by 30 seconds', async () => {
+    const pb = await load();
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    players[0].events.onProgress(10_000);
+    pb.playback.skipForward();
+    await pb.closePlayback();
+    expect(stored?.positionMs).toBe(40_000);
+  });
+
+  it('does not clamp to zero when the duration is unknown', async () => {
+    const pb = await load();
+    pb.openPlayback({ ...recording('rec-a'), durationMs: 0 });
+    await flush();
+    players[0].events.onProgress(600_000);
+    pb.playback.skipForward();
+    await pb.closePlayback();
+    expect(stored?.positionMs).toBe(630_000);
+  });
+
+  it('never skips past the end of a recording whose duration is known', async () => {
+    const pb = await load();
+    pb.openPlayback({ ...recording('rec-a'), durationMs: 20_000 });
+    await flush();
+    players[0].events.onProgress(10_000);
+    pb.playback.skipForward();
+    await pb.closePlayback();
+    expect(stored?.positionMs).toBe(20_000);
+  });
+
+  it('never skips back past the start', async () => {
+    const pb = await load();
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    players[0].events.onProgress(5_000);
+    pb.playback.skipBack();
+    await pb.closePlayback();
+    expect(stored?.positionMs).toBe(0);
+  });
+});
+
 describe('signed URLs', () => {
+  /*
+   * REFRESHED BEFORE IT EXPIRES, not after it fails. GCS answers an expired
+   * signed URL with a 400 and an `ExpiredToken` body — not a 403 — so a retry
+   * handler cannot even tell it apart from a real error, and the listener hears
+   * the failure first. The cache hands back a URL only while it has more than
+   * the refresh window left on it.
+   */
+  it('re-mints a cached URL that is close to expiring', async () => {
+    const pb = await load();
+    callable.mockResolvedValue({
+      data: { url: 'https://signed/nearly-stale.m4a', expiresAt: nowMs + 1_000 },
+    });
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    await pb.closePlayback();
+
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    expect(callable).toHaveBeenCalledTimes(2);
+  });
+
   it('reuses a cached URL rather than minting per open', async () => {
     const pb = await load();
     pb.openPlayback(recording('rec-a'));

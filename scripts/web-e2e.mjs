@@ -717,6 +717,32 @@ check(
 await tap(student, 'player-play'); // pause again
 await student.waitForTimeout(1500);
 
+/*
+ * SIGNING OUT ENDS THE SESSION, and this is the only place that says so.
+ *
+ * Playback is app-wide now, so nothing unmounts it: `signOut` has to stop the
+ * audio and drop the signed-URL cache itself. Both are one line each, both are
+ * silent when they are missing, and the failure — a foreground service still
+ * streaming a lecture behind a sign-in screen, and a 12-hour URL bound to a
+ * recording rather than an account waiting for whoever signs in next — is
+ * exactly the shared-device case the function exists for.
+ */
+await more(student, 'more-sign-out');
+await student.getByTestId('signin-email').waitFor({ timeout: 20000 });
+check(
+  'signing out ends the playback session — no docked bar behind the sign-in screen',
+  (await student.getByTestId('mini-player').count()) === 0 &&
+    (await student.getByTestId('player-play').count()) === 0,
+);
+await student.getByTestId('signin-email').fill('fatima@example.com');
+await student.getByTestId('signin-password').fill('StudentPass123!');
+await tap(student, 'signin-student');
+await sawText(student, 'Your listening', 30000);
+check(
+  'and signing back in starts clean, with nothing playing',
+  (await student.getByTestId('mini-player').count()) === 0,
+);
+
 // READ AFTER EVERYTHING HAS STOPPED PLAYING. The resume check below compares a
 // reopened position against this one, so anything that plays between the two
 // reads shows up as a resume that missed by exactly that much.

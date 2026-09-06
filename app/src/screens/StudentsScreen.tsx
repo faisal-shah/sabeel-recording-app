@@ -221,7 +221,7 @@ function AddStudent({
                 key={c.id}
                 testID={`student-course-${c.name}`}
                 accessibilityRole="radio"
-                accessibilityState={{ selected: on }}
+                aria-selected={on}
                 accessibilityLabel={`Enrol in ${c.name} in ${c.cohortName}`}
                 onPress={() => setCourseId(on ? null : c.id)}
                 style={styles.pickRow}

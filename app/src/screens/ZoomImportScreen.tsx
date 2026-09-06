@@ -95,7 +95,7 @@ export function ZoomImportScreen({
             // One of a set, so `radio` — and with a role at all, which
             // these chips had never had.
             accessibilityRole="radio"
-            accessibilityState={{ checked: status === s }}
+            aria-checked={status === s}
             accessibilityLabel={s}
             onPress={() => setStatus(s)}
             style={[styles.chip, status === s ? styles.chipOn : null]}
@@ -113,7 +113,7 @@ export function ZoomImportScreen({
       <Pressable
         testID="zoom-hide-short"
         accessibilityRole="checkbox"
-        accessibilityState={{ checked: hideShort }}
+        aria-checked={hideShort}
         accessibilityLabel="Hide recordings under two minutes"
         onPress={() => setHideShort((v) => !v)}
         style={styles.toggle}

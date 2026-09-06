@@ -173,7 +173,10 @@ sweeps every screen of both populations at five widths — between them they cov
 almost everything, and they are faster and far more repeatable than a human on an
 emulator. That is the default for layout, flows, rules, data and copy.
 
-**`npm run test:screens` is the sweep, and it runs on every push.** Every screen
+**`npm run test:screens` is the sweep, and it is the one browser suite CI can
+run** — `test:e2e` resets the emulators, so it cannot. With CI on
+`workflow_dispatch` it runs when you run it; run it before every commit that
+touches a screen. Every screen
 of both populations at five widths straddling `CONTENT_MAX_WIDTH` — which it
 reads out of `app/src/theme/index.ts` rather than restating — asserting that the
 page never scrolls sideways, that nothing is clipped by the right edge, that no

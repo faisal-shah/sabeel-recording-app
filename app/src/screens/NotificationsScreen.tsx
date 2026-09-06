@@ -157,6 +157,5 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
 }
 
 const styles = StyleSheet.create({
-  /** secondary, not muted: muted is the caption token and fails AA on this surface. */
   divided: { borderTopWidth: 1, borderTopColor: t.border.subtle },
 });

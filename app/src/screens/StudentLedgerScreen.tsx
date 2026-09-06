@@ -58,7 +58,7 @@ export function StudentLedgerScreen({
             // One of a set, so `radio` — and with a role at all, which
             // these chips had never had.
             accessibilityRole="radio"
-            accessibilityState={{ checked: filter === f }}
+            aria-checked={filter === f}
             onPress={() => setFilter(f)}
             style={[styles.chip, filter === f ? styles.chipOn : null]}
           >
@@ -112,6 +112,9 @@ const styles = StyleSheet.create({
   // finger-width apart. The sweep reports small targets and never fails them,
   // which is how four screens' worth stayed at half size.
   chip: {
+    // The same top margin the Export button beside it carries — see the note in
+    // `RecordingLedgerScreen`. Without it this toolbar sat four pixels out.
+    marginTop: spacing(2),
     minHeight: 44,
     justifyContent: 'center',
     paddingVertical: spacing(2),

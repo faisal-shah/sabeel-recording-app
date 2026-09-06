@@ -18,8 +18,9 @@ imported, published, and opened to whoever was marked excused; students stream
 them, mark their own completion, and staff read the accountability ledger and
 export it. Everything consequential is audited.
 
-Not started: Zoom import (gated on credentials), admin backend stats, and the
-release itself. See [`docs/PHASE_STATUS.md`](docs/PHASE_STATUS.md) for live
+Not started: admin backend stats and the release itself. Zoom import is built
+and toured end to end, and is waiting on institute credentials and its first
+live run. See [`docs/PHASE_STATUS.md`](docs/PHASE_STATUS.md) for live
 status and [`PLAN.md`](PLAN.md) for the build order.
 
 ## Documentation

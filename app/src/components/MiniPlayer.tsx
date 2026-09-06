@@ -138,10 +138,12 @@ export function MiniPlayer({
           On a wide bar the title is capped, so a spacer takes the slack:
           without it the whole cluster packs left and leaves a hole where the
           dismiss should be. */}
-      {/* WIDE ONLY. On a phone there is no slack to take: the title column had
-          94px left after the transport, which identifies no lecture at all. The
-          transport is the last thing in the row there, so it needs no pushing. */}
-      {wide ? <View style={styles.spacer} /> : null}
+      {/* ALWAYS. It is a zero-basis grower, so on a phone — where the title has
+          already shrunk to fill the row — it takes nothing. Gated on `wide` it
+          did nothing between 600 and 899 either, and there a short title left
+          the transport and the dismiss packed against it with a third of the
+          bar empty to their right. */}
+      <View style={styles.spacer} />
 
       {/* BACK AT EVERY WIDTH, forward only where there is room. The phone is
           the surface someone listens on hands-free, and "I missed that

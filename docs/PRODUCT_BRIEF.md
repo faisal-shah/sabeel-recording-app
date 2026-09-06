@@ -186,7 +186,10 @@ There is no course archive to browse: a student's list of what they may listen t
 
 Student home is the whole of what a student may listen to, ordered by urgency — because being granted a recording and being required to listen to it are now the same fact, there is nothing accessible-but-optional to separate out.
 
-Priority order:
+The most urgent recording that is still open is promoted to a card at the top of
+the screen and dropped from the group it would otherwise sit in, so the student's
+next action is the first thing on the page. The rest are grouped, in priority
+order:
 
 1. Missed
 2. Due soon

@@ -843,7 +843,7 @@ async function tourStaff(page, tag) {
   }, 'student-resend');
   await visit('cohorts', () => tap(byId(page, 'tab-courses')), 'cohorts-add');
   /*
-   * THE THREE CREATE SHEETS, OPEN.
+   * THE CREATE SHEETS, OPEN — these three, and `students-add` above.
    *
    * A sheet is a screen this app has and no tour was entering: its form exists
    * in no other state, it is the narrowest column in the product (a modal panel

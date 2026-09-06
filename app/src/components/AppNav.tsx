@@ -231,7 +231,12 @@ function NavItem({
       accessibilityLabel={
         badge > 0 ? `${label}, ${badge} blocking access` : label
       }
-      accessibilityState={{ selected: active }}
+      /* `aria-selected`, not `accessibilityState`: react-native-web has no
+         mapping for the latter, so it reaches the DOM as nothing at all and the
+         one thing this bar has to announce — which destination you are on — is
+         announced by nothing. `ui.tsx` records the same for `aria-expanded` and
+         `aria-checked`. */
+      aria-selected={active}
       onPress={onPress}
       style={({ pressed }) => [
         styles.item,

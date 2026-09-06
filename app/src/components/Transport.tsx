@@ -69,7 +69,7 @@ export function Transport({
         testID="player-play"
         accessibilityRole="button"
         accessibilityLabel={playing ? 'Pause' : 'Play'}
-        accessibilityState={{ disabled: !!disabled }}
+        aria-disabled={!!disabled}
         disabled={disabled}
         onPress={onPlayPause}
         style={({ pressed }) => [
@@ -122,7 +122,7 @@ export function Skip({
       accessibilityLabel={
         direction === 'back' ? `Back ${label} seconds` : `Forward ${label} seconds`
       }
-      accessibilityState={{ disabled: !!disabled }}
+      aria-disabled={!!disabled}
       disabled={disabled}
       onPress={onPress}
       hitSlop={12}
@@ -183,10 +183,9 @@ const styles = StyleSheet.create({
   playGlyphDisabled: { borderLeftColor: t.text.muted },
   pauseGlyph: { flexDirection: 'row', gap: 7 },
   pauseBar: { width: 7, height: 26, borderRadius: 2, backgroundColor: t.accent.onAccent },
+  // No size here: `Skip` sets it inline from its `size` prop, because the player
+  // and the docked bar want different ones.
   skip: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
     borderWidth: 2,
     borderColor: t.border.strong,
     alignItems: 'center',

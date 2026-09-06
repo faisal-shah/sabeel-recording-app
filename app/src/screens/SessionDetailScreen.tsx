@@ -343,7 +343,7 @@ function AttendanceSection({ session }: { session: SessionRow }) {
                         // no role at all — one of three mutually exclusive
                         // marks, so `radio` with the student's name on it.
                         accessibilityRole="radio"
-                        accessibilityState={{ checked: on }}
+                        aria-checked={on}
                         accessibilityLabel={`${nameByUid.get(uid) ?? uid}: ${STATUS_LABEL[s]}`}
                         onPress={() => setStatus(uid, s)}
                         style={[styles.segBtn, on ? styles.segBtnOn : null]}

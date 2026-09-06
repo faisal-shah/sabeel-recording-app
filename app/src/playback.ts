@@ -92,7 +92,14 @@ export interface PlaybackState {
   now: NowPlaying | null;
 }
 
-const IDLE: PlaybackState = {
+/**
+ * Nothing playing. Exported because the player screen needs the same shape: the
+ * session is app-wide, so on the first render after arriving it may still
+ * describe the PREVIOUS recording, and the screen substitutes this until the
+ * session is about the one it is showing. A second copy there drifted the moment
+ * `PlaybackState` gained a field.
+ */
+export const IDLE: PlaybackState = {
   ready: false,
   playing: false,
   positionMs: 0,

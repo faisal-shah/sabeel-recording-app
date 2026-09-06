@@ -10,7 +10,7 @@ import {
 import { Notice } from '../components/ui';
 import { Scrubber } from '../components/Scrubber';
 import { Transport } from '../components/Transport';
-import { closePlayback, formatClock, openPlayback, playback, usePlayback } from '../playback';
+import { IDLE, closePlayback, formatClock, openPlayback, playback, usePlayback } from '../playback';
 import { useCompletion, setCompleted } from '../completion';
 import { useListenerError } from '../liveQuery';
 import { useCohortName, type CourseRow } from '../structure';
@@ -21,16 +21,6 @@ const t = getTheme();
 const RATES = [1, 1.25, 1.5, 2];
 
 /** What this screen shows before the app-wide session is about its recording. */
-const IDLE_VIEW = {
-  ready: false,
-  playing: false,
-  positionMs: 0,
-  listenedMs: 0,
-  rate: 1,
-  error: null,
-  now: null,
-} as const;
-
 /**
  * Listening to one recording.
  *
@@ -65,7 +55,7 @@ export function PlayerScreen({
   // The session is app-wide, so on the first render after arriving it may still
   // describe the PREVIOUS recording. Read it only once it is about this one;
   // otherwise the scrubber shows another lecture's position for a frame.
-  const state = session.now?.recordingId === recording.id ? session : IDLE_VIEW;
+  const state = session.now?.recordingId === recording.id ? session : IDLE;
   const { play, pause, seek, setRate } = playback;
   // Opening the session is an EFFECT, not a render-time call: this screen is one
   // view onto app-wide playback, and re-entering it for something already
@@ -182,7 +172,7 @@ export function PlayerScreen({
               key={r}
               testID={`player-rate-${r}`}
               accessibilityRole="button"
-              accessibilityState={{ selected: on }}
+              aria-selected={on}
               accessibilityLabel={`Playback speed ${r} times`}
               disabled={!state.ready}
               onPress={() => setRate(r)}
@@ -264,12 +254,11 @@ function Hero({
         {courseName.toUpperCase()}
         {cohortName ? ` · ${cohortName.toUpperCase()}` : ''}
       </Text>
-      {/* CLAMPED, like the Today cards and the docked bar. A four-line title
-          took a third of a 900px viewport and pushed the transport — the reason
-          the screen exists — below the fold. */}
-      <Text style={styles.heroTitle} numberOfLines={3}>
-        {recording.title}
-      </Text>
+      {/* Not clamped. Three lines cut the institute's longest title mid-word on
+          a phone — "…the Hikam of Ib…" — on a screen that had room below the
+          card for all six. The transport stays reachable because the screen
+          scrolls; a truncated title is simply the wrong name. */}
+      <Text style={styles.heroTitle}>{recording.title}</Text>
       {recording.date ? <Text style={styles.heroDate}>Recorded {recording.date}</Text> : null}
     </View>
   );
@@ -320,7 +309,7 @@ function CompletionControl({
         testID="mark-complete"
         accessibilityRole="button"
         accessibilityLabel="Mark complete"
-        accessibilityState={{ disabled: !everPlayed }}
+        aria-disabled={!everPlayed}
         disabled={!everPlayed}
         onPress={() => void setCompleted(studentUid, recordingId, courseId, true)}
         style={({ pressed }) => [

@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   Empty,
+  Grid,
   ListRow,
   Notice,
   Row,
@@ -175,19 +176,25 @@ function AdminCourses({
   return (
     <>
       <SectionTitle>Courses ({rows.length})</SectionTitle>
+      {/* IN A GRID, like every other collection. Mapped straight into the screen
+          these were the only list rows in the app that never flowed into
+          columns — two 1114px bars each holding a course name and a status
+          lamp, on a `list`-width page whose whole point is the columns. */}
       {rows.length === 0 ? (
         <Empty>Not enrolled in any course yet.</Empty>
       ) : (
-        rows.map((r) => (
-          <CourseEnrollmentRow
-            key={r.enrollment.id}
-            course={r.course}
-            cohortName={cohortNameOf(r.course.cohortId)}
-            active={r.enrollment.active}
-            who={who}
-            onOpenCourse={onOpenCourse}
-          />
-        ))
+        <Grid min={330}>
+          {rows.map((r) => (
+            <CourseEnrollmentRow
+              key={r.enrollment.id}
+              course={r.course}
+              cohortName={cohortNameOf(r.course.cohortId)}
+              active={r.enrollment.active}
+              who={who}
+              onOpenCourse={onOpenCourse}
+            />
+          ))}
+        </Grid>
       )}
     </>
   );
@@ -229,6 +236,7 @@ function ManagerCourses({
         <Empty>You are not assigned to any courses.</Empty>
       ) : (
         <>
+          <Grid min={330}>
           {courses.map((c) => (
             <ManagedCourseRow
               key={c.id}
@@ -240,6 +248,7 @@ function ManagerCourses({
               onAnswered={report}
             />
           ))}
+          </Grid>
           {noneMatched ? (
             <Empty>{who} is not in any of the courses you manage.</Empty>
           ) : null}

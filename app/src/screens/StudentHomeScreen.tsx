@@ -116,6 +116,11 @@ export function StudentHomeScreen({
    */
   return (
     <Screen
+      // LIST, like every other collection in the app. Omitting `width` took the
+      // reading default, so a student's whole desktop experience was two cards
+      // in a 656px ribbon down the middle of a 1364px pane while every staff
+      // list beside it used the room.
+      width="list"
       title="Your listening"
       /* NOT "recordings you were excused from". Being excused is what grants
          these — but read plainly it says "recordings you do not have to listen
