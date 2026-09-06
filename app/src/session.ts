@@ -24,18 +24,31 @@ export type Session =
   | { phase: 'signedOut' }
   | { phase: 'signedIn'; user: User; profile: Profile | null; claims: TokenClaims };
 
+/** How long sign-out waits for the final progress write before giving up. */
+const SIGN_OUT_WRITE_GRACE_MS = 1000;
+
 export async function signOut(): Promise<void> {
   // Stop the audio before anything else. Playback outlives the screen that
   // started it now, so nothing else would end it: signing out would drop the
   // credential, leave a foreground service holding a lecture, and give the next
   // person on a shared device someone else's recording still playing.
   //
-  // AWAITED, for the last progress write it carries. Dropping the credential
-  // first means that write is refused and the final minutes of listening — the
-  // ones somebody would argue about — are lost at exactly the moment a student
-  // stops listening. Best effort still: a failure here must never trap someone
-  // signed in.
-  await closePlayback().catch(() => undefined);
+  // AWAITED, for the last progress write it carries — but only briefly.
+  // Dropping the credential first means that write is refused and the final
+  // minutes of listening, the ones somebody would argue about, are lost at
+  // exactly the moment a student stops listening.
+  //
+  // BOUNDED, because the promise is the tail of a serialised write chain and
+  // Firestore does not settle a write until the backend acknowledges it. On a
+  // phone with no signal that is never: the button would hang, the push
+  // registration would never be dropped, and the person would stay signed in on
+  // a shared device — the case this whole function exists to protect. A second
+  // is long enough for a write on a working connection and short enough that
+  // nobody waits on a broken one.
+  await Promise.race([
+    closePlayback().catch(() => undefined),
+    new Promise((resolve) => setTimeout(resolve, SIGN_OUT_WRITE_GRACE_MS)),
+  ]);
   // The signed-URL cache outlives a credential otherwise: a 12-hour URL minted
   // for one account would still be handed to the next person on a shared
   // device, bypassing `getPlaybackUrl`'s entitlement check entirely.

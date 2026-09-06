@@ -175,6 +175,36 @@ describe('opening and closing', () => {
     expect(stored?.recordingId).not.toBe('rec-b');
   });
 
+  /*
+   * A SESSION THAT NEVER LOADED MUST NOT OVERWRITE THE STORED POSITION.
+   *
+   * `openPlayback` zeroes the position synchronously and restores the stored
+   * one two round trips later. `mergeProgress` keeps the LARGER listenedMs but
+   * the NEWER positionMs — so a zero written on the way out wins, and the
+   * student's place in a two-hour lecture is gone.
+   */
+  it('closing before the audio loads keeps the stored position', async () => {
+    const pb = await load();
+    stored = { positionMs: 3_540_000, listenedMs: 3_540_000, updatedAt: 1 };
+    pb.openPlayback(recording('rec-a'));
+    // No flush: the mint and the progress read are still in the air.
+    await pb.closePlayback();
+    await flush();
+    expect(stored?.positionMs).toBe(3_540_000);
+    expect(setDoc).not.toHaveBeenCalled();
+  });
+
+  it('a failed mint does not overwrite the stored position either', async () => {
+    const pb = await load();
+    stored = { positionMs: 1_200_000, listenedMs: 1_200_000, updatedAt: 1 };
+    callable.mockRejectedValueOnce(new Error('offline'));
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    await pb.closePlayback();
+    await flush();
+    expect(stored?.positionMs).toBe(1_200_000);
+  });
+
   it('closing when nothing is open is a no-op', async () => {
     const pb = await load();
     await expect(pb.closePlayback()).resolves.toBeUndefined();
@@ -264,6 +294,48 @@ describe('counting listening', () => {
     stored = { positionMs: 500_000, listenedMs: 400_000, updatedAt: Date.now() + 1000 };
     await pb.closePlayback();
     expect(stored?.listenedMs).toBe(400_000);
+  });
+
+  /*
+   * THE CATCH-UP FROM ANOTHER DEVICE IS APPLIED ONCE, NOT PER QUEUED WRITE.
+   *
+   * `pause` and `seek` persist with no throttle, so two writes queue routinely.
+   * Advancing the local total by `merged - mine` made the second write re-read
+   * what the first had just stored and apply the same catch-up again — minutes
+   * of listening that never happened, in the number the ledger presents as
+   * evidence.
+   */
+  it('does not re-apply another device\'s total once per queued write', async () => {
+    const pb = await load();
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    players[0].events.onProgress(1_000);
+    wait(10_000);
+    players[0].events.onProgress(11_000);
+
+    // A laptop finished the same lecture while this session was open.
+    stored = { positionMs: 900_000, listenedMs: 900_000, updatedAt: nowMs + 1000 };
+
+    // Three writes queued before any of them resolves. Neither `seek` nor
+    // `pause` honours the write throttle, so a skip and a pause are enough.
+    pb.playback.seek(20_000);
+    players[0].events.onProgress(20_000);
+    pb.playback.pause();
+    await flush();
+
+    // Now listen a little more, so the session's own running total is written
+    // once the queue has drained — which is where the inflation shows up.
+    pb.playback.play();
+    wait(1_000);
+    players[0].events.onProgress(21_000);
+    await pb.closePlayback();
+    await flush();
+
+    // The laptop's total, plus the one second heard since. Adding the catch-up
+    // per queued write instead reached 2,691,000 — three quarters of an hour of
+    // listening that never happened, in the number the ledger presents as
+    // evidence.
+    expect(stored?.listenedMs).toBe(901_000);
   });
 
   /*

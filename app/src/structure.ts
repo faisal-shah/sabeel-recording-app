@@ -110,14 +110,19 @@ export function useCourse(courseId: string | null): CourseRow | null {
   return useCourseState(courseId).value;
 }
 
-/** As useCourse, plus whether the listener has answered — for a screen resolving
- *  a course from a URL, which must be able to say "no such course". */
-export function useCourseState(courseId: string | null) {
+/**
+ * As useCourse, plus whether the listener has answered — for a screen resolving
+ * a course from a URL, which must be able to say "no such course".
+ *
+ * `scope` for a second reader of the same document; see `useRecordingState`.
+ */
+export function useCourseState(courseId: string | null, scope?: string) {
   return useLiveDocState<CourseRow | null>(
     () => (courseId ? doc(db, COLLECTIONS.courses, courseId) : null),
     [courseId],
     {
       label: 'course',
+      context: scope ? { scope } : undefined,
       map: (snap) => ({ id: snap.id, ...(snap.data() as CourseDoc) }),
       empty: null,
     },

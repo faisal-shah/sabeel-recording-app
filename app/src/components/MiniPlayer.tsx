@@ -65,12 +65,16 @@ export function MiniPlayer({
    * that was unpublished — for as long as the signed URL lasts, with nothing on
    * screen saying anything changed.
    *
-   * One document listener, and only while something is loaded. The two are
-   * complementary rather than redundant: this bar is not rendered on the player
-   * screen, and the player screen is not mounted anywhere else.
+   * Two document listeners, and only while something is loaded. They do not
+   * duplicate the player screen's: this bar is not rendered there, and that
+   * screen is not mounted anywhere else.
+   *
+   * SCOPED, because this bar rides along with every screen. Listener errors are
+   * keyed by label, so an unscoped success here clears the banner a screen's
+   * own denied `course` or `recording` read had raised.
    */
-  const loaded = useRecordingState(now?.recordingId ?? null);
-  const course = useCourseState(now?.courseId ?? null);
+  const loaded = useRecordingState(now?.recordingId ?? null, 'miniPlayer');
+  const course = useCourseState(now?.courseId ?? null, 'miniPlayer');
   /*
    * THREE WAYS ACCESS ENDS, and the audio has to stop for all of them:
    *   - the recording is deleted or unpublished (its document goes);

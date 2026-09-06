@@ -181,18 +181,26 @@ function useTodayQueue(
   // `firestoreIndexes.test.ts` parses `label:` out of every `useLiveQuery` call
   // site and a computed one is a call site it cannot read — a guard that stops
   // seeing a query is worse than the duplication. They are twenty lines apart.
-  const failed = useListenerFailed(['todaySessions', 'todayRecordings']);
+  // All four, not just the two this hook subscribes itself. The first guard
+  // below waits on `courses`, which comes from `allCourses`/`myCourses` — so a
+  // refusal THERE left `courses` null, `failed` false, and the landing screen
+  // on "Checking your courses…" for good: the exact failure this reports.
+  const failed = useListenerFailed([
+    'todaySessions',
+    'todayRecordings',
+    'allCourses',
+    'myCourses',
+  ]);
 
   // OUTSIDE the memo: a browser left open past midnight would otherwise keep
   // saying "Met today" until the next snapshot happened to arrive.
   const today = todayInZone(INSTITUTE_TIMEZONE);
 
   return useMemo(() => {
-    // Nothing subscribed is not the same as nothing loaded: a manager assigned
-    // no courses has an answer already, and it is "nothing is waiting".
-    // The COURSES have not arrived either — and an empty list of them reads on
-    // screen as "you have no courses", which is a confident wrong answer to
-    // show every staff member for the length of a cold load.
+    // Nothing subscribed is not the same as nothing loaded. Until the COURSES
+    // arrive there is no answer at all, and an empty list of them reads on
+    // screen as "you have no courses" — a confident wrong answer shown to every
+    // staff member for the length of a cold load.
     const pending = { items: [], blocking: 0, failed, scoped: true, allFinished: false, truncated };
     if (!settled && courses === null) {
       return { ...pending, loading: !failed };

@@ -80,13 +80,21 @@ export function useRecording(recordingId: string | null): RecordingRow | null {
   return useRecordingState(recordingId).value;
 }
 
-/** As useRecording, plus whether the listener has answered. */
-export function useRecordingState(recordingId: string | null) {
+/**
+ * As useRecording, plus whether the listener has answered.
+ *
+ * `scope` is for the second reader of the same document. Listener errors are
+ * keyed by label, so two subscriptions sharing `recording` share one entry: the
+ * docked bar's success then clears the banner a screen's genuinely denied read
+ * had raised. Anything mounted alongside a screen rather than by it passes one.
+ */
+export function useRecordingState(recordingId: string | null, scope?: string) {
   return useLiveDocState<RecordingRow | null>(
     () => (recordingId ? doc(db, COLLECTIONS.recordings, recordingId) : null),
     [recordingId],
     {
       label: 'recording',
+      context: scope ? { scope } : undefined,
       map: (snap) => ({ id: snap.id, ...(snap.data() as RecordingDoc) }),
       empty: null,
     },

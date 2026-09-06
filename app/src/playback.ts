@@ -201,12 +201,15 @@ async function writeProgress(
     const existing = (await getDoc(ref)).data() as ListeningProgressDoc | undefined;
     const merged = existing ? mergeProgress(mine, existing) : mine;
     await setDoc(ref, { studentUid, recordingId, courseId, ...merged });
-    // ADVANCE BY THE JUMP, never assign the merged total. `mine` was captured
-    // before two round trips, and the ticks that arrived during them are already
-    // in `listened` — assigning would throw them away on every write, which over
-    // a two-hour lecture silently under-reports the number the ledger presents
-    // as evidence. Only the amount another device was ahead by is news here.
-    if (generation === gen) listened += merged.listenedMs - mine.listenedMs;
+    // TAKE THE LARGER, never add the difference. `mine` was captured before two
+    // round trips and the ticks that arrived during them are already in
+    // `listened`, so assigning the merged total would throw them away — but
+    // ADDING the catch-up is worse, because `pause` and `seek` persist with no
+    // throttle and two writes queue routinely: the second re-reads the document
+    // the first just wrote and applies the same catch-up again. Measured, that
+    // turned a laptop's 15 minutes into 44, in the number the ledger presents as
+    // evidence. `max` keeps the in-flight ticks and cannot double-count.
+    if (generation === gen) listened = Math.max(listened, merged.listenedMs);
   } catch {
     // A failed write must not break playback. The next tick retries — but only
     // for the session that is still open; a session already ended has had its
@@ -357,6 +360,19 @@ export function closePlayback(): Promise<void> {
   const finalPosition = position;
   const finalListened = listened;
   /*
+   * NOTHING HEARD, NOTHING WRITTEN — and this is the guard, not an optimisation.
+   *
+   * `openPlayback` zeroes the position synchronously and restores the stored one
+   * two round trips later, so a session closed before it loads still has
+   * `position === 0`. Writing that zero is not harmless: `mergeProgress` takes
+   * `listenedMs` as a max but `positionMs` from whichever record is NEWER, and
+   * the zero is newer — so tapping a lecture and immediately closing the bar,
+   * or opening one while offline so the mint fails, threw away the student's
+   * place in a two-hour recording. `dirty` is only ever set by a tick or a seek,
+   * which is exactly "this session went somewhere".
+   */
+  const moved = dirty;
+  /*
    * A GENERATION THAT CAN NEVER MATCH AGAIN.
    *
    * Take the current one for the dying session and then move past it, so the
@@ -384,6 +400,9 @@ export function closePlayback(): Promise<void> {
   // `gen` is stale by construction, so nothing module-level is touched when it
   // lands.
   if (!dying?.studentUid) return Promise.resolve();
+  // Nothing new since the last throttled save — but one may still be in flight,
+  // and the caller that awaits this is about to drop the credential.
+  if (!moved) return writes;
   return persistFor(
     gen,
     { studentUid: dying.studentUid, recordingId: dying.recordingId, courseId: dying.courseId },

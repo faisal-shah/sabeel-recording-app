@@ -106,7 +106,9 @@ export function MoreSheet({
           void Linking.openURL(PRIVACY_URL).catch(() => undefined);
         }}
       />
-      {IS_DEV ? (
+      {/* Staff only, because `Tokens` is registered in the staff arm of the
+          navigator alone — offered to a student it navigates nowhere. */}
+      {IS_DEV && !isStudent ? (
         <SheetOption
           label="Design tokens"
           onPress={() => {
