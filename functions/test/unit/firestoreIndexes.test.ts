@@ -140,3 +140,56 @@ describe('firestore composite indexes cover the app’s queries', () => {
   // does not read, so an "unused index" assertion would fail on indexes that are
   // in fact used — a false alarm on the check people would then stop trusting.
 });
+
+/**
+ * Collection-group queries, which Firestore indexes differently.
+ *
+ * A single-field index is created automatically at COLLECTION scope and NOT at
+ * COLLECTION_GROUP scope — so a `collectionGroup('x').where('f', ...)` needs an
+ * explicit `fieldOverrides` entry, and without one it fails in production with
+ * `failed-precondition` while the emulator serves it happily. Exactly the gap
+ * the composite check above exists for, in the one shape that check cannot see.
+ *
+ * Both source trees, because the only such query in this repo is in a TRIGGER:
+ * `onDeviceRegistered` sweeps a push token off every other account, and a
+ * missing index there is silent — the symptom is a device staying registered to
+ * a previous account, which is the leak the trigger exists to close.
+ */
+describe('firestore collection-group indexes', () => {
+  const overrides: {
+    collectionGroup: string;
+    fieldPath: string;
+    indexes: { queryScope?: string }[];
+  }[] = JSON.parse(readFileSync(INDEX_FILE, 'utf8')).fieldOverrides ?? [];
+
+  const FUNCTIONS_SRC = new URL('../../src/', import.meta.url).pathname;
+  const groupQueries = [...sourceFiles(APP_SRC), ...sourceFiles(FUNCTIONS_SRC)].flatMap((file) => {
+    const src = readFileSync(file, 'utf8');
+    return [
+      ...src.matchAll(/collectionGroup\(\s*'([^']+)'\s*\)[\s\S]{0,120}?\.where\(\s*'([^']+)'/g),
+    ].map((m) => ({ group: m[1], field: m[2], file }));
+  });
+
+  it('found the one this repo has', () => {
+    // A guard on the guard: a parser that matched nothing would make the
+    // assertion below vacuous, and it is the whole check.
+    expect(groupQueries.length).toBeGreaterThan(0);
+  });
+
+  it('declares a COLLECTION_GROUP index for each one', () => {
+    const missing = groupQueries
+      .filter(
+        (q) =>
+          !overrides.some(
+            (o) =>
+              o.collectionGroup === q.group &&
+              o.fieldPath === q.field &&
+              o.indexes.some((i) => i.queryScope === 'COLLECTION_GROUP'),
+          ),
+      )
+      .map((q) => `${q.group}.${q.field}`);
+    expect(missing, `no COLLECTION_GROUP index declared for:\n  ${missing.join('\n  ')}`).toEqual(
+      [],
+    );
+  });
+});

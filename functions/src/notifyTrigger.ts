@@ -49,7 +49,12 @@ import { SENTRY_DSN } from './reported';
  *
  * The collection-group query needs `devices.token` indexed at COLLECTION_GROUP
  * scope; Firestore does not create those automatically, so it is declared in
- * `firestore.indexes.json`.
+ * `firestore.indexes.json` — along with the collection-scope entries, because a
+ * `fieldOverrides` block REPLACES the automatic set for that field rather than
+ * adding to it. `scripts/check-query-shapes.mjs` sends this shape against the
+ * real project, which is the only place a missing index shows up: the emulator
+ * serves any shape, and the symptom in production would be a device quietly
+ * staying registered to a previous account.
  */
 export const onDeviceRegistered = onDocumentCreated(
   { document: `${COLLECTIONS.notifications}/{uid}/devices/{token}`, secrets: [SENTRY_DSN] },
