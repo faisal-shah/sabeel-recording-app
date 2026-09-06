@@ -165,12 +165,20 @@ function AddStudent({
     setError(null);
     try {
       const address = email.trim();
-      await createStudent({
+      // READ `emailSent`. The account and the email are two outcomes, not one:
+      // `createStudent` keeps the account when the send fails so staff can
+      // resend, and reporting a link that never went leaves someone waiting for
+      // an email that is not coming — with an account nobody can sign in to.
+      const { emailSent } = await createStudent({
         displayName: displayName.trim(),
         email: address.toLowerCase(),
         courseId: courseId ?? undefined,
       });
-      onCreated(`Account created. A set-password link has been emailed to ${address}.`);
+      onCreated(
+        emailSent
+          ? `Account created. A set-password link has been emailed to ${address}.`
+          : `Account created, but the set-password link could not be emailed to ${address}. Open their page and use Resend password link.`,
+      );
       setDisplayName('');
       setEmail('');
       setCourseId(null);

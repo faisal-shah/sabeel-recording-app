@@ -101,7 +101,11 @@ export function SessionDetailScreen({
       title={session.title}
       parent={{ label: cls.name, testID: 'up-to-course-from-session', onPress: onOpenCourse }}
       subtitle={`${session.date} · excused students listen by ${session.dueDate}`}
-      width="list"
+      // READ, not `list`. This screen is a register and a set of notes, both of
+      // which are read one line at a time; the list width put every name and its
+      // control 470px apart. The roster's three-way control is 330px wide, which
+      // fits the reading column with room for the longest name in the institute.
+      width="read"
     >
       <SessionHeader session={session} isAdmin={isAdmin} />
       <AttendanceSection session={session} />
@@ -156,7 +160,7 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
 
   if (editing) {
     return (
-      <Card style={styles.column}>
+      <Card>
         {error ? <Notice tone="error">{error}</Notice> : null}
         <Field label="Title" value={title} onChangeText={setTitle} autoCapitalize="words" />
         <DateField label="Date" value={date} onChange={setDate} />
@@ -196,7 +200,7 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
   }
 
   return (
-    <Card style={styles.column}>
+    <Card>
       {error ? <Notice tone="error">{error}</Notice> : null}
       {/* The listen-by date rides the heading line now — stating it again here
           was the same sentence twice on one screen. */}
@@ -290,7 +294,7 @@ function AttendanceSection({ session }: { session: SessionRow }) {
   return (
     <>
       <SectionTitle>Attendance</SectionTitle>
-      <Card style={styles.column}>
+      <Card>
         {error ? <Notice tone="error">{error}</Notice> : null}
         {info ? <Notice tone="success">{info}</Notice> : null}
         {/* With nobody on the roster there is nothing to mark, so telling someone
@@ -335,6 +339,12 @@ function AttendanceSection({ session }: { session: SessionRow }) {
                       <Pressable
                         key={s}
                         testID={`att-${nameByUid.get(uid) ?? uid}-${s}`}
+                        // The most-tapped control in the staff app, and it had
+                        // no role at all — one of three mutually exclusive
+                        // marks, so `radio` with the student's name on it.
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: on }}
+                        accessibilityLabel={`${nameByUid.get(uid) ?? uid}: ${STATUS_LABEL[s]}`}
                         onPress={() => setStatus(uid, s)}
                         style={[styles.segBtn, on ? styles.segBtnOn : null]}
                       >
@@ -442,7 +452,7 @@ function RecordingSection({
   return (
     <>
       <SectionTitle>Recording</SectionTitle>
-      <Card style={styles.column}>
+      <Card>
         {error ? <Notice tone="error">{error}</Notice> : null}
 
         {/* Rendered outside the recording/no-recording branch on purpose: the
@@ -552,7 +562,7 @@ function RecordingCard({
   // that leaves Publish and Delete tappable underneath it is not a confirmation.
   if (confirmClear && canClearAudio) {
     return (
-      <Card style={styles.column}>
+      <Card>
         <Notice tone="error">
           Remove the audio from “{r.title}”? The file is deleted permanently. A Zoom
           recording would have to be imported again; an uploaded one needs the original
@@ -730,16 +740,14 @@ const styles = StyleSheet.create({
   // down. Sized to the widest label rather than to the roster.
   segmentWide: { width: 330 },
   /*
-   * ONE COLUMN FOR THE WHOLE SCREEN, and it is the CARDS that carry it.
+   * ONE COLUMN FOR THE WHOLE SCREEN — and `Screen` now carries it, so the
+   * heading ends where the cards do.
    *
-   * The page is `list`-wide because it holds a roster, but a REGISTER is read
-   * one line at a time: left to fill 1180px it put every name and its control
-   * 470px apart. Capping the ROWS instead fixed that and left a 339px strip of
-   * empty card to the right of every one of them, and the editor card capped
-   * separately gave one screen three right edges. The cards cap; everything
-   * inside them fills.
+   * A REGISTER is read one line at a time: at the list width it put every name
+   * and its control 470px apart. Capping the ROWS instead left a 339px strip of
+   * empty card to the right of each; capping the CARDS left the H1 running 200px
+   * past them. `width="read"` caps the page, and every card in it simply fills.
    */
-  column: { maxWidth: 760 },
   // 44pt: this is the single most-tapped control in the staff app — once per
   // student, per session — and it was 32px tall at phone width.
   segBtn: {

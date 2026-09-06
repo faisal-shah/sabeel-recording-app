@@ -135,11 +135,15 @@ const recording = (id: string, studentUid: string | null = 'stu-1') => ({
 });
 
 describe('opening and closing', () => {
-  it('loads the audio and reports what is playing', async () => {
+  it('mints a URL for the recording asked for, and loads it', async () => {
     const pb = await load();
     pb.openPlayback(recording('rec-a'));
-    expect(pb.playback).toBeDefined();
+    // The player exists before the audio does — the docked bar has to appear
+    // the moment someone taps, not two round trips later.
+    expect(players).toHaveLength(1);
+    expect(players[0].loaded).toBeNull();
     await flush();
+    expect(callable).toHaveBeenCalledWith({ recordingId: 'rec-a' });
     expect(players[0].loaded).toBe('https://signed/audio.m4a');
   });
 
@@ -248,6 +252,29 @@ describe('who the progress belongs to', () => {
     players[0].events.onProgress(60_000);
     await pb.closePlayback();
     expect(setDoc).not.toHaveBeenCalled();
+  });
+
+  /*
+   * AND NOT ON THE THROTTLED PATH EITHER, which is the other half of the guard.
+   *
+   * A tick past the write interval, a pause and a seek each persist without
+   * going anywhere near `closePlayback`. Without the owner check there, a staff
+   * listen writes `listeningProgress/null_<recordingId>` with a null studentUid
+   * — a document for nobody, in the collection the ledger reads.
+   */
+  it('staff listening writes nothing when a tick, a pause or a seek persists', async () => {
+    const pb = await load();
+    pb.openPlayback(recording('rec-a', null));
+    await flush();
+    // Past PROGRESS_WRITE_INTERVAL_MS, so the tick itself would persist.
+    players[0].events.onProgress(1_000);
+    wait(20_000);
+    players[0].events.onProgress(21_000);
+    pb.playback.seek(30_000);
+    pb.playback.pause();
+    await flush();
+    expect(setDoc).not.toHaveBeenCalled();
+    expect(getDoc).not.toHaveBeenCalled();
   });
 
   it('pausing writes progress without ending the session', async () => {
@@ -398,6 +425,35 @@ describe('counting listening', () => {
     // listening that never happened, in the number the ledger presents as
     // evidence.
     expect(stored?.listenedMs).toBe(901_000);
+  });
+
+  /*
+   * AND THE TICKS THAT ARRIVED DURING THE WRITE SURVIVE IT.
+   *
+   * `mine` is captured before two round trips. Assigning the merged total back
+   * — rather than taking the larger of it and the running count — throws away
+   * everything heard while the write was in flight, which over a two-hour
+   * lecture silently under-reports the number staff read as evidence.
+   */
+  it('keeps the seconds heard while a write was in flight', async () => {
+    const pb = await load();
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+
+    // The first tick always persists, and it goes out carrying 0 listened.
+    players[0].events.onProgress(1_000);
+    // Eight seconds of real listening arrive before that write comes back.
+    wait(4_000);
+    players[0].events.onProgress(5_000);
+    wait(4_000);
+    players[0].events.onProgress(9_000);
+    await flush();
+
+    await pb.closePlayback();
+    await flush();
+    // Assigning the merged total back instead would have written 0 — the whole
+    // eight seconds discarded because they arrived after `mine` was captured.
+    expect(stored?.listenedMs).toBe(8_000);
   });
 
   /*

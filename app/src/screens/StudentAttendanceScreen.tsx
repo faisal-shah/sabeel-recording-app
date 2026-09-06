@@ -69,9 +69,17 @@ export function StudentAttendanceScreen({
   const outstanding = useMemo(
     () =>
       assignments.filter(
-        (a) => !isOverdue(a.dueDate, today) && !completions.get(a.recordingId)?.completed,
+        (a) =>
+          // THIS CLASS. `useMyAssignments` is constrained on the student and on
+          // `active`, so it spans every class they are enrolled in — and the
+          // sentence this number drives says "for this class". A student in two
+          // classes with one open recording in each read "2 still to listen to"
+          // on both pages.
+          a.courseId === cls.id &&
+          !isOverdue(a.dueDate, today) &&
+          !completions.get(a.recordingId)?.completed,
       ).length,
-    [assignments, completions, today],
+    [assignments, completions, today, cls.id],
   );
 
   return (

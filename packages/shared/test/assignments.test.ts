@@ -125,10 +125,10 @@ describe('bucketRank orders the home', () => {
 });
 
 /*
- * THE ONE GATE THREE SURFACES ASK. The player screen, the docked bar and the
- * shell's stale-link guard all read this; the copies they used to hold had
- * already drifted, and the drift cut a manager off from anything more than a
- * week old the moment they left the player.
+ * THE ONE GATE BOTH VIEWS OF A SESSION ASK. The player screen and the docked
+ * bar read this; the copies they used to hold had already drifted, and the drift
+ * cut a manager off from anything more than a week old the moment they left the
+ * player.
  */
 describe('canPlayNow', () => {
   const live = { effectiveActive: true, archivedAccess: false };

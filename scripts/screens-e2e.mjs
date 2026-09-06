@@ -267,8 +267,8 @@ const { STUDENT, DISABLED_STUDENT, STUDENT_PASSWORD, missed, dueSoon } = world;
  * real overflow. Reading the right box makes both questions well-posed on any
  * runner, which is a better reason to do it than the failure it avoids.
  */
-const layoutFaults = (page) =>
-  page.evaluate(() => {
+const layoutFaults = (page, readOnly = false) =>
+  page.evaluate((readOnly) => {
     const vw = document.documentElement.clientWidth;
     const faults = [];
 
@@ -341,8 +341,22 @@ const layoutFaults = (page) =>
      */
     const chrome = (e) =>
       /^tab-/.test(e.getAttribute('data-testid') || '') ||
-      !!e.closest('[data-testid="mini-player"]');
-    if (els.filter((e) => !chrome(e)).length === 0) {
+      !!e.closest('[data-testid="mini-player"]') ||
+      // AND THE HEADER'S BACK, which every pushed screen has and which this
+      // file already knows is a `role="link"` rather than a button (see
+      // `escapes`). Counting it left the guard unable to fire on the 33 pushed
+      // screens — the ones whose own controls it exists to watch for.
+      /(^|,\s*)(go\s+)?back$/i.test(
+        (e.getAttribute('aria-label') || e.textContent || '').trim(),
+      );
+    if (readOnly) {
+      // A screen DECLARED as read-only must not quietly grow a control the
+      // checks below would then be the only thing watching. The guard runs in
+      // both directions, so the declaration cannot rot.
+      if (els.filter((e) => !chrome(e)).length > 0) {
+        faults.push('declared read-only but rendered a control of its own');
+      }
+    } else if (els.filter((e) => !chrome(e)).length === 0) {
       faults.push(
         'examined NO controls of its own — the overlap and right-edge checks are inert here, not passing',
       );
@@ -475,7 +489,7 @@ const layoutFaults = (page) =>
     }
 
     return { faults: [...new Set(faults)], fixedFormat: fixedFormatSeen, controls: els.length };
-  });
+  }, readOnly);
 
 /**
  * Can you LEAVE this screen without the browser's Back?
@@ -588,8 +602,8 @@ function columnFault(col, caps) {
  * checks internally consistent and says nothing about *which width* they ran at.
  * The width came from a Playwright viewport option and was believed. If one ever
  * failed to apply, every geometric check would still pass, every screenshot
- * would be mislabelled, and "608 checks across five widths" would be a sentence
- * about nothing — the file's own headline rule, one level up, at the tour's
+ * would be mislabelled, and "a thousand checks across five widths" would be a
+ * sentence about nothing — the file's own headline rule, one level up, at the tour's
  * premise rather than at its steps.
  *
  * So the requested width is ASSERTED rather than threaded through as an
@@ -710,7 +724,8 @@ function visitor(page, tag, homeMarker, counter) {
     }
     await page.waitForTimeout(450);
 
-    const top = await layoutFaults(page);
+    const readOnly = READ_ONLY_SCREENS.has(name);
+    const top = await layoutFaults(page, readOnly);
     fixedFormatSeen += top.fixedFormat;
     controlsSeen += top.controls;
     check(`${tag} / ${name}`, top.faults.length === 0, top.faults.join('; ').slice(0, 200));
@@ -733,7 +748,7 @@ function visitor(page, tag, homeMarker, counter) {
 
     if (await scrollToBottom(page)) {
       await page.waitForTimeout(250);
-      const below = await layoutFaults(page);
+      const below = await layoutFaults(page, readOnly);
       fixedFormatSeen += below.fixedFormat;
       controlsSeen += below.controls;
       check(
@@ -765,6 +780,17 @@ const TAB_ROOTS = new Set([
   // root, with the now-playing bar on it.
   'miniplayer',
 ]);
+
+/*
+ * SCREENS WITH NO CONTROL OF THEIR OWN, and it is a short list on purpose.
+ *
+ * The audit log, the token sheet and a student's class record are read-only:
+ * cards and rows a person looks at. The starvation guard would otherwise report
+ * every one of them as inert, which is true and useless — so they are declared,
+ * and the declaration is checked in both directions. Everything else in the app
+ * has something to press, and a screen that stops having one is news.
+ */
+const READ_ONLY_SCREENS = new Set(['audit', 'audit-scoped', 'tokens', 'class-record']);
 
 const STAFF_SCREENS = 29;
 
@@ -861,7 +887,10 @@ async function tourStaff(page, tag) {
     await openCourse();
     await tap(byId(page, 'nav-attendance'));
     await tap(byId(page, 'attendance-tab-students'));
-  }, 'attendance-tab-sessions');
+    // The EXPORT, not the other tab's segment: `Segmented` renders every
+    // option's testID whichever is selected, so anchoring on one of them goes
+    // green on the view this visit exists to leave.
+  }, 'attendance-export-students');
   await visit('sessions', async () => {
     await openCourse();
     await tap(byId(page, 'nav-sessions'));

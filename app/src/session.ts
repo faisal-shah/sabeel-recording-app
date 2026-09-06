@@ -166,22 +166,39 @@ export function useSession(): Session {
       const publish = (profile: Profile | null, claims: TokenClaims) => {
         if (cancelled) return;
         latest.current = { profile };
+        const ready = isReady(claims, profile);
         // A gated account — pending, disabled, or not yet provisioned — is
         // denied by every rule, so denials while it is in that state say
         // nothing. Being disabled mid-session is the case that matters: the
         // claim flips under a screen that is still subscribed.
-        setLiveDataSession(isReady(claims, profile));
-        // The DISABLED case never reaches the branch above: the claim flips
-        // while the credential is still valid, and `App` swaps the whole
-        // navigator for the disabled screen — taking the player screen and the
-        // docked bar with it, and leaving the audio running with nothing to
-        // stop it. Ending the session is part of closing the account's access.
-        if (!isReady(claims, profile)) {
+        setLiveDataSession(ready);
+        setSession({ phase: 'signedIn', user, profile, claims });
+
+        /*
+         * EVERYTHING THE GATE DECIDES, IN ONE BRANCH.
+         *
+         * The poll was written as a bare `else` on the push-registration test
+         * below and bound to the wrong `if`: a READY account whose push token
+         * was already claimed fell into it, so the second `publish` of every
+         * healthy session — and there is always a second, since `start` arms
+         * the listener and calls `poll`, and both publish — armed a permanent
+         * three-second timer. Each tick force-refreshed the token and re-read
+         * the profile, then published again and re-armed, for every signed-in
+         * user for the life of the session.
+         *
+         * The audio stops here too. Being disabled mid-lecture never reaches
+         * the signed-out branch — the claim flips while the credential is still
+         * valid, and `App` swaps the whole navigator for the disabled screen,
+         * taking the player and the docked bar with it and leaving a foreground
+         * service running with nothing on screen to stop it.
+         */
+        if (!ready) {
           void closePlayback();
           forgetPlaybackUrls();
+          if (!pollTimer) pollTimer = setInterval(poll, 3000);
+          return;
         }
-        setSession({ phase: 'signedIn', user, profile, claims });
-        if (isReady(claims, profile)) stopPoll();
+        stopPoll();
 
         // Claim this device's push token once the account is usable. SILENT —
         // it never prompts, and only writes a token for a device already
@@ -189,11 +206,10 @@ export function useSession(): Session {
         // to the notifications screen, so someone who granted permission and
         // never went back received nothing, and a rotated FCM token was never
         // replaced. The sibling apps have always done this at sign-in.
-        if (isReady(claims, profile) && pushRegisteredFor !== user.uid) {
+        if (pushRegisteredFor !== user.uid) {
           pushRegisteredFor = user.uid;
           void registerThisDevice(user.uid, false).catch(() => undefined);
         }
-        else if (!pollTimer) pollTimer = setInterval(poll, 3000);
       };
 
       // Arm the live listener against whichever collection the claim points at.
@@ -204,6 +220,11 @@ export function useSession(): Session {
         unsubDoc = onSnapshot(
           doc(db, profileCollection(role), user.uid),
           (snap) => {
+            // CAUGHT, like `poll`'s. `getIdTokenResult` rejects once the
+            // credential is revoked — a disabled account, a sign-out elsewhere
+            // — and a snapshot can still land in that window. Unhandled, it
+            // surfaced as an uncaught FirebaseError on a screen that was already
+            // on its way out; the auth observer is what deals with it.
             void (async () => {
               const fresh = (await user.getIdTokenResult()).claims as TokenClaims;
               const profile = toProfile(fresh.role, snap.exists() ? snap.data() : null);
@@ -211,7 +232,9 @@ export function useSession(): Session {
               // Document says active but the token still lags: refresh now rather
               // than waiting for the next poll tick.
               if (profile && isStale(fresh, profile)) void poll();
-            })();
+            })().catch((e: { code?: string; message: string }) =>
+              console.warn('profile listener', e.code ?? e.message),
+            );
           },
           (e) => console.warn('profile listener', e.code ?? e.message),
         );

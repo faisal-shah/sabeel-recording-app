@@ -168,9 +168,10 @@ describe('sessions rules', () => {
           createdBy: ADMIN,
         });
         // TWO sessions and a recording per course, deliberately. With one row
-        // per course the test cannot tell "15 distinct `get(courses/{id})`
-        // paths" from "15 documents returned" — and a real term has twenty-odd
-        // sessions in each. It has to vary the thing it claims to pin.
+        // per course the test cannot tell "one `get(courses/{id})` per distinct
+        // path" from "one per document returned" — and a real term has
+        // twenty-odd sessions in each. It has to vary the thing it claims to
+        // pin, because the cache is what makes the ceiling a count of COURSES.
         for (const n of [0, 1]) {
           await setDoc(doc(db, COLLECTIONS.sessions, `qs${i}-${n}`), {
             courseId,
@@ -238,7 +239,7 @@ describe('sessions rules', () => {
   /**
    * THE OTHER HALF OF THE MEASUREMENT: the width that is actually refused.
    *
-   * Without it "15 is safe" is a number in a comment. The rule's document-access
+   * Without it "ten is safe" is a number in a comment. The rule's document-access
    * budget is what caps the queue, and a change to `firestore.rules` that spends
    * one more `get()` per row would move the ceiling silently — this is the test
    * that goes red when it does. `QUEUE_SCOPE.admin` is the width, because the

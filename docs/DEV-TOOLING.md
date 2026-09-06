@@ -13,7 +13,7 @@ emulator — not your diff.
 |---|---|
 | `npm run lint` | ESLint + `check:text` |
 | `npm run typecheck` | Builds `@sabeel/shared` first, then typechecks every workspace |
-| `npm test` | Vitest unit tests (shared + functions), no emulators needed |
+| `npm test` | Vitest unit tests (shared, functions and app), no emulators needed |
 | `npm run test:emulator` | Firestore + Auth + Storage emulators, then the rules suite |
 | `npm run knip` | Dead-code audit — fails on unused files, exports and dependencies |
 | `npm run emulators:free` | Kills whatever is squatting on the emulator ports |
@@ -210,9 +210,9 @@ SWEEP_FULL=1 npm run test:screens       # + iPhone SE / Pixel 7 / iPad Mini prof
 ```
 
 **Automatic CI is OFF (2026-08-28) — run this locally.** `ci.yml` is
-`workflow_dispatch` only while the repo is in heavy development: the job is
-8m12s, of which this sweep is 337s, and it duplicates what you can run on the
-machine you are changing. The full local equivalent is
+`workflow_dispatch` only while the repo is in heavy development: the job runs
+around ten minutes, most of it this sweep, and it duplicates what you can run on
+the machine you are changing. The full local equivalent is
 
 ```bash
 npm run lint && npm run typecheck && npm run knip && npm test \
@@ -270,8 +270,8 @@ that it is good.
 - **The requested width is asserted, not assumed.** Every other check measures
   the DOM against the DOM, which makes them internally consistent and silent
   about *which* width they ran at — so a viewport option that failed to apply
-  would leave all 608 checks green, every screenshot mislabelled, and the
-  five-width claim hollow. One check per context, before the tour, naming both
+  would leave every one of the sweep's checks green, every screenshot
+  mislabelled, and the five-width claim hollow. One check per context, before the tour, naming both
   `documentElement.clientWidth` and `window.innerWidth` if they diverge. It is
   the file's own headline rule (a tour that cannot fail is a screenshot
   generator) applied to the tour's premise rather than to its steps.

@@ -156,6 +156,11 @@ export function SessionsScreen({
           <Pressable
             key={s.id}
             testID={`session-open-${s.title}`}
+            // A row without a ROLE is not a control: a screen reader announces
+            // nothing tappable, and every check in the layout sweep that looks
+            // for controls looks straight past it.
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${s.title}`}
             onPress={() => onOpenSession(s)}
             // The grid child is this wrapper, not the Card inside it, so the
             // fill has to be here or the row ends ragged.

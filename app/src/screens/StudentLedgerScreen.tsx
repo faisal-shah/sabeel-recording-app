@@ -49,10 +49,16 @@ export function StudentLedgerScreen({
     <Screen title={studentName} subtitle={`${cls.name} · required listening`} width="list">
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       <View style={styles.chips}>
-        {(['all', 'notComplete', 'missed'] as Filter[]).map((f) => (
+        {/* The same order as the recording ledger's, which is the other screen
+            with these three words on it. */}
+        {(['notComplete', 'missed', 'all'] as Filter[]).map((f) => (
           <Pressable
             key={f}
             testID={`student-filter-${f}`}
+            // One of a set, so `radio` — and with a role at all, which
+            // these chips had never had.
+            accessibilityRole="radio"
+            accessibilityState={{ checked: filter === f }}
             onPress={() => setFilter(f)}
             style={[styles.chip, filter === f ? styles.chipOn : null]}
           >
@@ -139,8 +145,10 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: '600', color: t.text.primary },
   override: { fontSize: 13, color: t.text.accent, marginTop: spacing(1) },
   // `minWidth` is what makes the wrap happen: below it the title and the status
-  // cannot share a line, so the status moves to its own.
-  rowMain: { flexGrow: 1, flexShrink: 1, flexBasis: 200, minWidth: 200 },
+  // cannot share a line, so the status moves to its own. 150, not 200 — at 200 a
+  // three-column row at 1440 wrapped while the same cards at 1024 did not, so
+  // one row showed the status in two places.
+  rowMain: { flexGrow: 1, flexShrink: 1, flexBasis: 150, minWidth: 150 },
   status: { fontSize: 13, fontWeight: '700' },
   ok: { color: t.feedback.success },
   bad: { color: t.feedback.danger },

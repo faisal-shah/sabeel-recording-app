@@ -151,6 +151,7 @@ export function MiniPlayer({
       <Skip
         label={String(SKIP_BACK_MS / 1000)}
         direction="back"
+        size={44}
         disabled={!state.ready}
         onPress={playback.skipBack}
         testID="mini-player-back"
@@ -165,7 +166,8 @@ export function MiniPlayer({
         style={[styles.play, !state.ready ? styles.playDisabled : null]}
       >
         {/* 0.62: this button is 44px against the player's 72px, and the glyph
-            is built from borders rather than type. */}
+            is built from borders rather than type. The skips beside it are 44
+            too — see `Skip`'s `size`. */}
         <PlayPauseGlyph playing={state.playing} disabled={!state.ready} scale={0.62} />
       </Pressable>
 
@@ -173,6 +175,7 @@ export function MiniPlayer({
         <Skip
           label={String(SKIP_FORWARD_MS / 1000)}
           direction="forward"
+          size={44}
           disabled={!state.ready}
           onPress={playback.skipForward}
           testID="mini-player-forward"

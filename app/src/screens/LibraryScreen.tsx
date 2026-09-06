@@ -58,6 +58,11 @@ export function LibraryScreen({
           <Pressable
             key={s}
             testID={`library-filter-${s}`}
+            // One of a set, so `radio` — and with a role at all, which
+            // these chips had never had.
+            accessibilityRole="radio"
+            accessibilityState={{ checked: status === s }}
+            accessibilityLabel={STATUS_LABEL[s]}
             onPress={() => setStatus(s)}
             style={[styles.chip, status === s ? styles.chipOn : null]}
           >

@@ -247,7 +247,14 @@ export function CourseDetailScreen({
                       {pending ? (
                         <ActivityIndicator style={styles.tick} color={t.accent.base} />
                       ) : (
-                        <View style={[styles.tick, on ? styles.tickOn : null]} />
+                        /* A TICK, not just a fill. A bare filled square is the
+                           app's only checkbox and its checked state was colour
+                           alone, which reads as an image that failed to load —
+                           and says nothing at all to a screen reader's user who
+                           is also colour-blind. */
+                        <View style={[styles.tick, on ? styles.tickOn : null]}>
+                          {on ? <Text style={styles.tickMark}>✓</Text> : null}
+                        </View>
                       )}
                       <View style={styles.pickText}>
                         <Text style={styles.name}>{s.displayName}</Text>
@@ -325,11 +332,18 @@ export function CourseDetailScreen({
                 onPress={() => onOpenStudent(r.studentUid)}
                 actionsPinned
                 actions={
+                  /* Secondary, like Disable and Archive. Removing someone from a
+                     course keeps their listening history and can be undone — the
+                     confirmation says so in as many words — and the destructive
+                     register is this app's mark for permanent deletion. Fourteen
+                     alarm-tinted chips tiled three across a 1440px roster made
+                     the loudest thing on the page the one action nobody came
+                     here to take. The CONFIRM is still danger-red, which is
+                     where the weight belongs. */
                   <IconButton
                     testID={`roster-remove-${s?.email ?? r.studentUid}`}
                     glyph="×"
                     label={`Remove ${who} from this course`}
-                    variant="danger"
                     onPress={() => setConfirmRemove(r.id)}
                   />
                 }
@@ -410,8 +424,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: t.border.strong,
     backgroundColor: t.bg.raised,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tickOn: { backgroundColor: t.accent.base, borderColor: t.accent.base },
+  tickMark: { fontSize: 14, fontWeight: '700', color: t.accent.onAccent, lineHeight: 16 },
   plus: {
     width: 22,
     height: 22,

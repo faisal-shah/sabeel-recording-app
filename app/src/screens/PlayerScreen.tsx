@@ -416,7 +416,9 @@ const styles = StyleSheet.create({
   },
   listenedFill: { height: 6, backgroundColor: t.feedback.success },
   body: { fontSize: 15, color: t.text.secondary, lineHeight: 22 },
-  staffNote: { fontSize: 14, color: t.text.muted, fontStyle: 'italic', lineHeight: 20 },
+  // secondary, not muted: this sentence is the only explanation of why there is
+  // no Mark complete button, which makes it content rather than a caption.
+  staffNote: { fontSize: 14, color: t.text.secondary, fontStyle: 'italic', lineHeight: 20 },
   due: { fontSize: 14, color: t.text.secondary, marginTop: spacing(5) },
 
   completeButton: {

@@ -100,12 +100,20 @@ export function Skip({
   disabled,
   onPress,
   testID,
+  size = 56,
 }: {
   label: string;
   direction: 'back' | 'forward';
   disabled?: boolean;
   onPress: () => void;
   testID: string;
+  /**
+   * The ring's diameter. 56 on the player, beside a 72px play button; 44 in the
+   * docked bar, beside a 44px one — where left at 56 the skips were 27% LARGER
+   * than the control they flank, so the bar's primary was the smallest thing on
+   * it and sat exactly at the touch-target floor.
+   */
+  size?: number;
 }) {
   return (
     <Pressable
@@ -120,6 +128,7 @@ export function Skip({
       hitSlop={12}
       style={({ pressed }) => [
         styles.skip,
+        { width: size, height: size, borderRadius: size / 2 },
         pressed && !disabled ? styles.pressed : null,
         disabled ? styles.skipDisabled : null,
       ]}
@@ -130,7 +139,7 @@ export function Skip({
           they go, and the durations are asymmetric so the number cannot be read
           as the cue either. */}
       <MaterialIcons
-        name={direction === 'back' ? 'replay' : 'forward-30'}
+        name="replay"
         size={18}
         color={disabled ? t.text.muted : t.text.secondary}
         style={direction === 'forward' ? styles.flip : undefined}
@@ -184,8 +193,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   skipDisabled: { borderColor: t.bg.inset },
-  // `forward-30` is drawn with its own arrowhead; `replay` is the same mark
-  // mirrored, so the pair reads as one control in two directions.
+  // ONE MARK, MIRRORED. `replay` is a counter-clockwise arrow, so flipped it
+  // runs clockwise and the pair reads as one control in two directions. The
+  // set's own `forward-30` cannot be used for the other half: it already faces
+  // forward AND carries its own "30" numerals, so mirroring it produced a
+  // back-facing arrow with the digits reversed above a readable "30".
   flip: { transform: [{ scaleX: -1 }] },
   skipNumber: { fontSize: 14, lineHeight: 16, color: t.text.primary, fontWeight: '700' },
   skipTextDisabled: { color: t.text.muted },

@@ -40,7 +40,7 @@ The product should be designed for Android, web, and future iOS support. Initial
 - Admins have full platform visibility.
 - Managers must be assigned class by class. Cohort-level assignment does not grant access to every class in that cohort.
 - Students sign in with email and password.
-- Staff quick-create student accounts with full name, email, and enrolled cohort/class.
+- Staff quick-create student accounts with full name, email, and enrolled cohort/class — **on the web only**. The affordance is absent from the native builds, so an app-store reviewer never meets an account-creation flow; everything else about a student account (roles, enrolment, disabling, resending the set-password link) works on every surface.
 - After staff create a student account, the student receives an email to set their own password.
 - Disabling a student prevents login while preserving all history, enrollments, and reports.
 
@@ -385,7 +385,7 @@ Each has its own on/off switch, per person, defaulting on. Notifications are a c
 
 ### Student
 
-- Email/password login.
+- Email/password login, with a self-service reset from **More → Change password**.
 - View the classes they are enrolled in.
 - See required listening grouped by missed, due soon, upcoming, and recent/completed.
 - See their own attendance record for each class.
@@ -406,7 +406,7 @@ Each has its own on/off switch, per person, defaulting on. Notifications are a c
 - Google sign-in with approved Manager role.
 - Access only assigned classes.
 - Create/manage students in assigned classes.
-- Quick-create student accounts.
+- Quick-create student accounts (web only — see the access rules above).
 - Import recordings from approved Zoom source for assigned classes.
 - Upload audio manually.
 - Review drafts and publish recordings.

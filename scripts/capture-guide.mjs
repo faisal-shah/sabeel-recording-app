@@ -39,10 +39,14 @@ const home = async (p) => { await p.goto(WEB, { waitUntil: 'domcontentloaded' })
  * a manual written for institute staff, so it cannot appear in it. Cutting
  * above the panel is honest: everything the reader is shown is real, there is
  * simply less of it.
+ *
+ * FAILS CLOSED. Returning null when the anchor is missing let `pair` fall
+ * through to a full-height capture, which is the one outcome this function
+ * exists to prevent — a redaction that quietly does nothing is worse than none.
  */
 async function heightAbove(p, testId) {
   const box = await p.getByTestId(testId).boundingBox().catch(() => null);
-  if (!box) return null;
+  if (!box) throw new Error(`heightAbove: no "${testId}" to cut above — refusing to ship the full page`);
   // Back up past the panel's own dashed border and the gap above it.
   return Math.max(200, Math.round(box.y - 40));
 }
@@ -210,16 +214,16 @@ await adm.getByTestId('ledger-filter-all').waitFor({ timeout: 15000 });
 await tap(adm, 'ledger-filter-all'); await adm.waitForTimeout(800);
 await pair(adm, '18-recording-ledger');
 
-// Override form on the first not-complete accountable student.
+// Override form on the first not-complete required student.
 await tap(adm, 'ledger-filter-notComplete'); await adm.waitForTimeout(600);
-// Re-opened at EACH size: changing the viewport closes the editor, so capturing
-// once and resizing around it produced a "form" figure with no form in it.
+// `prepare` runs at EACH size, before that size's capture — which is what makes
+// the editor open in both figures rather than only the first.
 if (await adm.locator('[data-testid^="override-open-"]').first().count()) {
   await pair(adm, '19-override-form', {
     prepare: async (p) => {
-      // Only if none is open. `prepare` runs once per size, and the editor
-      // survives the phone shot — so clicking blindly opened a SECOND one at
-      // desktop width, and the figure showed two half-filled forms.
+      // Only if none is open. The editor survives the resize between the two
+      // shots, so clicking blindly opened a SECOND one at desktop width and the
+      // figure showed two half-filled forms.
       if (await p.locator('[data-testid^="override-reason-"]').count()) return;
       const btn = p.locator('[data-testid^="override-open-"]').first();
       if (await btn.count()) await btn.click();

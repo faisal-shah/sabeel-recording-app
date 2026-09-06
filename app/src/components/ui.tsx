@@ -17,7 +17,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { CONTENT_MAX_WIDTH, LAYOUT_WIDTHS, getTheme, spacing, type LayoutWidth } from '../theme';
+import { LAYOUT_WIDTHS, getTheme, spacing, type LayoutWidth } from '../theme';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useListenerError } from '../liveQuery';
@@ -26,6 +26,9 @@ import { KbScroll } from './KbScroll';
 import { Sheet } from './Sheet';
 
 const t = getTheme();
+
+/** A multiline field's own padding and borders, added to its measured content. */
+const MULTILINE_CHROME = spacing(3) * 2 + 2;
 
 /**
  * Shared primitives. Brand rules live here rather than in each screen:
@@ -412,12 +415,19 @@ export function Field({
   testID?: string;
 }) {
   const roomy = useRoomy();
+  // The measured height of a multiline field's content, once it has one. Null
+  // until then, so the field opens at `inputMultiline`'s four-line floor.
+  const [grown, setGrown] = useState<number | null>(null);
   return (
     <View style={[styles.field, roomy ? styles.fieldWide : null]}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
         testID={testID}
-        style={[styles.input, multiline ? styles.inputMultiline : null]}
+        style={[
+          styles.input,
+          multiline ? styles.inputMultiline : null,
+          multiline && grown ? { height: grown } : null,
+        ]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
@@ -431,6 +441,11 @@ export function Field({
         // box from this and web from the style; disagreeing gives the same
         // field two different heights on the two platforms.
         numberOfLines={multiline ? 4 : undefined}
+        onContentSizeChange={
+          multiline
+            ? (e) => setGrown(Math.ceil(e.nativeEvent.contentSize.height) + MULTILINE_CHROME)
+            : undefined
+        }
         textAlignVertical={multiline ? 'top' : undefined}
       />
     </View>
@@ -537,8 +552,8 @@ function StatusLight({ status }: { status: string }) {
  * plus the 12px gap have to fit in that: anything above 334 stays
  * single-column across the whole 720–899 band. Every grid holding a CARD passes
  * 320 or 330 for that reason — 340 was off by twelve pixels and read as a broken
- * breakpoint. The ledger's four count tiles pass 300, because four across is the
- * shape of that header and they hold a number, not a name.
+ * breakpoint. The ledger's four listener sections pass 300: their rows are a
+ * name and a percentage rather than a card with actions, so they need less.
  *
  * Required rather than defaulted: the number decides the layout at every width,
  * and a grid that did not state it would be laid out by whatever the default
@@ -974,7 +989,6 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing(5),
     paddingBottom: spacing(12),
-    maxWidth: CONTENT_MAX_WIDTH,
     width: '100%',
     alignSelf: 'center',
   },
@@ -1150,14 +1164,15 @@ const styles = StyleSheet.create({
   // the value in it is a name or an email, never a paragraph.
   fieldWide: { maxWidth: 440 },
   /*
-   * A WHOLE NUMBER OF LINE BOXES, measured against the box the browser actually
-   * lays out. `minHeight` is the border box (`box-sizing: border-box`), so the
-   * text area inside it is minHeight − 24 padding − 2 border; at 92 that left
-   * 66px, three lines of 22 with the fourth sliced through its x-height. 90 is
-   * 64 ÷ 22 ≈ 2.9 — still ragged — so the padding comes off explicitly: four
-   * lines of 22 plus 26 is 114, and the fourth line ends where the field does.
+   * GROWS WITH THE NOTE rather than scrolling inside a fixed box.
+   *
+   * A textarea scrolls its content THROUGH its padding, so however the height is
+   * rounded the next line's cap-tops show under the last full one — which reads
+   * as a rendering fault rather than as "there is more". Four lines is the
+   * floor, `maxHeight` the ceiling for a note nobody should be writing here, and
+   * `onContentSizeChange` moves between them.
    */
-  inputMultiline: { minHeight: 114, lineHeight: 22, textAlignVertical: 'top' },
+  inputMultiline: { minHeight: 114, maxHeight: 312, lineHeight: 22, textAlignVertical: 'top' },
   fieldLabel: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(1) },
   input: {
     backgroundColor: t.bg.inset,

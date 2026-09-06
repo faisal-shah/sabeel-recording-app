@@ -40,7 +40,7 @@ and commit messages, and renaming them would strand every one of those.
   work queue as the staff landing screen.**
 
   Three designs were built behind `?nav=a|b|c` and compared against one seeded
-  world at both widths; **B** was chosen and the other two deleted. Seven rounds
+  world at both widths; **B** was chosen and the other two deleted. Eight rounds
   of independent review followed, and every one of them found real defects — the
   most serious being a teardown race that made playing a second recording leave
   a permanently dead transport; a `closePlayback` that erased a student's place
@@ -113,8 +113,8 @@ and commit messages, and renaming them would strand every one of those.
   measuring the DOM. The sweep says a layout is not broken; it never says it is
   good.
 
-  Green on this machine: lint, typecheck, knip, 264 unit, 254 emulator,
-  1039/1039 sweep at five widths, and 107/107 web e2e. **Not yet run on a device** — this
+  Green on this machine: lint, typecheck, knip, 266 unit, 254 emulator,
+  1039/1039 sweep at five widths, and 108/108 web e2e. **Not yet run on a device** — this
   box has no hardware virtualization, and the playback refactor touches exactly
   the seam a browser cannot reach, so the pre-release AVD pass is mandatory
   before any release.

@@ -92,6 +92,11 @@ export function ZoomImportScreen({
           <Pressable
             key={s}
             testID={`zoom-filter-${s}`}
+            // One of a set, so `radio` — and with a role at all, which
+            // these chips had never had.
+            accessibilityRole="radio"
+            accessibilityState={{ checked: status === s }}
+            accessibilityLabel={s}
             onPress={() => setStatus(s)}
             style={[styles.chip, status === s ? styles.chipOn : null]}
           >

@@ -115,7 +115,8 @@ Do not silently change any of these.
 
 ## Dev & test loops
 
-- Unit: `npm test` (Vitest: shared + functions).
+- Unit: `npm test` (Vitest: shared, functions **and app** — the app's node-only
+  suite covers its pure logic, the playback session and the work queue).
 - **This checkout owns emulator ports 61100-61107** and web dev-server ports
   61110 (sweep) / 61111 (`test:e2e`); the sibling repos own 61000+ and 61200+.
   Three projects share this machine and all three used to pin 8080/9099/5001/9199,
@@ -144,7 +145,8 @@ Do not silently change any of these.
   not ahead of it. Suppressing knip to keep unused scaffolding would make the audit
   lie, and an audit that reports nothing is worse than no audit.
 - **CI is OFF** (2026-08-28, heavy development): `ci.yml` is `workflow_dispatch`
-  only. The job is 8m12s and duplicates the local loop, so run that instead —
+  only. The job runs about ten minutes and duplicates the local loop, so run
+  that instead —
   `npm run lint && npm run typecheck && npm run knip && npm test &&
   npm run test:emulator && npm run test:screens`. Trigger CI by hand before a
   release or when something must hold on a clean machine

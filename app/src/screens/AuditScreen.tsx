@@ -105,8 +105,13 @@ const styles = StyleSheet.create({
   },
   head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   action: { fontSize: 15, fontWeight: '700', color: t.text.primary, flex: 1 },
-  time: { fontSize: 12, color: t.text.muted },
+  // secondary, not muted. "When" is half of what this screen's own subtitle
+  // promises, and taupe is ~2.7:1 — BRAND.md's captions-only colour.
+  time: { fontSize: 12, color: t.text.secondary },
   by: { fontSize: 13, color: t.text.secondary, marginTop: spacing(1) },
-  targets: { fontSize: 12, color: t.text.muted, marginTop: spacing(1), fontVariant: ['tabular-nums'] },
-  detail: { fontSize: 13, color: t.text.accent, marginTop: spacing(1) },
+  targets: { fontSize: 12, color: t.text.secondary, marginTop: spacing(1), fontVariant: ['tabular-nums'] },
+  // secondary, not accent. `text.accent` is the app's link colour, and an
+  // override's reason is content — set in raspberry it was the loudest line on
+  // the card and read as something to click.
+  detail: { fontSize: 13, color: t.text.secondary, marginTop: spacing(1) },
 });

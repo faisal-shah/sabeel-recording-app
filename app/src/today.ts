@@ -114,7 +114,7 @@ function useTodayQueue(
   // make this one claim it could not read the courses, and this one's denial
   // must not clear because something unrelated recovered.
   //
-  // Spelled out rather than referenced from the calls below, because
+  // Spelled out rather than referenced from the calls above, because
   // `firestoreIndexes.test.ts` parses `label:` out of every `useLiveQuery` call
   // site and a computed one is a call site it cannot read — a guard that stops
   // seeing a query is worse than the duplication. They are twenty lines apart.

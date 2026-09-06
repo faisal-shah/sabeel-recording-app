@@ -149,7 +149,11 @@ async function newSession() {
       listenerDenials.push(m.text());
     }
   });
-  page.on('pageerror', (e) => consoleErrors.push(String(e)));
+  // TAGGED, because the two are not the same news. A `console.error` is the
+  // Firebase SDK reporting something it handled; a `pageerror` is an exception
+  // or an unhandled rejection that reached the top — a real defect, and one the
+  // summary line used to render indistinguishably from the other.
+  page.on('pageerror', (e) => consoleErrors.push(`UNHANDLED: ${String(e)}`));
   await page.goto(WEB, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(3000);
   return page;
@@ -236,6 +240,30 @@ const boot = await fetch(`${FN}/bootstrapAdmin`);
 await admin.getByTestId('tab-courses').waitFor({ timeout: 30000 });
 check('bootstrapAdmin promotes and the gate lifts LIVE, with no sign-out', boot.status === 200);
 await shot(admin, '03-home-admin');
+
+/*
+ * A READY SESSION POLLS NOTHING.
+ *
+ * While an account is gated the app force-refreshes its token and re-reads the
+ * profile every three seconds — that is how an approval is noticed at all, since
+ * setting custom claims disrupts the in-flight listener. Once the gate lifts it
+ * has to STOP, and it did not: the arming `else` bound to the push-registration
+ * test, so every healthy session ran a forced token refresh plus a profile read
+ * every three seconds for as long as it stayed open. Nothing on screen shows it,
+ * which is why it is measured here rather than looked at.
+ */
+let tokenRefreshes = 0;
+const countRefresh = (req) => {
+  if (/securetoken|\/v1\/token/.test(req.url())) tokenRefreshes += 1;
+};
+admin.on('request', countRefresh);
+await admin.waitForTimeout(9000);
+admin.off('request', countRefresh);
+check(
+  'an approved session stops polling — no token refresh in nine idle seconds',
+  tokenRefreshes === 0,
+  `${tokenRefreshes} refresh(es); the gated poll runs every 3s, so a live one shows 3`,
+);
 
 const again = await fetch(`${FN}/bootstrapAdmin`);
 check('bootstrapAdmin refuses a second call', again.status === 409);
