@@ -132,7 +132,7 @@ export function AppNav({
   active: RouteName;
   /**
    * How many things are keeping students locked out — an un-taken register, or
-   * a recording unpublished after the fact. See `TodayItem.blocking`.
+   * a recording taken back after they had it. See `TodayItem.blocking`.
    *
    * The ONLY thing in this app that gets a badge, and it is drawn narrowly on
    * purpose: a count that also included work merely outstanding would be a
@@ -231,12 +231,15 @@ function NavItem({
       accessibilityLabel={
         badge > 0 ? `${label}, ${badge} blocking access` : label
       }
-      /* `aria-selected`, not `accessibilityState`: react-native-web has no
-         mapping for the latter, so it reaches the DOM as nothing at all and the
-         one thing this bar has to announce — which destination you are on — is
-         announced by nothing. `ui.tsx` records the same for `aria-expanded` and
+      /* `aria-current`, and neither `accessibilityState` nor `aria-selected`.
+         The first reaches the web DOM as nothing at all — react-native-web has
+         no mapping for it — and the second does reach it but is not a supported
+         state of `role="button"`, so assistive technology ignores it either way.
+         `aria-current="page"` is the attribute a navigation control uses to say
+         which destination you are on, which is the one thing this bar has to
+         announce. `ui.tsx` records the same reasoning for `aria-expanded` and
          `aria-checked`. */
-      aria-selected={active}
+      aria-current={active ? 'page' : undefined}
       onPress={onPress}
       style={({ pressed }) => [
         styles.item,

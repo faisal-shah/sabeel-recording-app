@@ -1381,9 +1381,14 @@ await admin.waitForTimeout(2500);
 const sessDoc = (await readCollection('sessions'))[0];
 await patchField('sessions', sessDoc.name.split('/').pop(), 'dueDate', '2020-01-01');
 await new Promise((r) => setTimeout(r, 5000));
+// A FLOOR AS WELL AS A PREDICATE. `[].every()` is true, so if the reconcile
+// deactivated every grant instead of re-dating it — the regression this names —
+// an empty array would have read as a pass.
+const dated = await activeAssignments();
 check(
   'the past due date reaches every grant on the session',
-  (await activeAssignments()).every((a) => a.fields.dueDate?.stringValue === '2020-01-01'),
+  dated.length > 0 && dated.every((a) => a.fields.dueDate?.stringValue === '2020-01-01'),
+  `${dated.length} active grant(s)`,
 );
 
 // Fatima completed hers in time, so it must NOT be recast as missed. Completion

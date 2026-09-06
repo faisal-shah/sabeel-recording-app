@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { KIND_ORDER, buildTodayQueue } from './todayQueue';
+import { KIND_ORDER, buildTodayQueue, queueScope } from './todayQueue';
 import type { RecordingDoc, SessionDoc } from '@sabeel/shared';
 
 /**
@@ -221,6 +221,16 @@ describe('what the badge counts', () => {
     expect(q.blocking).toBe(0);
   });
 
+  /*
+   * A MISSING RECORDING IS WORK, NOT A CLOSED DOOR — and it is the most common
+   * row on the screen, so the badge turns on its exclusion.
+   */
+  it('does not count a session whose recording has not been added', () => {
+    const q = build([session('s1')]);
+    expect(q.items[0].kind).toBe('recording');
+    expect(q.blocking).toBe(0);
+  });
+
   it('does not count a deadline that is merely near', () => {
     const q = build(
       [session('s1', { recordingId: 'r1', dueInDays: 1 })],
@@ -362,5 +372,56 @@ describe('an empty queue', () => {
   it('carries the truncation flag through every early return', () => {
     const q = build([], [], { courses: null, settled: false, scope: [], truncated: true });
     expect(q.truncated).toBe(true);
+  });
+});
+
+/**
+ * Which courses the queue watches.
+ *
+ * Both rules here have a bug behind them and neither is visible on screen: a
+ * queue scoped to the wrong courses looks exactly like a queue with nothing in
+ * it, and the badge is simply a different number.
+ */
+describe('queueScope', () => {
+  const course = (id: string, effectiveActive = true) => ({ id, effectiveActive });
+
+  it('watches the live courses and no others', () => {
+    expect(queueScope([course('b'), course('a', false), course('c')], 10)).toEqual({
+      key: 'b,c',
+      truncated: false,
+    });
+  });
+
+  /*
+   * A COHORT ARCHIVED AT THE END OF TERM LEAVES `archived` FALSE on every course
+   * under it — the cascade sets `effectiveActive` instead. Filtering on the
+   * course's own flag kept every past term in the queue for ever and spent the
+   * scope budget the live courses needed.
+   */
+  it('drops a course whose cohort was archived, not just a self-archived one', () => {
+    const cascaded = { id: 'c1', effectiveActive: false, archived: false };
+    expect(queueScope([cascaded], 10).key).toBe('');
+  });
+
+  /*
+   * `in` takes at most `max` values. Cutting the ARRIVAL order would make the
+   * watched set depend on snapshot order — the same reader watching a different
+   * set of courses from one load to the next, and a badge that moves with no
+   * document changing.
+   */
+  it('cuts the sorted ids, so the watched set does not move between loads', () => {
+    const arrived = [course('m'), course('a'), course('z')];
+    const reordered = [course('z'), course('m'), course('a')];
+    expect(queueScope(arrived, 2)).toEqual({ key: 'a,m', truncated: true });
+    expect(queueScope(reordered, 2)).toEqual(queueScope(arrived, 2));
+  });
+
+  it('counts only the LIVE courses against the cap', () => {
+    const three = [course('a'), course('b', false), course('c', false)];
+    expect(queueScope(three, 2)).toEqual({ key: 'a', truncated: false });
+  });
+
+  it('has an answer before the first snapshot', () => {
+    expect(queueScope(null, 10)).toEqual({ key: '', truncated: false });
   });
 });

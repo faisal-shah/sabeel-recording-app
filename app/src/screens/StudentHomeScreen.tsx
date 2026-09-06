@@ -154,7 +154,7 @@ export function StudentHomeScreen({
           <Text style={styles.heroLabel}>NEXT TO LISTEN</Text>
           <Text style={styles.heroTitle}>{next.recording.title}</Text>
           <Text style={styles.heroCourse}>{next.cls.name}</Text>
-          <Text style={styles.heroDue}>Listen by {next.dueDate}</Text>
+          <Text style={styles.heroDue}>Listen by {unbreakableDate(next.dueDate)}</Text>
           {/* THE CARD IS THE BUTTON, so it has to say so. Without this line the
               app's single most important action was a date in bold ivory — it
               looked like a button label and was not one, and nothing on the

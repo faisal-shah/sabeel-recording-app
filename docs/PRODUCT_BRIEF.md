@@ -253,12 +253,13 @@ Staff home is a dated work queue — everything across the reader's courses that
 is waiting on them, most urgent first, each row a direct link to the screen
 where the work is done.
 
-Attendance not taken ranks first. The count on the navigation is everything
+Attendance not taken ranks first. The count on the navigation is what is
 blocking access right now — an un-taken register, and a recording taken back
 after students had been given it, whether unpublished or archived before its due
-date — so a draft appears in the list without appearing in the count. Under the excused-only policy an un-taken register grants nobody
-anything, so a published recording sits there that not one student can open —
-and it is the only failure in the product that is invisible from every other
+date — so a draft appears in the list without appearing in the count. Under the
+excused-only policy an un-taken register grants nobody anything, so a published
+recording sits there that not one student can open — and it is the only failure
+in the product that is invisible from every other
 screen.
 
 The rest, in order: a recording waiting to be published (draft, unpublished, or

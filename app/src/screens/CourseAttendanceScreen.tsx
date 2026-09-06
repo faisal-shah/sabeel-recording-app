@@ -174,7 +174,7 @@ export function CourseAttendanceScreen({
                     {/* The separator rides with the words AFTER it, or a wrap left
                         every row ending in a dangling "·". */}
                     {s.missed > 0 ? (
-                      <Text style={styles.missed}>{`\u00A0·\u00A0${s.missed} missed`}</Text>
+                      <Text style={styles.missed}>{`\u00A0·\u00A0${s.missed}\u00A0missed`}</Text>
                     ) : null}
                   </Text>
                 ) : (

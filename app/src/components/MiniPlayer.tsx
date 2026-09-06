@@ -13,7 +13,7 @@ import { useRecordingState } from '../recordings';
 import { useCourseState } from '../structure';
 import { PlayPauseGlyph, Skip } from './Transport';
 import { LAYOUT_WIDTHS, getTheme, spacing } from '../theme';
-import { useWide } from '../useWidth';
+import { useRoomy, useWide } from '../useWidth';
 
 const t = getTheme();
 
@@ -31,10 +31,10 @@ const t = getTheme();
  *
  *  - NARROW it sits directly on top of the tab bar as a single compact row —
  *    artwork-less: the title, back 15, play/pause and a dismiss. Skipping BACK
- *    earns its place on a phone even though skipping forward does not: the
- *    phone is where someone listens hands-free, and "I missed that sentence" is
- *    the reason anyone reaches for a bar they are not looking at. Scrubbing
- *    forward is a control you look at, and it is one tap away on the player.
+ *    earns its place on a phone even where forward cannot fit: the phone is
+ *    where someone listens hands-free, and "I missed that sentence" is the
+ *    reason anyone reaches for a bar they are not looking at. Forward arrives
+ *    with the room for it, at the reading width.
  *  - WIDE it spans the content area beneath the rail with the transport laid
  *    out inline: back 15 · play/pause · forward 30, elapsed and remaining, and
  *    a full-width progress line. There is room for the controls, so putting
@@ -53,6 +53,7 @@ export function MiniPlayer({
 }) {
   const state = usePlayback();
   const wide = useWide();
+  const roomy = useRoomy();
   const now = state.now;
 
   /*
@@ -145,11 +146,9 @@ export function MiniPlayer({
             bar empty to their right. */}
         <View style={styles.spacer} />
 
-        {/* BACK AT EVERY WIDTH, forward only where there is room. The phone is
-            the surface someone listens on hands-free, and "I missed that
-            sentence" is the reason anyone reaches for a bar they are not looking
-            at. Skipping forward is a scrubbing action, and scrubbing belongs on
-            the player screen this bar opens. */}
+        {/* BACK AT EVERY WIDTH. It is the one anyone reaches for on a bar they
+            are not looking at, and forward is the one that gives way when the
+            row runs out of room — see the gate below it. */}
         <Skip
           label={String(SKIP_BACK_MS / 1000)}
           direction="back"
@@ -173,7 +172,12 @@ export function MiniPlayer({
           <PlayPauseGlyph playing={state.playing} disabled={!state.ready} scale={0.62} />
         </Pressable>
 
-        {wide ? (
+        {/* ON ROOM, NOT ON THE NAV BREAKPOINT. Gated at 900 this was missing
+            from a 720px window with 294px of empty bar beside the transport — an
+            asymmetric transport for no reason a person could see. `useRoomy` is
+            the reading width, which is where the title still has a sentence's
+            worth of space left after a fourth target. */}
+        {roomy ? (
           <Skip
             label={String(SKIP_FORWARD_MS / 1000)}
             direction="forward"

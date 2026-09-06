@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   INSTITUTE_TIMEZONE,
+  canPlayFromCourse,
   canPlayNow,
-  isOverdue,
   listenedFraction,
   todayInZone,
 } from '@sabeel/shared';
@@ -48,8 +48,13 @@ export function PlayerScreen({
   // server refuses to mint a URL, so the transport must not be drawn — a play
   // button that does nothing reads as a broken app rather than a closed door.
   const today = todayInZone(INSTITUTE_TIMEZONE);
-  const closed = studentUid !== null && dueDate !== null && isOverdue(dueDate, today);
   const allowed = canPlayNow(cls, dueDate, studentUid, today);
+  // WHICH of the two, derived by ELIMINATION rather than by re-testing the
+  // deadline. Spelling `studentUid !== null && isOverdue(dueDate, today)` here
+  // would put half of `canPlayNow` in a second place, free to disagree with the
+  // half that actually shuts the transport — and the disagreement would surface
+  // as the wrong sentence under a correct lockout, which no test would catch.
+  const closed = !allowed && canPlayFromCourse(cls);
   const session = usePlayback();
   // The session is app-wide, so on the first render after arriving it may still
   // describe the PREVIOUS recording. Read it only once it is about this one;
@@ -171,7 +176,7 @@ export function PlayerScreen({
               key={r}
               testID={`player-rate-${r}`}
               accessibilityRole="button"
-              aria-selected={on}
+              aria-pressed={on}
               accessibilityLabel={`Playback speed ${r} times`}
               disabled={!state.ready}
               onPress={() => setRate(r)}

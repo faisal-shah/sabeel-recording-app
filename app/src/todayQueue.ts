@@ -34,11 +34,12 @@ export interface TodayItem {
   /**
    * Students are locked out of something until this is cleared.
    *
-   * Two kinds qualify and it is worth being exact about which. An un-taken
-   * register grants nobody anything, and an UNPUBLISHED recording takes back
-   * access every excused student already had. A draft has granted nothing yet
-   * and a missing recording is not a lockout — those are work, not a closed
-   * door. This is what the tab's badge counts.
+   * Two things qualify and it is worth being exact about which. An un-taken
+   * register grants nobody anything, and a recording TAKEN BACK — unpublished,
+   * or archived before its listen-by date — removes access every excused
+   * student already had. A draft has granted nothing yet and a missing recording
+   * is not a lockout: those are work, not a closed door. This is what the tab's
+   * badge counts.
    */
   blocking: boolean;
 }
@@ -64,6 +65,45 @@ export interface TodayQueue {
   allFinished: boolean;
   /** More courses than one `in` clause can carry; the queue is a partial view. */
   truncated: boolean;
+}
+
+/**
+ * Which courses the queue watches, and whether that is all of them.
+ *
+ * HERE RATHER THAN IN THE HOOK, for the reason at the top of this file: the
+ * hook imports react and firebase, so nothing inside it is reachable from a
+ * test, and this is the piece whose two rules are worth pinning.
+ *
+ * FINISHED COURSES ARE NOT WORK — and `effectiveActive` is the field that says
+ * so, not `archived`. `archived` is a course's OWN flag. A term ends by
+ * archiving the COHORT, and that cascade deliberately never touches it — it
+ * sets `effectiveActive`. So reading `archived` meant every course of every
+ * past term stayed in the queue for ever, producing rows nobody is waiting on
+ * and spending the scope budget that live courses need.
+ *
+ * SORTED, THEN CUT, and the order matters: `in` takes at most `max` values, and
+ * a cut applied to the arrival order would make the watched set depend on
+ * snapshot order — the same reader would watch a different set of courses from
+ * one load to the next, and the badge would move with no change to any
+ * document. Sorting first makes the cut deterministic.
+ *
+ * Returns a comma-joined `key` — a stable primitive the hook can hand to
+ * `useMemo`, since `courses` is a fresh array on every render of the live query
+ * behind it.
+ */
+export function queueScope(
+  courses: { id: string; effectiveActive: boolean }[] | null,
+  max: number,
+): { key: string; truncated: boolean } {
+  const live = (courses ?? []).filter((c) => c.effectiveActive);
+  return {
+    key: live
+      .map((c) => c.id)
+      .sort()
+      .slice(0, max)
+      .join(','),
+    truncated: live.length > max,
+  };
 }
 
 /**

@@ -158,7 +158,10 @@ function listeningLine(completed: boolean, dueDate: string, today: string): stri
   // `unbreakableDate`.
   const when = unbreakableDate(dueDate);
   if (completed) return 'Recording required · completed';
-  if (isOverdue(dueDate, today)) return `Recording required · not\u00A0listened, closed\u00A0${when}`;
+  // "Missed", the word the student's own home uses for the same session. "not
+  // listened" was a second name for one state, and outside the vocabulary the
+  // brief declares.
+  if (isOverdue(dueDate, today)) return `Recording required · missed, closed\u00A0${when}`;
   return `Recording required · listen\u00A0by\u00A0${when}`;
 }
 

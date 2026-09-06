@@ -146,13 +146,17 @@ export function CoursesScreen({
             safe action is how people learn to click through warnings. */}
         {/* Only on the way IN: the notice above already explains the archived
             state, and saying it twice reads as a stutter. */}
-        {/* And not when there is nothing to turn off: "also turns off 0 courses
-            in this cohort" is a sentence about an empty set, which is the state
-            a cohort spends its first week in. */}
-        {archived || courses.length === 0 ? null : (
+        {/* The blast radius only when there IS one — "also turns off 0 courses"
+            is a sentence about an empty set, which is the state a cohort spends
+            its first week in. The reassurance is not conditional on that: it is
+            true of archiving whatever the cohort holds, and taking it away with
+            the count left a bare Archive button with nothing to say it can be
+            undone. */}
+        {archived ? null : (
           <Text style={styles.hint}>
-            Archiving also turns off {courseLabel(courses.length)} in this cohort. It is
-            reversible.
+            {courses.length === 0
+              ? 'Archiving is reversible.'
+              : `Archiving also turns off ${courseLabel(courses.length)} in this cohort. It is reversible.`}
           </Text>
         )}
         <Button

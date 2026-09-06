@@ -12,7 +12,7 @@ import {
 // and the shapes it returns. `buildTodayQueue` itself is not: its callers are
 // this file and its own test, and both name the module it lives in.
 export { KIND_ORDER, type TodayItem, type TodayKind, type TodayQueue } from './todayQueue';
-import { buildTodayQueue, type TodayQueue } from './todayQueue';
+import { buildTodayQueue, queueScope, type TodayQueue } from './todayQueue';
 import { db } from './firebase';
 import { useListenerFailed, useLiveQuery } from './liveQuery';
 import { useAllCoursesState, useMyCoursesState, type CourseRow } from './structure';
@@ -49,25 +49,8 @@ function useTodayQueue(
    * proves every live query resubscribes when its inputs change; silencing it
    * here would cost more than the two lines it saves.
    */
-  /*
-   * FINISHED COURSES ARE NOT WORK — and `effectiveActive` is the field that
-   * says so, not `archived`.
-   *
-   * `archived` is a course's OWN flag. A term ends by archiving the COHORT, and
-   * that cascade deliberately never touches it — it sets `effectiveActive`. So
-   * reading `archived` meant every course of every past term stayed in the
-   * queue for ever, producing rows nobody is waiting on and spending the scope
-   * budget that live courses need. Every other "is this course live" test in
-   * the app already uses the derived flag.
-   */
-  const live = (courses ?? []).filter((c) => c.effectiveActive);
-  const key = live
-    .map((c) => c.id)
-    .sort()
-    .slice(0, max)
-    .join(',');
+  const { key, truncated } = queueScope(courses, max);
   const scope = useMemo(() => (key ? key.split(',') : []), [key]);
-  const truncated = live.length > max;
 
   /*
    * `null` UNTIL THE FIRST SNAPSHOT, deliberately — not an empty array.

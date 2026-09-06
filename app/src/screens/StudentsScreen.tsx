@@ -222,7 +222,9 @@ function AddStudent({
                 key={c.id}
                 testID={`student-course-${c.name}`}
                 accessibilityRole="radio"
-                aria-selected={on}
+                // `aria-checked`, because the role is `radio`. `aria-selected`
+                // belongs to tabs and options, and AT ignores it here.
+                aria-checked={on}
                 accessibilityLabel={`Enrol in ${c.name} in ${c.cohortName}`}
                 onPress={() => setCourseId(on ? null : c.id)}
                 style={styles.pickRow}

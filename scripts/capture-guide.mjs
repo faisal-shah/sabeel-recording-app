@@ -67,24 +67,32 @@ async function contentHeight(p, fallback) {
   // every figure silently the top 900px of its screen — with nothing to show
   // for it.
   const h = await p.evaluate(() => {
-    const scrollers = [...document.querySelectorAll('div')].filter((el) => {
-      const cs = getComputedStyle(el);
-      return /auto|scroll/.test(cs.overflowY) && el.scrollHeight > el.clientHeight;
-    });
-    // 0 means "nothing scrolls", which is a real answer: a short screen fits.
-    // -1 means the query found nothing at all, which is the failure this
-    // function exists to prevent, reported rather than rounded away.
-    if (!document.querySelector('div')) return -1;
-    if (!scrollers.length) return 0;
-    scrollers.sort((a, b) => b.clientHeight * b.clientWidth - a.clientHeight * a.clientWidth);
-    const el = scrollers[0];
+    /*
+     * THE SCROLL CONTAINERS, WHETHER OR NOT THEY CURRENTLY OVERFLOW — and the
+     * distinction is the whole point.
+     *
+     * Every screen in this app renders inside a `Screen`, whose ScrollView is a
+     * scroll container at every width. So NONE at all means the page did not
+     * render, which is the failure this function exists to catch; asking only
+     * for containers that are currently overflowing cannot tell that apart from
+     * a short screen that simply fits, and -1 was unreachable.
+     */
+    const boxes = [...document.querySelectorAll('div')].filter((el) =>
+      /auto|scroll/.test(getComputedStyle(el).overflowY),
+    );
+    if (!boxes.length) return -1;
+    const over = boxes.filter((el) => el.scrollHeight > el.clientHeight);
+    // A rendered screen with nothing to scroll: it fits, and the caller's
+    // viewport height is the right answer rather than a guess.
+    if (!over.length) return 0;
+    over.sort((a, b) => b.clientHeight * b.clientWidth - a.clientHeight * a.clientWidth);
+    const el = over[0];
     // The chrome outside the scroller — header, tab bar, now-playing strip.
     return Math.ceil(el.scrollHeight + (window.innerHeight - el.clientHeight));
   });
-  if (h < 0) throw new Error('contentHeight: found no elements to measure — refusing to guess');
+  if (h < 0) throw new Error('contentHeight: the page rendered no screen — refusing to guess a height');
   // Capped: a fourteen-student roster at full length is a figure nobody reads,
-  // and a 6000px PNG in a PDF is worse than a scrolled one. `h === 0` is the
-  // honest "nothing scrolls, the fallback is right" case.
+  // and a 6000px PNG in a PDF is worse than a scrolled one.
   return Math.min(Math.max(h, fallback), 2400);
 }
 

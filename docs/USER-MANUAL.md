@@ -274,13 +274,17 @@ the thing.
 - **Closing soon** — access to a recording ends within the week; a good moment
   to see who still hasn't listened.
 
-The number on the **Today** tab counts everything that is blocking access right
-now: a register not yet submitted, and a recording that was published and has
-since been taken back — unpublished, or archived before its Listen by date. A
+The number on the **Today** tab counts what is blocking access right now: a
+register not yet submitted, and a recording that was published and has since
+been taken back — unpublished, or archived before its Listen by date. A
 draft that has never been published is waiting on you but is blocking nobody, so
 it is in the list without being in the count. Archiving *after* the Listen by
 date took nothing away from anyone, so it is simply filing and says nothing
 here.
+
+If you run more courses than one screen can watch at once, Today says so above
+the list — the rest are still there under **Courses**, they are just not in this
+count.
 
 A card disappears the moment you close the gap, and the count goes with it. An
 empty Today is the answer, not a blank screen: it means attendance is in, every

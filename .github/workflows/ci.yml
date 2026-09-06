@@ -3,10 +3,10 @@ name: CI
 # AUTOMATIC CI IS OFF while this repo is in heavy development (2026-08-28).
 #
 # Not because it was failing — it is green — but because it is about ten minutes
-# a run and duplicates work already done locally: `npm run lint && npm run typecheck &&
-# npm run knip && npm test && npm run test:emulator && npm run test:screens`
-# covers everything below and more, on the machine where the change is being
-# made. Waiting on a slower copy of a check you already ran is the whole cost.
+# a run and duplicates work already done locally:
+# `npm run lint && npm run typecheck && npm run knip && npm test &&
+# npm run test:emulator && npm run test:screens` covers everything below and
+# more, on the machine where the change is being made. Waiting on a slower copy of a check you already ran is the whole cost.
 #
 # The job is intact and still runnable on demand — Actions tab -> CI -> Run
 # workflow, or `gh workflow run ci.yml --ref <branch>`. Worth doing before a

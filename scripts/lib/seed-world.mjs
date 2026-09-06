@@ -211,6 +211,24 @@ export async function seedWorld({ db, auth, browser, base }) {
   const adminUid = await provisionStaff('dev-signin-first-admin', 'faisal.shah@oursabeel.com', 'admin');
   const managerUid = await provisionStaff('dev-signin-manager', 'manager@oursabeel.com', 'manager');
 
+  /*
+   * A PENDING staff account, written directly — there is no third dev sign-in to
+   * make one, and both of those approve themselves the moment their document
+   * appears.
+   *
+   * Without it the staff half of People photographs as "Nobody is waiting" at
+   * all five widths, so the two-button "Approve as manager / Approve as admin"
+   * row is measured at none of them — the exact paired shape whose own docblock
+   * records a button crushed below its own label on a real phone.
+   */
+  await db.collection('staffUsers').doc('sw-pending').set({
+    email: 'nadia.karim@oursabeel.com',
+    displayName: 'Nadia Karim',
+    role: null,
+    status: 'pending',
+    createdAt: now - 2 * DAY,
+  });
+
   /**
    * A roster LONGER THAN ONE SCREEN, because the bug being looked for is what
    * happens at the bottom of a list, and eight rows all fit at every width.
@@ -390,8 +408,10 @@ export async function seedWorld({ db, auth, browser, base }) {
     if (attendance) {
       for (const [uid, mark] of Object.entries(attendance)) {
         // A student cannot read a session, so their own mark is projected onto a
-        // document of their own. Written here because the sweep's world is seeded
-        // rather than submitted through the callable that normally does it.
+        // document of their own. Written here as well as by `onSessionWritten`,
+        // which does fire against the seeded writes: the trigger converges on
+        // the same value, and seeding it directly means the tour does not race
+        // a background function on its first screen.
         await db.collection('attendanceRecords').doc(`${uid}_${id}`).set({
           studentUid: uid, sessionId: id, courseId, cohortId: COHORT,
           date, title, status: mark, submittedAt,

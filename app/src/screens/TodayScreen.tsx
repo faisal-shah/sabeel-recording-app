@@ -27,9 +27,9 @@ const HEADING: Record<TodayKind, { label: string; blurb: string }> = {
  * The argument for leading with this rather than with the cohort hierarchy is
  * the shape of the job. Everything a teacher does here runs on a fixed cycle: a
  * class meets, attendance is taken, the recording is added and published, and a
- * week later access closes. Every one of those steps
- * is dated, every one has an owner, and every one is invisible until somebody
- * goes looking for it course by course. A hierarchy answers "where is X"; this
+ * week later access closes. Every one of those steps is dated, every one has an
+ * owner, and every one is invisible until somebody goes looking for it course by
+ * course. A hierarchy answers "where is X"; this
  * answers "what is waiting", which is the question actually being asked on a
  * Tuesday evening.
  *
@@ -146,13 +146,29 @@ export function TodayScreen({
   );
 }
 
+/** What pressing this card does, in the words the card shows. */
+const ACTION: Record<TodayKind, string> = {
+  attendance: 'Take attendance',
+  closing: 'See who has listened',
+  publish: 'Review and publish',
+  recording: 'Add the recording',
+};
+
 function QueueCard({ item, onPress }: { item: TodayItem; onPress: () => void }) {
   const urgent = item.kind === 'attendance';
   return (
     <Pressable
       testID={`today-${item.key}`}
       accessibilityRole="button"
-      accessibilityLabel={`${item.title}, ${item.detail}`}
+      /*
+       * THE WHOLE CARD, because the label REPLACES it. `accessibilityLabel` is
+       * the button's entire accessible name — the course, the section heading
+       * and the action line inside it are announced by nobody — so it has to
+       * carry what the eye gets from the group it sits in. Shortening the
+       * details so two cards in different sections stopped repeating their own
+       * heading left those two cards announcing the identical sentence.
+       */
+      accessibilityLabel={`${HEADING[item.kind].label}: ${item.title}, ${item.courseName}. ${item.detail} ${ACTION[item.kind]}.`}
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
@@ -167,15 +183,7 @@ function QueueCard({ item, onPress }: { item: TodayItem; onPress: () => void }) 
         {item.title}
       </Text>
       <Text style={styles.detail}>{item.detail}</Text>
-      <Text style={styles.action}>
-        {item.kind === 'attendance'
-          ? 'Take attendance ›'
-          : item.kind === 'closing'
-            ? 'See who has listened ›'
-            : item.kind === 'publish'
-              ? 'Review and publish ›'
-              : 'Add the recording ›'}
-      </Text>
+      <Text style={styles.action}>{ACTION[item.kind]} ›</Text>
     </Pressable>
   );
 }

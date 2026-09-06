@@ -4,6 +4,7 @@ import {
   allowedTransitions,
   isEmptyDraft,
   publishBlockers,
+  unbreakableDate,
   type AttendanceStatus,
   type RecordingStatus,
 } from '@sabeel/shared';
@@ -101,7 +102,7 @@ export function SessionDetailScreen({
     <Screen
       title={session.title}
       parent={{ label: cls.name, testID: 'up-to-course-from-session', onPress: onOpenCourse }}
-      subtitle={`${session.date} · excused students listen by ${session.dueDate}`}
+      subtitle={`${session.date} · excused students listen\u00A0by\u00A0${unbreakableDate(session.dueDate)}`}
       // READ, not `list`. This screen is a register and a set of notes, both of
       // which are read one line at a time; the list width put every name and its
       // control 470px apart. The roster's three-way control is 330px wide, which
@@ -742,16 +743,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: t.border.strong,
     overflow: 'hidden',
-    // CAPPED IN THE STACKED LAYOUT TOO. Below the 900px breakpoint the name sits
-    // above its control, and `segBtn`'s `flex: 1` then spread three segments
-    // across the whole card — 215px each at a 720px window, twice their width on
-    // a desktop. A half-screen browser and a portrait tablet both land there.
+    // CAPPED IN THE STACKED LAYOUT TOO, but capped — not shrink-wrapped. Below
+    // the 900px breakpoint the name sits above its control, and `segBtn`'s
+    // `flex: 1` spread three segments across the whole card: 215px each at a
+    // 720px window, twice their width on a desktop. `maxWidth` alone fixes that,
+    // because a column child still stretches to the card and stops here.
+    // `alignSelf: 'flex-start'` does NOT: it collapses the row to fit its
+    // content, and with a zero flex-basis that content is one label's width, so
+    // all three came out 49px and "Excused" was sliced mid-letter at 320, 390
+    // and 720 alike.
     maxWidth: 330,
-    alignSelf: 'flex-start',
   },
   // Fixed rather than capped, so every row's three states line up in a column
   // the eye can run down whatever the names beside them measure.
-  segmentWide: { width: 330, alignSelf: 'auto' },
+  segmentWide: { width: 330 },
   /*
    * ONE COLUMN FOR THE WHOLE SCREEN — and `Screen` now carries it, so the
    * heading ends where the cards do.

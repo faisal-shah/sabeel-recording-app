@@ -161,7 +161,18 @@ async function checkDeviceState(page, tag) {
   const messages = Object.values(PUSH_DEVICE_MESSAGE);
   const shown = [];
   for (const m of messages) {
-    if (await page.getByText(m, { exact: false }).first().isVisible().catch(() => false)) {
+    // `.filter({ visible: true })`, like every other locator in this file. Home's
+    // push nudge renders the SAME sentence as this screen, native-stack keeps
+    // Home mounted-but-hidden and FIRST in document order, so `.first()` picked
+    // the invisible copy and the check reported seeing nothing.
+    if (
+      await page
+        .getByText(m, { exact: false })
+        .filter({ visible: true })
+        .first()
+        .isVisible()
+        .catch(() => false)
+    ) {
       shown.push(m);
     }
   }
@@ -918,7 +929,9 @@ async function tourStaff(page, tag) {
   await visit('course-attendance', async () => {
     await openCourse();
     await tap(byId(page, 'nav-attendance'));
-  }, 'attendance-tab-students');
+    // The EXPORT, not a segment: `Segmented` renders every option's testID
+    // whichever is selected, so a segment cannot say which view is on screen.
+  }, 'attendance-export-sessions');
   // The per-student tab: the widest grid in the app, and the other half of the
   // screen above.
   await visit('course-attendance-students', async () => {

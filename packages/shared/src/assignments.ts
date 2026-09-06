@@ -171,8 +171,7 @@ export function isOverdue(dueDate: string, today: string): boolean {
  * hyphen; it renders identically to U+002D.
  *
  * Use it wherever a date sits INSIDE a sentence, beside words that could push it
- * onto the next line. A date that is the whole of its own `Text` — the hero
- * card's "Listen by", a session's date line, the ledger's rows — cannot break in
+ * onto the next line. A date that is the whole of its own `Text` cannot break in
  * the first place and does not need it.
  */
 export function unbreakableDate(date: string): string {
@@ -187,8 +186,8 @@ export function unbreakableDate(date: string): string {
  * deadline unconditionally cut a manager off from anything more than a week old
  * the moment they left the player, because the deadline closes a STUDENT's
  * access and nobody else's. That is exactly the shape of bug two spellings of
- * one rule produce, and it is why `formatClock`
- * and `SKIP_BACK_MS` live in one place too.
+ * one rule produce, and it is why `formatClock` and `SKIP_BACK_MS` live in one
+ * place too.
  *
  * The server is still the authority: `getPlaybackUrl` checks the same facts
  * before it mints anything. This is the client saying the same thing, so a

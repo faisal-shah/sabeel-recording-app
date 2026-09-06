@@ -11,9 +11,8 @@ admins/managers.
 are not started; Zoom import is built and waiting on institute credentials.
 Source of truth: `docs/PRODUCT_BRIEF.md` (product decisions & data model),
 `PLAN.md` (the build order and locked architecture decisions),
-`docs/PHASE_STATUS.md` (live status),
-`docs/DEV-TOOLING.md` (what each script guards against, and which failures are
-environmental rather than yours).
+`docs/PHASE_STATUS.md` (live status), `docs/DEV-TOOLING.md` (what each script
+guards against, and which failures are environmental rather than yours).
 
 ## Stack knowledge lives in a shared skill, not here
 
@@ -147,9 +146,8 @@ Do not silently change any of these.
   not ahead of it. Suppressing knip to keep unused scaffolding would make the audit
   lie, and an audit that reports nothing is worse than no audit.
 - **CI is OFF** (2026-08-28, heavy development): `ci.yml` is `workflow_dispatch`
-  only. The job runs about ten minutes and duplicates the local loop, so run
-  that instead —
-  `npm run lint && npm run typecheck && npm run knip && npm test &&
+  only. The job runs about ten minutes and duplicates the local loop, so run that
+  instead — `npm run lint && npm run typecheck && npm run knip && npm test &&
   npm run test:emulator && npm run test:screens`. Trigger CI by hand before a
   release or when something must hold on a clean machine
   (`gh workflow run ci.yml --ref <branch>`); the trigger block to restore is at
@@ -178,9 +176,9 @@ emulator. That is the default for layout, flows, rules, data and copy.
 **`npm run test:screens` is the sweep, and it is the one browser suite CI can
 run** — `test:e2e` resets the emulators, so it cannot. With CI on
 `workflow_dispatch` it runs when you run it; run it before every commit that
-touches a screen. Every screen
-of both populations at five widths straddling `CONTENT_MAX_WIDTH` — which it
-reads out of `app/src/theme/index.ts` rather than restating — asserting that the
+touches a screen. Every screen of both populations at five widths straddling
+`CONTENT_MAX_WIDTH` — which it reads out of `app/src/theme/index.ts` rather than
+restating — asserting that the
 page never scrolls sideways, that nothing is clipped by the right edge, that no
 two same-layer controls overlap, that every screen has a way out (Back on a
 pushed screen, the bar on a tab root), and that the content column settles on one

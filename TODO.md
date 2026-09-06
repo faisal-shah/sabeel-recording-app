@@ -257,9 +257,9 @@ The app's More menu already links to `PRIVACY_URL`
 host is not attached to this Hosting site (the app lives on
 `sabeel-class-recordings.web.app`) and no privacy asset exists. Whether the link
 404s or lands on the app depends on the host you pick below; either way a
-reviewer does not find a policy. Apple 5.1.1(i) requires the policy reachable inside the
-app, and a store reviewer does not sign in, so a client-side route behind auth
-looks empty to them.
+reviewer does not find a policy. Apple 5.1.1(i) requires the policy reachable
+inside the app, and a store reviewer does not sign in, so a client-side route
+behind auth looks empty to them.
 
 - [ ] **Confirm the host.** `recordings.oursabeel.com` is the agent's guess; the
       constant in `@sabeel/shared` follows whatever you decide.
