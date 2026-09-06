@@ -253,9 +253,11 @@ currently debug-signed) and **its** SHA-1 registered.
 ### 6. The three static pages the stores need — RELEASE BLOCKER
 
 The app's More menu already links to `PRIVACY_URL`
-(`https://recordings.oursabeel.com/privacy`), so **following that link today
-lands on the app itself** — `firebase.json` rewrites `**` to `index.html` and no
-privacy asset exists. Apple 5.1.1(i) requires the policy reachable inside the
+(`https://recordings.oursabeel.com/privacy`), and **no page answers it** — that
+host is not attached to this Hosting site (the app lives on
+`sabeel-class-recordings.web.app`) and no privacy asset exists. Whether the link
+404s or lands on the app depends on the host you pick below; either way a
+reviewer does not find a policy. Apple 5.1.1(i) requires the policy reachable inside the
 app, and a store reviewer does not sign in, so a client-side route behind auth
 looks empty to them.
 

@@ -9,6 +9,7 @@ import {
   progressId,
   type ListeningProgressDoc,
 } from '@sabeel/shared';
+import { errorText } from './errors';
 import { db, functions } from './firebase';
 import { createPlayer } from './player';
 import type { Player } from './playerTypes';
@@ -374,7 +375,10 @@ export function openPlayback(now: NowPlaying): void {
       if (generation !== gen) return;
       set({ ready: true, positionMs: position, listenedMs: listened });
     } catch (e) {
-      if (generation === gen) set({ error: (e as Error).message });
+      // `errorText`, like every other failure a person reads: an offline tap on
+      // a lecture, or any unhandled throw in `getPlaybackUrl`, otherwise put the
+      // bare word "internal" in a full-width red band on the student's player.
+      if (generation === gen) set({ error: errorText(e) });
     }
   })();
 }

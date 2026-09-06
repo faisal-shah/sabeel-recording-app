@@ -14,7 +14,10 @@ const HEADING: Record<TodayKind, { label: string; blurb: string }> = {
     blurb: 'Until this is submitted, nobody in the class has access.',
   },
   publish: { label: 'Waiting to publish', blurb: 'Recorded, not yet released.' },
-  recording: { label: 'No recording yet', blurb: 'Attendance is in; the audio is not.' },
+  recording: {
+    label: 'No recording yet',
+    blurb: 'Attendance is in; the audio is not. Nobody is waiting on anything else.',
+  },
   closing: { label: 'Closing soon', blurb: 'Access ends within the week.' },
 };
 

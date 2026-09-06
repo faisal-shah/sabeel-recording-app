@@ -92,14 +92,12 @@ describe('what becomes work', () => {
     const q = build([session('s1', { attendanceSubmittedAt: null, metDaysAgo: 3 })]);
     expect(q.items).toHaveLength(1);
     expect(q.items[0].kind).toBe('attendance');
-    expect(q.items[0].detail).toBe(
-      'Met 3 days ago. Nobody has access until attendance is taken.',
-    );
+    expect(q.items[0].detail).toBe('Met 3 days ago.');
   });
 
   it('says "today" rather than "0 days ago"', () => {
     const q = build([session('s1', { attendanceSubmittedAt: null, metDaysAgo: 0 })]);
-    expect(q.items[0].detail).toBe('Met today. Nobody has access until attendance is taken.');
+    expect(q.items[0].detail).toBe('Met today.');
   });
 
   it('a session that has NOT met yet is not work', () => {
@@ -111,6 +109,8 @@ describe('what becomes work', () => {
     const q = build([session('s1')]);
     expect(q.items[0].kind).toBe('recording');
     expect(q.items[0].recordingId).toBeNull();
+    // The row says when the class met; its heading says what is missing.
+    expect(q.items[0].detail).toBe('Met 3 days ago.');
   });
 
   it('an archived session is not work at all', () => {

@@ -218,11 +218,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing(2),
     width: '100%',
-    // MINUS THE BAR'S OWN PADDING, because `Screen` caps the column INSIDE its
-    // padding and this capped outside it — so the bar's title started 33px left
-    // of the cards above it at 1440, which reads as a mistake rather than as a
-    // different column.
-    maxWidth: LAYOUT_WIDTHS.list - spacing(6) * 2,
+    // MINUS THE PAGE'S PADDING, not the bar's. `Screen` caps its column INSIDE
+    // `spacing(8)` of padding; this capped outside its own, so the bar's title
+    // started 32px left of the cards above it at 1440. Both are centred in the
+    // same stack, so matching the page's inner width is what lines them up —
+    // subtracting the bar's own 24 left 8px of the same error.
+    maxWidth: LAYOUT_WIDTHS.list - spacing(8) * 2,
     alignSelf: 'center',
   },
   progressTrack: {

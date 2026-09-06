@@ -89,9 +89,13 @@ async function contentHeight(p, fallback) {
 }
 
 /**
- * `prepare` runs again at EACH size. Anything transient — an open editor, an
- * expanded section — closes when the viewport changes, so a figure of one has to
- * be re-opened rather than captured once and resized around.
+ * `prepare` runs again at EACH size, before that size's capture, so a figure of
+ * a transient state — an open editor, an expanded section — is set up for both
+ * shots rather than captured once and resized around.
+ *
+ * It runs again; it does not START again. A state opened for the phone shot
+ * SURVIVES the resize, so a `prepare` that acts unconditionally opens a second
+ * one at desktop width — which is why the only one in this file checks first.
  */
 async function pair(p, name, { cutAbove = null, prepare = null } = {}) {
   for (const [size, suffix] of [[PHONE, 'phone'], [DESKTOP, 'desktop']]) {

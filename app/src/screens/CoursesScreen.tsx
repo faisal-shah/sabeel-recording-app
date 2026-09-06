@@ -56,7 +56,7 @@ function AddCourse({ cohortId }: { cohortId: string }) {
               setName('');
               close();
             })
-            .catch((e: Error) => setError(e.message))
+            .catch((e) => setError(errorText(e)))
             .finally(() => setBusy(false));
         }}
       />

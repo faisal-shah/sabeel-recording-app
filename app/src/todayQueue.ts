@@ -172,10 +172,14 @@ export function buildTodayQueue({
         recordingId: null,
         age: met,
         blocking: true,
-        detail:
-          met === 0
-            ? 'Met today. Nobody has access until attendance is taken.'
-            : `Met ${met} ${met === 1 ? 'day' : 'days'} ago. Nobody has access until attendance is taken.`,
+        /*
+         * ONLY WHAT IS TRUE OF THIS ROW. The section heading already carries the
+         * rule ("Until this is submitted, nobody in the class has access"), and
+         * repeating it on every card made the one thing that differs between
+         * them — how long it has been waiting — two words at the head of a
+         * sentence that was otherwise identical four times over.
+         */
+        detail: met === 0 ? 'Met today.' : `Met ${met} ${met === 1 ? 'day' : 'days'} ago.`,
       });
       continue;
     }
@@ -190,7 +194,8 @@ export function buildTodayQueue({
           recordingId: null,
           age: met,
           blocking: false,
-          detail: 'Attendance is in. The recording has not been added yet.',
+          // The heading says the rest; this says when the class met.
+          detail: met === 0 ? 'Met today.' : `Met ${met} ${met === 1 ? 'day' : 'days'} ago.`,
         });
       }
       continue;

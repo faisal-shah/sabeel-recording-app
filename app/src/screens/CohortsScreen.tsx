@@ -14,6 +14,7 @@ import {
 } from '../components/ui';
 import { createCohort, useAllCourses, useCohorts, type CohortRow } from '../structure';
 import { courseLabel } from './CoursesScreen';
+import { errorText } from '../errors';
 
 /**
  * Admin-only: the list of cohorts.
@@ -105,7 +106,7 @@ function AddCohort() {
               setName('');
               close();
             })
-            .catch((e: Error) => setError(e.message))
+            .catch((e) => setError(errorText(e)))
             .finally(() => setBusy(false));
         }}
       />

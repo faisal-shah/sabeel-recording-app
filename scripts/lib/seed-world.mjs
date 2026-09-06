@@ -464,8 +464,8 @@ export async function seedWorld({ db, auth, browser, base }) {
   await seedSession('sw-a1', 'sw-a1r', 'Lesson 1 — The Arabic Alphabet',
     { courseId: LONG_COURSE, daysAgo: 9, dueOffset: 5, roster: students.slice(0, 4), present: 2 });
 
-  /** The demo student completed one and part-listened another, so both the ledger
-   *  and their own home have every row type on them. */
+  /** The demo student completed one and part-listened two more, so both the
+   *  ledger and their own home have every row type on them. */
   await db.collection('completions').doc(`${STUDENT.uid}_${done.recId}`).set({
     studentUid: STUDENT.uid, recordingId: done.recId, courseId: COURSE,
     completed: true, completedAt: now - 3 * DAY, updatedAt: now - 3 * DAY,
@@ -477,7 +477,7 @@ export async function seedWorld({ db, auth, browser, base }) {
       updatedAt: now - 2 * DAY,
     });
   }
-  /** Two more students complete, so the ledger's filters are not all one row. */
+  /** Four more students complete, so the ledger's filters are not all one row. */
   for (const s of students.slice(1, 5)) {
     await db.collection('completions').doc(`${s.uid}_${dueSoon.recId}`).set({
       studentUid: s.uid, recordingId: dueSoon.recId, courseId: COURSE,

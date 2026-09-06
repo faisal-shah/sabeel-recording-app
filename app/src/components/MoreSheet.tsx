@@ -8,6 +8,7 @@ import { BUILD_LABEL } from '../buildInfo';
 import { IS_DEV } from '../env';
 import { getTheme, spacing } from '../theme';
 import type { RootStackParamList } from '../nav';
+import { errorText } from '../errors';
 
 const t = getTheme();
 
@@ -90,7 +91,7 @@ export function MoreSheet({
             setResetError(null);
             void sendMyPasswordReset(email)
               .then(() => setSent(true))
-              .catch((e: Error) => setResetError(e.message));
+              .catch((e) => setResetError(errorText(e)));
           }}
         />
       ) : null}

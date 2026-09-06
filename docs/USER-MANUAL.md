@@ -478,7 +478,7 @@ The screen has five parts:
   for example a student you excused, who listened, and whom you then corrected to
   present. Kept as history.
 
-**Export CSV** downloads the accountable rows — the same rows, the same filter —
+**Export CSV** downloads the required rows — the same rows, the same filter —
 as a spreadsheet, for records or a follow-up.
 
 ## 2.7 Overriding a completion

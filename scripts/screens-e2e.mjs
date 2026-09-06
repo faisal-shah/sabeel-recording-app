@@ -743,6 +743,8 @@ function visitor(page, tag, homeMarker, counter) {
    * layout is fine" and "this layout, on this screen, is fine".
    */
   return async function visit(name, go, anchor) {
+    // Every call passes one. The parameter stays optional only so a new visit
+    // fails on the anchor rather than on a signature.
     await goHome(page, homeMarker);
     await go();
     if (anchor) {
@@ -767,7 +769,7 @@ function visitor(page, tag, homeMarker, counter) {
     const root = TAB_ROOTS.has(name);
     check(
       `${tag} / ${name} has a way out`,
-      root ? out.nav : out.back ? out.nav : out.cancel,
+      root ? out.nav : out.back || out.cancel,
       root ? 'a tab root with no navigation bar' : 'no Back in the header and no way to dismiss',
     );
 

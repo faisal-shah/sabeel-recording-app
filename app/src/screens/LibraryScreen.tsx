@@ -229,33 +229,32 @@ function RecordingLine({
           {r.date ? ` · ${r.date}` : ''}
         </Text>
       </View>
-      {/* Pushed to the foot of the card. The cards in a row are the same height,
-          but a title that wraps used to drop its own actions below its
-          neighbours' — level outlines with a ragged row of buttons inside. */}
-      {/* NOT RENDERED WHEN THERE IS NOTHING IN IT. `marginTop: 'auto'` pins the
-          row to the foot of a cell that is as tall as its tallest neighbour, so
-          an empty one reserved 76px of blank card under a recording with no
-          audio — half the height of the card beside it. */}
+      {/* Pushed to the foot of the card: the cards in a row are the same height,
+          and a title that wraps used to drop its own actions below its
+          neighbours' — level outlines with a ragged row of buttons inside. NOT
+          RENDERED WHEN THERE IS NOTHING IN IT, because the same `marginTop:
+          'auto'` made an empty row reserve 76px of blank card under a recording
+          with no audio, half the height of the card beside it. */}
       {r.audioPath || r.status === 'published' ? (
-      <View style={styles.actions}>
-        <Row>
-          {/* PRIMARY, and the only one on the card. Two identical sage bars six
-              times down a page gave the library no answer to "what do I do here",
-              and listening is what the library is for — the ledger beside it is
-              the follow-up. */}
-          {r.audioPath ? (
-            <Button testID={`library-listen-${r.title}`} label="Listen" onPress={onPlay} />
-          ) : null}
-          {r.status === 'published' ? (
-            <Button
-              testID={`library-progress-${r.title}`}
-              label="Listening progress"
-              variant="secondary"
-              onPress={onOpenProgress}
-            />
-          ) : null}
-        </Row>
-      </View>
+        <View style={styles.actions}>
+          <Row>
+            {/* PRIMARY, and the only one on the card. Two identical sage bars
+                six times down a page gave the library no answer to "what do I do
+                here", and listening is what the library is for — the ledger
+                beside it is the follow-up. */}
+            {r.audioPath ? (
+              <Button testID={`library-listen-${r.title}`} label="Listen" onPress={onPlay} />
+            ) : null}
+            {r.status === 'published' ? (
+              <Button
+                testID={`library-progress-${r.title}`}
+                label="Listening progress"
+                variant="secondary"
+                onPress={onOpenProgress}
+              />
+            ) : null}
+          </Row>
+        </View>
       ) : null}
     </Card>
   );

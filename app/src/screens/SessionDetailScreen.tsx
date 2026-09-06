@@ -736,10 +736,22 @@ const styles = StyleSheet.create({
   },
   rosterName: { fontSize: 15, color: t.text.primary, marginBottom: spacing(1) },
   rosterNameWide: { flex: 1, marginBottom: 0 },
-  segment: { flexDirection: 'row', borderRadius: 8, borderWidth: 1, borderColor: t.border.strong, overflow: 'hidden' },
-  // Fixed, so every row's three states line up in a column the eye can run
-  // down. Sized to the widest label rather than to the roster.
-  segmentWide: { width: 330 },
+  segment: {
+    flexDirection: 'row',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: t.border.strong,
+    overflow: 'hidden',
+    // CAPPED IN THE STACKED LAYOUT TOO. Below the 900px breakpoint the name sits
+    // above its control, and `segBtn`'s `flex: 1` then spread three segments
+    // across the whole card — 215px each at a 720px window, twice their width on
+    // a desktop. A half-screen browser and a portrait tablet both land there.
+    maxWidth: 330,
+    alignSelf: 'flex-start',
+  },
+  // Fixed rather than capped, so every row's three states line up in a column
+  // the eye can run down whatever the names beside them measure.
+  segmentWide: { width: 330, alignSelf: 'auto' },
   /*
    * ONE COLUMN FOR THE WHOLE SCREEN — and `Screen` now carries it, so the
    * heading ends where the cards do.

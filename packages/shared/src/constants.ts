@@ -74,9 +74,10 @@ export const SIGNED_URL_REFRESH_MS = 60 * 60 * 1000;
  * to them — which means a static page plus a Hosting rewrite ahead of the
  * catch-all, since `**` currently rewrites everything to the SPA.
  *
- * THE PAGE DOES NOT EXIST YET. The link is live in the More menu, so until it
- * does, following it lands on the app. Tracked in `TODO.md`; it is a release
- * blocker, not a nice-to-have.
+ * THE PAGE DOES NOT EXIST YET, and the host is not settled either. The link is
+ * live in the More menu, so until both are, following it answers with nothing a
+ * reviewer would accept. Tracked in `TODO.md`; it is a release blocker, not a
+ * nice-to-have.
  *
  * Absolute, not a relative path: it is opened from the native apps as well as
  * the browser, where there is no origin to be relative to.

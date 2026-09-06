@@ -170,8 +170,10 @@ export function isOverdue(dueDate: string, today: string): boolean {
  * value a student's whole entitlement turns on. U+2011 is the non-breaking
  * hyphen; it renders identically to U+002D.
  *
- * Use it wherever a date sits INSIDE a sentence. A date on a line of its own
- * cannot break and does not need it.
+ * Use it wherever a date sits INSIDE a sentence, beside words that could push it
+ * onto the next line. A date that is the whole of its own `Text` — the hero
+ * card's "Listen by", a session's date line, the ledger's rows — cannot break in
+ * the first place and does not need it.
  */
 export function unbreakableDate(date: string): string {
   return date.replace(/-/g, '\u2011');

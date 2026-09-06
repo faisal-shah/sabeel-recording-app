@@ -292,11 +292,14 @@ function LedgerRowCard({
         <Text style={[styles.status, statusStyle(bucket)]}>{statusLabel(r, today)}</Text>
       </View>
 
-      {/* Pushed to the foot of the card, like every other grid card: a name that
-          wraps to two lines used to drop its own Override 19px below the ones
-          beside it, inside a row whose outlines were already level. */}
+      {/* NOT pushed to the foot. Grid row-mates are equal height, so pinning the
+          actions down there cost far more than it bought: a name wrapping to two
+          lines dropped its Override 19px below its neighbours', and the fix
+          turned every row containing an OPEN editor into a 245px void inside the
+          cards beside it — in the one state a staff member is always in when
+          they use this screen. Nineteen ragged pixels is the smaller problem. */}
       {open ? (
-        <View style={[styles.overrideForm, styles.actions]}>
+        <View style={styles.overrideForm}>
           <Field
             testID={`override-reason-${r.name}`}
             label="Reason (required, recorded in the audit log)"
@@ -349,7 +352,7 @@ function LedgerRowCard({
           <Button label="Cancel" variant="quiet" onPress={() => setOpen(false)} />
         </View>
       ) : (
-        <View style={styles.actions}>
+        <View>
           <Button
             testID={`override-open-${r.name}`}
             label={r.source === 'override' ? 'Change override' : 'Override'}
@@ -394,7 +397,6 @@ function fmtDate(ms: number | null): string {
 }
 
 const styles = StyleSheet.create({
-  actions: { marginTop: 'auto' },
   /**
    * WRAPS, because four tiles across a phone cannot hold their own labels.
    * A quarter of a 360dp screen leaves a label about 49dp of inner width, and

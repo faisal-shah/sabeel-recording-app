@@ -152,9 +152,9 @@ export const WIDE_BREAKPOINT = 900;
  *   list  card and row collections — these want the room, and flow into columns
  *
  * Two, because every screen that uses `Screen` is one or the other. The player
- * is the exception that matters and does not use `Screen` at all: a transport, a scrub
- * bar and a rate row are a media column, narrower than prose, and it caps
- * itself at 560. That is a deliberate third width with exactly one member, kept
+ * is the exception that matters and does not use `Screen` at all: a transport,
+ * a scrub bar and a rate row are a media column, narrower than prose, and it
+ * caps itself at 560. That is a deliberate third width with one member, kept
  * where it is used rather than offered here for screens that would misuse it.
  */
 export const LAYOUT_WIDTHS = {
