@@ -221,17 +221,28 @@ export function RecordingLedgerScreen({
   );
 }
 
-/** A read-only row — present, absent, and other listeners; no accountability. */
+/**
+ * A read-only row — present, absent, and other listeners; no accountability.
+ *
+ * SILENT WHERE THERE IS NOTHING TO REPORT. The section above these rows says
+ * this recording is neither required for them nor open to them, and then every
+ * name carried "0% listened · not started" — a shortfall printed against people
+ * of whom nothing was asked. Someone who listened anyway is worth showing;
+ * someone who did not is simply not in this story.
+ */
 function ListenerRow({ row: r }: { row: LedgerRow }) {
+  const listened = r.listenedPct > 0 || !!r.lastListened;
   return (
     <View style={styles.row}>
       <View style={styles.rowHead}>
         <View style={{ flex: 1 }}>
           <Text style={styles.name}>{r.name}</Text>
-          <Text style={styles.sub}>
-            {Math.round(r.listenedPct * 100)}% listened
-            {r.lastListened ? ` · last ${fmtDate(r.lastListened)}` : ' · not started'}
-          </Text>
+          {listened ? (
+            <Text style={styles.sub}>
+              {Math.round(r.listenedPct * 100)}% listened
+              {r.lastListened ? ` · last ${fmtDate(r.lastListened)}` : ''}
+            </Text>
+          ) : null}
         </View>
         {r.completed ? <Text style={[styles.status, styles.ok]}>Completed</Text> : null}
       </View>

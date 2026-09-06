@@ -188,6 +188,7 @@ export function Button({
 }) {
   const isDisabled = disabled || busy;
   const roomy = useRoomy();
+  const inRowCell = useContext(RowCellContext);
   const style =
     variant === 'primary'
       ? styles.btnPrimary
@@ -211,6 +212,7 @@ export function Button({
       disabled={isDisabled}
       style={({ pressed }) => [
         styles.btn,
+        inRowCell && !compact ? styles.btnFill : null,
         compact ? styles.btnCompact : null,
         // A button laid out as a column child stretches to the column on a
         // phone, which is the right primary-action shape there and a bar across
@@ -530,11 +532,16 @@ function StatusLight({ status }: { status: string }) {
  * `min` IS THE NARROWEST A CELL MAY BE, and it is what decides where two
  * columns start. The content box at a 720px viewport is 680px, so two cells
  * plus the 12px gap have to fit in that: anything above 334 stays
- * single-column across the whole 720–899 band. Every grid in this app passes
- * 320 or 330 for that reason — 340 was off by twelve pixels and read as a
- * broken breakpoint.
+ * single-column across the whole 720–899 band. Every grid holding a CARD passes
+ * 320 or 330 for that reason — 340 was off by twelve pixels and read as a broken
+ * breakpoint. The ledger's four count tiles pass 300, because four across is the
+ * shape of that header and they hold a number, not a name.
+ *
+ * Required rather than defaulted: the number decides the layout at every width,
+ * and a grid that did not state it would be laid out by whatever the default
+ * happened to be that day.
  */
-export function Grid({ min = 300, children }: { min?: number; children: ReactNode }) {
+export function Grid({ min, children }: { min: number; children: ReactNode }) {
   const [width, setWidth] = useState(0);
   const cells = Children.toArray(children);
 
@@ -557,12 +564,32 @@ export function Grid({ min = 300, children }: { min?: number; children: ReactNod
    * the last row lines up with the rest and simply ends.
    */
   const gap = spacing(3);
-  const cols = width > 0 ? Math.max(1, Math.floor((width + gap) / (min + gap))) : 1;
+  const fits = width > 0 ? Math.max(1, Math.floor((width + gap) / (min + gap))) : 1;
+  /*
+   * NEVER MORE COLUMNS THAN THERE ARE CELLS.
+   *
+   * Dividing by the columns that FIT rather than the ones in use made a grid
+   * narrower the wider the window got: two cards in a 1116px column were sized
+   * as a third of it, 364px each, where the same two had 436px at 1024 — and a
+   * course name that fitted on the smaller screen truncated on the larger, next
+   * to 500px of nothing. Below `min` there is only ever one column, so this
+   * changes nothing on a phone.
+   */
+  const cols = Math.max(1, Math.min(fits, cells.length));
+  /*
+   * And a cell never grows past the width at which two columns would have fitted
+   * — because at that width the grid would have chosen two. Without the cap, a
+   * manager with one course got a single card spanning the whole page, which is
+   * the stretched-phone look the grid exists to avoid.
+   */
+  const maxCell = min * 2 + gap;
   // FLOORED. `cols * cell + gap * (cols - 1)` is exactly the container width in
   // real arithmetic, but Yoga rounds child widths to the pixel grid — a fraction
   // over and the last cell wraps onto a line of its own at a fixed narrow width.
   const cell =
-    width > 0 && cols > 1 ? Math.floor((width - gap * (cols - 1)) / cols) : undefined;
+    width > 0 && fits > 1
+      ? Math.min(Math.floor((width - gap * (cols - 1)) / cols), maxCell)
+      : undefined;
 
   return (
     <View style={styles.grid} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
@@ -691,12 +718,16 @@ export function Segmented<T extends string>({
   );
 }
 
+/** Set inside a `Row`, so a button knows to fill the cell it was given. */
+const RowCellContext = createContext(false);
+
 /**
  * Lays controls out side by side, wrapping instead of overflowing.
  *
  * Each child is wrapped rather than styled directly, so the flex behaviour
  * belongs to the row: putting flexGrow on the button itself made every
- * standalone button stretch to fill the column it sat in.
+ * standalone button stretch to fill the column it sat in — and putting it back
+ * there, to make a pair come out level, did the same thing a second time.
  *
  * Items GROW to share a line but never SHRINK (see `rowItem`). Shrinking is what
  * produced a Publish button squeezed to a third of its neighbour with its label
@@ -713,8 +744,9 @@ export function Segmented<T extends string>({
 export function Row({ children }: { children: ReactNode }) {
   const roomy = useRoomy();
   return (
-    <View style={styles.row}>
-      {Children.map(children, (child) =>
+    <RowCellContext.Provider value={true}>
+      <View style={styles.row}>
+        {Children.map(children, (child) =>
         child ? (
           /*
            * THE CELLS SHARE THE WIDTH ON A PHONE AND NOT ON A LAPTOP.
@@ -729,10 +761,11 @@ export function Row({ children }: { children: ReactNode }) {
            * primitive rather than in any screen, which is why it appeared on
            * five screens at once.
            */
-          <View style={[styles.rowItem, roomy ? styles.rowItemWide : null]}>{child}</View>
-        ) : null,
-      )}
-    </View>
+            <View style={[styles.rowItem, roomy ? styles.rowItemWide : null]}>{child}</View>
+          ) : null,
+        )}
+      </View>
+    </RowCellContext.Provider>
   );
 }
 
@@ -1048,16 +1081,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing(3),
   },
   btn: {
-    // Fills the cell `Row` gives it. Harmless anywhere else: as a column child
-    // there is no free main-axis space to grow into, and `btnWide` overrides the
-    // cross-axis stretch where a button should size to its label.
-    flexGrow: 1,
-    // AND shrinks into it. React Native defaults flexShrink to 0, unlike CSS, so
-    // growing alone left a 190px button sitting in the 154px cell it shares with
-    // its neighbour — the label clipped mid-word and the two controls drawn on
-    // top of each other. Shrinking lets the label wrap, which is what
-    // `numberOfLines={2}` was already there for.
-    flexShrink: 1,
     borderRadius: 8,
     paddingVertical: spacing(3),
     paddingHorizontal: spacing(4),
@@ -1068,6 +1091,20 @@ const styles = StyleSheet.create({
   },
   btnWide: { alignSelf: 'flex-start', minWidth: 120 },
   btnPrimary: { backgroundColor: t.accent.base },
+  /*
+   * FILLS THE CELL `Row` GIVES IT — and only there.
+   *
+   * Grow, so a pair comes out as two equal halves; shrink, because React Native
+   * defaults flexShrink to 0 unlike CSS and growing alone left a 190px button in
+   * the 154px cell it shared, its label clipped mid-word and the two controls
+   * drawn on top of each other. Shrinking lets the label wrap onto the second
+   * line `numberOfLines={2}` already allows.
+   *
+   * On the button unconditionally, this reached every OTHER row in the app too:
+   * the Export CSV beside a segmented control grew to 840px, a slab holding one
+   * word and the largest thing on the page.
+   */
+  btnFill: { flexGrow: 1, flexShrink: 1 },
   btnSecondary: { backgroundColor: t.bg.sage },
   // Unfilled, because weight should follow consequence. A full-width sage
   // Cancel under a content-width primary is the loudest thing in the sheet and

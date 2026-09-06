@@ -167,10 +167,14 @@ export function CourseDetailScreen({
               />
               <Button
                 testID="course-archived-access"
+                // What pressing it DOES, not the state it is in. "Archived
+                // listening: off" reads as a label on a switch that isn't
+                // there, and sat in a row beside "Archive course" — which does
+                // what it says — styled identically.
                 label={
                   cls.archivedAccess
-                    ? 'Archived listening: on'
-                    : 'Archived listening: off'
+                    ? 'Stop listening when archived'
+                    : 'Allow listening when archived'
                 }
                 variant="secondary"
                 busy={busy === 'access'}

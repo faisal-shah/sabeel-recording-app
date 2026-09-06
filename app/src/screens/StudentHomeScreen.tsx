@@ -152,6 +152,11 @@ export function StudentHomeScreen({
           <Text style={styles.heroTitle}>{next.recording.title}</Text>
           <Text style={styles.heroCourse}>{next.cls.name}</Text>
           <Text style={styles.heroDue}>Listen by {next.dueDate}</Text>
+          {/* THE CARD IS THE BUTTON, so it has to say so. Without this line the
+              app's single most important action was a date in bold ivory — it
+              looked like a button label and was not one, and nothing on the
+              student's landing screen named the thing to do. */}
+          <Text style={styles.heroAction}>Listen ›</Text>
         </Pressable>
       ) : null}
 
@@ -337,7 +342,8 @@ const styles = StyleSheet.create({
   },
   heroTitle: { fontSize: 22, fontWeight: '700', color: t.accent.onAccent, marginTop: spacing(2) },
   heroCourse: { fontSize: 14, color: t.accent.onAccentMuted, marginTop: 2 },
-  heroDue: { fontSize: 14, fontWeight: '600', color: t.accent.onAccent, marginTop: spacing(3) },
+  heroDue: { fontSize: 14, color: t.accent.onAccentMuted, marginTop: spacing(3) },
+  heroAction: { fontSize: 15, fontWeight: '700', color: t.accent.onAccent, marginTop: spacing(2) },
   group: { marginBottom: spacing(5) },
   groupLabel: {
     fontSize: 13,
@@ -373,8 +379,17 @@ const styles = StyleSheet.create({
   titleDone: { color: t.text.secondary },
   course: { fontSize: 13, color: t.text.secondary, marginTop: spacing(1) },
   cardMeta: { alignItems: 'flex-end', flexGrow: 1 },
-  due: { fontSize: 13, color: t.text.secondary, fontVariant: ['tabular-nums'] },
-  missed: { color: t.feedback.danger, fontWeight: '600' },
+  /*
+   * THE LIVE DATE IS THE LOUD ONE.
+   *
+   * It was the other way round: "Closed 2026-08-28" came out danger-red and
+   * bold while "Listen by 2026-09-11" was quiet secondary — the app shouting
+   * about the one thing the student can no longer do anything about, and
+   * whispering the three they can. A closed grant is information; the tone the
+   * brief asks for is "missed", not a reprimand.
+   */
+  due: { fontSize: 13, fontWeight: '600', color: t.text.primary, fontVariant: ['tabular-nums'] },
+  missed: { color: t.text.secondary, fontWeight: '400' },
   doneChip: { fontSize: 13, color: t.feedback.success, fontWeight: '600' },
   pending: { fontSize: 12, color: t.feedback.warning, fontWeight: '600', marginBottom: spacing(1) },
 });

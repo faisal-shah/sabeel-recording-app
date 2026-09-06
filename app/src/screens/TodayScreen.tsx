@@ -178,9 +178,17 @@ const styles = StyleSheet.create({
   group: { marginBottom: spacing(5) },
   groupHead: { marginBottom: spacing(2) },
   groupLabel: { fontSize: 13, fontWeight: '700', letterSpacing: 0.8, color: t.text.secondary, textTransform: 'uppercase' },
-  urgent: { color: t.text.danger },
-  groupBlurb: { fontSize: 13, color: t.text.muted, marginTop: 2 },
-  note: { fontSize: 13, color: t.text.muted, marginBottom: spacing(3) },
+  // Gold, not danger. Attendance not yet taken is where every class meeting
+  // begins — it is the work, not an emergency — and spending the destructive
+  // register on the routine daily task leaves nothing to say "you are about to
+  // remove a person from this course".
+  urgent: { color: t.accent.goldText },
+  // `secondary`, not `muted`. These two sentences carry the reason the section
+  // exists ("Until this is submitted, nobody in the class has access"), and
+  // BRAND.md puts anything that conveys content in secondary — taupe is for
+  // captions, borders and dividers.
+  groupBlurb: { fontSize: 13, color: t.text.secondary, marginTop: 2 },
+  note: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(3) },
   card: {
     // Fills the grid cell it is given, so a row of these ends level instead
     // of ragged with its actions at three different heights.
@@ -193,7 +201,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing(3),
     minHeight: 132,
   },
-  cardUrgent: { borderColor: t.feedback.danger, backgroundColor: t.bg.dangerSoft },
+  // The tint behind a blocking row. `goldSoft` is the app's "waiting on you"
+  // fill; `dangerSoft` is the tint of "remove this person", and wearing it on
+  // the card a teacher sees at the start of every class both overstated the
+  // problem and spent the colour that has to mean something worse.
+  cardUrgent: { borderColor: t.accent.gold, backgroundColor: t.bg.goldSoft },
   cardPressed: { opacity: 0.8 },
   course: { fontSize: 12, fontWeight: '700', color: t.text.secondary, letterSpacing: 0.4 },
   title: { fontSize: 16, fontWeight: '700', color: t.text.primary, marginTop: 2 },

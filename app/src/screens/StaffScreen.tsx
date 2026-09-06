@@ -109,7 +109,12 @@ export function StaffScreen({ selfUid, header }: { selfUid: string; header?: Rea
                   />
                   <Button
                     label={s.status === 'disabled' ? 'Re-enable' : 'Disable'}
-                    variant={s.status === 'disabled' ? 'secondary' : 'danger'}
+                    // Secondary in BOTH directions, exactly as on a student's
+                    // page. Disabling an account is reversible and is the
+                    // RECOMMENDED action in this product; dressing one of the
+                    // two Disables in the app as destructive and the other as
+                    // routine teaches people the colour means nothing.
+                    variant="secondary"
                     busy={busyUid === s.uid}
                     onPress={() =>
                       void act(s.uid, {

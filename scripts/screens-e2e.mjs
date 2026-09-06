@@ -98,6 +98,8 @@ const admin = require('firebase-admin');
 import { EMULATOR_PORTS, WEB_PORTS } from './lib/ports.mjs';
 import { EMULATOR_PROJECT_ID, EMULATOR_STORAGE_BUCKET } from './lib/project.mjs';
 import { backButton, byId, byName, resetEmulators, seedWorld, tap } from './lib/seed-world.mjs';
+// The built workspace package — `screens-e2e.sh` builds it before this runs.
+import { PUSH_DEVICE_MESSAGE } from '@sabeel/shared';
 
 const BASE = process.env.E2E_BASE ?? `http://127.0.0.1:${WEB_PORTS.sweep}/`;
 const ROOT = resolve(import.meta.dirname, '..');
@@ -153,12 +155,10 @@ let controlsSeen = 0;
  * whatever renders, and the whole control could vanish with every check green.
  */
 async function checkDeviceState(page, tag) {
-  const messages = [
-    'Notifications are not enabled on this device.',
-    'Notifications are enabled on this device.',
-    'Notifications are blocked for this app on this device.',
-    "This device can't show notifications.",
-  ];
+  // FROM THE APP'S OWN STRINGS, not a copy. A restated sentence drifts, and the
+  // check then passes by finding something the screen stopped saying — or, as
+  // here, fails for a wording change that was fine.
+  const messages = Object.values(PUSH_DEVICE_MESSAGE);
   const shown = [];
   for (const m of messages) {
     if (await page.getByText(m, { exact: false }).first().isVisible().catch(() => false)) {

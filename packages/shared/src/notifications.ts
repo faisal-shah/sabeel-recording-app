@@ -173,3 +173,24 @@ export function attendanceMissingMessage(
     body: `${title} met on ${date} and its attendance has not been submitted. Nobody can hear its recording until it is.`,
   };
 }
+
+/**
+ * What the notifications screen says about THIS device, one sentence per state.
+ *
+ * Here rather than in the screen because the layout sweep asserts that exactly
+ * one of them is on screen — never none, never two. Restated in the test, the
+ * sentence and its assertion drift apart, and the check then passes by finding
+ * a string the app stopped saying.
+ *
+ * `blocked` has two, because only the native build can open its own settings
+ * page: a browser has to be told where to look.
+ */
+export const PUSH_DEVICE_MESSAGE = {
+  canAsk: 'Notifications are not enabled on this device.',
+  ready: 'Notifications are enabled on this device.',
+  blockedNative:
+    'Notifications are blocked for this app on this device. Turn them back on in settings.',
+  blockedWeb:
+    "Notifications are blocked for this app in this browser. Allow them in the browser's site settings for this page, then reload it.",
+  unavailable: "This device can't show notifications.",
+} as const;

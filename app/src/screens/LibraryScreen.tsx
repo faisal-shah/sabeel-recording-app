@@ -229,13 +229,12 @@ function RecordingLine({
           neighbours' — level outlines with a ragged row of buttons inside. */}
       <View style={styles.actions}>
       <Row>
+        {/* PRIMARY, and the only one on the card. Two identical sage bars six
+            times down a page gave the library no answer to "what do I do here",
+            and listening is what the library is for — the ledger beside it is
+            the follow-up. */}
         {r.audioPath ? (
-          <Button
-            testID={`library-listen-${r.title}`}
-            label="Listen"
-            variant="secondary"
-            onPress={onPlay}
-          />
+          <Button testID={`library-listen-${r.title}`} label="Listen" onPress={onPlay} />
         ) : null}
         {r.status === 'published' ? (
           <Button

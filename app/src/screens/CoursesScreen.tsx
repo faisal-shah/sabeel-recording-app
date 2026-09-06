@@ -145,7 +145,10 @@ export function CoursesScreen({
             safe action is how people learn to click through warnings. */}
         {/* Only on the way IN: the notice above already explains the archived
             state, and saying it twice reads as a stutter. */}
-        {archived ? null : (
+        {/* And not when there is nothing to turn off: "also turns off 0 courses
+            in this cohort" is a sentence about an empty set, which is the state
+            a cohort spends its first week in. */}
+        {archived || courses.length === 0 ? null : (
           <Text style={styles.hint}>
             Archiving also turns off {courseLabel(courses.length)} in this cohort. It is
             reversible.
@@ -192,10 +195,14 @@ export function CourseCard({ cls, onOpen }: { cls: CourseRow; onOpen: (c: Course
           {!cls.effectiveActive && cls.archivedAccess ? (
             <Text style={styles.hint}>listening still allowed</Text>
           ) : null}
+          {/* "0 managers" is a count of nothing; the course needs one, so say
+              so. */}
           <Text style={styles.hint}>
-            {cls.managerUids.length === 1
-              ? '1 manager'
-              : `${cls.managerUids.length} managers`}
+            {cls.managerUids.length === 0
+              ? 'No manager yet'
+              : cls.managerUids.length === 1
+                ? '1 manager'
+                : `${cls.managerUids.length} managers`}
           </Text>
         </View>
       </Pressable>

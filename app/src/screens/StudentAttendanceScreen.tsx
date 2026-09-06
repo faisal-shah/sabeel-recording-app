@@ -63,9 +63,33 @@ export function StudentAttendanceScreen({
     return t0;
   }, [marks]);
 
+  // Still open AND not yet completed. A grant whose date has passed is closed,
+  // not outstanding — nothing can be done about it, and counting it would make
+  // the number un-clearable.
+  const outstanding = useMemo(
+    () =>
+      assignments.filter(
+        (a) => !isOverdue(a.dueDate, today) && !completions.get(a.recordingId)?.completed,
+      ).length,
+    [assignments, completions, today],
+  );
+
   return (
     <Screen title={cls.name} subtitle="Your attendance" width="list">
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
+
+      {/* WHAT THEY STILL OWE COMES FIRST, and in their words. Three attendance
+          counts are the register a teacher keeps; the number an adult student
+          opens this screen for is how much listening is still outstanding — and
+          "excused" is the word that MEANS "you must listen to this", which is
+          not something the count says on its own. */}
+      {outstanding > 0 ? (
+        <Notice tone="info">
+          {outstanding === 1
+            ? '1 recording still to listen to for this class.'
+            : `${outstanding} recordings still to listen to for this class.`}
+        </Notice>
+      ) : null}
 
       <Card>
         <View style={styles.tally}>
@@ -97,7 +121,7 @@ export function StudentAttendanceScreen({
                   </Text>
                 ) : null}
               </View>
-              <Text style={[styles.status, styles[m.status]]}>{STATUS_LABEL[m.status]}</Text>
+              <Text style={styles.status}>{STATUS_LABEL[m.status]}</Text>
             </View>
           );
         })}
@@ -156,9 +180,10 @@ const styles = StyleSheet.create({
   rowMain: { flex: 1, paddingRight: spacing(3) },
   title: { fontSize: 15, fontWeight: '600', color: t.text.primary },
   date: { fontSize: 13, color: t.text.secondary, marginTop: spacing(1) },
-  listening: { fontSize: 13, color: t.text.secondary, marginTop: spacing(1) },
-  status: { fontSize: 13, fontWeight: '700' },
-  present: { color: t.feedback.success },
-  absent: { color: t.feedback.danger },
-  excused: { color: t.text.accent },
+  // The row's point, so it reads as one: what this session asks of them. The
+  // attendance mark beside it is the reason it asks, and is set quieter for
+  // that — it had the colour and the weight while the sentence that says what
+  // to DO was a muted caption under the date.
+  listening: { fontSize: 14, fontWeight: '600', color: t.text.primary, marginTop: spacing(1) },
+  status: { fontSize: 13, fontWeight: '600', color: t.text.secondary },
 });

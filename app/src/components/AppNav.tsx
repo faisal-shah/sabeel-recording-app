@@ -260,17 +260,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'flex-start',
-    backgroundColor: t.bg.raised,
+    // Surface, not white. BRAND.md: the chrome is ivory like everything else —
+    // a pure-white strip against the warm canvas reads as a cool foreign panel,
+    // and `raised` is the menu colour.
+    backgroundColor: t.bg.surface,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: t.border.strong,
     paddingTop: spacing(2),
+    // So the first and last active pills are inset from the screen edges rather
+    // than butting against them, at every width.
+    paddingHorizontal: spacing(2),
   },
   rail: {
     width: RAIL_WIDTH,
     alignItems: 'center',
     justifyContent: 'flex-start',
     gap: spacing(1),
-    backgroundColor: t.bg.raised,
+    backgroundColor: t.bg.surface,
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: t.border.strong,
   },

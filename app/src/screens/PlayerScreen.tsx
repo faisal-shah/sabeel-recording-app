@@ -264,7 +264,12 @@ function Hero({
         {courseName.toUpperCase()}
         {cohortName ? ` · ${cohortName.toUpperCase()}` : ''}
       </Text>
-      <Text style={styles.heroTitle}>{recording.title}</Text>
+      {/* CLAMPED, like the Today cards and the docked bar. A four-line title
+          took a third of a 900px viewport and pushed the transport — the reason
+          the screen exists — below the fold. */}
+      <Text style={styles.heroTitle} numberOfLines={3}>
+        {recording.title}
+      </Text>
       {recording.date ? <Text style={styles.heroDate}>Recorded {recording.date}</Text> : null}
     </View>
   );

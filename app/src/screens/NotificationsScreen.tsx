@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import {
   NOTIFICATION_DESCRIPTION,
+  PUSH_DEVICE_MESSAGE,
   NOTIFICATION_LABEL,
   STAFF_KINDS,
   STUDENT_KINDS,
@@ -98,7 +99,7 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
 
       {device === 'canAsk' ? (
         <Card>
-          <Notice tone="info">Notifications are not enabled on this device.</Notice>
+          <Notice tone="info">{PUSH_DEVICE_MESSAGE.canAsk}</Notice>
           <Button
             testID="enable-push"
             label="Enable notifications"
@@ -109,31 +110,29 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
       ) : null}
 
       {device === 'ready' ? (
-        <Notice tone="info">Notifications are enabled on this device.</Notice>
+        <Notice tone="info">{PUSH_DEVICE_MESSAGE.ready}</Notice>
       ) : null}
 
       {device === 'blocked' ? (
         <Card>
+          {/* THE FIX GOES IN THE BOX, not under it. The problem was tinted and
+              the remedy was a grey line outside the notice — emphasis on the
+              half nobody can act on. One block, and it ends with what to do. */}
           <Notice tone="info">
-            Notifications are blocked for this app on this device.
+            {canOpenPushSettings
+              ? PUSH_DEVICE_MESSAGE.blockedNative
+              : PUSH_DEVICE_MESSAGE.blockedWeb}
           </Notice>
           {/* Native can open its own settings page; a browser cannot, so there
               it is instructions or nothing. */}
           {canOpenPushSettings ? (
             <Button label="Open settings" variant="secondary" onPress={openPushSettings} />
-          ) : (
-            /* Plain text, not a second Notice: two stacked gold blocks in one
-               card read as two separate alerts. The siblings pair a line with a
-               lighter hint, and so does this. */
-            <Text style={styles.deviceHint}>
-              Allow them in your browser&apos;s site settings, then reopen this screen.
-            </Text>
-          )}
+          ) : null}
         </Card>
       ) : null}
 
       {device === 'unavailable' ? (
-        <Notice tone="info">This device can&apos;t show notifications.</Notice>
+        <Notice tone="info">{PUSH_DEVICE_MESSAGE.unavailable}</Notice>
       ) : null}
 
       <SectionTitle>Send me</SectionTitle>
@@ -156,6 +155,5 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
 
 const styles = StyleSheet.create({
   /** secondary, not muted: muted is the caption token and fails AA on this surface. */
-  deviceHint: { fontSize: 13, color: t.text.secondary },
   divided: { borderTopWidth: 1, borderTopColor: t.border.subtle },
 });

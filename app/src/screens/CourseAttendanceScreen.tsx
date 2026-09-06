@@ -126,11 +126,11 @@ export function CourseAttendanceScreen({
                 <Text style={styles.hint}>{s.date}</Text>
                 {s.submitted ? (
                   <Text style={styles.counts}>
-                    <Text style={styles.present}>{s.present} present</Text>
+                    <Text style={styles.countValue}>{s.present}</Text> present
                     {'   '}
-                    <Text style={styles.absent}>{s.absent} absent</Text>
+                    <Text style={styles.countValue}>{s.absent}</Text> absent
                     {'   '}
-                    <Text style={styles.excused}>{s.excused} excused</Text>
+                    <Text style={styles.countValue}>{s.excused}</Text> excused
                   </Text>
                 ) : (
                   <Text style={styles.notTaken}>Attendance not taken</Text>
@@ -154,11 +154,11 @@ export function CourseAttendanceScreen({
             >
               <Text style={styles.name}>{nameOf(s.studentUid)}</Text>
               <Text style={styles.counts}>
-                <Text style={styles.present}>{s.present} present</Text>
+                <Text style={styles.countValue}>{s.present}</Text> present
                 {'   '}
-                <Text style={styles.absent}>{s.absent} absent</Text>
+                <Text style={styles.countValue}>{s.absent}</Text> absent
                 {'   '}
-                <Text style={styles.excused}>{s.excused} excused</Text>
+                <Text style={styles.countValue}>{s.excused}</Text> excused
                 {s.notMarked > 0 ? <Text style={styles.hint}>{`   ${s.notMarked} not marked`}</Text> : null}
               </Text>
               {s.assigned > 0 ? (
@@ -190,9 +190,14 @@ const styles = StyleSheet.create({
   name: { fontSize: 15, fontWeight: '600', color: t.text.primary },
   hint: { fontSize: 13, color: t.text.secondary },
   counts: { fontSize: 14, color: t.text.secondary, marginTop: spacing(1) },
-  present: { color: t.feedback.success, fontWeight: '600' },
-  absent: { color: t.text.primary, fontWeight: '600' },
-  excused: { color: t.accent.goldText, fontWeight: '600' },
+  /*
+   * ONE WEIGHT, NO TONE. A breakdown is three facts, not three verdicts, and
+   * binding the colour to the WORD made the number lie: "0 present" came out
+   * green because "present" is good, and "11 excused" came out in the attention
+   * colour on every healthy session — excused is the normal, intended state
+   * that opens a recording and is the whole of a student's entitlement.
+   */
+  countValue: { color: t.text.primary, fontWeight: '700' },
   notTaken: { fontSize: 14, color: t.text.secondary, fontStyle: 'italic', marginTop: spacing(1) },
   catchup: { fontSize: 14, color: t.text.secondary, marginTop: spacing(2) },
   missed: { color: t.feedback.danger, fontWeight: '700' },

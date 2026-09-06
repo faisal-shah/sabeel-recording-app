@@ -133,22 +133,25 @@ export function MiniPlayer({
       {/* THE SAME CONTROLS THE FULL PLAYER USES, not lookalikes. Bare "15" and
           "30" read as inert tags, and a typed "▶" renders as a colour emoji on
           some Android builds — which is exactly why `Transport` draws its
-          glyphs. Sharing them is how the two views cannot drift. */}
-      {/* The title is capped, so something has to take the slack — otherwise the
-          whole cluster packs left and leaves a hole where the dismiss should be.
-          A spacer, so the transport stays at the far end of the row it is
-          centred in rather than trailing the title. */}
+          glyphs. Sharing them is how the two views cannot drift.
+
+          The title is capped, so the spacer takes the slack: without it the
+          whole cluster packs left and leaves a hole where the dismiss should
+          be. */}
       <View style={styles.spacer} />
 
-      {wide ? (
-        <Skip
-          label={String(SKIP_BACK_MS / 1000)}
-          direction="back"
-          disabled={!state.ready}
-          onPress={playback.skipBack}
-          testID="mini-player-back"
-        />
-      ) : null}
+      {/* BACK AT EVERY WIDTH, forward only where there is room. The phone is
+          the surface someone listens on hands-free, and "I missed that
+          sentence" is the reason anyone reaches for a bar they are not looking
+          at. Skipping forward is a scrubbing action, and scrubbing belongs on
+          the player screen this bar opens. */}
+      <Skip
+        label={String(SKIP_BACK_MS / 1000)}
+        direction="back"
+        disabled={!state.ready}
+        onPress={playback.skipBack}
+        testID="mini-player-back"
+      />
 
       <Pressable
         testID="mini-player-toggle"
@@ -193,7 +196,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing(4),
     paddingVertical: spacing(2),
     minHeight: 56,
-    backgroundColor: t.bg.raised,
+    // Surface, like the bar it sits on — see `AppNav`.
+    backgroundColor: t.bg.surface,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: t.border.strong,
   },
@@ -215,11 +219,8 @@ const styles = StyleSheet.create({
     backgroundColor: t.border.subtle,
   },
   progressFill: { height: 2, backgroundColor: t.accent.base },
-  // Capped as well as flexed. The bar spans the widest content column, and an
-  // uncapped title pushed the transport to the far end of it — several hundred
-  // pixels of nothing between what is playing and the button that pauses it.
-  // Capped rather than left to flex: an uncapped title pushed the transport to
-  // the far end of a 1180px row, hundreds of pixels from what it controls.
+  // Capped as well as flexed: an uncapped title pushed the transport to the far
+  // end of a 1180px row, hundreds of pixels from what it controls.
   text: { flexShrink: 1, maxWidth: 520, justifyContent: 'center', minHeight: 40 },
   spacer: { flex: 1 },
   title: { fontSize: 14, fontWeight: '700', color: t.text.primary },
@@ -234,5 +235,7 @@ const styles = StyleSheet.create({
   },
   playDisabled: { backgroundColor: t.bg.inset },
   close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  closeGlyph: { fontSize: 20, color: t.text.muted },
+  // Secondary, not muted: taupe on the bar is ~2.7:1, and this is the only way
+  // to stop a lecture from a screen that is not the player.
+  closeGlyph: { fontSize: 22, color: t.text.secondary },
 });
