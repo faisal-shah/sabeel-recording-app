@@ -125,7 +125,7 @@ function AdminLibrary({
       {filtered.length === 0 ? (
         <Empty>No recordings with that status.</Empty>
       ) : (
-        <Grid min={340}>
+        <Grid min={330}>
           {filtered.map((r) => {
             const cls = clsFor(r);
             return (
@@ -167,7 +167,7 @@ function CourseSection({
       {filtered.length === 0 ? (
         <Empty>No recordings with that status.</Empty>
       ) : (
-        <Grid min={340}>
+        <Grid min={330}>
           {filtered.map((r) => (
             <RecordingLine
               key={r.id}

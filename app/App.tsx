@@ -41,6 +41,7 @@ import { MyCoursesScreen } from './src/screens/MyCoursesScreen';
 import { TokensScreen } from './src/screens/TokensScreen';
 import { TodayScreen } from './src/screens/TodayScreen';
 import { AppNav } from './src/components/AppNav';
+import { MoreSheet } from './src/components/MoreSheet';
 import { MiniPlayer } from './src/components/MiniPlayer';
 import { useWide } from './src/useWidth';
 import type { RootStackParamList } from './src/nav';
@@ -50,7 +51,7 @@ import { useSessionState } from './src/sessions';
 import { useRecordingState } from './src/recordings';
 import { useStudent } from './src/students';
 import { useCourse, useCourseState } from './src/structure';
-import { closePlayback } from './src/playback';
+import { closePlayback, usePlayback } from './src/playback';
 import { useStaffQueue, type TodayQueue } from './src/today';
 import { Empty, Screen, ScreenOwnsTopInset, Segmented } from './src/components/ui';
 import { getTheme } from './src/theme';
@@ -262,7 +263,7 @@ export default function App() {
                 status-bar inset there instead. One list decides which is which:
                 `HEADERLESS`, read by `screenOptions` below. */}
             <Stack.Screen name="Home" options={screenOptions('Home', 'Class Recordings')}>
-              {() => <Landing role={role} uid={user.uid} />}
+              {() => <Landing role={role} uid={user.uid} isAdmin={isAdmin} />}
             </Stack.Screen>
             <Stack.Screen name="Notifications" options={screenOptions('Notifications', 'Notifications')}>
               {() => <NotificationsScreen uid={user.uid} isStudent={isStudent} />}
@@ -438,14 +439,29 @@ function Shell({
     if (navRef.isReady()) navRef.navigate('Player', { recordingId, dueDate });
   }, []);
 
+  const [moreOpen, setMoreOpen] = useState(false);
   const nav = (
     <AppNav
       role={role}
-      email={email}
       variant={wide ? 'rail' : 'bar'}
       active={routeName}
       blocking={queue.blocking}
       onNavigate={go}
+      onOpenMore={() => setMoreOpen(true)}
+    />
+  );
+  // The sheet lives HERE, not in the bar. See `MoreSheet` — it is what lets the
+  // bar sit after the content in reading order while the rail sits before it.
+  const moreSheet = (
+    <MoreSheet
+      visible={moreOpen}
+      role={role}
+      email={email}
+      onClose={() => setMoreOpen(false)}
+      onNavigate={(route, mode) => {
+        setMoreOpen(false);
+        go(route, mode);
+      }}
     />
   );
 
@@ -458,27 +474,33 @@ function Shell({
       <QueueContext.Provider value={queue}>
       <ScreenOwnsTopInset.Provider value={HEADERLESS.has(routeName)}>
       {/*
-        ONE TREE POSITION FOR THE CHROME, at both widths.
-        `row` puts it down the left as a rail; `column-reverse` puts it across
-        the bottom as a bar — same child, same slot, so crossing 900px reflows
-        instead of unmounting it and discarding an open More sheet mid-edit.
+        THE CHROME IS ON EVERY SCREEN, not only the tab roots. The sibling kanban
+        app hides its bar on the immersive board and the reflex is to copy that;
+        it is wrong here, because this app is navigated WHILE SOMETHING IS
+        PLAYING, and hiding the bar on the player makes the screen people spend
+        the most time on a cul-de-sac they can only leave through Back. Every
+        audio app on either store keeps the bar and the now-playing strip
+        together. The cost is real and it is the right trade: about 112px of a
+        small phone on a tab root, and 56px more where a pushed screen adds its
+        header.
 
-        AND IT IS ON EVERY SCREEN, not only the tab roots. The sibling kanban app
-        hides its bar on the immersive board and the reflex is to copy that; it
-        is wrong here, because this app is navigated WHILE SOMETHING IS PLAYING,
-        and hiding the bar on the player makes the screen people spend the most
-        time on a cul-de-sac they can only leave through Back. Every audio app on
-        either store keeps the bar and the now-playing strip together. The cost
-        is real and it is the right trade: about 112px of a small phone on a tab
-        root, and 56px more where a pushed screen adds its header.
+        READING ORDER DECIDES WHICH SIDE OF THE CONTENT IT SITS ON. A left rail
+        belongs before the content and a bottom bar after it — that is what a
+        screen reader and the Tab key follow, and CSS reordering does not move
+        either. So the two cases genuinely are two orders, rather than one order
+        flipped visually. Nothing is lost by unmounting the bar across the
+        breakpoint any more: the only state it held was the More sheet, which
+        the shell owns now.
       */}
-      <View style={[styles.shell, wide ? styles.shellWide : styles.shellNarrow]}>
-        {nav}
+      <View style={[styles.shell, wide ? styles.shellWide : null]}>
+        {wide ? nav : null}
         <View style={styles.stack}>
           {children}
           {mini}
         </View>
+        {wide ? null : nav}
       </View>
+      {moreSheet}
       </ScreenOwnsTopInset.Provider>
       </QueueContext.Provider>
     </NavStateContext.Provider>
@@ -579,7 +601,7 @@ function Navigator({
  * So `Home` is simply THE FIRST TAB: their own listening for a student, and the
  * work queue for staff.
  */
-function Landing({ role, uid }: { role: Role; uid: string }) {
+function Landing({ role, uid, isAdmin }: { role: Role; uid: string; isAdmin: boolean }) {
   const navigation = useNavigation<Nav>();
   const queue = useContext(QueueContext);
   if (role === 'student') {
@@ -597,6 +619,7 @@ function Landing({ role, uid }: { role: Role; uid: string }) {
   return (
     <TodayScreen
       uid={uid}
+      isAdmin={isAdmin}
       queue={queue}
       onOpenSession={(sessionId, courseId) =>
         navigation.navigate('SessionDetail', { sessionId, courseId })
@@ -786,9 +809,12 @@ function Play({ studentUid }: { studentUid: string | null }) {
    * running off a signed URL good for another twelve hours. The hook version got
    * this for free from its cleanup; the hoisted session has to be told.
    */
+  const playing = usePlayback().now?.recordingId;
   useEffect(() => {
-    if (gone) closePlayback();
-  }, [gone]);
+    // Only if THIS is what is playing. Opening a stale link to a deleted
+    // recording while listening to another one must not stop the other one.
+    if (gone && playing === recordingId) void closePlayback();
+  }, [gone, playing, recordingId]);
   const gate = resolve(recording, 'recording') ?? resolve(cls, 'course');
   if (gate || !recording.value || !cls.value) return gate;
   return (
@@ -904,10 +930,7 @@ function MyCourses({ uid }: { uid: string }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: t.bg.canvas },
   centre: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  shell: { flex: 1, backgroundColor: t.bg.canvas },
-  // `column-reverse`, so the chrome is the FIRST child in both directions and
-  // still paints at the bottom. See the note at the render site.
-  shellNarrow: { flexDirection: 'column-reverse' },
+  shell: { flex: 1, flexDirection: 'column', backgroundColor: t.bg.canvas },
   shellWide: { flexDirection: 'row' },
   stack: { flex: 1 },
 });

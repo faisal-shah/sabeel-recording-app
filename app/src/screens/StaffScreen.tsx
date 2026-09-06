@@ -51,7 +51,7 @@ export function StaffScreen({ selfUid, header }: { selfUid: string; header?: Rea
       {pending.length === 0 ? (
         <Empty>Nobody is waiting.</Empty>
       ) : (
-        <Grid min={340}>
+        <Grid min={330}>
         {pending.map((s) => (
           <Card key={s.uid}>
             <Person row={s} />
@@ -78,7 +78,7 @@ export function StaffScreen({ selfUid, header }: { selfUid: string; header?: Rea
       {decided.length === 0 ? (
         <Empty>No staff accounts yet.</Empty>
       ) : (
-        <Grid min={340}>
+        <Grid min={330}>
         {decided.map((s) => {
           const isSelf = s.uid === selfUid;
           return (

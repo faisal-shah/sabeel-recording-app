@@ -63,6 +63,8 @@ async function playbackUrl(recordingId: string): Promise<string> {
 /** What is loaded, so any surface can name it without re-fetching. */
 export interface NowPlaying {
   recordingId: string;
+  /** The course, so any surface can re-check that it may still be played. */
+  courseId: string;
   title: string;
   courseName: string;
   durationMs: number;
@@ -149,7 +151,28 @@ function set(next: Partial<PlaybackState>) {
  * Writing the wrong `listenedMs` here is not a cosmetic bug — that number is the
  * audit evidence staff read on the ledger.
  */
-async function persistFor(
+/**
+ * The write queue for the current session's progress document.
+ *
+ * ONE AT A TIME. `persistFor` is read-modify-write, and two of them in flight
+ * against the same document race: the throttled tick and the write on the way
+ * out both read the same stale value, and whichever `setDoc` lands second wins
+ * — which is usually the throttled one, so the LAST seconds of a session are
+ * the ones lost. Chaining is enough; there is only ever one session.
+ */
+let writes: Promise<void> = Promise.resolve();
+
+function persistFor(
+  gen: number,
+  who: { studentUid: string; recordingId: string; courseId: string },
+  positionMs: number,
+  listenedMs: number,
+): Promise<void> {
+  writes = writes.then(() => writeProgress(gen, who, positionMs, listenedMs));
+  return writes;
+}
+
+async function writeProgress(
   gen: number,
   who: { studentUid: string; recordingId: string; courseId: string },
   positionMs: number,

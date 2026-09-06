@@ -151,9 +151,11 @@ export const WIDE_BREAKPOINT = 900;
  *   read  text, forms, a single record — line length is the constraint
  *   list  card and row collections — these want the room, and flow into columns
  *
- * Deliberately only two. Every screen in the app is one or the other, and a
- * third, uncapped variant with no screen to use it would be a width nobody
- * could see was broken.
+ * Two, because every screen that uses `Screen` is one or the other. The player
+ * is the one exception and does not use `Screen` at all: a transport, a scrub
+ * bar and a rate row are a media column, narrower than prose, and it caps
+ * itself at 560. That is a deliberate third width with exactly one member, kept
+ * where it is used rather than offered here for screens that would misuse it.
  */
 export const LAYOUT_WIDTHS = {
   read: CONTENT_MAX_WIDTH,

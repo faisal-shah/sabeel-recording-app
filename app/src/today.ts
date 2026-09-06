@@ -12,7 +12,7 @@ import {
 } from '@sabeel/shared';
 import { db } from './firebase';
 import { useListenerFailed, useLiveQuery } from './liveQuery';
-import { useAllCourses, useMyCourses, type CourseRow } from './structure';
+import { useAllCoursesState, useMyCoursesState, type CourseRow } from './structure';
 
 export type TodayKind = 'attendance' | 'recording' | 'publish' | 'closing';
 
@@ -84,7 +84,11 @@ const RANK: Record<TodayKind, number> = {
  * the whole thing honest: submit attendance and the row and the count go at the
  * same moment, from whichever screen you are on.
  */
-function useTodayQueue(courses: CourseRow[], max: number): TodayQueue {
+function useTodayQueue(
+  courses: CourseRow[] | null,
+  max: number,
+  settled: boolean,
+): TodayQueue {
   /*
    * A STRING FIRST, THE ARRAY FROM IT — not the other way round.
    *
@@ -96,11 +100,18 @@ function useTodayQueue(courses: CourseRow[], max: number): TodayQueue {
    * proves every live query resubscribes when its inputs change; silencing it
    * here would cost more than the two lines it saves.
    */
-  // ARCHIVED COURSES ARE NOT WORK. A finished term's recordings are closed to
-  // students anyway, so an un-taken sheet on one blocks nothing — and without
-  // this the queue grows for ever, one dead term at a time, and spends its
-  // scope on courses nobody is waiting on.
-  const live = courses.filter((c) => !c.archived);
+  /*
+   * FINISHED COURSES ARE NOT WORK — and `effectiveActive` is the field that
+   * says so, not `archived`.
+   *
+   * `archived` is a course's OWN flag. A term ends by archiving the COHORT, and
+   * that cascade deliberately never touches it — it sets `effectiveActive`. So
+   * reading `archived` meant every course of every past term stayed in the
+   * queue for ever, producing rows nobody is waiting on and spending the scope
+   * budget that live courses need. Every other "is this course live" test in
+   * the app already uses the derived flag.
+   */
+  const live = (courses ?? []).filter((c) => c.effectiveActive);
   const key = live
     .map((c) => c.id)
     .sort()
@@ -145,7 +156,7 @@ function useTodayQueue(courses: CourseRow[], max: number): TodayQueue {
     },
   );
 
-  const names = useMemo(() => new Map(courses.map((c) => [c.id, c.name])), [courses]);
+  const names = useMemo(() => new Map((courses ?? []).map((c) => [c.id, c.name])), [courses]);
   // A refused listener leaves both queries on their `empty` value for ever, and
   // `empty` is the same `null` that means "nothing has arrived yet" — so without
   // this the landing screen sits on "Checking your courses…" with no way out.
@@ -167,6 +178,13 @@ function useTodayQueue(courses: CourseRow[], max: number): TodayQueue {
   return useMemo(() => {
     // Nothing subscribed is not the same as nothing loaded: a manager assigned
     // no courses has an answer already, and it is "nothing is waiting".
+    // The COURSES have not arrived either — and an empty list of them reads on
+    // screen as "you have no courses", which is a confident wrong answer to
+    // show every staff member for the length of a cold load.
+    if (!settled && courses === null) {
+      return { items: [], blocking: 0, loading: !failed, failed, scoped: true, truncated };
+    }
+
     const subscribed = scope.length > 0;
     if (subscribed && (sessions === null || recordings === null)) {
       return { items: [], blocking: 0, loading: !failed, failed, scoped: true, truncated };
@@ -271,7 +289,7 @@ function useTodayQueue(courses: CourseRow[], max: number): TodayQueue {
       scoped: subscribed,
       truncated,
     };
-  }, [sessions, recordings, names, truncated, scope, today, failed]);
+  }, [sessions, recordings, names, truncated, scope, today, failed, courses, settled]);
 }
 
 /**
@@ -289,7 +307,14 @@ function useTodayQueue(courses: CourseRow[], max: number): TodayQueue {
  * no listener is ever opened.
  */
 export function useStaffQueue(isStaff: boolean, isAdmin: boolean, uid: string): TodayQueue {
-  const all = useAllCourses(isStaff && isAdmin);
-  const mine = useMyCourses(isStaff && !isAdmin ? uid : null);
-  return useTodayQueue(isAdmin ? all : mine, isAdmin ? QUEUE_SCOPE.admin : QUEUE_SCOPE.manager);
+  const all = useAllCoursesState(isStaff && isAdmin);
+  const mine = useMyCoursesState(isStaff && !isAdmin ? uid : null);
+  const courses = isAdmin ? all : mine;
+  return useTodayQueue(
+    courses,
+    isAdmin ? QUEUE_SCOPE.admin : QUEUE_SCOPE.manager,
+    // A student subscribes to nothing, so "no courses" is their settled answer
+    // rather than one still arriving.
+    !isStaff,
+  );
 }

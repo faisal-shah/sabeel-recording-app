@@ -68,7 +68,7 @@ export function StudentLedgerScreen({
       {rows.length === 0 ? (
         <Empty>No required recordings here.</Empty>
       ) : (
-        <Grid min={340}>
+        <Grid min={330}>
           {rows.map((r) => (
             <View key={r.recordingId} style={styles.row}>
               <View style={{ flex: 1 }}>

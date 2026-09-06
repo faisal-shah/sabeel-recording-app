@@ -1,0 +1,143 @@
+import { useState } from 'react';
+import { Linking, StyleSheet, Text, View } from 'react-native';
+import { PRIVACY_URL, type Role } from '@sabeel/shared';
+import { Sheet, SheetOption, SheetSection } from './Sheet';
+import { signOut } from '../session';
+import { sendMyPasswordReset } from '../students';
+import { BUILD_LABEL } from '../buildInfo';
+import { IS_DEV } from '../env';
+import { getTheme, spacing } from '../theme';
+import type { RootStackParamList } from '../nav';
+
+const t = getTheme();
+
+/**
+ * Everything behind "More" — the tail of the navigation.
+ *
+ * RENDERED BY THE SHELL, not by the bar, and that is not tidiness. An overlay
+ * is not part of the control that opens it, and keeping it here means the bar
+ * and the rail can live at different places in the tree — which is what lets
+ * the bar sit AFTER the content in reading order on a phone while the rail sits
+ * before it on a wide screen. Held inside the bar, crossing the breakpoint
+ * unmounted the sheet and threw away whatever was open.
+ *
+ * What belongs here is what you need occasionally rather than daily. A screen
+ * visited twice in an account's life does not earn a permanent slot, however
+ * often it gets proposed for one.
+ */
+export function MoreSheet({
+  visible,
+  role,
+  email,
+  onClose,
+  onNavigate,
+}: {
+  visible: boolean;
+  role: Role;
+  email: string;
+  onClose: () => void;
+  onNavigate: (route: keyof RootStackParamList, mode: 'tab' | 'push') => void;
+}) {
+  const [sent, setSent] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const isStudent = role === 'student';
+  const isAdmin = role === 'admin';
+
+  return (
+    <Sheet visible={visible} title="More" onClose={onClose}>
+      {isAdmin ? (
+        <>
+          <SheetSection label="Institute" />
+          <SheetOption
+            label="Audit history"
+            detail="Every change, who made it and when"
+            testID="more-audit"
+            onPress={() => {
+              onClose();
+              onNavigate('Audit', 'push');
+            }}
+          />
+        </>
+      ) : null}
+
+      <SheetSection label="You" />
+      <SheetOption
+        label="Notifications"
+        detail="Choose which messages this device receives"
+        testID="more-notifications"
+        onPress={() => {
+          onClose();
+          onNavigate('Notifications', 'push');
+        }}
+      />
+      {/* STUDENTS ONLY, and it is a first-party reset — an emailed link, no
+          third-party login service involved, so it triggers nothing under
+          Guideline 4.8. Staff have no password to change: their credential is
+          the institute's Google account, and offering to reset it here would be
+          offering to change something this app does not own. */}
+      {isStudent ? (
+        <SheetOption
+          label={resetError ? 'Could not send the link' : sent ? 'Reset link sent' : 'Change password'}
+          detail={
+            resetError ?? (sent ? `Check ${email}` : 'We email you a link to set a new one')
+          }
+          tone={resetError ? 'danger' : 'normal'}
+          testID="more-password"
+          onPress={() => {
+            // Reported only once it has actually gone. Saying "sent" the instant
+            // the button is pressed says it whether or not anything was sent,
+            // and the person then waits for an email that is not coming.
+            setSent(false);
+            setResetError(null);
+            void sendMyPasswordReset(email)
+              .then(() => setSent(true))
+              .catch((e: Error) => setResetError(e.message));
+          }}
+        />
+      ) : null}
+      {/* Required to be reachable INSIDE the app, not just in store metadata —
+          Apple 5.1.1(i). Absolute URL so it opens from a phone as well as a
+          browser. */}
+      <SheetOption
+        label="Privacy policy"
+        testID="more-privacy"
+        onPress={() => {
+          onClose();
+          void Linking.openURL(PRIVACY_URL).catch(() => undefined);
+        }}
+      />
+      {IS_DEV ? (
+        <SheetOption
+          label="Design tokens"
+          onPress={() => {
+            onClose();
+            onNavigate('Tokens', 'push');
+          }}
+        />
+      ) : null}
+      <SheetOption
+        label="Sign out"
+        tone="danger"
+        testID="more-sign-out"
+        onPress={() => {
+          onClose();
+          void signOut();
+        }}
+      />
+
+      {/* The running build, in the app rather than only on the sign-in screen.
+          "Is that fixed for you?" is unanswerable once you are signed in if the
+          only place the version appears is the screen you have already left. */}
+      <View style={styles.build}>
+        <Text style={styles.buildText}>
+          Class Recordings · {BUILD_LABEL}
+        </Text>
+      </View>
+    </Sheet>
+  );
+}
+
+const styles = StyleSheet.create({
+  build: { alignItems: 'center', paddingTop: spacing(3) },
+  buildText: { fontSize: 11, color: t.text.muted },
+});

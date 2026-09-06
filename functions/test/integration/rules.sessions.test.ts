@@ -163,17 +163,39 @@ describe('sessions rules', () => {
           createdAt: 1,
           createdBy: ADMIN,
         });
-        await setDoc(doc(db, COLLECTIONS.sessions, `qs${i}`), {
+        // TWO sessions and a recording per course, deliberately. With one row
+        // per course the test cannot tell "15 distinct `get(courses/{id})`
+        // paths" from "15 documents returned" — and a real term has twenty-odd
+        // sessions in each. It has to vary the thing it claims to pin.
+        for (const n of [0, 1]) {
+          await setDoc(doc(db, COLLECTIONS.sessions, `qs${i}-${n}`), {
+            courseId,
+            cohortId: 'c1',
+            date: '2026-07-06',
+            title: `qs${i}-${n}`,
+            dueDate: '2026-07-13',
+            notes: '',
+            recordingId: null,
+            attendance: {},
+            attendanceSubmittedAt: null,
+            archived: false,
+            createdAt: 1,
+            createdBy: ADMIN,
+            updatedAt: 1,
+          });
+        }
+        await setDoc(doc(db, COLLECTIONS.recordings, `qr${i}`), {
+          sessionId: `qs${i}-0`,
           courseId,
           cohortId: 'c1',
-          date: '2026-07-06',
-          title: `qs${i}`,
-          dueDate: '2026-07-13',
+          title: `qr${i}`,
           notes: '',
-          recordingId: null,
-          attendance: {},
-          attendanceSubmittedAt: null,
-          archived: false,
+          date: '2026-07-06',
+          status: 'published',
+          source: 'manual',
+          audioPath: null,
+          durationSec: null,
+          sizeBytes: null,
           createdAt: 1,
           createdBy: ADMIN,
           updatedAt: 1,

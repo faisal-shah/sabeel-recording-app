@@ -52,11 +52,21 @@ function subscriptionKey(label: string, context?: Record<string, string>): strin
   return context?.scope ? `${label}:${context.scope}` : label;
 }
 
-/** Recompute the surfaced message and notify screens when it changed. */
+/**
+ * Recompute the surfaced message and notify every watcher.
+ *
+ * UNCONDITIONALLY, even when the message is unchanged. Two different questions
+ * ride this one channel: `useListenerError` wants the aggregate MESSAGE, and
+ * `useListenerFailed` wants to know whether ITS labels are in the map. Skipping
+ * the notification when the message happened not to change left the second one
+ * stuck — a subscription that recovered while some unrelated listener was still
+ * failing never told anyone, so a screen went on saying it could not read its
+ * data over the rows it had just loaded. `useListenerError`'s own setState
+ * bails on an identical string, so notifying always costs nothing.
+ */
 function publishListenerError(): void {
   // Most recently recorded failure wins — the one the user just provoked.
   const next = [...listenerErrors.values()].pop() ?? null;
-  if (next === lastListenerError) return;
   lastListenerError = next;
   errorWatchers.forEach((w) => w(next));
 }

@@ -520,6 +520,14 @@ function StatusLight({ status }: { status: string }) {
  * stops a lone last card in a row from stretching to the full width and looking
  * like a different component.
  */
+/**
+ * `min` IS THE NARROWEST A CELL MAY BE, and it decides where two columns start.
+ *
+ * The content box at a 720px viewport is 680px, so two cells plus the 12px gap
+ * must fit in that: anything above 334 stays single-column across the whole
+ * 720–899 band. Every grid in this app uses 320 or 330 for that reason; 340 was
+ * off by twelve pixels and looked like a breakpoint bug.
+ */
 export function Grid({ min = 300, children }: { min?: number; children: ReactNode }) {
   const [width, setWidth] = useState(0);
   const cells = Children.toArray(children);
@@ -544,7 +552,11 @@ export function Grid({ min = 300, children }: { min?: number; children: ReactNod
    */
   const gap = spacing(3);
   const cols = width > 0 ? Math.max(1, Math.floor((width + gap) / (min + gap))) : 1;
-  const cell = width > 0 && cols > 1 ? (width - gap * (cols - 1)) / cols : undefined;
+  // FLOORED. `cols * cell + gap * (cols - 1)` is exactly the container width in
+  // real arithmetic, but Yoga rounds child widths to the pixel grid — a fraction
+  // over and the last cell wraps onto a line of its own at a fixed narrow width.
+  const cell =
+    width > 0 && cols > 1 ? Math.floor((width - gap * (cols - 1)) / cols) : undefined;
 
   return (
     <View style={styles.grid} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
@@ -1082,7 +1094,11 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 13, color: t.text.secondary },
   row: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    // `stretch`, not `flex-start`: a two-word label wraps and a one-word one does
+    // not, and top-aligned that leaves one button 14px shorter than the one
+    // beside it. At 320 they stack and at 720 they both fit on a line, so 390 —
+    // the commonest phone width — was the only place it showed.
+    alignItems: 'stretch',
     justifyContent: 'flex-start',
     flexWrap: 'wrap',
     gap: spacing(2),

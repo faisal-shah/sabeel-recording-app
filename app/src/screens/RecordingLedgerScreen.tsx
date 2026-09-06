@@ -141,7 +141,7 @@ export function RecordingLedgerScreen({
               : 'Everyone required has completed this — nice.'}
         </Empty>
       ) : (
-        <Grid min={340}>
+        <Grid min={330}>
         {rows.map((r) => (
           <LedgerRowCard
             key={r.studentUid}
@@ -411,6 +411,9 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 13, fontWeight: '600', color: t.text.secondary },
   chipTextOn: { color: t.accent.onAccent },
   row: {
+    // Fills its grid cell, so a row of these ends level — and so an open
+    // override editor stretches its neighbours instead of leaving a hole.
+    flexGrow: 1,
     backgroundColor: t.bg.surface,
     borderRadius: 12,
     padding: spacing(4),

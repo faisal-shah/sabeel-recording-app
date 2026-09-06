@@ -151,12 +151,15 @@ export function SessionsScreen({
       {sessions.length === 0 ? (
         <Empty>No sessions yet. Add one for each class meeting.</Empty>
       ) : (
-        <Grid min={340}>
+        <Grid min={330}>
         {sessions.map((s) => (
           <Pressable
             key={s.id}
             testID={`session-open-${s.title}`}
             onPress={() => onOpenSession(s)}
+            // The grid child is this wrapper, not the Card inside it, so the
+            // fill has to be here or the row ends ragged.
+            style={styles.cell}
           >
             <Card>
               <Text style={styles.title}>{s.title}</Text>
@@ -189,6 +192,7 @@ function Tag({ on, onLabel, offLabel }: { on: boolean; onLabel: string; offLabel
 }
 
 const styles = StyleSheet.create({
+  cell: { flexGrow: 1 },
   title: { fontSize: 16, fontWeight: '600', color: t.text.primary },
   date: { fontSize: 13, color: t.text.secondary, marginTop: 2 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginTop: spacing(3) },

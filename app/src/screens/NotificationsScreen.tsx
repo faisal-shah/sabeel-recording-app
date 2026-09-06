@@ -92,7 +92,7 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
     })();
 
   return (
-    <Screen title="Notifications" subtitle="What this app may send you">
+    <Screen subtitle="What this app may send you">
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
 

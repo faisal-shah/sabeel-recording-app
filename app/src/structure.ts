@@ -133,7 +133,20 @@ export function useCourseState(courseId: string | null) {
  * picker. Single-field `createdAt` order needs no composite index.
  */
 export function useAllCourses(enabled: boolean): CourseRow[] {
-  return useLiveQuery<CourseRow[]>(
+  return useAllCoursesState(enabled) ?? [];
+}
+
+/**
+ * The same query, `null` until the first snapshot.
+ *
+ * An empty array cannot tell "there are none" from "none have arrived yet", and
+ * one caller has to: the staff landing screen says "You are not assigned to any
+ * courses yet" when the list is empty, and said it to everybody for the length
+ * of a cold load. `useAllCourses` keeps the simpler shape for the callers that
+ * only render rows.
+ */
+export function useAllCoursesState(enabled: boolean): CourseRow[] | null {
+  return useLiveQuery<CourseRow[] | null>(
     () =>
       enabled
         ? query(collection(db, COLLECTIONS.courses), orderBy('createdAt', 'asc'))
@@ -142,7 +155,7 @@ export function useAllCourses(enabled: boolean): CourseRow[] {
     {
       label: 'allCourses',
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CourseDoc) })),
-      empty: [],
+      empty: null,
     },
   );
 }
@@ -156,7 +169,12 @@ export function useAllCourses(enabled: boolean): CourseRow[] {
  * fails the query outright.
  */
 export function useMyCourses(uid: string | null): CourseRow[] {
-  return useLiveQuery<CourseRow[]>(
+  return useMyCoursesState(uid) ?? [];
+}
+
+/** The same query, `null` until the first snapshot — see `useAllCoursesState`. */
+export function useMyCoursesState(uid: string | null): CourseRow[] | null {
+  return useLiveQuery<CourseRow[] | null>(
     () =>
       uid
         ? query(collection(db, COLLECTIONS.courses), where('managerUids', 'array-contains', uid))
@@ -165,7 +183,7 @@ export function useMyCourses(uid: string | null): CourseRow[] {
     {
       label: 'myCourses',
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CourseDoc) })),
-      empty: [],
+      empty: null,
     },
   );
 }

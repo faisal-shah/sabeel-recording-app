@@ -508,8 +508,9 @@ const escapes = (page) =>
       // button, which is as real an escape as a Back arrow.
       cancel: controls.some((e) => /^(cancel|close)$/i.test(label(e))),
       // The persistent chrome. Every screen has it; only a tab root may rely on
-      // it as its ONLY exit.
-      nav: !!document.querySelector('[data-testid="tab-more"]'),
+      // it as its ONLY exit — and it has to be VISIBLE, like the others: a bar
+      // rendered at zero height would otherwise satisfy "has a way out".
+      nav: controls.some((e) => e.getAttribute('data-testid') === 'tab-more'),
     };
   });
 
@@ -947,6 +948,10 @@ async function tourStudent(page, tag) {
     await openDueSoon();
     await page.waitForTimeout(1500);
     await tap(byId(page, 'tab-classes'));
+    // ASSERTED, not just photographed. Without this the "screen" is byte-
+    // identical to `my-classes` if the bar stops rendering, every geometric
+    // check passes, and the tour still reports having reached every screen.
+    await byId(page, 'mini-player').waitFor({ timeout: 15_000 });
   });
   await visit('notifications', async () => {
     await tap(byId(page, 'tab-more'));

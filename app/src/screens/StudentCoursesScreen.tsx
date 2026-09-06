@@ -34,7 +34,6 @@ export function StudentCoursesScreen({
     <Screen
       title="Your classes"
       subtitle="Your attendance and required listening, class by class"
-      width="list"
     >
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {courseIds.length === 0 ? (

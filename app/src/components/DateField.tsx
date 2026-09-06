@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useRoomy } from '../useWidth';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -19,13 +20,16 @@ interface DateFieldProps {
 }
 
 export function DateField({ label, value, onChange }: DateFieldProps) {
+  const roomy = useRoomy();
   const [show, setShow] = useState(false);
   // Parse as LOCAL midnight so the picker opens on the stored day; a due date is
   // a plain calendar date, never a UTC instant.
   const current = value ? new Date(`${value}T00:00:00`) : new Date();
 
   return (
-    <View style={styles.field}>
+    // The same reading cap `Field` takes — a ten-character date has no business
+    // running the full width of a card whose text fields are capped.
+    <View style={[styles.field, roomy ? styles.fieldWide : null]}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.row}>
         <Pressable
@@ -75,6 +79,7 @@ function toYmd(d: Date): string {
 
 const styles = StyleSheet.create({
   field: { marginTop: spacing(3) },
+  fieldWide: { maxWidth: 440 },
   label: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(1) },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
   input: {

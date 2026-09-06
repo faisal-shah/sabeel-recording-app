@@ -29,7 +29,13 @@ export async function signOut(): Promise<void> {
   // started it now, so nothing else would end it: signing out would drop the
   // credential, leave a foreground service holding a lecture, and give the next
   // person on a shared device someone else's recording still playing.
-  closePlayback();
+  //
+  // AWAITED, for the last progress write it carries. Dropping the credential
+  // first means that write is refused and the final minutes of listening — the
+  // ones somebody would argue about — are lost at exactly the moment a student
+  // stops listening. Best effort still: a failure here must never trap someone
+  // signed in.
+  await closePlayback().catch(() => undefined);
   // The signed-URL cache outlives a credential otherwise: a 12-hour URL minted
   // for one account would still be handed to the next person on a shared
   // device, bypassing `getPlaybackUrl`'s entitlement check entirely.

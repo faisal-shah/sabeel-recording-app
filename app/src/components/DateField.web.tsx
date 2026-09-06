@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { useRoomy } from '../useWidth';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -16,8 +17,12 @@ interface DateFieldProps {
 }
 
 export function DateField({ label, value, onChange }: DateFieldProps) {
+  const roomy = useRoomy();
   return (
-    <View style={styles.field}>
+    // The same reading cap `Field` takes. Without it a ten-character date ran
+    // to 622px in a card whose free-text fields were capped at 440 — the field
+    // that needed room was the constrained one.
+    <View style={[styles.field, roomy ? styles.fieldWide : null]}>
       <Text style={styles.label}>{label}</Text>
       <input
         type="date"
@@ -39,5 +44,6 @@ export function DateField({ label, value, onChange }: DateFieldProps) {
 
 const styles = StyleSheet.create({
   field: { marginTop: spacing(3) },
+  fieldWide: { maxWidth: 440 },
   label: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(1) },
 });

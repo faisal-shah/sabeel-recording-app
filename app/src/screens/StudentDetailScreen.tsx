@@ -71,6 +71,7 @@ export function StudentDetailScreen({
       title={who}
       subtitle={student?.email}
       status={student ? student.status : undefined}
+      width="list"
     >
       {error ? <Notice tone="error">{error}</Notice> : null}
       {info ? <Notice tone="success">{info}</Notice> : null}

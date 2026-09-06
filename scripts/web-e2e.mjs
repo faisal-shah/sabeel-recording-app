@@ -512,7 +512,7 @@ await admin.getByTestId('tab-today-badge').waitFor({ timeout: 20000 });
 const queueText = await admin.locator('body').innerText();
 check(
   'Today counts a session whose attendance is not taken, and names it',
-  /1\s*$/m.test(await admin.getByTestId('tab-today-badge').innerText()) &&
+  (await admin.getByTestId('tab-today-badge').innerText()).trim() === '1' &&
     /attendance not taken/i.test(queueText) &&
     /Session 1/.test(queueText),
   queueText.replace(/\n+/g, ' | ').slice(0, 200),
@@ -540,9 +540,13 @@ check(
 // two listeners rather than a read on arrival.
 await goHome(admin);
 await admin.waitForTimeout(2500);
+// A POSITIVE CONTROL WITH THE NEGATIVE. `count() === 0` alone passes if the bar
+// failed to render, if the session signed out, or if the queue's listeners were
+// refused — every way of breaking it looks like success.
 check(
   'the blocking count clears once attendance is submitted',
-  (await admin.getByTestId('tab-today-badge').count()) === 0,
+  (await admin.getByTestId('tab-today').count()) === 1 &&
+    (await admin.getByTestId('tab-today-badge').count()) === 0,
   (await admin.locator('body').innerText()).replace(/\n+/g, ' | ').slice(0, 160),
 );
 // Back to the session — the upload continues from there.

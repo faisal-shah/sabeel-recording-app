@@ -74,7 +74,7 @@ export function ZoomImportScreen({
   );
 
   return (
-    <Screen title="Import from Zoom" subtitle={`${session.title} · ${cls.name}`}>
+    <Screen subtitle={`${session.title} · ${cls.name}`}>
       <Card>
         <DateField label="From" value={from} onChange={setFrom} />
         <DateField label="To" value={to} onChange={setTo} />

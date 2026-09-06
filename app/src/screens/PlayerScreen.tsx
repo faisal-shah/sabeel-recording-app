@@ -10,7 +10,7 @@ import {
 import { Notice } from '../components/ui';
 import { Scrubber } from '../components/Scrubber';
 import { Transport } from '../components/Transport';
-import { formatClock, openPlayback, playback, usePlayback } from '../playback';
+import { closePlayback, formatClock, openPlayback, playback, usePlayback } from '../playback';
 import { useCompletion, setCompleted } from '../completion';
 import { useListenerError } from '../liveQuery';
 import { useCohortName, type CourseRow } from '../structure';
@@ -71,11 +71,26 @@ export function PlayerScreen({
   // view onto app-wide playback, and re-entering it for something already
   // playing must re-focus rather than restart. `openPlayback` is idempotent for
   // the loaded recording, so a re-render costs nothing.
+  /*
+   * THE GATE CLOSES ON A SESSION ALREADY PLAYING, not only on one about to
+   * start.
+   *
+   * `allowed` goes false in two ways that have nothing to do with the recording
+   * document: the course is archived with listening off, and the student's own
+   * deadline rolls over at midnight. Both are live here — so without this the
+   * screen swaps to "this recording closed" over audio that is still running,
+   * with the transport gone and no control anywhere to stop it.
+   */
+  useEffect(() => {
+    if (!allowed && session.now?.recordingId === recording.id) void closePlayback();
+  }, [allowed, session.now?.recordingId, recording.id]);
+
   useEffect(() => {
     if (!allowed) return;
     openPlayback(
       {
         recordingId: recording.id,
+        courseId: recording.courseId,
         title: recording.title,
         courseName: cls.name,
         durationMs: (recording.durationSec ?? 0) * 1000,
@@ -320,6 +335,10 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing(5),
     paddingBottom: spacing(12),
+    // NARROWER THAN THE READING CAP, deliberately, and the one width in the app
+    // that is not in `LAYOUT_WIDTHS`. A transport, a scrub bar and a row of rate
+    // chips are a media column: at 720 the controls drift apart, and this screen
+    // is the same object at every width rather than a layout that reflows.
     maxWidth: 560,
     width: '100%',
     alignSelf: 'center',

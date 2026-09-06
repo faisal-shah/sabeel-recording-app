@@ -101,6 +101,7 @@ export function SessionDetailScreen({
       title={session.title}
       parent={{ label: cls.name, testID: 'up-to-course-from-session', onPress: onOpenCourse }}
       subtitle={`${session.date} · excused students listen by ${session.dueDate}`}
+      width="list"
     >
       <SessionHeader session={session} isAdmin={isAdmin} />
       <AttendanceSection session={session} />
@@ -311,7 +312,14 @@ function AttendanceSection({ session }: { session: SessionRow }) {
               student instead of across one. Same markup, one flex direction.
             */}
             {activeUids.map((uid) => (
-              <View key={uid} style={[styles.rosterRow, wide ? styles.rosterRowWide : null]}>
+              <View
+                key={uid}
+                style={[
+                  styles.rosterRow,
+                  wide ? styles.rosterRowWide : null,
+                  wide ? styles.rosterWide : null,
+                ]}
+              >
                 <Text style={[styles.rosterName, wide ? styles.rosterNameWide : null]}>
                   {nameByUid.get(uid) ?? uid}
                 </Text>
@@ -711,6 +719,10 @@ const styles = StyleSheet.create({
   // Fixed, so every row's three states line up in a column the eye can run
   // down. Sized to the widest label rather than to the roster.
   segmentWide: { width: 330 },
+  // The page is `list`-wide because it holds a roster, but a REGISTER is read
+  // one line at a time: left to fill 1180px it put every name and its control
+  // 470px apart. Capped, and left-aligned under the heading.
+  rosterWide: { maxWidth: 760 },
   // 44pt: this is the single most-tapped control in the staff app — once per
   // student, per session — and it was 32px tall at phone width.
   segBtn: {

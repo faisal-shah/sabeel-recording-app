@@ -15,12 +15,12 @@ export function AuditScreen({ courseId, title }: { courseId: string | null; titl
   const entries = useAudit(courseId);
 
   return (
-    <Screen subtitle={title} width="list">
+    <Screen title={title} subtitle="Every change, who made it and when" width="list">
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
       {entries.length === 0 ? (
         <Empty>No audit entries yet.</Empty>
       ) : (
-        <Grid min={360}>
+        <Grid min={330}>
           {entries.map((e) => (
             <AuditCard key={e.id} entry={e} />
           ))}

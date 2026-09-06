@@ -1,13 +1,8 @@
-import { useState, type ComponentProps } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { type ComponentProps } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PRIVACY_URL, type Role } from '@sabeel/shared';
-import { Sheet, SheetOption, SheetSection } from './Sheet';
-import { signOut } from '../session';
-import { sendMyPasswordReset } from '../students';
-import { BUILD_LABEL } from '../buildInfo';
-import { IS_DEV } from '../env';
+import { type Role } from '@sabeel/shared';
 import { RAIL_WIDTH, getTheme, spacing } from '../theme';
 import type { RootStackParamList } from '../nav';
 
@@ -126,14 +121,13 @@ function tabsFor(role: Role): Tab[] {
  */
 export function AppNav({
   role,
-  email,
   variant,
   active,
   blocking,
   onNavigate,
+  onOpenMore,
 }: {
   role: Role;
-  email: string;
   variant: 'bar' | 'rail';
   active: RouteName;
   /**
@@ -145,14 +139,11 @@ export function AppNav({
    */
   blocking: number;
   onNavigate: (route: RouteName, mode: 'tab' | 'push') => void;
+  /** Opens the sheet, which the shell owns — see `MoreSheet`. */
+  onOpenMore: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [resetError, setResetError] = useState<string | null>(null);
   const rail = variant === 'rail';
-  const isStudent = role === 'student';
-  const isAdmin = role === 'admin';
 
   const items = tabsFor(role).map((tab) => (
     <NavItem
@@ -174,101 +165,8 @@ export function AppNav({
       rail={rail}
       testID="tab-more"
       active={active === 'Notifications' || active === 'Audit' || active === 'Tokens'}
-      onPress={() => setMenuOpen(true)}
+      onPress={onOpenMore}
     />
-  );
-
-  const menu = (
-    <Sheet visible={menuOpen} title="More" onClose={() => setMenuOpen(false)}>
-      {isAdmin ? (
-        <>
-          <SheetSection label="Institute" />
-          <SheetOption
-            label="Audit history"
-            detail="Every change, who made it and when"
-            testID="more-audit"
-            onPress={() => {
-              setMenuOpen(false);
-              onNavigate('Audit', 'push');
-            }}
-          />
-        </>
-      ) : null}
-
-      <SheetSection label="You" />
-      <SheetOption
-        label="Notifications"
-        detail="Choose which messages this device receives"
-        testID="more-notifications"
-        onPress={() => {
-          setMenuOpen(false);
-          onNavigate('Notifications', 'push');
-        }}
-      />
-      {/* STUDENTS ONLY, and it is a first-party reset — an emailed link, no
-          third-party login service involved, so it triggers nothing under
-          Guideline 4.8. Staff have no password to change: their credential is
-          the institute's Google account, and offering to reset it here would be
-          offering to change something this app does not own. */}
-      {isStudent ? (
-        <SheetOption
-          label={resetError ? 'Could not send the link' : sent ? 'Reset link sent' : 'Change password'}
-          detail={
-            resetError ?? (sent ? `Check ${email}` : 'We email you a link to set a new one')
-          }
-          tone={resetError ? 'danger' : 'normal'}
-          testID="more-password"
-          onPress={() => {
-            // Reported only once it has actually gone. Saying "sent" the instant
-            // the button is pressed says it whether or not anything was sent,
-            // and the person then waits for an email that is not coming.
-            setSent(false);
-            setResetError(null);
-            void sendMyPasswordReset(email)
-              .then(() => setSent(true))
-              .catch((e: Error) => setResetError(e.message));
-          }}
-        />
-      ) : null}
-      {/* Required to be reachable INSIDE the app, not just in store metadata —
-          Apple 5.1.1(i). Absolute URL so it opens from a phone as well as a
-          browser. */}
-      <SheetOption
-        label="Privacy policy"
-        testID="more-privacy"
-        onPress={() => {
-          setMenuOpen(false);
-          void Linking.openURL(PRIVACY_URL).catch(() => undefined);
-        }}
-      />
-      {IS_DEV ? (
-        <SheetOption
-          label="Design tokens"
-          onPress={() => {
-            setMenuOpen(false);
-            onNavigate('Tokens', 'push');
-          }}
-        />
-      ) : null}
-      <SheetOption
-        label="Sign out"
-        tone="danger"
-        testID="more-sign-out"
-        onPress={() => {
-          setMenuOpen(false);
-          void signOut();
-        }}
-      />
-
-      {/* The running build, in the app rather than only on the sign-in screen.
-          "Is that fixed for you?" is unanswerable once you are signed in if the
-          only place the version appears is the screen you have already left. */}
-      <View style={styles.build}>
-        <Text style={styles.buildText}>
-          Class Recordings · {BUILD_LABEL}
-        </Text>
-      </View>
-    </Sheet>
   );
 
   if (rail) {
@@ -288,7 +186,6 @@ export function AppNav({
         </View>
         <View style={styles.railTabs}>{items}</View>
         {more}
-        {menu}
       </View>
     );
   }
@@ -297,7 +194,6 @@ export function AppNav({
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, spacing(2)) }]}>
       {items}
       {more}
-      {menu}
     </View>
   );
 }
@@ -404,6 +300,4 @@ const styles = StyleSheet.create({
     backgroundColor: t.feedback.danger,
   },
   badgeText: { fontSize: 10, fontWeight: '700', color: t.text.inverse },
-  build: { alignItems: 'center', paddingTop: spacing(3) },
-  buildText: { fontSize: 11, color: t.text.muted },
 });

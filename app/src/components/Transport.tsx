@@ -13,17 +13,29 @@ const t = getTheme();
  * calls this out. A bordered triangle and two bars are deterministic everywhere.
  */
 /**
- * The play/pause mark, drawn. Exported so the docked now-playing bar draws the
- * same one at a smaller size instead of typing `▶` — see the note above.
+ * The play/pause mark, drawn rather than typed — see the note above.
+ *
+ * `scale` because the docked bar's button is 44px against the player's 72px,
+ * and the same glyph in both filled the small one to its edges. The mark is
+ * built from borders, so it cannot simply be given a font size; it is scaled.
  */
-export function PlayPauseGlyph({ playing, disabled }: { playing: boolean; disabled?: boolean }) {
+export function PlayPauseGlyph({
+  playing,
+  disabled,
+  scale = 1,
+}: {
+  playing: boolean;
+  disabled?: boolean;
+  scale?: number;
+}) {
+  const sized = scale === 1 ? null : { transform: [{ scale }] };
   return playing ? (
-    <View style={styles.pauseGlyph}>
+    <View style={[styles.pauseGlyph, sized]}>
       <View style={styles.pauseBar} />
       <View style={styles.pauseBar} />
     </View>
   ) : (
-    <View style={[styles.playGlyph, disabled ? styles.playGlyphDisabled : null]} />
+    <View style={[styles.playGlyph, disabled ? styles.playGlyphDisabled : null, sized]} />
   );
 }
 

@@ -8,7 +8,9 @@ import {
   playback,
   usePlayback,
 } from '../playback';
+import { INSTITUTE_TIMEZONE, canPlayFromCourse, isOverdue, todayInZone } from '@sabeel/shared';
 import { useRecordingState } from '../recordings';
+import { useCourseState } from '../structure';
 import { PlayPauseGlyph, Skip } from './Transport';
 import { LAYOUT_WIDTHS, getTheme, spacing } from '../theme';
 import { useWide } from '../useWidth';
@@ -68,9 +70,24 @@ export function MiniPlayer({
    * screen, and the player screen is not mounted anywhere else.
    */
   const loaded = useRecordingState(now?.recordingId ?? null);
-  const revoked = !!now && loaded.resolved && !loaded.value;
+  const course = useCourseState(now?.courseId ?? null);
+  /*
+   * THREE WAYS ACCESS ENDS, and the audio has to stop for all of them:
+   *   - the recording is deleted or unpublished (its document goes);
+   *   - the course is archived with listening off;
+   *   - the student's own deadline passes, which happens at midnight while
+   *     they are listening and nothing else would notice.
+   * Watching only the first left the other two running off a signed URL good
+   * for another twelve hours, with nothing on screen saying anything changed.
+   */
+  const today = todayInZone(INSTITUTE_TIMEZONE);
+  const revoked =
+    !!now &&
+    ((loaded.resolved && !loaded.value) ||
+      (course.resolved && !!course.value && !canPlayFromCourse(course.value)) ||
+      (now.dueDate !== null && isOverdue(now.dueDate, today)));
   useEffect(() => {
-    if (revoked) closePlayback();
+    if (revoked) void closePlayback();
   }, [revoked]);
 
   if (!now) return null;
@@ -84,10 +101,11 @@ export function MiniPlayer({
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${pct * 100}%` }]} />
       </View>
-      {/* CAPPED AND CENTRED, like the content above it. Left to span a 1400px
-          window the title and the transport ended up an 800px canyon apart, and
-          the controls sat outside the column every other control on the page
-          lines up with. */}
+      {/* CAPPED AND CENTRED to the widest content column. Left to span a 1400px
+          window, the title and the transport ended up hundreds of pixels apart.
+          It cannot match the column of the screen it happens to be docked under
+          — it outlives every screen, and knowing which one is showing is not
+          its business — so it takes the widest and caps the title too. */}
       <View style={styles.inner}>
       <Pressable
         testID="mini-player-open"
@@ -127,7 +145,9 @@ export function MiniPlayer({
         onPress={playback.toggle}
         style={[styles.play, !state.ready ? styles.playDisabled : null]}
       >
-        <PlayPauseGlyph playing={state.playing} disabled={!state.ready} />
+        {/* 0.62: this button is 44px against the player's 72px, and the glyph
+            is built from borders rather than type. */}
+        <PlayPauseGlyph playing={state.playing} disabled={!state.ready} scale={0.62} />
       </Pressable>
 
       {wide ? (
@@ -182,7 +202,10 @@ const styles = StyleSheet.create({
     backgroundColor: t.border.subtle,
   },
   progressFill: { height: 2, backgroundColor: t.accent.base },
-  text: { flex: 1, justifyContent: 'center', minHeight: 40 },
+  // Capped as well as flexed. The bar spans the widest content column, and an
+  // uncapped title pushed the transport to the far end of it — several hundred
+  // pixels of nothing between what is playing and the button that pauses it.
+  text: { flex: 1, maxWidth: 520, justifyContent: 'center', minHeight: 40 },
   title: { fontSize: 14, fontWeight: '700', color: t.text.primary },
   sub: { fontSize: 12, color: t.text.secondary, marginTop: 1 },
   play: {

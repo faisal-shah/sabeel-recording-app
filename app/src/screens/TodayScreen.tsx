@@ -41,11 +41,14 @@ const HEADINGS: { kind: TodayKind; label: string; blurb: string }[] = [
  */
 export function TodayScreen({
   uid,
+  isAdmin,
   queue,
   onOpenSession,
   onOpenLedger,
 }: {
   uid: string;
+  /** Only to say the right thing when there is nothing here yet. */
+  isAdmin: boolean;
   /** Subscribed by the app shell, so the tab's badge cannot disagree with it. */
   queue: TodayQueue;
   onOpenSession: (sessionId: string, courseId: string) => void;
@@ -80,8 +83,8 @@ export function TodayScreen({
           cut by document id, which is arbitrary. Say what is true. */}
       {truncated ? (
         <Text style={styles.note}>
-          More courses than this queue can span. Some are not counted here — open a
-          cohort to see them.
+          More courses than this queue can span. Some are not counted here — open them
+          under Courses to see the rest.
         </Text>
       ) : null}
 
@@ -95,8 +98,9 @@ export function TodayScreen({
           </Empty>
         ) : (
           <Notice tone="info">
-            You are not assigned to any courses yet. An administrator assigns them; once
-            they do, this is where the work waiting on you appears.
+            {isAdmin
+              ? 'No courses yet. Add a cohort under Courses, then a course inside it — this is where the work waiting on you will appear.'
+              : 'You are not assigned to any courses yet. An administrator assigns them; once they do, this is where the work waiting on you appears.'}
           </Notice>
         )
       ) : null}
