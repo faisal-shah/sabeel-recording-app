@@ -36,12 +36,15 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
-- 2026-09-05 — **A persistent navigation shell, a real desktop layout, and a
+- 2026-09-06 — **A persistent navigation shell, a real desktop layout, and a
   work queue as the staff landing screen.**
 
   Three designs were built behind `?nav=a|b|c` and compared against one seeded
-  world at both widths; **B** was chosen and the other two deleted. What
-  survived:
+  world at both widths; **B** was chosen and the other two deleted. Four rounds
+  of independent review followed, three of which found real defects — the most
+  serious being a teardown race that made playing a second recording leave a
+  permanently dead transport, and a roster with no `orderBy` behind the register
+  staff mark by hand. What survived:
 
   **The chrome.** A bottom bar below `WIDE_BREAKPOINT` (900) and a 76px activity
   rail above it, branched on WIDTH, never on platform. It shows on *every*
@@ -97,11 +100,21 @@ and commit messages, and renaming them would strand every one of those.
   `screens-e2e.mjs` now reads its fixture from `scripts/lib/seed-world.mjs`
   rather than building three hundred lines of it inline in front of the checks.
 
-  Green on this machine: lint, typecheck, knip, 206 unit, 252 emulator, 703/703
-  sweep at five widths, and the web e2e. **Not yet run on a device** — this box
-  has no hardware virtualization, and the playback refactor touches exactly the
-  seam a browser cannot reach, so the pre-release AVD pass is mandatory before
-  any release.
+  **What the reviews were worth, and what they could not reach.** The sweep
+  found two of the navigation defects itself — More-menu destinations arriving
+  with no Back, and a route crashing on undefined params. It could not see the
+  worst layout fault: a shared `Row` primitive that grew its cells on every
+  width, leaving pairs of related buttons 400px apart on five screens at once.
+  Nothing overlapped, nothing clipped, the column capped correctly, and it was
+  still the ugliest thing in the app. It took looking at a screenshot and then
+  measuring the DOM. The sweep says a layout is not broken; it never says it is
+  good.
+
+  Green on this machine: lint, typecheck, knip, 206 unit, 253 emulator, 694/694
+  sweep at five widths, and 107/107 web e2e. **Not yet run on a device** — this
+  box has no hardware virtualization, and the playback refactor touches exactly
+  the seam a browser cannot reach, so the pre-release AVD pass is mandatory
+  before any release.
 
 - 2026-08-28 — **v0.4.3: the first Android verification this app has had, and it
   found two things every other check is blind to.**

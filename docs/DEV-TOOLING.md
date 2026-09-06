@@ -224,7 +224,7 @@ something has to hold on a clean machine rather than this one:
 `gh workflow run ci.yml --ref <branch>`. The trigger block to restore is written
 out at the top of `ci.yml`.
 
-**Scale and cost, measured 2026-09-05:** 705 checks over 5 viewports x 38
+**Scale and cost, measured 2026-09-06:** 694 checks over 5 viewports x 38
 screens, **~6m wall clock** (including the shared/functions build, Metro's cold
 bundle and emulator boot). The staff tour gained the work queue, the create
 sheet open, and the People tab's staff half; the student tour gained the docked
