@@ -436,6 +436,30 @@ export async function seedWorld({ db, auth, browser, base }) {
     dueDate: iso(now + 7 * DAY), notes: '', recordingId: null, attendance: {},
     attendanceSubmittedAt: null, archived: false, createdAt: now, createdBy: adminUid, updatedAt: now,
   });
+  /*
+   * THE OTHER TWO KINDS OF WORK THE STAFF LANDING SCREEN GROUPS BY.
+   *
+   * Every session above ends up either "attendance not taken" or "closing soon",
+   * so the queue's other two sections — a recording waiting to be published, and
+   * attendance in with no audio — were measured and photographed at zero widths,
+   * along with the `needsAttention` chip and the library's unpublished filter.
+   * The docblock at the top of this file claimed both states; nothing produced
+   * them.
+   */
+  await seedSession('sw-s7', 'sw-s7r', 'Session 7 — Gratitude and Contentment',
+    { daysAgo: 6, dueOffset: 8, present: 4, status: 'draft' });
+  await seedSession('sw-s8', 'sw-s8r', 'Session 8 — The Signs of Sincerity',
+    { daysAgo: 5, dueOffset: 9, present: 4, status: 'needsAttention',
+      attention: 'Audio file looks truncated — re-upload before publishing.' });
+  /** Attendance in, no audio: the queue's "No recording yet". */
+  await db.collection('sessions').doc('sw-s9').set({
+    courseId: COURSE, cohortId: COHORT, date: iso(now - 2 * DAY),
+    title: 'Session 9 — Fear and Hope', dueDate: iso(now + 12 * DAY), notes: '',
+    recordingId: null,
+    attendance: Object.fromEntries(students.map((s) => [s.uid, 'excused'])),
+    attendanceSubmittedAt: now - 2 * DAY, archived: false,
+    createdAt: now - 2 * DAY, createdBy: adminUid, updatedAt: now - 2 * DAY,
+  });
   await seedSession('sw-a1', 'sw-a1r', 'Lesson 1 — The Arabic Alphabet',
     { courseId: LONG_COURSE, daysAgo: 9, dueOffset: 5, roster: students.slice(0, 4), present: 2 });
 

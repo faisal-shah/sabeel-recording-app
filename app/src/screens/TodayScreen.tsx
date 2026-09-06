@@ -2,21 +2,21 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { INSTITUTE_TIMEZONE, todayInZone } from '@sabeel/shared';
 import { Empty, Grid, Notice, Screen } from '../components/ui';
 import { PushNudge } from '../components/PushNudge';
-import type { TodayItem, TodayKind, TodayQueue } from '../today';
+import { KIND_ORDER, type TodayItem, type TodayKind, type TodayQueue } from '../today';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
 
-const HEADINGS: { kind: TodayKind; label: string; blurb: string }[] = [
-  {
-    kind: 'attendance',
+/** What each kind is called here; the ORDER comes from `KIND_ORDER`. */
+const HEADING: Record<TodayKind, { label: string; blurb: string }> = {
+  attendance: {
     label: 'Attendance not taken',
     blurb: 'Until this is submitted, nobody in the class has access.',
   },
-  { kind: 'publish', label: 'Waiting to publish', blurb: 'Recorded, not yet released.' },
-  { kind: 'recording', label: 'No recording yet', blurb: 'Attendance is in; the audio is not.' },
-  { kind: 'closing', label: 'Closing soon', blurb: 'Access ends within the week.' },
-];
+  publish: { label: 'Waiting to publish', blurb: 'Recorded, not yet released.' },
+  recording: { label: 'No recording yet', blurb: 'Attendance is in; the audio is not.' },
+  closing: { label: 'Closing soon', blurb: 'Access ends within the week.' },
+};
 
 /**
  * The staff landing screen: what is waiting, most urgent first.
@@ -90,9 +90,11 @@ export function TodayScreen({
         </Text>
       ) : null}
 
-      {/* An empty queue has two quite different causes, and only one of them is
-          good news. Saying "attendance is in" to someone who has not been given
-          a course yet is a sentence about courses they do not have. */}
+      {/* An empty queue has three causes and only one of them is good news.
+          Saying "attendance is in" to someone who has not been given a course
+          yet is a sentence about courses they do not have, and saying it at the
+          end of term to a manager whose courses have all finished is an answer
+          to a question they did not ask. See `TodayQueue.scoped`. */}
       {!loading && !failed && items.length === 0 ? (
         scoped ? (
           <Empty>
@@ -109,13 +111,14 @@ export function TodayScreen({
         )
       ) : null}
 
-      {HEADINGS.map((h) => {
-        const rows = items.filter((i) => i.kind === h.kind);
+      {KIND_ORDER.map((kind) => {
+        const h = HEADING[kind];
+        const rows = items.filter((i) => i.kind === kind);
         if (rows.length === 0) return null;
         return (
-          <View key={h.kind} style={styles.group}>
+          <View key={kind} style={styles.group}>
             <View style={styles.groupHead}>
-              <Text style={[styles.groupLabel, h.kind === 'attendance' ? styles.urgent : null]}>
+              <Text style={[styles.groupLabel, kind === 'attendance' ? styles.urgent : null]}>
                 {h.label} ({rows.length})
               </Text>
               <Text style={styles.groupBlurb}>{h.blurb}</Text>

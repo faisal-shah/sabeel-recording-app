@@ -333,9 +333,18 @@ const layoutFaults = (page) =>
      * own check, so it names WHERE and costs no extra line. Every screen in this
      * app has controls; one with none is an anomaly, not a quiet day.
      */
-    if (els.length === 0) {
+    /*
+     * CHROME DOES NOT COUNT. The navigation bar puts three to five buttons on
+     * every screen in the app, and the docked player adds more — so counting
+     * them made this guard true everywhere and unable to fire again. What it is
+     * watching for is a SCREEN whose own controls the selector cannot see.
+     */
+    const chrome = (e) =>
+      /^tab-/.test(e.getAttribute('data-testid') || '') ||
+      !!e.closest('[data-testid="mini-player"]');
+    if (els.filter((e) => !chrome(e)).length === 0) {
       faults.push(
-        'examined NO controls — the overlap and right-edge checks are inert here, not passing',
+        'examined NO controls of its own — the overlap and right-edge checks are inert here, not passing',
       );
     }
     const name = (e) => (e.getAttribute('aria-label') || e.textContent || '?').trim().slice(0, 24);
@@ -676,9 +685,29 @@ async function goHome(page, homeMarker) {
  * two, so a failure always has a picture of what was measured beside it.
  */
 function visitor(page, tag, homeMarker, counter) {
-  return async function visit(name, go) {
+  /*
+   * `anchor` IS WHAT SAYS THE TOUR ARRIVED.
+   *
+   * `tap` waits for the BUTTON to appear, not for the screen the button leads
+   * to — so a slow render, or a row that resolved to the wrong record, gave a
+   * green run of geometric checks against whatever happened to be on screen,
+   * saved under the name of the screen that was meant to be there. A testID only
+   * the destination renders closes that: it is the difference between "this
+   * layout is fine" and "this layout, on this screen, is fine".
+   */
+  return async function visit(name, go, anchor) {
     await goHome(page, homeMarker);
     await go();
+    if (anchor) {
+      await byId(page, anchor)
+        .waitFor({ timeout: 15_000 })
+        .catch(() => {});
+      check(
+        `${tag} / ${name} is the screen it says it is`,
+        await byId(page, anchor).isVisible().catch(() => false),
+        `${anchor} never appeared`,
+      );
+    }
     await page.waitForTimeout(450);
 
     const top = await layoutFaults(page);
@@ -729,7 +758,6 @@ const TAB_ROOTS = new Set([
   'my-courses',
   'people',
   'staff',
-  'students-add',
   'students-disabled',
   'library',
   'my-classes',
@@ -738,7 +766,7 @@ const TAB_ROOTS = new Set([
   'miniplayer',
 ]);
 
-const STAFF_SCREENS = 25;
+const STAFF_SCREENS = 28;
 
 async function tourStaff(page, tag) {
   const counter = { seen: 0 };
@@ -762,7 +790,7 @@ async function tourStaff(page, tag) {
   // The work queue: attendance not taken, drafts waiting, deadlines closing.
   // It is the landing screen, so it is also what `home` means for staff.
   await visit('home', async () => {});
-  await visit('people', () => tap(byId(page, 'tab-people')));
+  await visit('people', () => tap(byId(page, 'tab-people')), 'students-add');
   // The staff half of the People tab. A SEGMENT, not a route: same screen, other
   // list, so it is toured as its own screen and asks for no Back.
   await visit('staff', async () => {
@@ -774,85 +802,108 @@ async function tourStaff(page, tag) {
   await visit('students-add', async () => {
     await tap(byId(page, 'tab-people'));
     await tap(byId(page, 'students-add'));
-  });
+  }, 'student-create');
   // The disabled section EXPANDED: rows that exist in no other state, and the
   // collapsible's own header row moves when they arrive.
   await visit('students-disabled', async () => {
     await tap(byId(page, 'tab-people'));
     await tap(byId(page, 'students-disabled'));
-  });
+  }, 'students-disabled');
   await visit('student', async () => {
     await tap(byId(page, 'tab-people'));
     await tap(byId(page, `student-open-${STUDENT.email}`));
-  });
-  await visit('cohorts', () => tap(byId(page, 'tab-courses')));
+  }, 'student-resend');
+  await visit('cohorts', () => tap(byId(page, 'tab-courses')), 'cohorts-add');
+  /*
+   * THE THREE CREATE SHEETS, OPEN.
+   *
+   * A sheet is a screen this app has and no tour was entering: its form exists
+   * in no other state, it is the narrowest column in the product (a modal panel
+   * inside a 320px viewport), and the sessions one carries two `DateField`s,
+   * which are the app's only fixed-format controls. Photographed closed, all of
+   * that was measured at zero widths.
+   */
+  await visit('cohorts-add', async () => {
+    await tap(byId(page, 'tab-courses'));
+    await tap(byId(page, 'cohorts-add'));
+  }, 'cohort-create');
   await visit('cohort', async () => {
     await tap(byId(page, 'tab-courses'));
     await tap(byId(page, 'cohort-open-Autumn 2026'));
-  });
+  }, 'courses-add');
   // The empty state. No amount of seeding shows it, and it is the screen a term
   // spends its first week in.
   await visit('cohort-empty', async () => {
     await tap(byId(page, 'tab-courses'));
     await tap(byId(page, 'cohort-open-Spring 2027 — Evening Intensive'));
-  });
+  }, 'courses-add');
+  await visit('courses-add', async () => {
+    await tap(byId(page, 'tab-courses'));
+    await tap(byId(page, 'cohort-open-Autumn 2026'));
+    await tap(byId(page, 'courses-add'));
+  }, 'course-create');
   await visit('course', openCourse);
   // A roster removal CONFIRMS IN PLACE — the row is replaced by a warning and
   // two buttons, which is more than fits where the row was.
   await visit('course-remove-confirm', async () => {
     await openCourse();
     await tap(byId(page, `roster-remove-${STUDENT.email}`));
-  });
+  }, `roster-remove-confirm-${STUDENT.email}`);
   await visit('course-attendance', async () => {
     await openCourse();
     await tap(byId(page, 'nav-attendance'));
-  });
+  }, 'attendance-tab-students');
   // The per-student tab: the widest grid in the app, and the other half of the
   // screen above.
   await visit('course-attendance-students', async () => {
     await openCourse();
     await tap(byId(page, 'nav-attendance'));
     await tap(byId(page, 'attendance-tab-students'));
-  });
+  }, 'attendance-tab-sessions');
   await visit('sessions', async () => {
     await openCourse();
     await tap(byId(page, 'nav-sessions'));
-  });
+  }, 'sessions-add');
+  await visit('sessions-add', async () => {
+    await openCourse();
+    await tap(byId(page, 'nav-sessions'));
+    await tap(byId(page, 'sessions-add'));
+  }, 'session-create');
   await visit('session', openSession);
   // The session editor: four fields and a Save/Cancel row that exist nowhere
   // else, and 320px is where they run out of room.
   await visit('session-editing', async () => {
     await openSession();
     await tap(byName(page, 'Edit session'));
-  });
+  }, 'session-save');
   await visit('recording-ledger', async () => {
     await openSession();
     await tap(byId(page, 'recording-ledger'));
-  });
+  }, 'ledger-filter-all');
   // The override editor, open: a reason field and two more buttons inside a row
   // that already carries a name and a status.
   await visit('ledger-override', async () => {
     await openSession();
     await tap(byId(page, 'recording-ledger'));
     await tap(byId(page, `override-open-${STUDENT.name}`));
-  });
+  }, 'ledger-filter-all');
   await visit('student-ledger', async () => {
     await openCourse();
     await tap(byId(page, `student-ledger-${STUDENT.email}`));
-  });
+  }, 'student-export');
   await visit('zoom-import', async () => {
     await openCourse();
     await tap(byId(page, 'nav-sessions'));
     await tap(byId(page, 'session-open-Session 6 — Today (recording pending)'));
     await tap(byId(page, 'recording-import-zoom'));
-  });
-  await visit('library', () => tap(byId(page, 'tab-library')));
+  }, 'zoom-load');
+  await visit('library', () => tap(byId(page, 'tab-library')), 'library-filter-all');
   await visit('player', async () => {
     await tap(byId(page, 'tab-library'));
     await tap(byId(page, `library-listen-${missed.title}`));
   });
   await visit('audit', () => more('more-audit'));
-  await visit('notifications', () => more('more-notifications'));
+  await visit('notifications', () => more('more-notifications'), 'notify-attendanceMissing');
   await checkDeviceState(page, tag);
   await visit('tokens', async () => {
     await tap(byId(page, 'tab-more'));
@@ -888,23 +939,23 @@ async function tourManager(page, tag) {
   };
 
   await visit('home', async () => {});
-  await visit('my-courses', () => tap(byId(page, 'tab-courses')));
+  await visit('my-courses', () => tap(byId(page, 'tab-courses')), 'course-open-Hikam Foundations');
   await visit('course', openCourse);
   await visit('audit-scoped', async () => {
     await openCourse();
     await tap(byId(page, 'nav-audit'));
   });
-  await visit('library', () => tap(byId(page, 'tab-library')));
+  await visit('library', () => tap(byId(page, 'tab-library')), 'library-filter-all');
   // People, and one student's page. A manager's People tab is not an admin's
   // with rows removed: the student page swaps a whole query for a per-course
   // one, drops the Disable control for a sentence explaining who has it, and
   // shows "Courses you manage" where an admin sees every enrolment. None of
   // that renders in an admin's run, so none of it was ever photographed.
-  await visit('people', () => tap(byId(page, 'tab-people')));
+  await visit('people', () => tap(byId(page, 'tab-people')), 'students-add');
   await visit('student', async () => {
     await tap(byId(page, 'tab-people'));
     await tap(byId(page, `student-open-${STUDENT.email}`));
-  });
+  }, 'student-resend');
   // The ledger, which a manager reads through a DIFFERENT rule arm than an
   // admin: theirs resolves a course lookup from the row, so it is the only one
   // that can fail closed — and it did, silently, as an empty roster. A denial
@@ -918,14 +969,14 @@ async function tourManager(page, tag) {
   await visit('recording-ledger', async () => {
     await openSession();
     await tap(byId(page, 'recording-ledger'));
-  });
+  }, 'ledger-filter-all');
   await visit('ledger-override', async () => {
     await openSession();
     await tap(byId(page, 'recording-ledger'));
     await tap(byId(page, `override-open-${STUDENT.name}`));
-  });
+  }, 'ledger-filter-all');
 
-  check(`${tag} reached every manager screen`, counter.seen === MANAGER_SCREENS,
+  check(`${tag} toured as many manager screens as the tour lists`, counter.seen === MANAGER_SCREENS,
     `${counter.seen}/${MANAGER_SCREENS}`);
 }
 
@@ -938,7 +989,7 @@ async function tourStudent(page, tag) {
   // The task list, with all four buckets on it — Missed, Due soon, Upcoming,
   // Completed. Those group headings ARE the layout.
   await visit('home', async () => {});
-  await visit('my-classes', () => tap(byId(page, 'tab-classes')));
+  await visit('my-classes', () => tap(byId(page, 'tab-classes')), 'myclass-Hikam Foundations');
   await visit('class-record', async () => {
     await tap(byId(page, 'tab-classes'));
     await tap(byId(page, 'myclass-Hikam Foundations'));
@@ -948,7 +999,7 @@ async function tourStudent(page, tag) {
   // The home screen promotes the most urgent OPEN recording to a hero card and
   // drops it from the grouped list below, so this is where that one is.
   const openDueSoon = () => tap(byId(page, `next-up-${dueSoon.title}`));
-  await visit('player', openDueSoon);
+  await visit('player', openDueSoon, 'player-scrubber');
   // THE DOCKED NOW-PLAYING BAR, on a screen that is not the player. It is a row
   // that exists in no other state and it eats 56px off the bottom of every
   // screen under it — which on a 320px phone is exactly where a list runs out
@@ -979,7 +1030,7 @@ async function tourStudent(page, tag) {
    * closed recording and this is where its width sweep belongs.
    */
 
-  check(`${tag} reached every student screen`, counter.seen === STUDENT_SCREENS,
+  check(`${tag} toured as many student screens as the tour lists`, counter.seen === STUDENT_SCREENS,
     `${counter.seen}/${STUDENT_SCREENS}`);
 }
 
@@ -1035,8 +1086,9 @@ try {
   await browser.close();
 }
 
-// The app puts a `DateField` on three toured screens (SessionDetail, Sessions,
-// ZoomImport), so this is a real expectation rather than a formality.
+// The app puts a `DateField` on four toured screens (SessionDetail, the session
+// editor, the `sessions-add` sheet and ZoomImport), so this is a real
+// expectation rather than a formality.
 /*
  * `> 0`, not a threshold. The honest claim without a run is "it looked at
  * something"; anything larger would be a number reasoned to rather than

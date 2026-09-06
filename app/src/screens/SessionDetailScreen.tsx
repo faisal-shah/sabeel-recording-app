@@ -156,7 +156,10 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
 
   if (editing) {
     return (
-      <Card>
+      // The reading width, like the fields inside it. The screen is `list`-wide
+      // because it holds a roster; the editor holds four fields capped at 440,
+      // and left at the list width the card was 1115px of which 658 was empty.
+      <Card style={styles.editorCard}>
         {error ? <Notice tone="error">{error}</Notice> : null}
         <Field label="Title" value={title} onChangeText={setTitle} autoCapitalize="words" />
         <DateField label="Date" value={date} onChange={setDate} />
@@ -169,6 +172,10 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
         />
         <Row>
           <Button
+            // The editor's own handle. It replaces the settings card rather than
+            // opening beside it, so nothing else on this screen identifies the
+            // editing state to a test.
+            testID="session-save"
             label="Save"
             busy={busy === 'save'}
             onPress={() =>
@@ -727,6 +734,7 @@ const styles = StyleSheet.create({
   // 470px apart. Capped, and left-aligned under the heading.
   rosterWide: { maxWidth: 760 },
   prose: { maxWidth: 760 },
+  editorCard: { maxWidth: 760 },
   // 44pt: this is the single most-tapped control in the staff app — once per
   // student, per session — and it was 32px tall at phone width.
   segBtn: {

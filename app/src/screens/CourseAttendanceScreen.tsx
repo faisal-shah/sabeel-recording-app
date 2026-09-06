@@ -65,7 +65,7 @@ export function CourseAttendanceScreen({
   };
 
   const exportStudents = () => {
-    const header = ['Student', 'Present', 'Absent', 'Excused', 'Not marked', 'Catch-up assigned', 'Completed', 'Missed'];
+    const header = ['Student', 'Present', 'Absent', 'Excused', 'Not marked', 'Required listening', 'Completed', 'Missed'];
     const body = studentRows.map((s) => [
       nameOf(s.studentUid),
       `${s.present}`,
@@ -163,11 +163,11 @@ export function CourseAttendanceScreen({
               </Text>
               {s.assigned > 0 ? (
                 <Text style={styles.catchup}>
-                  Catch-up: {s.completed}/{s.assigned} complete
+                  Required listening: {s.completed} of {s.assigned} completed
                   {s.missed > 0 ? <Text style={styles.missed}>{`  ·  ${s.missed} missed`}</Text> : null}
                 </Text>
               ) : (
-                <Text style={styles.hint}>Catch-up: nothing required</Text>
+                <Text style={styles.hint}>No required listening</Text>
               )}
             </Pressable>
           </Card>

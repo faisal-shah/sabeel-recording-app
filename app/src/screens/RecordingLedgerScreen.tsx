@@ -96,9 +96,12 @@ export function RecordingLedgerScreen({
       {error ? <Notice tone="error">{error}</Notice> : null}
 
       <View style={styles.summary}>
-        <Stat label="Accountable" value={rollup.total} />
-        <Stat label="Complete" value={rollup.complete} tone="success" />
-        <Stat label="Incomplete" value={rollup.incomplete} />
+        {/* The product's own words — required listening, completed, missed —
+            and not a fifth set for this screen. "Accountable" was also the one
+            label too long for its tile. */}
+        <Stat label="Required" value={rollup.total} />
+        <Stat label="Completed" value={rollup.complete} tone="success" />
+        <Stat label="Not complete" value={rollup.incomplete} />
         <Stat label="Missed" value={rollup.missed} tone={rollup.missed > 0 ? 'danger' : undefined} />
       </View>
 
@@ -366,7 +369,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: 'su
 }
 
 function statusLabel(r: RequiredRow, today: string): string {
-  if (r.completed) return r.source === 'override' ? 'Complete (override)' : 'Complete';
+  if (r.completed) return r.source === 'override' ? 'Completed (override)' : 'Completed';
   if (isOverdue(r.dueDate, today)) return 'Missed';
   return 'Not complete';
 }
@@ -389,10 +392,10 @@ const styles = StyleSheet.create({
   actions: { marginTop: 'auto' },
   /**
    * WRAPS, because four tiles across a phone cannot hold their own labels.
-   * "Accountable" is 11 characters and a quarter of a 360dp screen leaves it
-   * about 49dp of inner width, so it broke mid-word — rendering as
-   * "Accountabl / e" on a real device. Every layout check passed throughout:
-   * nothing overlapped and nothing was clipped, which is all they can see.
+   * A quarter of a 360dp screen leaves a label about 49dp of inner width, and
+   * an 11-character one broke mid-word on a real device — "Accountabl / e".
+   * Every layout check passed throughout: nothing overlapped and nothing was
+   * clipped, which is all they can see.
    *
    * `minWidth` is what makes the row break, and it is set to break CLEANLY. The
    * label itself only needs about 84 — but at 84 a 390px screen fits three

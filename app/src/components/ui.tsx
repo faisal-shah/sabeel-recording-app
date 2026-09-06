@@ -14,6 +14,8 @@ import {
   Text,
   TextInput,
   View,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import { CONTENT_MAX_WIDTH, LAYOUT_WIDTHS, getTheme, spacing, type LayoutWidth } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -147,8 +149,11 @@ export function Screen({ title, subtitle, status, parent, width = 'read', action
   );
 }
 
-export function Card({ children }: { children: ReactNode }) {
-  return <View style={styles.card}>{children}</View>;
+export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+  // `style` for the one thing a caller may say about a card: how wide it is
+  // allowed to get. A screen laid out for a roster still has cards on it that
+  // hold prose or a form, and those want a reading measure.
+  return <View style={[styles.card, style]}>{children}</View>;
 }
 
 export function SectionTitle({ children }: { children: ReactNode }) {
@@ -1253,7 +1258,8 @@ const styles = StyleSheet.create({
     borderColor: t.border.subtle,
   },
   // Wraps rather than squeezes: a long name pushes the actions onto their own
-  // line instead of crushing them (see `rowItem` for why shrink is never on).
+  // line instead of crushing them. The CELL is what never shrinks (`rowItem`);
+  // the button inside one does, so its own label can wrap.
   rowHead2: {
     flexDirection: 'row',
     flexWrap: 'wrap',

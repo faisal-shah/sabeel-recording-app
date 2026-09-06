@@ -24,6 +24,10 @@ const t = getTheme();
  * What belongs here is what you need occasionally rather than daily. A screen
  * visited twice in an account's life does not earn a permanent slot, however
  * often it gets proposed for one.
+ *
+ * `onNavigate` closes the sheet itself, so nothing here calls `onClose` before
+ * it. The rows that leave the app — the privacy policy, signing out — still do,
+ * because those go nowhere the shell knows about.
  */
 export function MoreSheet({
   visible,
@@ -52,10 +56,7 @@ export function MoreSheet({
             label="Audit history"
             detail="Every change, who made it and when"
             testID="more-audit"
-            onPress={() => {
-              onClose();
-              onNavigate('Audit', 'push');
-            }}
+            onPress={() => onNavigate('Audit', 'push')}
           />
         </>
       ) : null}
@@ -65,10 +66,7 @@ export function MoreSheet({
         label="Notifications"
         detail="Choose which messages this device receives"
         testID="more-notifications"
-        onPress={() => {
-          onClose();
-          onNavigate('Notifications', 'push');
-        }}
+        onPress={() => onNavigate('Notifications', 'push')}
       />
       {/* STUDENTS ONLY, and it is a first-party reset — an emailed link, no
           third-party login service involved, so it triggers nothing under
@@ -111,10 +109,7 @@ export function MoreSheet({
       {IS_DEV && !isStudent ? (
         <SheetOption
           label="Design tokens"
-          onPress={() => {
-            onClose();
-            onNavigate('Tokens', 'push');
-          }}
+          onPress={() => onNavigate('Tokens', 'push')}
         />
       ) : null}
       <SheetOption

@@ -134,7 +134,7 @@ export const CONTENT_MAX_WIDTH = 720;
  *
  * 900 rather than 720: `CONTENT_MAX_WIDTH` is the point a READING column stops
  * growing, which is a typographic limit and is reached long before a window is
- * wide enough to give up 72px to a rail and still hold a useful content area.
+ * wide enough to give up 76px to a rail and still hold a useful content area.
  * The two numbers answer different questions and must not be merged.
  */
 export const WIDE_BREAKPOINT = 900;
@@ -152,7 +152,7 @@ export const WIDE_BREAKPOINT = 900;
  *   list  card and row collections — these want the room, and flow into columns
  *
  * Two, because every screen that uses `Screen` is one or the other. The player
- * is the one exception and does not use `Screen` at all: a transport, a scrub
+ * is the exception that matters and does not use `Screen` at all: a transport, a scrub
  * bar and a rate row are a media column, narrower than prose, and it caps
  * itself at 560. That is a deliberate third width with exactly one member, kept
  * where it is used rather than offered here for screens that would misuse it.

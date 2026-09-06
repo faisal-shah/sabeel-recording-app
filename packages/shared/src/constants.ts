@@ -93,9 +93,10 @@ export const PRIVACY_URL = 'https://recordings.oursabeel.com/privacy';
  * every document returned, against a per-evaluation cap on document-access
  * calls, so their ceiling is lower and has nothing to do with `in`.
  *
- * MEASURED, not assumed: `rules.sessions.test.ts` sends exactly this query at
- * exactly `QUEUE_SCOPE.manager` and asserts it is served. At 30 it is refused;
- * at 20 it is served; 15 is the value with margin. Raise either number only
- * with that test green at the new one.
+ * MEASURED, not assumed, and in both directions: `rules.sessions.test.ts` sends
+ * exactly this query at exactly `QUEUE_SCOPE.manager` and asserts it is served
+ * with every row returned, then sends it at `QUEUE_SCOPE.admin` and asserts a
+ * manager is refused while an admin is not. Raise either number only with both
+ * of those green at the new one.
  */
 export const QUEUE_SCOPE = { admin: 30, manager: 15 } as const;

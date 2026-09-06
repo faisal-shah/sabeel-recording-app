@@ -338,21 +338,17 @@ export function openPlayback(now: NowPlaying): void {
 /**
  * End the session and release the audio. Safe to call when nothing is open.
  *
- * EVERY STATE CHANGE IS SYNCHRONOUS, AND IT HAS TO BE. The returned promise is
- * only the final progress write, for the one caller that must not race it —
- * signing out drops the credential, and a write still in flight is refused. Fire
- * and forget everywhere else. This used to `await persist()` in the middle
- * and null `owner` and `state` afterwards — which meant `openPlayback` calling
- * it and then setting up the next recording ran to completion first, and the
- * continuation woke up and wiped the session that had just started. The symptom
- * was that playing a second recording left a permanently disabled transport
- * stuck on "Preparing…", with nothing to recover it but leaving the screen; and
- * `await` on an already-resolved promise is enough to reproduce it, so it fired
- * every time rather than under load.
+ * EVERY STATE CHANGE IS SYNCHRONOUS, AND IT HAS TO BE. `openPlayback` calls this
+ * and then sets up the next recording; if any part of the teardown resumed after
+ * an await, it would wake up and wipe the session that had just started, and the
+ * symptom is a permanently disabled transport stuck on "Preparing…" with nothing
+ * to recover it but leaving the screen. An await on an already-resolved promise
+ * is enough to cause it, so it happens every time rather than under load.
  *
  * So: every mutation happens in one tick, and the final write is handed its own
- * snapshot and fired detached. A session that has ended can no longer reach the
- * one that replaced it.
+ * snapshot and fired detached. The returned promise is only that write, for the
+ * one caller that must not race it — signing out drops the credential, and a
+ * write still in flight is refused. Fire and forget everywhere else.
  */
 export function closePlayback(): Promise<void> {
   const p = player;
@@ -373,13 +369,10 @@ export function closePlayback(): Promise<void> {
    */
   const moved = dirty;
   /*
-   * A GENERATION THAT CAN NEVER MATCH AGAIN.
-   *
-   * Take the current one for the dying session and then move past it, so the
-   * final write's `generation === gen` guard is false however this was reached.
-   * Capturing the POST-increment value made the guard true for a bare close —
-   * the mini player's ×, sign-out, a revoked recording — and the comment here
-   * claimed the opposite.
+   * A GENERATION THAT CAN NEVER MATCH AGAIN: take the current one for the dying
+   * session, then move past it. The final write's `generation === gen` guard is
+   * false however this was reached — including a bare close with no `openPlayback`
+   * behind it, which is the mini player's ×, sign-out, and a revoked recording.
    */
   const gen = generation;
   generation += 1;

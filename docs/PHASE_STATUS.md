@@ -40,11 +40,15 @@ and commit messages, and renaming them would strand every one of those.
   work queue as the staff landing screen.**
 
   Three designs were built behind `?nav=a|b|c` and compared against one seeded
-  world at both widths; **B** was chosen and the other two deleted. Four rounds
-  of independent review followed, three of which found real defects — the most
-  serious being a teardown race that made playing a second recording leave a
-  permanently dead transport, and a roster with no `orderBy` behind the register
-  staff mark by hand. What survived:
+  world at both widths; **B** was chosen and the other two deleted. Five rounds
+  of independent review followed, and every one of them found real defects — the
+  most serious being a teardown race that made playing a second recording leave
+  a permanently dead transport; a `closePlayback` that erased a student's place
+  in a two-hour lecture whenever a session was closed before it loaded; a
+  multi-device catch-up applied once per queued write, which turned a laptop's
+  fifteen minutes into forty-four in the number the ledger presents as evidence;
+  and a roster with no `orderBy` behind the register staff mark by hand. What
+  survived:
 
   **The chrome.** A bottom bar below `WIDE_BREAKPOINT` (900) and a 76px activity
   rail above it, branched on WIDTH, never on platform. It shows on *every*
@@ -75,13 +79,6 @@ and commit messages, and renaming them would strand every one of those.
   above 900px — name and control on one line — which halves the height of a
   fourteen-student roster on the screen a teacher uses most.
 
-  **The worst defect of the lot passed every assertion.** `Row` grew each of its
-  cells to fill, which is right at 320px and gives every cell 537px at 1400px,
-  leaving pairs of related buttons 400px apart on five screens at once. Nothing
-  overlapped, nothing clipped, the column capped correctly. It took looking at a
-  screenshot and then measuring the DOM. The sweep says a layout is not broken;
-  it never says it is good.
-
   **Today is derived and live.** Sessions past their date with no attendance,
   drafts waiting to publish, sessions with no audio, recordings closing within
   the week — computed from documents the reader can already see, with no queue
@@ -110,7 +107,7 @@ and commit messages, and renaming them would strand every one of those.
   measuring the DOM. The sweep says a layout is not broken; it never says it is
   good.
 
-  Green on this machine: lint, typecheck, knip, 206 unit, 253 emulator, 694/694
+  Green on this machine: lint, typecheck, knip, 254 unit, 254 emulator, 935/935
   sweep at five widths, and 107/107 web e2e. **Not yet run on a device** — this
   box has no hardware virtualization, and the playback refactor touches exactly
   the seam a browser cannot reach, so the pre-release AVD pass is mandatory

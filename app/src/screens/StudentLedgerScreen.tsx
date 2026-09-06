@@ -87,9 +87,11 @@ export function StudentLedgerScreen({
 }
 
 function statusLabel(r: StudentLedgerItem, today: string): string {
-  if (r.completed) return r.source === 'override' ? 'Complete (override)' : 'Complete';
+  if (r.completed) return r.source === 'override' ? 'Completed (override)' : 'Completed';
   if (isOverdue(r.dueDate, today)) return 'Missed';
-  return `Due ${r.dueDate}`;
+  // "Listen by", the same words the student sees on their own screens — not a
+  // staff-only synonym for the same date.
+  return `Listen by ${r.dueDate}`;
 }
 function styleFor(r: StudentLedgerItem, today: string) {
   if (r.completed) return styles.ok;

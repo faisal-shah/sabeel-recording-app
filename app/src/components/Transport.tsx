@@ -5,7 +5,9 @@ import { getTheme, spacing } from '../theme';
 const t = getTheme();
 
 /**
- * The play/pause mark, drawn rather than typed — see the note above.
+ * The play/pause mark, drawn from borders rather than typed. A "▶" character
+ * renders as a colour emoji on some Android builds, which is a different size
+ * and a different colour from everything around it; see `Transport` below.
  *
  * `scale` because the docked bar's button is 44px against the player's 72px,
  * and the same glyph in both filled the small one to its edges. The mark is

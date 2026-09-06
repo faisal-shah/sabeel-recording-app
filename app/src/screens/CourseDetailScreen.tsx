@@ -132,12 +132,14 @@ export function CourseDetailScreen({
           active assignments), while the recordings' history stays. */}
       <Card>
         <Text style={styles.ledgerLine}>
-          <Text style={styles.ledgerNum}>{ledger.rollup.incomplete}</Text> incomplete
+          <Text style={styles.ledgerNum}>{ledger.rollup.total}</Text> required listening
+          {'   '}
+          <Text style={styles.ledgerNum}>{ledger.rollup.incomplete}</Text> not complete
           {'   '}
           <Text style={[styles.ledgerNum, ledger.rollup.missed > 0 ? styles.missedNum : null]}>
             {ledger.rollup.missed}
           </Text>{' '}
-          missed{'   '}of {ledger.rollup.total} required
+          missed
         </Text>
         <Button testID="nav-audit" label="Audit history" variant="secondary" onPress={onOpenAudit} />
       </Card>

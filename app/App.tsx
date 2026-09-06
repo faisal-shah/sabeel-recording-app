@@ -426,10 +426,7 @@ function Shell({
   const go = useCallback((name: keyof RootStackParamList, mode: 'tab' | 'push') => {
     if (!navRef.isReady()) return;
     if (mode === 'push') {
-      // `{}` rather than nothing: Audit reads `params.courseId` and destructures
-      // it, so an undefined params object is a crash rather than an admin-wide
-      // view. Every route here takes only optional params.
-      (navRef.navigate as (n: string, p: object) => void)(name, {});
+      (navRef.navigate as (n: string, p?: object) => void)(name);
       return;
     }
     navRef.reset({ index: 0, routes: [{ name } as never] });
@@ -903,9 +900,11 @@ function Library({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
   );
 }
 function Audit() {
-  // `?? {}`: React Navigation attaches no params object at all for a path with
-  // no parameters in it, so destructuring the result crashes on a cold load of
-  // `/audit` — which is now a More-menu destination people land on and reload.
+  // `?? {}`, and this is the ONE guard for it: React Navigation attaches no
+  // params object at all for a path with no parameters in it, so destructuring
+  // the result crashes on a cold load of `/audit` — a More-menu destination
+  // people land on and reload. Passing `{}` from the navigate call as well
+  // covered only the half of the cases that go through it.
   const { courseId } = useRoute<RouteProp<RootStackParamList, 'Audit'>>().params ?? {};
   // The heading is derived rather than passed: a title in the params would ride
   // in the URL's query string, and would be a stale copy of the course's name.

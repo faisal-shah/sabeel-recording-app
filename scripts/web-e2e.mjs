@@ -877,8 +877,8 @@ await tap(admin, 'ledger-filter-all');
 await admin.waitForTimeout(1000);
 ledgerText = await admin.locator('body').innerText();
 check(
-  'the overridden student now shows Complete (override) on the ledger',
-  /Complete \(override\)/.test(ledgerText),
+  'the overridden student now shows Completed (override) on the ledger',
+  /Completed \(override\)/.test(ledgerText),
 );
 await shot(admin, '16-recording-ledger');
 
@@ -891,7 +891,7 @@ check(
   csvLines[0].startsWith('Student,Attendance,Status,Listened %') && csvLines.length === 3,
   `${csvLines.length} lines`,
 );
-check('CSV reflects the override', /Complete \(override\)/.test(csv));
+check('CSV reflects the override', /Completed \(override\)/.test(csv));
 
 // ------------------------------------------- the same ledger, as a MANAGER --
 //
@@ -923,7 +923,7 @@ check(
 );
 check(
   'the manager ledger joins the override written by the admin',
-  /Complete \(override\)/.test(mgrLedger),
+  /Completed \(override\)/.test(mgrLedger),
 );
 check(
   'no live-data error is showing on the manager ledger',
@@ -951,8 +951,8 @@ await admin.getByTestId('attendance-export-students').waitFor({ timeout: 10000 }
 await admin.waitForTimeout(800);
 const studentsView = await admin.locator('body').innerText();
 check(
-  'toggling to by-student shows catch-up state (Bilal caught up via override)',
-  /Bilal Khan/.test(studentsView) && /Catch-up/.test(studentsView),
+  'toggling to by-student shows required listening (Bilal caught up via override)',
+  /Bilal Khan/.test(studentsView) && /Required listening/.test(studentsView),
 );
 check(
   'the toggle swaps the view: the by-session export is gone, the by-student export is present',

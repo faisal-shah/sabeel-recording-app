@@ -1,6 +1,6 @@
 # Sabeel Class Recordings — User Manual
 
-*For app version 0.4.3 · August 2026*
+*For app version 0.4.3 · September 2026*
 
 Welcome! This guide explains everything the Sabeel Class Recordings app can do —
 from listening to your first class to taking attendance and tracking who has
@@ -52,9 +52,10 @@ Students have **Listening**, **Classes** and **More**. Staff have **Today**,
 settings, the privacy policy, signing out, and — for students — changing your
 password. Admins also reach the audit history there.
 
-When something is playing, a slim bar sits just above the navigation showing
-what it is, with a play/pause button. You can move around the app and it keeps
-playing; tap the bar to go back to the full player.
+When something is playing, a slim bar shows what it is with a play/pause button
+— above the tabs on a phone, along the foot of the window on a computer. You can
+move around the app and it keeps playing; tap the bar to go back to the full
+player.
 
 ---
 
@@ -81,8 +82,8 @@ don't need it.
 ## 1.2 Your listening list
 
 <div class="pair">
-<figure class="ph"><img src="manual/img/02-student-home-phone.png" alt="Student home on a phone"><figcaption>On a phone</figcaption></figure>
-<figure class="wd"><img src="manual/img/02-student-home-desktop.png" alt="Student home on a computer"><figcaption>On a computer</figcaption></figure>
+<figure class="ph"><img src="manual/img/02-student-home-phone.png" alt="Your listening, on a phone"><figcaption>On a phone</figcaption></figure>
+<figure class="wd"><img src="manual/img/02-student-home-desktop.png" alt="Your listening, on a computer"><figcaption>On a computer</figcaption></figure>
 </div>
 
 This is **Your listening**, the first thing the app opens on. It holds every recording that has
@@ -141,9 +142,10 @@ If the teacher left a note, it appears under **About this recording** — often
 "focus on this part" or "we'll discuss this next week."
 
 **You can leave this screen without stopping the audio.** Go and check your
-attendance record or open another class — a slim bar above the navigation keeps
-showing what's playing, with a play/pause button, and tapping it brings you back
-here. On a computer that bar carries the skip buttons and the times as well.
+attendance record or open another class — a slim bar keeps showing what's
+playing, with play/pause and a 15-second skip back, and tapping it brings you
+back here. On a computer that bar carries the skip forward and the times as
+well.
 Closing it with the **×** is what stops playback.
 
 ## 1.4 Marking a recording complete
@@ -254,12 +256,17 @@ you, most urgent first. Every card is a link straight to the screen where you do
 the thing.
 
 - **Attendance not taken** — a class has met and nobody has submitted the
-  register. This is first and it's marked in red, because until it's submitted
-  **nobody in that class has access to the recording** — and nothing else on any
-  screen would tell you. The count on the **Today** tab is this number.
+  register. This is first and it's the one entry the screen tints, because until
+  it's submitted **nobody in that class has access to the recording** — and
+  nothing else on any screen would tell you.
 - **Waiting to publish** — a recording is added but still a draft, or an import
   needs attention before it can go out.
 - **No recording yet** — attendance is in, the audio isn't.
+
+The number on the **Today** tab counts everything that is blocking access right
+now: a register not yet submitted, and a recording that was published and has
+since been unpublished. A draft that has never been published is waiting on you
+but is blocking nobody, so it is in the list without being in the count.
 - **Closing soon** — access to a recording ends within the week; a good moment
   to see who still hasn't listened.
 
@@ -381,8 +388,10 @@ well under 30 MB. (Uploading audio rather than a video file is the single bigges
 thing that keeps this app free to run.) The recording takes its title, date, and
 notes from the session, so you don't retype them.
 
+<div class="pair">
 <figure class="ph"><img src="manual/img/17b-session-no-recording-phone.png" alt="A session with no recording yet, on a phone"><figcaption>On a phone</figcaption></figure>
 <figure class="wd"><img src="manual/img/17b-session-no-recording-desktop.png" alt="A session with no recording yet, on a computer"><figcaption>On a computer</figcaption></figure>
+</div>
 
 Each recording moves through a few states:
 
@@ -519,7 +528,7 @@ unpublished / needs attention**. It's the fastest way to answer "which recording
 still need audio?" or "what's flagged?" without walking course by course. Admins
 see everything; managers see their assigned courses.
 
-## 2.11 People — managing students *(admin)*
+## 2.11 People — managing students
 
 <div class="pair">
 <figure class="ph"><img src="manual/img/11-students-phone.png" alt="The People screen on a phone"><figcaption>On a phone</figcaption></figure>
@@ -579,8 +588,8 @@ Tap **More**, then **Notifications**. Staff get one message:
 
 It's more useful than it sounds. Until attendance is submitted nobody has been
 excused, so a recording you've already published is sitting there that not one
-student can open. **Today** now shows the same thing in the app, with a count on
-the tab, so this message is a nudge rather than the only warning.
+student can open. **Today** shows the same thing in the app, with a count on the
+tab, so this message is a nudge rather than the only warning.
 
 Reaching this device needs its permission as well. The app offers to set that up
 once, on Today after you sign in; you can also tap **Enable notifications** on
@@ -632,10 +641,10 @@ approvals, attendance submissions, completion overrides (with their reasons),
 recording edits — newest first. Each entry shows *who* did *what*, *when*, and the
 details that matter.
 
-You can reach it two ways: **globally** from the staff home (admins, all
-courses), or **scoped to one course** from that course's page (managers see their
-own courses' history). It's there so that "who marked this complete, and why?"
-always has an answer.
+You can reach it two ways: **globally** from **More → Audit history** (admins,
+all courses), or **scoped to one course** from that course's page (managers see
+their own courses' history). It's there so that "who marked this complete, and
+why?" always has an answer.
 
 ## 3.4 Disable and archive — don't delete
 

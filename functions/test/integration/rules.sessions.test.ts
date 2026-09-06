@@ -1,4 +1,4 @@
-import { describe, it, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, expect, it, beforeAll, afterAll, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
   initializeTestEnvironment,
@@ -141,8 +141,8 @@ describe('sessions rules', () => {
    * single rules evaluation. That cap is the real constraint on how many
    * courses the queue may span, and it is not the `in` clause's own limit — so
    * `QUEUE_SCOPE.manager` is pinned to what this test proves rather than to what
-   * the query builder allows. Measured: 30 is refused, 20 is served, 15 is the
-   * value shipped.
+   * the query builder allows: 15 is served here, and the test below shows the
+   * same query refused at `QUEUE_SCOPE.admin` width.
    *
    * If this ever goes red, lower `QUEUE_SCOPE.manager`; do not widen the rule.
    */
@@ -203,7 +203,15 @@ describe('sessions rules', () => {
       }
     });
 
-    await assertSucceeds(
+    /*
+     * THE ROW COUNT IS PART OF THE ASSERTION.
+     *
+     * The rule resolves its `get(courses/{id})` per RETURNED document, so a
+     * query that matched nothing would succeed having exercised none of the cap
+     * this test exists to pin — a green run proving only that an empty result
+     * is cheap. Asserting the size is what makes it a measurement.
+     */
+    const sessions = await assertSucceeds(
       getDocs(
         query(
           collection(mine().firestore(), COLLECTIONS.sessions),
@@ -211,7 +219,8 @@ describe('sessions rules', () => {
         ),
       ),
     );
-    await assertSucceeds(
+    expect(sessions.size).toBe(QUEUE_SCOPE.manager * 2);
+    const recordings = await assertSucceeds(
       getDocs(
         query(
           collection(mine().firestore(), COLLECTIONS.recordings),
@@ -219,6 +228,74 @@ describe('sessions rules', () => {
         ),
       ),
     );
+    expect(recordings.size).toBe(QUEUE_SCOPE.manager);
+  });
+
+  /**
+   * THE OTHER HALF OF THE MEASUREMENT: the width that is actually refused.
+   *
+   * Without it "15 is safe" is a number in a comment. The rule's document-access
+   * budget is what caps the queue, and a change to `firestore.rules` that spends
+   * one more `get()` per row would move the ceiling silently — this is the test
+   * that goes red when it does. `QUEUE_SCOPE.admin` is the width, because the
+   * admin arm reads no documents and so is the query builder's own limit.
+   */
+  it('refuses the same query at a width the rule cannot afford', async () => {
+    const ids: string[] = [];
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      for (let i = 0; i < QUEUE_SCOPE.admin; i += 1) {
+        const courseId = `wc${i}`;
+        ids.push(courseId);
+        await setDoc(doc(db, COLLECTIONS.courses, courseId), {
+          cohortId: 'c1',
+          name: courseId,
+          archived: false,
+          effectiveActive: true,
+          archivedAccess: false,
+          managerUids: [MINE],
+          createdAt: 1,
+          createdBy: ADMIN,
+        });
+        for (const n of [0, 1]) {
+          await setDoc(doc(db, COLLECTIONS.sessions, `ws${i}-${n}`), {
+            courseId,
+            cohortId: 'c1',
+            date: '2026-07-06',
+            title: `ws${i}-${n}`,
+            dueDate: '2026-07-13',
+            notes: '',
+            recordingId: null,
+            attendance: {},
+            attendanceSubmittedAt: null,
+            archived: false,
+            createdAt: 1,
+            createdBy: ADMIN,
+            updatedAt: 1,
+          });
+        }
+      }
+    });
+
+    await assertFails(
+      getDocs(
+        query(
+          collection(mine().firestore(), COLLECTIONS.sessions),
+          where('courseId', 'in', ids),
+        ),
+      ),
+    );
+    // And an ADMIN is served the same query at the same width, so the refusal
+    // above is the manager arm's document budget and not the `in` clause.
+    const asAdmin = await assertSucceeds(
+      getDocs(
+        query(
+          collection(admin().firestore(), COLLECTIONS.sessions),
+          where('courseId', 'in', ids),
+        ),
+      ),
+    );
+    expect(asAdmin.size).toBe(QUEUE_SCOPE.admin * 2);
   });
 
   it('does NOT let an enrolled student read a session (attendance is private)', async () => {
