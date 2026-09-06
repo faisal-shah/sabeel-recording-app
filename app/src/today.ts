@@ -17,7 +17,6 @@ import { db } from './firebase';
 import { useListenerFailed, useLiveQuery } from './liveQuery';
 import { useAllCoursesState, useMyCoursesState, type CourseRow } from './structure';
 
-
 /**
  * The staff work queue, derived — never stored.
  *
@@ -106,22 +105,28 @@ function useTodayQueue(
     },
   );
 
-  // A refused listener leaves both queries on their `empty` value for ever, and
-  // `empty` is the same `null` that means "nothing has arrived yet" — so without
-  // this the landing screen sits on "Checking your courses…" with no way out.
-  //
-  // THESE TWO LABELS, not the app-wide signal: another screen's denial must not
-  // make this one claim it could not read the courses, and this one's denial
-  // must not clear because something unrelated recovered.
-  //
-  // Spelled out rather than referenced from the calls above, because
-  // `firestoreIndexes.test.ts` parses `label:` out of every `useLiveQuery` call
-  // site and a computed one is a call site it cannot read — a guard that stops
-  // seeing a query is worse than the duplication. They are twenty lines apart.
-  // All four, not just the two this hook subscribes itself. The first guard
-  // below waits on `courses`, which comes from `allCourses`/`myCourses` — so a
-  // refusal THERE left `courses` null, `failed` false, and the landing screen
-  // on "Checking your courses…" for good: the exact failure this reports.
+  /*
+   * ALL FOUR QUERIES THIS SCREEN DEPENDS ON, not just the two it subscribes
+   * itself.
+   *
+   * A refused listener leaves its query on the `empty` value for ever, and
+   * `empty` is the same `null` that means "nothing has arrived yet" — so without
+   * this the landing screen sits on "Checking your courses…" with no way out.
+   * The first guard in `buildTodayQueue` waits on `courses`, which comes from
+   * `allCourses`/`myCourses`, so leaving those two out left exactly that.
+   *
+   * `useListenerFailed` matches on the label and ignores the scope, so an
+   * unscoped denial of the same query from another screen counts here too. That
+   * is the right answer — it is the same query against the same rules, and it
+   * fails for both or neither — but it is not a claim about isolation: the
+   * SCOPING exists so that a screen's success cannot clear the shell's failure,
+   * which is the opposite direction.
+   *
+   * Spelled out rather than derived from the calls above, because
+   * `firestoreIndexes.test.ts` parses `label:` out of every `useLiveQuery` call
+   * site and a computed one is a call site it cannot read — a guard that stops
+   * seeing a query is worse than the duplication.
+   */
   const failed = useListenerFailed([
     'todaySessions',
     'todayRecordings',
@@ -139,7 +144,6 @@ function useTodayQueue(
     [courses, sessions, recordings, scope, today, failed, settled, truncated],
   );
 }
-
 
 /**
  * The queue for whoever is signed in — subscribed ONCE, at the app shell.
@@ -159,7 +163,7 @@ export function useStaffQueue(isStaff: boolean, isAdmin: boolean, uid: string): 
   // SCOPED, for the same reason the docked bar's listeners are: this one is
   // mounted by the SHELL and outlives every screen, while five screens mount the
   // same query under the same label. Unscoped, navigating away from one of them
-  // deletes the shell's error entry — and `useListenerFailed` below then goes
+  // deletes the shell's error entry — and `useListenerFailed` above then goes
   // false with `courses` still null, so the landing screen falls back from
   // "Could not read your courses" to "Checking your courses…" for good.
   const all = useAllCoursesState(isStaff && isAdmin, 'todayQueue');

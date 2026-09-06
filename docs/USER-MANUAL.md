@@ -554,9 +554,9 @@ app emails them a link to set their own password — you never handle passwords.
 
 **Creating accounts is done on the website, not in the phone apps.** The
 **Add a student** button in the figures above is a capture of the website at a
-phone's width; in the Android app it is simply absent. This is a store requirement rather than a limitation we
-chose, and it only affects *creating* — changing roles, disabling an account and
-enrolling someone all work everywhere.
+phone's width; in the Android app it is simply absent. This is a store
+requirement rather than a limitation we chose, and it only affects *creating* —
+changing roles, disabling an account and enrolling someone all work everywhere.
 
 The list itself is just for finding someone. **Tap a student to open their
 page**, where everything about them lives. Students you've disabled move out of
@@ -694,7 +694,7 @@ confirmation, and is audited. Reach for disable, unpublish, or archive first.
 | **Turn a notification off** | **More** → **Notifications** → tap the one you don't want. |
 | **Approve a new teacher** *(admin)* | **People** → **Staff** → **Approve as manager / admin**. |
 | **Give a manager a course** *(admin)* | Course page → **Managers** → add them. |
-| **Create a student** *(admin)* | On the website: **People** → **Add a student** → name + email → **Create account**. |
+| **Create a student** *(staff)* | On the website: **People** → **Add a student** → name + email → **Create account**. |
 | **See who changed what** *(admin)* | **More** → **Audit history**. |
 
 ## Troubleshooting

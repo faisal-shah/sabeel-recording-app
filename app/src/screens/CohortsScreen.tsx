@@ -15,7 +15,6 @@ import {
 import { createCohort, useAllCourses, useCohorts, type CohortRow } from '../structure';
 import { courseLabel } from './CoursesScreen';
 
-
 /**
  * Admin-only: the list of cohorts.
  *
@@ -135,5 +134,4 @@ function CohortRowItem({
     />
   );
 }
-
 

@@ -136,10 +136,13 @@ describe('sessions rules', () => {
    *
    * `Today` reads every course the reader can see in one `where('courseId','in',
    * [...])`. For an ADMIN that is free — their arm of the rule reads no
-   * documents. For a MANAGER every returned document costs a
-   * `get(courses/{id})`, and Firestore caps the document-access calls in a
-   * single rules evaluation. That cap is the real constraint on how many
-   * courses the queue may span, and it is not the `in` clause's own limit — so
+   * documents. For a MANAGER each returned document resolves a
+   * `get(courses/{id})`, cached per distinct path — so the cost is one call per
+   * COURSE however many sessions come back — and Firestore caps the
+   * document-access calls in a single request. That cap is the real constraint
+   * on how many courses the queue may span, and it is not the `in` clause's own
+   * limit.
+   *
    * WHAT THIS PROVES, AND WHAT IT DOES NOT. It proves the rule's SHAPE — that
    * the manager arm serves the exact query the queue sends, with every row
    * returned, and that the same query at a wider scope is refused for a manager

@@ -21,9 +21,20 @@ vi.mock('firebase/functions', () => ({ httpsCallable: () => callable }));
 
 /** The one progress document, as a plain value the fakes read and write. */
 let stored: Record<string, unknown> | undefined;
-const getDoc = vi.fn(() => Promise.resolve({ data: () => stored }));
+/** Every read and write in order, for the tests about ordering. */
+let ioLog: string[] = [];
+// SNAPSHOTTED AT CALL TIME, like a real `getDoc`. Reading `stored` from inside
+// `data()` instead would hand a read issued minutes ago whatever the document
+// says when someone finally looks at it — which is exactly the staleness the
+// generation guards exist to survive, hidden from the tests that check them.
+const getDoc = vi.fn(() => {
+  const snap = stored;
+  ioLog.push('get');
+  return Promise.resolve({ data: () => snap });
+});
 const setDoc = vi.fn((_ref: unknown, value: Record<string, unknown>) => {
   stored = value;
+  ioLog.push('set');
   return Promise.resolve();
 });
 vi.mock('firebase/firestore', () => ({
@@ -59,6 +70,20 @@ interface Fake {
 const players: Fake[] = [];
 /** When set, the next player's `load` waits for `fake.finishLoad()`. */
 let holdLoad = false;
+/**
+ * When set, the next `getPlaybackUrl` waits for `finishMint()`.
+ *
+ * THE MINT IS THE SLOW LEG. It is a Cloud Function, so a cold start is seconds,
+ * and every other test in this file settles it with `await flush()` before doing
+ * anything else — which is precisely the window a person walks through when they
+ * tap one lecture, change their mind, and tap another.
+ */
+let holdMint = false;
+let finishMint: ((v: { data: Minted }) => void) | null = null;
+interface Minted {
+  url: string;
+  expiresAt: number;
+}
 vi.mock('./player', () => ({
   createPlayer: (events: Fake['events']) => {
     const fake: Fake = {
@@ -102,10 +127,21 @@ async function load(): Promise<Playback> {
   players.length = 0;
   holdLoad = false;
   stored = undefined;
+  ioLog = [];
   getDoc.mockClear();
   setDoc.mockClear();
   callable.mockReset();
-  callable.mockResolvedValue({ data: { url: 'https://signed/audio.m4a', expiresAt: 1e15 } });
+  holdMint = false;
+  finishMint = null;
+  callable.mockImplementation(() => {
+    if (!holdMint) {
+      return Promise.resolve({ data: { url: 'https://signed/audio.m4a', expiresAt: 1e15 } });
+    }
+    holdMint = false;
+    return new Promise((resolve) => {
+      finishMint = resolve;
+    });
+  });
   return import('./playback');
 }
 
@@ -235,6 +271,45 @@ describe('opening and closing', () => {
     await pb.closePlayback();
     await flush();
     expect(stored?.positionMs).toBe(1_200_000);
+  });
+
+  /*
+   * A MINT THAT RESOLVES AFTER THE SESSION IT BELONGS TO HAS GONE.
+   *
+   * `openPlayback` reads the stored progress and assigns it to the module's
+   * `listened`/`position` when its `Promise.all` settles. Tap one lecture, back
+   * out while the Cloud Function is still cold, tap another, and the first
+   * continuation lands inside the second session — assigning the FIRST
+   * recording's totals over the one now playing, which the next tick then writes
+   * to the second recording's progress document. The generation check before
+   * that assignment is the only thing in the way, and it is the same failure as
+   * "progress written for the wrong session" reached through a different door.
+   */
+  it('a mint that resolves after its session ended cannot touch the new one', async () => {
+    const pb = await load();
+    stored = { positionMs: 3_000_000, listenedMs: 3_000_000, updatedAt: 1 };
+    holdMint = true;
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+
+    // Second thoughts: a different lecture, whose own mint resolves at once.
+    stored = undefined;
+    pb.openPlayback(recording('rec-b'));
+    await flush();
+
+    // Now the abandoned one comes back.
+    finishMint?.({ data: { url: 'https://signed/stale.m4a', expiresAt: 1e15 } });
+    await flush();
+
+    // The player still holds what it was given, and the session still counts
+    // from zero rather than from the other recording's hour.
+    expect(players[1].loaded).toBe('https://signed/audio.m4a');
+    players[1].events.onProgress(1_000);
+    wait(2_000);
+    players[1].events.onProgress(3_000);
+    await pb.closePlayback();
+    await flush();
+    expect(stored).toMatchObject({ recordingId: 'rec-b', listenedMs: 2_000 });
   });
 
   it('closing when nothing is open is a no-op', async () => {
@@ -508,6 +583,27 @@ describe('counting listening', () => {
    * position that does not exist in the file — which is both the resume point
    * and the number the ledger presents as evidence.
    */
+  /*
+   * AND HOLDS UNTIL IT DOES. Between the seek and the hold expiring, the player
+   * keeps reporting where it WAS for a beat; showing those would snap the thumb
+   * backwards the instant it is dropped.
+   */
+  it('discards the stale ticks a seek leaves behind', async () => {
+    const pb = await load();
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    players[0].events.onProgress(600_000);
+    pb.playback.seek(60_000);
+    // The player is still reporting the old position, well inside the hold.
+    wait(200);
+    players[0].events.onProgress(600_500);
+    wait(200);
+    players[0].events.onProgress(601_000);
+    await pb.closePlayback();
+    await flush();
+    expect(stored?.positionMs).toBe(60_000);
+  });
+
   it('gives up on a seek target the player never reaches', async () => {
     const pb = await load();
     // No duration, so `skipForward` cannot clamp — a phone upload supplies none.
@@ -521,7 +617,10 @@ describe('counting listening', () => {
     // The player clamps at the real end and reports it. No `onEnded`.
     wait(500);
     players[0].events.onProgress(60_000);
-    expect(stored).toBeUndefined();
+    await flush();
+    // HELD: inside the window the stale position is discarded, so what is on
+    // disk is still the seek's own target rather than the player's report.
+    expect(stored?.positionMs).toBe(9_999_000);
 
     // Past the hold, the player's own position is believed again.
     wait(2_500);
@@ -542,6 +641,38 @@ describe('counting listening', () => {
  * which is the note above `skipForward`. Neither skip was called anywhere in
  * this file.
  */
+/*
+ * ONE WRITE AT A TIME. `writeProgress` is read-modify-write, and `pause` and
+ * `seek` both persist without the throttle, so two in flight against one
+ * document is routine. Run concurrently they read the same stale value and
+ * whichever `setDoc` lands second wins — usually the earlier, smaller one, so
+ * the last seconds of a session are the ones lost.
+ */
+describe('the write queue', () => {
+  it('never has two reads of the progress document in flight at once', async () => {
+    const pb = await load();
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    // Discard the session's own opening read of the stored progress; what is
+    // under test is the writes that follow it.
+    ioLog = [];
+
+    players[0].events.onProgress(1_000);
+    wait(1_000);
+    players[0].events.onProgress(2_000);
+    // Two persists with nothing awaited between them.
+    pb.playback.seek(2_000);
+    pb.playback.pause();
+    await pb.closePlayback();
+    await flush();
+
+    // Strictly alternating: each write reads the document its predecessor left.
+    expect(ioLog.length).toBeGreaterThanOrEqual(4);
+    expect(ioLog.filter((_, i) => i % 2 === 0).every((e) => e === 'get')).toBe(true);
+    expect(ioLog.filter((_, i) => i % 2 === 1).every((e) => e === 'set')).toBe(true);
+  });
+});
+
 describe('the skip controls', () => {
   it('skips forward by 30 seconds', async () => {
     const pb = await load();

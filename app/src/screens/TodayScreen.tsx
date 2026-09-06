@@ -64,16 +64,16 @@ export function TodayScreen({
         failed
           ? 'Could not read your courses'
           : loading
-          ? 'Checking your courses…'
-          : allFinished
-            ? 'No courses running'
-            : !scoped
-            ? 'No courses yet'
-            : items.length === 0
-              ? `Nothing is waiting · ${today}`
-              : blocking > 0
-                ? `${items.length} waiting · ${blocking} blocking access`
-                : `${items.length} waiting`
+            ? 'Checking your courses…'
+            : allFinished
+              ? 'No courses running'
+              : !scoped
+                ? 'No courses yet'
+                : items.length === 0
+                  ? `Nothing is waiting · ${today}`
+                  : blocking > 0
+                    ? `${items.length} waiting · ${blocking} blocking access`
+                    : `${items.length} waiting`
       }
       width="list"
     >

@@ -44,7 +44,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-
 export function TokensScreen() {
   return (
     <ScrollView

@@ -149,16 +149,16 @@ export function RecordingLedgerScreen({
         </Empty>
       ) : (
         <Grid min={330}>
-        {rows.map((r) => (
-          <LedgerRowCard
-            key={r.studentUid}
-            row={r}
-            recordingId={recording.id}
-            today={today}
-            busy={busy}
-            onRun={run}
-          />
-        ))}
+          {rows.map((r) => (
+            <LedgerRowCard
+              key={r.studentUid}
+              row={r}
+              recordingId={recording.id}
+              today={today}
+              busy={busy}
+              onRun={run}
+            />
+          ))}
         </Grid>
       )}
 

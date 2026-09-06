@@ -776,20 +776,20 @@ export function Row({ children }: { children: ReactNode }) {
     <RowCellContext.Provider value={true}>
       <View style={styles.row}>
         {Children.map(children, (child) =>
-        child ? (
-          /*
-           * THE CELLS SHARE THE WIDTH ON A PHONE AND NOT ON A LAPTOP.
-           *
-           * Growing each cell is what makes two actions on a 320px screen come
-           * out as two equal halves instead of one wide button and one narrow
-           * one. At 1400px the same rule gives each cell 537px and leaves its
-           * button sitting at its natural width in the middle of it — so a pair
-           * of related actions ends up 400px apart with nothing between them,
-           * reading as two unrelated controls. It is the single most visible
-           * "stretched phone layout" tell in the app, and it was in the shared
-           * primitive rather than in any screen, which is why it appeared on
-           * five screens at once.
-           */
+          child ? (
+            /*
+             * THE CELLS SHARE THE WIDTH ON A PHONE AND NOT ON A LAPTOP.
+             *
+             * Growing each cell is what makes two actions on a 320px screen come
+             * out as two equal halves instead of one wide button and one narrow
+             * one. At 1400px the same rule gives each cell 537px and leaves its
+             * button sitting at its natural width in the middle of it — so a
+             * pair of related actions ends up 400px apart with nothing between
+             * them, reading as two unrelated controls. It is the single most
+             * visible "stretched phone layout" tell in the app, and it was in
+             * the shared primitive rather than in any screen, which is why it
+             * appeared on five screens at once.
+             */
             <View style={[styles.rowItem, roomy ? styles.rowItemWide : null]}>{child}</View>
           ) : null,
         )}

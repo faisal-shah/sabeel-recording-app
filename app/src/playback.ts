@@ -258,7 +258,6 @@ function persist(): void {
   );
 }
 
-
 /**
  * Start (or re-focus) a playback session.
  *

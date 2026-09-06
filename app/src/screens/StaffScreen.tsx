@@ -52,25 +52,25 @@ export function StaffScreen({ selfUid, header }: { selfUid: string; header?: Rea
         <Empty>Nobody is waiting.</Empty>
       ) : (
         <Grid min={330}>
-        {pending.map((s) => (
-          <Card key={s.uid}>
-            <Person row={s} />
-            <Row>
-              <Button
-                testID={`approve-${s.email}`}
-                label="Approve as manager"
-                busy={busyUid === s.uid}
-                onPress={() => void act(s.uid, { uid: s.uid, status: 'active', role: 'manager' })}
-              />
-              <Button
-                label="Approve as admin"
-                variant="secondary"
-                busy={busyUid === s.uid}
-                onPress={() => void act(s.uid, { uid: s.uid, status: 'active', role: 'admin' })}
-              />
-            </Row>
-          </Card>
-        ))}
+          {pending.map((s) => (
+            <Card key={s.uid}>
+              <Person row={s} />
+              <Row>
+                <Button
+                  testID={`approve-${s.email}`}
+                  label="Approve as manager"
+                  busy={busyUid === s.uid}
+                  onPress={() => void act(s.uid, { uid: s.uid, status: 'active', role: 'manager' })}
+                />
+                <Button
+                  label="Approve as admin"
+                  variant="secondary"
+                  busy={busyUid === s.uid}
+                  onPress={() => void act(s.uid, { uid: s.uid, status: 'active', role: 'admin' })}
+                />
+              </Row>
+            </Card>
+          ))}
         </Grid>
       )}
 
@@ -79,56 +79,56 @@ export function StaffScreen({ selfUid, header }: { selfUid: string; header?: Rea
         <Empty>No staff accounts yet.</Empty>
       ) : (
         <Grid min={330}>
-        {decided.map((s) => {
-          const isSelf = s.uid === selfUid;
-          return (
-            <Card key={s.uid}>
-              <Person row={s} />
-              {isSelf ? (
-                // The server refuses this too; saying so up front is kinder than
-                // a permission error. Without the rule, the last admin could lock
-                // the institute out of its own user management.
-                <Text style={styles.selfNote}>
-                  This is you. You cannot change your own role or access.
-                </Text>
-              ) : (
-                <Row>
-                  <Button
-                    testID={`staff-role-${s.email}`}
-                    label={s.role === 'admin' ? 'Make manager' : 'Make admin'}
-                    variant="secondary"
-                    busy={busyUid === s.uid}
-                    onPress={() =>
-                      void act(s.uid, {
-                        uid: s.uid,
-                        role: (s.role === 'admin' ? 'manager' : 'admin') as Extract<
-                          Role,
-                          'admin' | 'manager'
-                        >,
-                      })
-                    }
-                  />
-                  <Button
-                    label={s.status === 'disabled' ? 'Re-enable' : 'Disable'}
-                    // Secondary in BOTH directions, exactly as on a student's
-                    // page. Disabling an account is reversible and is the
-                    // RECOMMENDED action in this product; dressing one of the
-                    // two Disables in the app as destructive and the other as
-                    // routine teaches people the colour means nothing.
-                    variant="secondary"
-                    busy={busyUid === s.uid}
-                    onPress={() =>
-                      void act(s.uid, {
-                        uid: s.uid,
-                        status: s.status === 'disabled' ? 'active' : 'disabled',
-                      })
-                    }
-                  />
-                </Row>
-              )}
-            </Card>
-          );
-        })}
+          {decided.map((s) => {
+            const isSelf = s.uid === selfUid;
+            return (
+              <Card key={s.uid}>
+                <Person row={s} />
+                {isSelf ? (
+                  // The server refuses this too; saying so up front is kinder than
+                  // a permission error. Without the rule, the last admin could lock
+                  // the institute out of its own user management.
+                  <Text style={styles.selfNote}>
+                    This is you. You cannot change your own role or access.
+                  </Text>
+                ) : (
+                  <Row>
+                    <Button
+                      testID={`staff-role-${s.email}`}
+                      label={s.role === 'admin' ? 'Make manager' : 'Make admin'}
+                      variant="secondary"
+                      busy={busyUid === s.uid}
+                      onPress={() =>
+                        void act(s.uid, {
+                          uid: s.uid,
+                          role: (s.role === 'admin' ? 'manager' : 'admin') as Extract<
+                            Role,
+                            'admin' | 'manager'
+                          >,
+                        })
+                      }
+                    />
+                    <Button
+                      label={s.status === 'disabled' ? 'Re-enable' : 'Disable'}
+                      // Secondary in BOTH directions, exactly as on a student's
+                      // page. Disabling an account is reversible and is the
+                      // RECOMMENDED action in this product; dressing one of the
+                      // two Disables in the app as destructive and the other as
+                      // routine teaches people the colour means nothing.
+                      variant="secondary"
+                      busy={busyUid === s.uid}
+                      onPress={() =>
+                        void act(s.uid, {
+                          uid: s.uid,
+                          status: s.status === 'disabled' ? 'active' : 'disabled',
+                        })
+                      }
+                    />
+                  </Row>
+                )}
+              </Card>
+            );
+          })}
         </Grid>
       )}
     </Screen>

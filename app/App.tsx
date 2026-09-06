@@ -253,102 +253,102 @@ export default function App() {
       const isStudent = role === 'student';
       content = (
         <Shell role={role} uid={user.uid} email={email} isAdmin={isAdmin}>
-        <Navigator
-          linking={isStudent ? STUDENT_LINKING : STAFF_LINKING}
-        >
-          <Stack.Navigator screenOptions={{ headerTintColor: t.text.primary }}>
-            {/* A PUSHED screen keeps its header, which is the only thing
-                carrying Back. A tab root runs without one — it is never pushed,
-                and its own heading already names it — so `Screen` takes over the
-                status-bar inset there instead. One list decides which is which:
-                `HEADERLESS`, read by `screenOptions` below. */}
-            <Stack.Screen name="Home" options={screenOptions('Home', 'Class Recordings')}>
-              {() => <Landing role={role} uid={user.uid} isAdmin={isAdmin} />}
-            </Stack.Screen>
-            <Stack.Screen name="Notifications" options={screenOptions('Notifications', 'Notifications')}>
-              {() => <NotificationsScreen uid={user.uid} isStudent={isStudent} />}
-            </Stack.Screen>
-            {/* THE ROLE SPLIT IS THE BOUNDARY, not a tidy-up. A screen registered
-                here is addressable by URL, and a browser tab outlives the person
-                signed into it — see the note on the path tables above. Adding a
-                screen to both arms puts it back within reach of both populations. */}
-            {isStudent ? (
-              <>
-                <Stack.Screen name="MyClasses" options={screenOptions('MyClasses', 'Your classes')}>
-                  {() => <MyClasses uid={user.uid} />}
-                </Stack.Screen>
-                <Stack.Screen name="MyClassRecord" options={screenOptions('MyClassRecord', 'Attendance')}>
-                  {() => <MyClassRecord uid={user.uid} />}
-                </Stack.Screen>
-              </>
-            ) : (
-              <>
-                <Stack.Screen name="Students" options={screenOptions('Students', 'People')}>
-                  {() => <People isAdmin={isAdmin} uid={user.uid} />}
-                </Stack.Screen>
-                <Stack.Screen name="StudentDetail" options={screenOptions('StudentDetail', 'Student')}>
-                  {() => <StudentDetail isAdmin={isAdmin} uid={user.uid} />}
-                </Stack.Screen>
-                <Stack.Screen name="Cohorts" options={screenOptions('Cohorts', 'Courses')}>
-                  {() => <Cohorts />}
-                </Stack.Screen>
-                {/* Titled for what the screen IS — one cohort: its settings and the
-                    courses inside it. The route keeps its name until the id-param
-                    conversion renames routes wholesale. */}
-                <Stack.Screen name="Courses" options={screenOptions('Courses', 'Cohort')}>
-                  {() => <Courses />}
-                </Stack.Screen>
-                <Stack.Screen name="CourseDetail" options={screenOptions('CourseDetail', 'Course')}>
-                  {() => <CourseDetail isAdmin={isAdmin} />}
-                </Stack.Screen>
-                <Stack.Screen name="CourseAttendance" options={screenOptions('CourseAttendance', 'Attendance')}>
-                  {() => <CourseAttendance />}
-                </Stack.Screen>
-                <Stack.Screen name="Sessions" options={screenOptions('Sessions', 'Sessions')}>
-                  {() => <Sessions />}
-                </Stack.Screen>
-                <Stack.Screen name="SessionDetail" options={screenOptions('SessionDetail', 'Session')}>
-                  {() => <SessionDetail isAdmin={isAdmin} />}
-                </Stack.Screen>
-                <Stack.Screen name="RecordingLedger" options={screenOptions('RecordingLedger', 'Listening progress')}>
-                  {() => <RecordingLedger />}
-                </Stack.Screen>
-                <Stack.Screen name="StudentLedger" options={screenOptions('StudentLedger', 'Student progress')}>
-                  {() => <StudentLedger />}
-                </Stack.Screen>
-                <Stack.Screen name="Library" options={screenOptions('Library', 'Library')}>
-                  {() => <Library uid={user.uid} isAdmin={isAdmin} />}
-                </Stack.Screen>
-                <Stack.Screen name="ZoomImport" options={screenOptions('ZoomImport', 'Import from Zoom')}>
-                  {() => <ZoomImport />}
-                </Stack.Screen>
-                <Stack.Screen name="Audit" options={screenOptions('Audit', 'Audit')}>
-                  {() => <Audit />}
-                </Stack.Screen>
-                {/* MANAGERS ONLY, and registered rather than merely unlinked:
-                    it is their Courses tab, and it queries `array-contains` on
-                    their own uid — so for an admin the same URL would render a
-                    permanently empty screen. A path belonging to a role the
-                    reader does not have matches no screen and falls back to
-                    their own home, which is the right answer. */}
-                {isAdmin ? null : (
-                  <Stack.Screen name="MyCourses" options={screenOptions('MyCourses', 'My courses')}>
-                    {() => <MyCourses uid={user.uid} />}
+          <Navigator
+            linking={isStudent ? STUDENT_LINKING : STAFF_LINKING}
+          >
+            <Stack.Navigator screenOptions={{ headerTintColor: t.text.primary }}>
+              {/* A PUSHED screen keeps its header, which is the only thing
+                  carrying Back. A tab root runs without one — it is never pushed,
+                  and its own heading already names it — so `Screen` takes over the
+                  status-bar inset there instead. One list decides which is which:
+                  `HEADERLESS`, read by `screenOptions` below. */}
+              <Stack.Screen name="Home" options={screenOptions('Home', 'Class Recordings')}>
+                {() => <Landing role={role} uid={user.uid} isAdmin={isAdmin} />}
+              </Stack.Screen>
+              <Stack.Screen name="Notifications" options={screenOptions('Notifications', 'Notifications')}>
+                {() => <NotificationsScreen uid={user.uid} isStudent={isStudent} />}
+              </Stack.Screen>
+              {/* THE ROLE SPLIT IS THE BOUNDARY, not a tidy-up. A screen registered
+                  here is addressable by URL, and a browser tab outlives the person
+                  signed into it — see the note on the path tables above. Adding a
+                  screen to both arms puts it back within reach of both populations. */}
+              {isStudent ? (
+                <>
+                  <Stack.Screen name="MyClasses" options={screenOptions('MyClasses', 'Your classes')}>
+                    {() => <MyClasses uid={user.uid} />}
                   </Stack.Screen>
-                )}
-                <Stack.Screen
-                  name="Tokens"
-                  component={TokensScreen}
-                  options={screenOptions('Tokens', 'Design tokens')}
-                />
-              </>
-            )}
-            {/* Both: staff open the player from the library and from a session. */}
-            <Stack.Screen name="Player" options={screenOptions('Player', 'Listen')}>
-              {() => <Play studentUid={isStudent ? user.uid : null} />}
-            </Stack.Screen>
-          </Stack.Navigator>
-        </Navigator>
+                  <Stack.Screen name="MyClassRecord" options={screenOptions('MyClassRecord', 'Attendance')}>
+                    {() => <MyClassRecord uid={user.uid} />}
+                  </Stack.Screen>
+                </>
+              ) : (
+                <>
+                  <Stack.Screen name="Students" options={screenOptions('Students', 'People')}>
+                    {() => <People isAdmin={isAdmin} uid={user.uid} />}
+                  </Stack.Screen>
+                  <Stack.Screen name="StudentDetail" options={screenOptions('StudentDetail', 'Student')}>
+                    {() => <StudentDetail isAdmin={isAdmin} uid={user.uid} />}
+                  </Stack.Screen>
+                  <Stack.Screen name="Cohorts" options={screenOptions('Cohorts', 'Courses')}>
+                    {() => <Cohorts />}
+                  </Stack.Screen>
+                  {/* Titled for what the screen IS — one cohort: its settings and the
+                      courses inside it. The route keeps its name until the id-param
+                      conversion renames routes wholesale. */}
+                  <Stack.Screen name="Courses" options={screenOptions('Courses', 'Cohort')}>
+                    {() => <Courses />}
+                  </Stack.Screen>
+                  <Stack.Screen name="CourseDetail" options={screenOptions('CourseDetail', 'Course')}>
+                    {() => <CourseDetail isAdmin={isAdmin} />}
+                  </Stack.Screen>
+                  <Stack.Screen name="CourseAttendance" options={screenOptions('CourseAttendance', 'Attendance')}>
+                    {() => <CourseAttendance />}
+                  </Stack.Screen>
+                  <Stack.Screen name="Sessions" options={screenOptions('Sessions', 'Sessions')}>
+                    {() => <Sessions />}
+                  </Stack.Screen>
+                  <Stack.Screen name="SessionDetail" options={screenOptions('SessionDetail', 'Session')}>
+                    {() => <SessionDetail isAdmin={isAdmin} />}
+                  </Stack.Screen>
+                  <Stack.Screen name="RecordingLedger" options={screenOptions('RecordingLedger', 'Listening progress')}>
+                    {() => <RecordingLedger />}
+                  </Stack.Screen>
+                  <Stack.Screen name="StudentLedger" options={screenOptions('StudentLedger', 'Student progress')}>
+                    {() => <StudentLedger />}
+                  </Stack.Screen>
+                  <Stack.Screen name="Library" options={screenOptions('Library', 'Library')}>
+                    {() => <Library uid={user.uid} isAdmin={isAdmin} />}
+                  </Stack.Screen>
+                  <Stack.Screen name="ZoomImport" options={screenOptions('ZoomImport', 'Import from Zoom')}>
+                    {() => <ZoomImport />}
+                  </Stack.Screen>
+                  <Stack.Screen name="Audit" options={screenOptions('Audit', 'Audit')}>
+                    {() => <Audit />}
+                  </Stack.Screen>
+                  {/* MANAGERS ONLY, and registered rather than merely unlinked:
+                      it is their Courses tab, and it queries `array-contains` on
+                      their own uid — so for an admin the same URL would render a
+                      permanently empty screen. A path belonging to a role the
+                      reader does not have matches no screen and falls back to
+                      their own home, which is the right answer. */}
+                  {isAdmin ? null : (
+                    <Stack.Screen name="MyCourses" options={screenOptions('MyCourses', 'My courses')}>
+                      {() => <MyCourses uid={user.uid} />}
+                    </Stack.Screen>
+                  )}
+                  <Stack.Screen
+                    name="Tokens"
+                    component={TokensScreen}
+                    options={screenOptions('Tokens', 'Design tokens')}
+                  />
+                </>
+              )}
+              {/* Both: staff open the player from the library and from a session. */}
+              <Stack.Screen name="Player" options={screenOptions('Player', 'Listen')}>
+                {() => <Play studentUid={isStudent ? user.uid : null} />}
+              </Stack.Screen>
+            </Stack.Navigator>
+          </Navigator>
         </Shell>
       );
     }
@@ -469,36 +469,36 @@ function Shell({
   return (
     <NavStateContext.Provider value={onStateChange}>
       <QueueContext.Provider value={queue}>
-      <ScreenOwnsTopInset.Provider value={HEADERLESS.has(routeName)}>
-      {/*
-        THE CHROME IS ON EVERY SCREEN, not only the tab roots. The sibling kanban
-        app hides its bar on the immersive board and the reflex is to copy that;
-        it is wrong here, because this app is navigated WHILE SOMETHING IS
-        PLAYING, and hiding the bar on the player makes the screen people spend
-        the most time on a cul-de-sac they can only leave through Back. Every
-        audio app on either store keeps the bar and the now-playing strip
-        together. The cost is real and it is the right trade: about 112px of a
-        small phone on a tab root, and 56px more where a pushed screen adds its
-        header.
+        <ScreenOwnsTopInset.Provider value={HEADERLESS.has(routeName)}>
+          {/*
+            THE CHROME IS ON EVERY SCREEN, not only the tab roots. The sibling kanban
+            app hides its bar on the immersive board and the reflex is to copy that;
+            it is wrong here, because this app is navigated WHILE SOMETHING IS
+            PLAYING, and hiding the bar on the player makes the screen people spend
+            the most time on a cul-de-sac they can only leave through Back. Every
+            audio app on either store keeps the bar and the now-playing strip
+            together. The cost is real and it is the right trade: about 112px of a
+            small phone on a tab root, and 56px more where a pushed screen adds its
+            header.
 
-        READING ORDER DECIDES WHICH SIDE OF THE CONTENT IT SITS ON. A left rail
-        belongs before the content and a bottom bar after it — that is what a
-        screen reader and the Tab key follow, and CSS reordering does not move
-        either. So the two cases genuinely are two orders, rather than one order
-        flipped visually. Nothing is lost by unmounting the bar across the
-        breakpoint any more: the only state it held was the More sheet, which
-        the shell owns now.
-      */}
-      <View style={[styles.shell, wide ? styles.shellWide : null]}>
-        {wide ? nav : null}
-        <View style={styles.stack}>
-          {children}
-          {mini}
-        </View>
-        {wide ? null : nav}
-      </View>
-      {moreSheet}
-      </ScreenOwnsTopInset.Provider>
+            READING ORDER DECIDES WHICH SIDE OF THE CONTENT IT SITS ON. A left rail
+            belongs before the content and a bottom bar after it — that is what a
+            screen reader and the Tab key follow, and CSS reordering does not move
+            either. So the two cases genuinely are two orders, rather than one order
+            flipped visually. Nothing is lost by unmounting the bar across the
+            breakpoint any more: the only state it held was the More sheet, which
+            the shell owns now.
+          */}
+          <View style={[styles.shell, wide ? styles.shellWide : null]}>
+            {wide ? nav : null}
+            <View style={styles.stack}>
+              {children}
+              {mini}
+            </View>
+            {wide ? null : nav}
+          </View>
+          {moreSheet}
+        </ScreenOwnsTopInset.Provider>
       </QueueContext.Provider>
     </NavStateContext.Provider>
   );

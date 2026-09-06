@@ -233,23 +233,23 @@ function RecordingLine({
           but a title that wraps used to drop its own actions below its
           neighbours' — level outlines with a ragged row of buttons inside. */}
       <View style={styles.actions}>
-      <Row>
-        {/* PRIMARY, and the only one on the card. Two identical sage bars six
-            times down a page gave the library no answer to "what do I do here",
-            and listening is what the library is for — the ledger beside it is
-            the follow-up. */}
-        {r.audioPath ? (
-          <Button testID={`library-listen-${r.title}`} label="Listen" onPress={onPlay} />
-        ) : null}
-        {r.status === 'published' ? (
-          <Button
-            testID={`library-progress-${r.title}`}
-            label="Listening progress"
-            variant="secondary"
-            onPress={onOpenProgress}
-          />
-        ) : null}
-      </Row>
+        <Row>
+          {/* PRIMARY, and the only one on the card. Two identical sage bars six
+              times down a page gave the library no answer to "what do I do here",
+              and listening is what the library is for — the ledger beside it is
+              the follow-up. */}
+          {r.audioPath ? (
+            <Button testID={`library-listen-${r.title}`} label="Listen" onPress={onPlay} />
+          ) : null}
+          {r.status === 'published' ? (
+            <Button
+              testID={`library-progress-${r.title}`}
+              label="Listening progress"
+              variant="secondary"
+              onPress={onOpenProgress}
+            />
+          ) : null}
+        </Row>
       </View>
     </Card>
   );

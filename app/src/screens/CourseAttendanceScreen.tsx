@@ -95,15 +95,15 @@ export function CourseAttendanceScreen({
             button beside it — a column affordance that, in a centred row, put
             the two controls out of true. */}
         <View style={styles.toolItem}>
-        <Segmented
-          value={tab}
-          testIdPrefix="attendance-tab"
-          options={[
-            { value: 'sessions' as Tab, label: `By session (${report.sessions.length})` },
-            { value: 'students' as Tab, label: `By student (${studentRows.length})` },
-          ]}
-          onChange={setTab}
-        />
+          <Segmented
+            value={tab}
+            testIdPrefix="attendance-tab"
+            options={[
+              { value: 'sessions' as Tab, label: `By session (${report.sessions.length})` },
+              { value: 'students' as Tab, label: `By student (${studentRows.length})` },
+            ]}
+            onChange={setTab}
+          />
         </View>
         <Button
           testID={tab === 'sessions' ? 'attendance-export-sessions' : 'attendance-export-students'}
@@ -119,70 +119,70 @@ export function CourseAttendanceScreen({
           <Empty>No sessions in this course yet.</Empty>
         ) : (
           <Grid min={330}>
-          {report.sessions.map((s) => (
-            <Card key={s.sessionId}>
-              <Pressable
-                testID={`attendance-session-${s.title}`}
-                accessibilityRole="button"
-                accessibilityLabel={`Open ${s.title}`}
-                onPress={() => onOpenSession(s.sessionId)}
-              >
-                <Text style={styles.name}>{s.title}</Text>
-                <Text style={styles.hint}>{s.date}</Text>
-                {s.submitted ? (
-                  <Text style={styles.counts}>
-                    <Text style={styles.countValue}>{s.present}</Text> present
-                    {'   '}
-                    <Text style={styles.countValue}>{s.absent}</Text> absent
-                    {'   '}
-                    <Text style={styles.countValue}>{s.excused}</Text> excused
-                  </Text>
-                ) : (
-                  <View style={styles.notTakenChip}>
-                    <Text style={styles.notTaken}>Attendance not taken</Text>
-                  </View>
-                )}
-              </Pressable>
-            </Card>
-          ))}
+            {report.sessions.map((s) => (
+              <Card key={s.sessionId}>
+                <Pressable
+                  testID={`attendance-session-${s.title}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${s.title}`}
+                  onPress={() => onOpenSession(s.sessionId)}
+                >
+                  <Text style={styles.name}>{s.title}</Text>
+                  <Text style={styles.hint}>{s.date}</Text>
+                  {s.submitted ? (
+                    <Text style={styles.counts}>
+                      <Text style={styles.countValue}>{s.present}</Text> present
+                      {'   '}
+                      <Text style={styles.countValue}>{s.absent}</Text> absent
+                      {'   '}
+                      <Text style={styles.countValue}>{s.excused}</Text> excused
+                    </Text>
+                  ) : (
+                    <View style={styles.notTakenChip}>
+                      <Text style={styles.notTaken}>Attendance not taken</Text>
+                    </View>
+                  )}
+                </Pressable>
+              </Card>
+            ))}
           </Grid>
         )
       ) : studentRows.length === 0 ? (
         <Empty>Nobody is enrolled in this course yet.</Empty>
       ) : (
         <Grid min={330}>
-        {studentRows.map((s) => (
-          <Card key={s.studentUid}>
-            <Pressable
-              testID={`attendance-student-${nameOf(s.studentUid)}`}
-              accessibilityRole="button"
-              accessibilityLabel={`Open listening progress for ${nameOf(s.studentUid)}`}
-              onPress={() => onOpenStudent(s.studentUid)}
-            >
-              <Text style={styles.name}>{nameOf(s.studentUid)}</Text>
-              <Text style={styles.counts}>
-                <Text style={styles.countValue}>{s.present}</Text> present
-                {'   '}
-                <Text style={styles.countValue}>{s.absent}</Text> absent
-                {'   '}
-                <Text style={styles.countValue}>{s.excused}</Text> excused
-                {s.notMarked > 0 ? <Text style={styles.hint}>{`   ${s.notMarked} not marked`}</Text> : null}
-              </Text>
-              {s.assigned > 0 ? (
-                <Text style={styles.catchup}>
-                  Required listening: {s.completed} of {s.assigned} completed
-                  {/* The separator rides with the words AFTER it, or a wrap left
-                      every row ending in a dangling "·". */}
-                  {s.missed > 0 ? (
-                    <Text style={styles.missed}>{`\u00A0\u00A0·\u00A0${s.missed} missed`}</Text>
-                  ) : null}
+          {studentRows.map((s) => (
+            <Card key={s.studentUid}>
+              <Pressable
+                testID={`attendance-student-${nameOf(s.studentUid)}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Open listening progress for ${nameOf(s.studentUid)}`}
+                onPress={() => onOpenStudent(s.studentUid)}
+              >
+                <Text style={styles.name}>{nameOf(s.studentUid)}</Text>
+                <Text style={styles.counts}>
+                  <Text style={styles.countValue}>{s.present}</Text> present
+                  {'   '}
+                  <Text style={styles.countValue}>{s.absent}</Text> absent
+                  {'   '}
+                  <Text style={styles.countValue}>{s.excused}</Text> excused
+                  {s.notMarked > 0 ? <Text style={styles.hint}>{`   ${s.notMarked} not marked`}</Text> : null}
                 </Text>
-              ) : (
-                <Text style={styles.hint}>No required listening</Text>
-              )}
-            </Pressable>
-          </Card>
-        ))}
+                {s.assigned > 0 ? (
+                  <Text style={styles.catchup}>
+                    Required listening: {s.completed} of {s.assigned} completed
+                    {/* The separator rides with the words AFTER it, or a wrap left
+                        every row ending in a dangling "·". */}
+                    {s.missed > 0 ? (
+                      <Text style={styles.missed}>{`\u00A0\u00A0·\u00A0${s.missed} missed`}</Text>
+                    ) : null}
+                  </Text>
+                ) : (
+                  <Text style={styles.catchup}>No required listening</Text>
+                )}
+              </Pressable>
+            </Card>
+          ))}
         </Grid>
       )}
     </Screen>

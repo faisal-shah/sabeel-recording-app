@@ -165,8 +165,9 @@ export function isOverdue(dueDate: string, today: string): boolean {
  * MAY THIS RECORDING STILL BE PLAYED? One rule, for every surface that asks.
  *
  * Two of them do — the player screen and the docked bar — and each held its own
- * copy of the composition. The copies had already drifted once: applying the deadline unconditionally cut a manager off
- * from anything more than a week old the moment they left the player, because
+ * copy of the composition. The copies had already drifted once: applying the
+ * deadline unconditionally cut a manager off from anything more than a week old
+ * the moment they left the player, because
  * the deadline closes a STUDENT's access and nobody else's. That is exactly the
  * shape of bug two spellings of one rule produce, and it is why `formatClock`
  * and `SKIP_BACK_MS` live in one place too.

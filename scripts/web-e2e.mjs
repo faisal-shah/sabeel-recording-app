@@ -727,19 +727,31 @@ await student.waitForTimeout(1500);
  * recording rather than an account waiting for whoever signs in next — is
  * exactly the shared-device case the function exists for.
  */
+// The bar IS on screen before we sign out — the positive control, without which
+// "no bar afterwards" is a sentence about a screen that never had one.
+await tap(student, 'tab-classes');
+await student.getByTestId('mini-player').waitFor({ timeout: 15000 });
 await more(student, 'more-sign-out');
 await student.getByTestId('signin-email').waitFor({ timeout: 20000 });
-check(
-  'signing out ends the playback session — no docked bar behind the sign-in screen',
-  (await student.getByTestId('mini-player').count()) === 0 &&
-    (await student.getByTestId('player-play').count()) === 0,
-);
 await student.getByTestId('signin-email').fill('fatima@example.com');
 await student.getByTestId('signin-password').fill('StudentPass123!');
 await tap(student, 'signin-student');
-await sawText(student, 'Your listening', 30000);
+// The TAB BAR, not a screen title: the linking config restores the route this
+// student was last on, so signing back in lands them on Classes rather than
+// Listening — which is the shell working, not a failure.
+await student.getByTestId('tab-classes').waitFor({ timeout: 30000 });
+await student.waitForTimeout(1500);
+/*
+ * SIGNING BACK IN IS WHAT DISCRIMINATES, not the sign-in screen itself.
+ *
+ * The signed-out branch renders a bare `SignInScreen` with no `Shell` in it, so
+ * "no docked bar on the sign-in screen" is true whether or not the session was
+ * ended. `playback.ts` holds its session at module scope and nothing reloads the
+ * page between the two, so a session left running comes straight back with the
+ * bar — under the next person's account.
+ */
 check(
-  'and signing back in starts clean, with nothing playing',
+  'signing out ends the playback session — nothing is playing for the next sign-in',
   (await student.getByTestId('mini-player').count()) === 0,
 );
 

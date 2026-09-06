@@ -116,27 +116,27 @@ export function StudentAttendanceScreen({
         <Empty>No attendance has been taken for this class yet.</Empty>
       ) : (
         <Grid min={330}>
-        {rows.map((m) => {
-          const a = bySession.get(m.sessionId);
-          return (
-            <View key={m.id} testID={`attendance-${m.title}`} style={styles.row}>
-              <View style={styles.rowMain}>
-                <Text style={styles.title}>{m.title}</Text>
-                <Text style={styles.date}>{m.date}</Text>
-                {a ? (
-                  <Text style={styles.listening}>
-                    {listeningLine(
-                      completions.get(a.recordingId)?.completed ?? false,
-                      a.dueDate,
-                      today,
-                    )}
-                  </Text>
-                ) : null}
+          {rows.map((m) => {
+            const a = bySession.get(m.sessionId);
+            return (
+              <View key={m.id} testID={`attendance-${m.title}`} style={styles.row}>
+                <View style={styles.rowMain}>
+                  <Text style={styles.title}>{m.title}</Text>
+                  <Text style={styles.date}>{m.date}</Text>
+                  {a ? (
+                    <Text style={styles.listening}>
+                      {listeningLine(
+                        completions.get(a.recordingId)?.completed ?? false,
+                        a.dueDate,
+                        today,
+                      )}
+                    </Text>
+                  ) : null}
+                </View>
+                <Text style={styles.status}>{STATUS_LABEL[m.status]}</Text>
               </View>
-              <Text style={styles.status}>{STATUS_LABEL[m.status]}</Text>
-            </View>
-          );
-        })}
+            );
+          })}
         </Grid>
       )}
     </Screen>
@@ -151,9 +151,11 @@ export function StudentAttendanceScreen({
  * they "missed" it would be both wrong and the punitive tone the brief rules out.
  */
 function listeningLine(completed: boolean, dueDate: string, today: string): string {
+  // Non-breaking spaces around the date: it is the whole point of the line, and
+  // it was the one token a wrap split — "listen by 2026-" / "09-26".
   if (completed) return 'Recording required · completed';
-  if (isOverdue(dueDate, today)) return `Recording required · not listened, closed ${dueDate}`;
-  return `Recording required · listen by ${dueDate}`;
+  if (isOverdue(dueDate, today)) return `Recording required · not\u00A0listened, closed\u00A0${dueDate}`;
+  return `Recording required · listen\u00A0by\u00A0${dueDate}`;
 }
 
 function Tally({ label, value }: { label: string; value: number }) {

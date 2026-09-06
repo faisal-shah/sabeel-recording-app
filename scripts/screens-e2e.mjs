@@ -248,7 +248,6 @@ const browser = await chromium.launch();
 const world = await seedWorld({ db, auth, browser, base: BASE });
 const { STUDENT, DISABLED_STUDENT, STUDENT_PASSWORD, missed, dueSoon } = world;
 
-
 // ---- assertions ------------------------------------------------------------
 
 /**

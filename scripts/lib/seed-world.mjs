@@ -27,7 +27,6 @@ import { EMULATOR_PROJECT_ID as PROJECT } from './project.mjs';
 const require = createRequire(new URL('../../functions/package.json', import.meta.url));
 const admin = require('firebase-admin');
 
-
 const DAY = 86_400_000;
 const now = Date.now();
 const iso = (ms) => new Date(ms).toISOString().slice(0, 10);
@@ -502,7 +501,6 @@ export async function seedWorld({ db, auth, browser, base }) {
       detail: { note: 'Seeded so the audit list has rows at every width.' },
     });
   }
-
 
   // WHAT A TOUR NEEDS TO NAME A THING, and nothing else. Twelve handles were
   // returned and four were read; the rest were a standing invitation to reach

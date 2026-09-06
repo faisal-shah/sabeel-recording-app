@@ -20,7 +20,6 @@ import { getTheme, spacing } from '../theme';
 const t = getTheme();
 const RATES = [1, 1.25, 1.5, 2];
 
-/** What this screen shows before the app-wide session is about its recording. */
 /**
  * Listening to one recording.
  *

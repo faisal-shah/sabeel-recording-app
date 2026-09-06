@@ -152,34 +152,34 @@ export function SessionsScreen({
         <Empty>No sessions yet. Add one for each class meeting.</Empty>
       ) : (
         <Grid min={330}>
-        {sessions.map((s) => (
-          <Pressable
-            key={s.id}
-            testID={`session-open-${s.title}`}
-            // A row without a ROLE is not a control: a screen reader announces
-            // nothing tappable, and every check in the layout sweep that looks
-            // for controls looks straight past it.
-            accessibilityRole="button"
-            accessibilityLabel={`Open ${s.title}`}
-            onPress={() => onOpenSession(s)}
-            // The grid child is this wrapper, not the Card inside it, so the
-            // fill has to be here or the row ends ragged.
-            style={styles.cell}
-          >
-            <Card>
-              <Text style={styles.title}>{s.title}</Text>
-              <Text style={styles.date}>{s.date}</Text>
-              <View style={styles.tags}>
-                <Tag
-                  on={!!s.attendanceSubmittedAt}
-                  onLabel="Attendance taken"
-                  offLabel="Attendance not taken"
-                />
-                <Tag on={!!s.recordingId} onLabel="Recording added" offLabel="No recording" />
-              </View>
-            </Card>
-          </Pressable>
-        ))}
+          {sessions.map((s) => (
+            <Pressable
+              key={s.id}
+              testID={`session-open-${s.title}`}
+              // A row without a ROLE is not a control: a screen reader announces
+              // nothing tappable, and every check in the layout sweep that looks
+              // for controls looks straight past it.
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${s.title}`}
+              onPress={() => onOpenSession(s)}
+              // The grid child is this wrapper, not the Card inside it, so the
+              // fill has to be here or the row ends ragged.
+              style={styles.cell}
+            >
+              <Card>
+                <Text style={styles.title}>{s.title}</Text>
+                <Text style={styles.date}>{s.date}</Text>
+                <View style={styles.tags}>
+                  <Tag
+                    on={!!s.attendanceSubmittedAt}
+                    onLabel="Attendance taken"
+                    offLabel="Attendance not taken"
+                  />
+                  <Tag on={!!s.recordingId} onLabel="Recording added" offLabel="No recording" />
+                </View>
+              </Card>
+            </Pressable>
+          ))}
         </Grid>
       )}
     </Screen>

@@ -83,7 +83,13 @@ export function StudentLedgerScreen({
                   <Text style={styles.override}>Override: {r.overrideReason}</Text>
                 ) : null}
               </View>
-              <Text style={[styles.status, styleFor(r, today)]}>{statusLabel(r, today)}</Text>
+              {/* Wrapped in its own end-aligned block, like the student's home
+                  card. As a bare Text a wrapped status fell to the left of its
+                  own line, so a four-row list showed the same fact in two
+                  places. */}
+              <View style={styles.rowMeta}>
+                <Text style={[styles.status, styleFor(r, today)]}>{statusLabel(r, today)}</Text>
+              </View>
             </View>
           ))}
         </Grid>
@@ -152,6 +158,11 @@ const styles = StyleSheet.create({
   // three-column row at 1440 wrapped while the same cards at 1024 did not, so
   // one row showed the status in two places.
   rowMain: { flexGrow: 1, flexShrink: 1, flexBasis: 150, minWidth: 150 },
+  // `flexGrow: 1` is what makes `flex-end` mean anything once the row wraps:
+  // sized to its content the block sits at the line's start, so a wrapped status
+  // fell to the LEFT while its unwrapped neighbours stayed right. Same shape as
+  // the student home's own card.
+  rowMeta: { alignItems: 'flex-end', flexGrow: 1 },
   status: { fontSize: 13, fontWeight: '700' },
   ok: { color: t.feedback.success },
   bad: { color: t.feedback.danger },

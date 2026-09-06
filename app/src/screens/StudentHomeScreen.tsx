@@ -384,7 +384,10 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: '600', color: t.text.primary },
   titleDone: { color: t.text.secondary },
   course: { fontSize: 13, color: t.text.secondary, marginTop: spacing(1) },
-  cardMeta: { alignItems: 'flex-end', flexGrow: 1 },
+  // `flexGrow: 0`. Growing BOTH halves split the spare width evenly, so a
+  // one-line date was handed 490px it could not use while the title wrapped —
+  // the row's slack belongs to the only part of it that can spend slack.
+  cardMeta: { alignItems: 'flex-end' },
   /*
    * THE LIVE DATE IS THE LOUD ONE.
    *

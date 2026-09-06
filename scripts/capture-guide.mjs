@@ -207,7 +207,6 @@ await adm.getByTestId('recording-ledger').waitFor({ timeout: 15000 });
 await adm.waitForTimeout(800);
 await pair(adm, '17-session-detail');
 
-
 // Its ledger — the accountable/attendees split.
 await tap(adm, 'recording-ledger');
 await adm.getByTestId('ledger-filter-all').waitFor({ timeout: 15000 });
@@ -218,7 +217,13 @@ await pair(adm, '18-recording-ledger');
 await tap(adm, 'ledger-filter-notComplete'); await adm.waitForTimeout(600);
 // `prepare` runs at EACH size, before that size's capture — which is what makes
 // the editor open in both figures rather than only the first.
-if (await adm.locator('[data-testid^="override-open-"]').first().count()) {
+// FAILS CLOSED, like `heightAbove`. Skipping silently left the previous run's
+// PNG on disk and exited 0, so the manual would ship a figure of a screen the
+// app no longer produces.
+if (!(await adm.locator('[data-testid^="override-open-"]').first().count())) {
+  throw new Error('no not-complete student to open an override on — figure 19 would be stale');
+}
+{
   await pair(adm, '19-override-form', {
     prepare: async (p) => {
       // Only if none is open. The editor survives the resize between the two

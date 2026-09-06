@@ -231,7 +231,6 @@ export function useRoster(courseId: string | null): EnrollmentRow[] {
   );
 }
 
-
 /**
  * Every enrollment of one student, across courses. Must carry the studentUid
  * constraint — the rule depends on resource.data, so Firestore rejects an

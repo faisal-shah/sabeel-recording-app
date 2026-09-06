@@ -237,17 +237,17 @@ function ManagerCourses({
       ) : (
         <>
           <Grid min={330}>
-          {courses.map((c) => (
-            <ManagedCourseRow
-              key={c.id}
-              course={c}
-              cohortName={cohortNameOf(c.cohortId)}
-              studentUid={studentUid}
-              who={who}
-              onOpenCourse={onOpenCourse}
-              onAnswered={report}
-            />
-          ))}
+            {courses.map((c) => (
+              <ManagedCourseRow
+                key={c.id}
+                course={c}
+                cohortName={cohortNameOf(c.cohortId)}
+                studentUid={studentUid}
+                who={who}
+                onOpenCourse={onOpenCourse}
+                onAnswered={report}
+              />
+            ))}
           </Grid>
           {noneMatched ? (
             <Empty>{who} is not in any of the courses you manage.</Empty>

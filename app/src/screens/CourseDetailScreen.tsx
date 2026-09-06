@@ -273,83 +273,83 @@ export function CourseDetailScreen({
         <Empty>Nobody is enrolled in this course yet.</Empty>
       ) : (
         <Grid min={320}>
-        {/* By name. The list carries a remove button on every row, so an
-            arbitrary order is a real chance of removing the wrong person. */}
-        {sortByName(
-          roster.filter((r) => r.active),
-          (r) => byUid.get(r.studentUid)?.displayName ?? r.studentUid,
-        )
-          .map((r) => {
-            const s = byUid.get(r.studentUid);
-            const who = s?.displayName ?? r.studentUid;
-            // The whole row opens the student's progress, so the × beside it is
-            // one mis-tap away from silently unenrolling someone. It confirms IN
-            // PLACE, replacing the row: leaving the row still tappable under
-            // "remove?" is the flaw ConfirmDanger exists to prevent.
-            if (confirmRemove === r.id) {
+          {/* By name. The list carries a remove button on every row, so an
+              arbitrary order is a real chance of removing the wrong person. */}
+          {sortByName(
+            roster.filter((r) => r.active),
+            (r) => byUid.get(r.studentUid)?.displayName ?? r.studentUid,
+          )
+            .map((r) => {
+              const s = byUid.get(r.studentUid);
+              const who = s?.displayName ?? r.studentUid;
+              // The whole row opens the student's progress, so the × beside it is
+              // one mis-tap away from silently unenrolling someone. It confirms IN
+              // PLACE, replacing the row: leaving the row still tappable under
+              // "remove?" is the flaw ConfirmDanger exists to prevent.
+              if (confirmRemove === r.id) {
+                return (
+                  <View key={r.id} style={styles.confirmRow}>
+                    <Notice tone="error">
+                      Remove {who} from this course? Their listening history is kept, and you
+                      can add them back.
+                    </Notice>
+                    <Row>
+                      <Button
+                        testID={`roster-remove-confirm-${s?.email ?? r.studentUid}`}
+                        label="Remove"
+                        variant="danger"
+                        busy={busy === `rm-${r.id}`}
+                        onPress={() =>
+                          void run(`rm-${r.id}`, async () => {
+                            await setEnrollmentActive({
+                              studentUid: r.studentUid,
+                              courseId: cls.id,
+                              active: false,
+                            });
+                            setConfirmRemove(null);
+                          })
+                        }
+                      />
+                      <Button
+                        label="Cancel"
+                        variant="quiet"
+                        disabled={busy === `rm-${r.id}`}
+                        onPress={() => setConfirmRemove(null)}
+                      />
+                    </Row>
+                  </View>
+                );
+              }
+              // The roster is a list to scan, so it is one line per student: the
+              // email added nothing here (you identify classmates by name) and cost
+              // a line each, which on a 20-student course is most of the screen.
               return (
-                <View key={r.id} style={styles.confirmRow}>
-                  <Notice tone="error">
-                    Remove {who} from this course? Their listening history is kept, and you
-                    can add them back.
-                  </Notice>
-                  <Row>
-                    <Button
-                      testID={`roster-remove-confirm-${s?.email ?? r.studentUid}`}
-                      label="Remove"
-                      variant="danger"
-                      busy={busy === `rm-${r.id}`}
-                      onPress={() =>
-                        void run(`rm-${r.id}`, async () => {
-                          await setEnrollmentActive({
-                            studentUid: r.studentUid,
-                            courseId: cls.id,
-                            active: false,
-                          });
-                          setConfirmRemove(null);
-                        })
-                      }
+                <ListRow
+                  key={r.id}
+                  testID={`student-ledger-${s?.email ?? r.studentUid}`}
+                  name={who}
+                  openLabel={`Open ${who}'s progress`}
+                  onPress={() => onOpenStudent(r.studentUid)}
+                  actionsPinned
+                  actions={
+                    /* Secondary, like Disable and Archive. Removing someone from a
+                       course keeps their listening history and can be undone — the
+                       confirmation says so in as many words — and the destructive
+                       register is this app's mark for permanent deletion. Fourteen
+                       alarm-tinted chips tiled three across a 1440px roster made
+                       the loudest thing on the page the one action nobody came
+                       here to take. The CONFIRM is still danger-red, which is
+                       where the weight belongs. */
+                    <IconButton
+                      testID={`roster-remove-${s?.email ?? r.studentUid}`}
+                      glyph="×"
+                      label={`Remove ${who} from this course`}
+                      onPress={() => setConfirmRemove(r.id)}
                     />
-                    <Button
-                      label="Cancel"
-                      variant="quiet"
-                      disabled={busy === `rm-${r.id}`}
-                      onPress={() => setConfirmRemove(null)}
-                    />
-                  </Row>
-                </View>
+                  }
+                />
               );
-            }
-            // The roster is a list to scan, so it is one line per student: the
-            // email added nothing here (you identify classmates by name) and cost
-            // a line each, which on a 20-student course is most of the screen.
-            return (
-              <ListRow
-                key={r.id}
-                testID={`student-ledger-${s?.email ?? r.studentUid}`}
-                name={who}
-                openLabel={`Open ${who}'s progress`}
-                onPress={() => onOpenStudent(r.studentUid)}
-                actionsPinned
-                actions={
-                  /* Secondary, like Disable and Archive. Removing someone from a
-                     course keeps their listening history and can be undone — the
-                     confirmation says so in as many words — and the destructive
-                     register is this app's mark for permanent deletion. Fourteen
-                     alarm-tinted chips tiled three across a 1440px roster made
-                     the loudest thing on the page the one action nobody came
-                     here to take. The CONFIRM is still danger-red, which is
-                     where the weight belongs. */
-                  <IconButton
-                    testID={`roster-remove-${s?.email ?? r.studentUid}`}
-                    glyph="×"
-                    label={`Remove ${who} from this course`}
-                    onPress={() => setConfirmRemove(r.id)}
-                  />
-                }
-              />
-            );
-          })}
+            })}
         </Grid>
       )}
 

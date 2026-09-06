@@ -114,90 +114,89 @@ export function MiniPlayer({
           — it outlives every screen, and knowing which one is showing is not
           its business — so it takes the widest and caps the title too. */}
       <View style={[styles.inner, wide ? styles.innerWide : null]}>
-      <Pressable
-        testID="mini-player-open"
-        accessibilityRole="button"
-        accessibilityLabel={`Open ${now.title}`}
-        onPress={() => onOpen(now.recordingId, now.dueDate)}
-        style={styles.text}
-      >
-        <Text style={styles.title} numberOfLines={1}>
-          {now.title}
-        </Text>
-        <Text style={styles.sub} numberOfLines={1}>
-          {now.courseName}
-          {wide ? ` · ${times}` : ''}
-        </Text>
-      </Pressable>
+        <Pressable
+          testID="mini-player-open"
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${now.title}`}
+          onPress={() => onOpen(now.recordingId, now.dueDate)}
+          style={styles.text}
+        >
+          <Text style={styles.title} numberOfLines={1}>
+            {now.title}
+          </Text>
+          <Text style={styles.sub} numberOfLines={1}>
+            {now.courseName}
+            {wide ? ` · ${times}` : ''}
+          </Text>
+        </Pressable>
 
-      {/* THE SAME CONTROLS THE FULL PLAYER USES, not lookalikes. Bare "15" and
-          "30" read as inert tags, and a typed "▶" renders as a colour emoji on
-          some Android builds — which is exactly why `Transport` draws its
-          glyphs. Sharing them is how the two views cannot drift.
+        {/* THE SAME CONTROLS THE FULL PLAYER USES, not lookalikes. Bare "15" and
+            "30" read as inert tags, and a typed "▶" renders as a colour emoji on
+            some Android builds — which is exactly why `Transport` draws its
+            glyphs. Sharing them is how the two views cannot drift.
 
-          On a wide bar the title is capped, so a spacer takes the slack:
-          without it the whole cluster packs left and leaves a hole where the
-          dismiss should be. */}
-      {/* ALWAYS. It is a zero-basis grower, so on a phone — where the title has
-          already shrunk to fill the row — it takes nothing. Gated on `wide` it
-          did nothing between 600 and 899 either, and there a short title left
-          the transport and the dismiss packed against it with a third of the
-          bar empty to their right. */}
-      <View style={styles.spacer} />
+            On a wide bar the title is capped, so a spacer takes the slack:
+            without it the whole cluster packs left and leaves a hole where the
+            dismiss should be. */}
+        {/* ALWAYS. It is a zero-basis grower, so on a phone — where the title has
+            already shrunk to fill the row — it takes nothing. Gated on `wide` it
+            did nothing between 600 and 899 either, and there a short title left
+            the transport and the dismiss packed against it with a third of the
+            bar empty to their right. */}
+        <View style={styles.spacer} />
 
-      {/* BACK AT EVERY WIDTH, forward only where there is room. The phone is
-          the surface someone listens on hands-free, and "I missed that
-          sentence" is the reason anyone reaches for a bar they are not looking
-          at. Skipping forward is a scrubbing action, and scrubbing belongs on
-          the player screen this bar opens. */}
-      <Skip
-        label={String(SKIP_BACK_MS / 1000)}
-        direction="back"
-        size={44}
-        disabled={!state.ready}
-        onPress={playback.skipBack}
-        testID="mini-player-back"
-      />
-
-      <Pressable
-        testID="mini-player-toggle"
-        accessibilityRole="button"
-        accessibilityLabel={state.playing ? 'Pause' : 'Play'}
-        disabled={!state.ready}
-        onPress={playback.toggle}
-        style={[styles.play, !state.ready ? styles.playDisabled : null]}
-      >
-        {/* 0.62: this button is 44px against the player's 72px, and the glyph
-            is built from borders rather than type. The skips beside it are 44
-            too — see `Skip`'s `size`. */}
-        <PlayPauseGlyph playing={state.playing} disabled={!state.ready} scale={0.62} />
-      </Pressable>
-
-      {wide ? (
+        {/* BACK AT EVERY WIDTH, forward only where there is room. The phone is
+            the surface someone listens on hands-free, and "I missed that
+            sentence" is the reason anyone reaches for a bar they are not looking
+            at. Skipping forward is a scrubbing action, and scrubbing belongs on
+            the player screen this bar opens. */}
         <Skip
-          label={String(SKIP_FORWARD_MS / 1000)}
-          direction="forward"
+          label={String(SKIP_BACK_MS / 1000)}
+          direction="back"
           size={44}
           disabled={!state.ready}
-          onPress={playback.skipForward}
-          testID="mini-player-forward"
+          onPress={playback.skipBack}
+          testID="mini-player-back"
         />
-      ) : null}
 
-      <Pressable
-        testID="mini-player-close"
-        accessibilityRole="button"
-        accessibilityLabel="Stop listening"
-        onPress={closePlayback}
-        style={styles.close}
-      >
-        <Text style={styles.closeGlyph}>×</Text>
-      </Pressable>
+        <Pressable
+          testID="mini-player-toggle"
+          accessibilityRole="button"
+          accessibilityLabel={state.playing ? 'Pause' : 'Play'}
+          disabled={!state.ready}
+          onPress={playback.toggle}
+          style={[styles.play, !state.ready ? styles.playDisabled : null]}
+        >
+          {/* 0.62: this button is 44px against the player's 72px, and the glyph
+              is built from borders rather than type. The skips beside it are 44
+              too — see `Skip`'s `size`. */}
+          <PlayPauseGlyph playing={state.playing} disabled={!state.ready} scale={0.62} />
+        </Pressable>
+
+        {wide ? (
+          <Skip
+            label={String(SKIP_FORWARD_MS / 1000)}
+            direction="forward"
+            size={44}
+            disabled={!state.ready}
+            onPress={playback.skipForward}
+            testID="mini-player-forward"
+          />
+        ) : null}
+
+        <Pressable
+          testID="mini-player-close"
+          accessibilityRole="button"
+          accessibilityLabel="Stop listening"
+          onPress={closePlayback}
+          style={styles.close}
+        >
+          <Text style={styles.closeGlyph}>×</Text>
+        </Pressable>
       </View>
     </View>
   );
 }
-
 
 const styles = StyleSheet.create({
   bar: {
@@ -231,9 +230,10 @@ const styles = StyleSheet.create({
     backgroundColor: t.border.subtle,
   },
   progressFill: { height: 2, backgroundColor: t.accent.base },
-  // Capped as well as flexed: an uncapped title pushed the transport to the far
-  // end of a 1180px row, hundreds of pixels from what it controls.
-  text: { flexShrink: 1, maxWidth: 520, justifyContent: 'center', minHeight: 40 },
+  // NO CAP. The spacer below is what holds the transport at the end of the row,
+  // so capping the title bought nothing and cost the name of the lecture: at
+  // 1440 it ellipsised at 520px with 450px of bar empty beside it.
+  text: { flexShrink: 1, justifyContent: 'center', minHeight: 40 },
   spacer: { flex: 1 },
   title: { fontSize: 14, fontWeight: '700', color: t.text.primary },
   sub: { fontSize: 12, color: t.text.secondary, marginTop: 1 },

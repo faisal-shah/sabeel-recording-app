@@ -224,7 +224,7 @@ something has to hold on a clean machine rather than this one:
 `gh workflow run ci.yml --ref <branch>`. The trigger block to restore is written
 out at the top of `ci.yml`.
 
-**Scale and cost, measured 2026-09-06:** 1038 checks over 5 viewports x 45
+**Scale and cost, measured 2026-09-06:** 1039 checks over 5 viewports x 45
 screens, **~7m wall clock** (including the shared/functions build, Metro's cold
 bundle and emulator boot). The staff tour covers the work queue, all four
 create sheets open, the People tab's staff half and the More sheet itself; the
@@ -271,7 +271,8 @@ that it is good.
   the DOM against the DOM, which makes them internally consistent and silent
   about *which* width they ran at — so a viewport option that failed to apply
   would leave every one of the sweep's checks green, every screenshot
-  mislabelled, and the five-width claim hollow. One check per context, before the tour, naming both
+  mislabelled, and the five-width claim hollow. One check per context, before
+  the tour, naming both
   `documentElement.clientWidth` and `window.innerWidth` if they diverge. It is
   the file's own headline rule (a tour that cannot fail is a screenshot
   generator) applied to the tour's premise rather than to its steps.
