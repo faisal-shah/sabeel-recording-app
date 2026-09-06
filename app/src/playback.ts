@@ -150,6 +150,14 @@ let dirty = false;
 // displayed position at the target and ignore those stale ticks, so the thumb
 // does not snap backwards right after it is dropped.
 let seekTarget: number | null = null;
+/**
+ * Whether THIS session's source ever loaded.
+ *
+ * `onError` clears `ready` while a fault stands and restores it when the fault
+ * clears — and this is what it restores it to. Without it a recovery would
+ * enable the transport over a source that had never loaded in the first place.
+ */
+let loadedOk = false;
 /*
  * WHEN THE HOLD WAS SET, because a target the player can never report would
  * otherwise hold for ever.
@@ -299,6 +307,7 @@ export function openPlayback(now: NowPlaying): void {
   dirty = false;
   seekTarget = null;
   seekAt = 0;
+  loadedOk = false;
   state = { ...IDLE, now };
   listeners.forEach((l) => l(state));
 
@@ -352,22 +361,32 @@ export function openPlayback(now: NowPlaying): void {
       persist();
     },
     onError: (message) => {
+      if (generation !== gen) return;
       /*
-       * `ready: false` TOO, or the transport stays live over a dead source.
+       * THE TRANSPORT FOLLOWS THE SOURCE, IN BOTH DIRECTIONS.
        *
-       * The two failure paths have to agree: a mint that throws leaves `ready`
-       * false and the player screen draws "Preparing…" with everything
-       * disabled, while an audio error used to leave a fully enabled scrubber,
-       * two skips and four rate chips over a source that never loaded. Tapping
-       * play then set `playing: true` on a player that emits no `play` event,
-       * so even the correction from `onPlayingChanged` could not fire and the
-       * pause glyph sat over silence.
+       * `ready` false while there is an error, because the two failure paths
+       * have to agree: a mint that throws leaves the player screen on
+       * "Preparing…" with everything disabled, while an audio error used to
+       * leave a fully enabled scrubber, two skips and four rate chips over a
+       * source that never loaded.
        *
-       * `openPlayback`'s idempotency guard keys on `!state.error`, so this
-       * remains retryable: leaving the screen and coming back builds a new
-       * player rather than taking the early return.
+       * And `ready` BACK when the error clears, because expo-audio's
+       * `status.error` is transient — "cleared when a new source is loaded or
+       * playback resumes successfully". Latched, a single network blip forty
+       * minutes into a two-hour lecture disabled the transport for good and, via
+       * the `!state.ready` gate on ticks, stopped counting the remaining eighty
+       * minutes while the audio kept playing.
+       *
+       * `playing` is NOT touched here: the player reports that itself through
+       * `onPlayingChanged`, and a source that has genuinely died reports it
+       * paused. Guessing here contradicted that on the recovery path.
+       *
+       * `openPlayback`'s idempotency guard keys on `!state.error`, so a session
+       * left in the failed state stays retryable: leaving the screen and coming
+       * back builds a new player rather than taking the early return.
        */
-      if (generation === gen) set({ error: message, ready: false, playing: false });
+      set({ error: message, ready: message === null && loadedOk });
     },
     onPlayingChanged: (playing) => {
       // The lock screen, the notification controls, a phone call taking audio
@@ -397,10 +416,13 @@ export function openPlayback(now: NowPlaying): void {
       position = prior?.positionMs ?? 0;
       await p.load(url, position);
       if (generation !== gen) return;
-      // NOT OVER AN ERROR. `load` resolves on a failed source as well as a
-      // loaded one — on web it has to, or a stalled request leaves the promise
-      // pending for ever — so the error the player already reported would
-      // otherwise be overwritten here by a ready transport.
+      // THE SOURCE IS LOADED — remembered, so `onError` can put the transport
+      // back when a transient fault clears. NOT ready while an error stands:
+      // `load` resolves on a failed source as well as a loaded one (on web it
+      // has to, or a stalled request leaves the promise pending for ever), so
+      // the error the player already reported would otherwise be overwritten
+      // here by a ready transport.
+      loadedOk = true;
       if (state.error) return;
       set({ ready: true, positionMs: position, listenedMs: listened });
     } catch (e) {

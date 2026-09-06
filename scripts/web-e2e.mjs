@@ -1552,6 +1552,34 @@ check(
   'a cohort-level entry is course-less (null courseId → admin-only)',
   !!cohortEntry && cohortEntry.fields.courseId?.nullValue !== undefined,
 );
+/*
+ * AND IT SAYS WHAT IT CREATED.
+ *
+ * A create's target does not exist until the call has run, so there is nothing
+ * in the request for the wrapper's derivation to pick up — the callable has to
+ * set it itself, and until it did, the most privilege-adjacent thing a manager
+ * can do audited as "somebody created a student" with no way to tell which. Only
+ * a real invocation of the wrapper can prove it, which is why this lives here
+ * and not in a unit test.
+ */
+const targetsOf = (e) => e?.fields?.targets?.mapValue?.fields ?? {};
+const studentEntry = audit.find((e) => e.fields.action?.stringValue === 'createStudent');
+check(
+  'a createStudent entry names the account it created',
+  !!targetsOf(studentEntry).uid?.stringValue,
+  JSON.stringify(Object.keys(targetsOf(studentEntry))),
+);
+check(
+  'a createCohort entry names the cohort it created',
+  !!targetsOf(cohortEntry).cohortId?.stringValue,
+  JSON.stringify(Object.keys(targetsOf(cohortEntry))),
+);
+const sessionEntry = audit.find((e) => e.fields.action?.stringValue === 'createSession');
+check(
+  'a createSession entry names the session it created',
+  !!targetsOf(sessionEntry).sessionId?.stringValue,
+  JSON.stringify(Object.keys(targetsOf(sessionEntry))),
+);
 
 console.log('\nLive data');
 check(

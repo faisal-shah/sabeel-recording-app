@@ -3,7 +3,23 @@
 export interface PlayerEvents {
   onProgress: (positionMs: number) => void;
   onEnded: () => void;
-  onError: (message: string) => void;
+  /**
+   * The CURRENT source error, or null when there is none.
+   *
+   * NULLABLE BECAUSE IT IS A STATE, NOT AN EVENT. expo-audio documents
+   * `status.error` as "cleared when a new source is loaded or playback resumes
+   * successfully" — so a network blip mid-lecture sets it and then clears it,
+   * and treating the first as a one-way latch left a live session with a dead
+   * transport and eighty minutes of listening uncounted. Report the change in
+   * both directions and the session can recover with the player.
+   *
+   * SOURCE errors only. A failure to configure background audio or the
+   * lock-screen controls is not one: the audio plays, the person can do nothing
+   * about it, and routing it here put a native error string in a red band and
+   * (once `ready` followed `error`) refused to play a recording that had loaded
+   * perfectly.
+   */
+  onError: (message: string | null) => void;
   /**
    * The transport changed WITHOUT this app asking.
    *

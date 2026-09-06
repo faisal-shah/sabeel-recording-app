@@ -87,8 +87,41 @@ beforeEach(async () => {
         createdAt: 1,
         createdBy: ADMIN,
       });
-    const rec = (id: string, courseId: string, status: string) =>
+    /*
+     * A SESSION PER RECORDING, WITH ATTENDANCE THAT AGREES WITH THE GRANT —
+     * even though these tests only read a recording's status and course.
+     *
+     * The Functions emulator runs against this same project, so every write here
+     * fires `onRecordingWritten` → `applyRecordingFanout`, which re-reads both
+     * documents and reconciles. A fixture whose session says something different
+     * from its seeded grant is therefore RACING that trigger to undo its own
+     * setup: with no `sessionId` at all, or a session that does not exist, the
+     * reconcile deactivates every grant on the recording — including the one the
+     * student-read cases depend on. It failed about one run in a hundred, which
+     * is the worst rate to debug.
+     *
+     * So each recording gets a session whose submitted attendance produces the
+     * grant the fixture wants, which is what production would have written.
+     */
+    const sess = (id: string, courseId: string, attendance: Record<string, string>) =>
+      setDoc(doc(db, COLLECTIONS.sessions, id), {
+        courseId,
+        cohortId: 'c1',
+        date: '2026-07-06',
+        title: id,
+        dueDate: '2099-01-01',
+        notes: '',
+        recordingId: null,
+        attendance,
+        attendanceSubmittedAt: 1,
+        archived: false,
+        createdAt: 1,
+        createdBy: ADMIN,
+        updatedAt: 1,
+      });
+    const rec = (id: string, courseId: string, status: string, sessionId: string) =>
       setDoc(doc(db, COLLECTIONS.recordings, id), {
+        sessionId,
         cohortId: 'c1',
         courseId,
         title: id,
@@ -105,11 +138,11 @@ beforeEach(async () => {
       });
     // The grant. A student reads a recording through this document and nothing
     // else, so every student-read case below is really a case about one of these.
-    const grant = (recordingId: string, active: boolean) =>
+    const grant = (recordingId: string, active: boolean, sessionId: string) =>
       setDoc(doc(db, COLLECTIONS.assignments, assignmentId(STUDENT, recordingId)), {
         studentUid: STUDENT,
         recordingId,
-        sessionId: 's1',
+        sessionId,
         courseId: CLASS_MINE,
         cohortId: 'c1',
         dueDate: '2099-01-01',
@@ -117,17 +150,26 @@ beforeEach(async () => {
         assignedAt: 1,
         assignedBy: 'system',
       });
+    // Excused → the reconcile grants and keeps granting. Present → it grants
+    // nobody, which is what "never excused" and "grant withdrawn" both need.
+    const EXCUSED = { [STUDENT]: 'excused' };
+    const PRESENT = { [STUDENT]: 'present' };
     await Promise.all([
       cls(CLASS_MINE, [MINE]),
       cls(CLASS_THEIRS, [THEIRS]),
-      rec(PUBLISHED, CLASS_MINE, 'published'),
-      rec(UNGRANTED, CLASS_MINE, 'published'),
-      rec(WITHDRAWN, CLASS_MINE, 'published'),
-      rec(DRAFT, CLASS_MINE, 'draft'),
-      rec(THEIR_REC, CLASS_THEIRS, 'published'),
-      grant(PUBLISHED, true),
-      grant(WITHDRAWN, false),
-      grant(DRAFT, true),
+      sess(`${PUBLISHED}-s`, CLASS_MINE, EXCUSED),
+      sess(`${UNGRANTED}-s`, CLASS_MINE, PRESENT),
+      sess(`${WITHDRAWN}-s`, CLASS_MINE, PRESENT),
+      sess(`${DRAFT}-s`, CLASS_MINE, EXCUSED),
+      sess(`${THEIR_REC}-s`, CLASS_THEIRS, {}),
+      rec(PUBLISHED, CLASS_MINE, 'published', `${PUBLISHED}-s`),
+      rec(UNGRANTED, CLASS_MINE, 'published', `${UNGRANTED}-s`),
+      rec(WITHDRAWN, CLASS_MINE, 'published', `${WITHDRAWN}-s`),
+      rec(DRAFT, CLASS_MINE, 'draft', `${DRAFT}-s`),
+      rec(THEIR_REC, CLASS_THEIRS, 'published', `${THEIR_REC}-s`),
+      grant(PUBLISHED, true, `${PUBLISHED}-s`),
+      grant(WITHDRAWN, false, `${WITHDRAWN}-s`),
+      grant(DRAFT, true, `${DRAFT}-s`),
       setDoc(doc(db, COLLECTIONS.enrollments, enrollmentId(STUDENT, CLASS_MINE)), {
         studentUid: STUDENT,
         courseId: CLASS_MINE,
@@ -360,7 +402,7 @@ describe('listeningProgress', () => {
       await setDoc(doc(c.firestore(), COLLECTIONS.assignments, assignmentId(OUTSIDER, PUBLISHED)), {
         studentUid: OUTSIDER,
         recordingId: PUBLISHED,
-        sessionId: 's1',
+        sessionId: `${PUBLISHED}-s`,
         courseId: CLASS_MINE,
         cohortId: 'c1',
         dueDate: '2099-01-01',

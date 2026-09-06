@@ -291,8 +291,12 @@ that it is good.
 - **Every screen is measured twice — at the top and scrolled to the end.**
   Overlap is judged on what is visible, so a check that only ever looks at the
   top of a page cannot see the bottom of a fourteen-row roster.
-- **Every locator says `.filter({ visible: true })`, and `.first()`/`.last()` are
-  not a substitute.** The stack keeps the screen underneath MOUNTED but hidden,
+- **Every locator in the SWEEP says `.filter({ visible: true })`, and
+  `.first()`/`.last()` are not a substitute.** (In `web-e2e.mjs` the filter is on
+  `tap()` and `sawText()`, which is where the waits are; its direct
+  `page.getByTestId(...)` calls — assertions and one-off waits — do not carry it.
+  Prefer the helpers there, and add the filter to any direct locator that has to
+  wait for something.) The stack keeps the screen underneath MOUNTED but hidden,
   so a locator that does not say "visible" can resolve to a node on that screen —
   one that will never become clickable. Playwright then retries for its whole
   timeout against an element that cannot change, and the run dies at a step with
@@ -300,8 +304,7 @@ that it is good.
   on screen". `getByRole` happens to be immune because role selectors skip
   `display:none` subtrees the way a screen reader does; `getByTestId` is a plain
   CSS attribute selector and is **not**. Diagnosed in the sibling time-tracker's
-  flow suite, at clean HEAD, failing about one run in two. Both suites' `tap()`
-  and `sawText()` helpers carry `.filter({ visible: true })` for this reason.
+  flow suite, at clean HEAD, failing about one run in two.
 - **The header Back is an `<a>`, not a `<button>`.** `PlatformPressable` renders
   `role="link"` when it has an `href`, and the navigator gives it one because
   this app has a linking config. A query for buttons alone reports every pushed

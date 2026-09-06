@@ -147,6 +147,8 @@ export interface RecordingLedger {
    * screen says when this is false and `accountable` is empty.
    */
   loading: boolean;
+  /** A listener was refused, so the roster will never arrive. Not `loading`. */
+  failed: boolean;
   /** Excused, so granted the recording and required to listen — the only people
    *  who can open it at all. */
   accountable: RequiredRow[];
@@ -273,12 +275,24 @@ export function useRecordingLedger(
       };
     };
 
-    // A REFUSAL IS NOT A LOAD. `useLiveQuery` resets to `empty` on a listener
-    // error as well as before the first snapshot, and `empty` here is the same
-    // null — so a manager removed from the class mid-view would sit on
-    // "Checking who holds this recording…" for ever. `today.ts` carries the same
-    // guard for the same reason.
-    const loading = assignments === null && !failed;
+    /*
+     * THREE STATES, NOT TWO — and conflating any pair of them puts a confident
+     * wrong answer on the screen staff use to decide who to chase.
+     *
+     *   unknown  the grants have not arrived. Nothing below is settled.
+     *   failed   a listener was refused. Also unknown, and it will stay that way.
+     *   neither  the roster is what it says.
+     *
+     * `useLiveQuery` resets to `empty` on a listener error as well as before the
+     * first snapshot, so `null` alone cannot tell the first two apart: reading it
+     * as "still loading" leaves a refused manager on "Checking…" for ever, and
+     * reading it as "loaded, and empty" renders `Required 0 / Completed 0 /
+     * Missed 0` over an "Excused, access closed" section naming the whole class.
+     * Both have shipped here. The groups derived by ABSENCE stay empty for
+     * either, and the screen says which one it is.
+     */
+    const unknown = assignments === null;
+    const loading = unknown && !failed;
     const granted = assignments ?? new Map<string, AssignmentDoc>();
     const status = session.attendance;
     // Re-stating dueDate after the spread is what narrows the row to a
@@ -297,13 +311,13 @@ export function useRecordingLedger(
     // reads only ACTIVE assignments, so unenrolling a student or unpublishing the
     // recording drops them out of it while the session still says they were
     // excused — and they belong to neither present nor absent.
-    // EMPTY UNTIL THE GRANTS ARRIVE. Both this group and `otherListeners` are
-    // defined by ABSENCE from `granted`, so before the first snapshot they are
+    // EMPTY WHILE THE GRANTS ARE UNKNOWN. Both this group and `otherListeners`
+    // are defined by ABSENCE from `granted`, so without them they are
     // "everyone" — and each carries a notice stating a cause ("unenrolled, or
     // this recording was unpublished") that has not happened. A section that is
-    // briefly missing is a loading screen; a section that briefly accuses the
-    // whole class of having lost access is not.
-    const lapsed = loading
+    // briefly missing is a loading screen; a section that accuses the whole
+    // class of having lost access is not.
+    const lapsed = unknown
       ? []
       : excused
           .filter((uid) => !granted.has(uid))
@@ -316,10 +330,11 @@ export function useRecordingLedger(
     const otherUids = new Set<string>();
     for (const [uid, c] of completions.entries()) if (c.completed && !known.has(uid)) otherUids.add(uid);
     for (const uid of progress.keys()) if (!known.has(uid)) otherUids.add(uid);
-    const otherListeners = loading ? [] : [...otherUids].map((uid) => row(uid, null, null));
+    const otherListeners = unknown ? [] : [...otherUids].map((uid) => row(uid, null, null));
 
     return {
       loading,
+      failed: unknown && failed,
       accountable,
       attendees,
       absentees,

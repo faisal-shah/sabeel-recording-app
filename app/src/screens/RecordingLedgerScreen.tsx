@@ -43,7 +43,7 @@ export function RecordingLedgerScreen({
   const today = todayInZone(INSTITUTE_TIMEZONE);
   // Reached from the cross-cohort library, where the course name alone is ambiguous.
   const cohortName = useCohortName()(cls.cohortId);
-  const { loading, accountable, attendees, absentees, lapsed, otherListeners, rollup } = useRecordingLedger(
+  const { loading, failed, accountable, attendees, absentees, lapsed, otherListeners, rollup } = useRecordingLedger(
     recording,
     session,
     today,
@@ -100,7 +100,7 @@ export function RecordingLedgerScreen({
           the length of every cold load, on the screen staff consult to decide
           who to chase. Four confident zeros are a worse answer than four
           absent tiles. */}
-      {loading ? null : (
+      {loading || failed ? null : (
         <View style={styles.summary}>
           {/* The product's own words — required listening, completed, missed —
               and not a fifth set for this screen. "Accountable" was also the one
@@ -146,7 +146,9 @@ export function RecordingLedgerScreen({
               staff on nothing having happened. */}
           {loading
             ? 'Checking who holds this recording…'
-            : accountable.length === 0
+            : failed
+              ? 'The roster for this recording could not be read. The message above says why.'
+              : accountable.length === 0
               ? lapsed.length > 0
                 ? 'Nobody holds this recording now — every grant from this session has lapsed. See below.'
                 : 'No one was excused from this session, so nobody has been granted this recording.'

@@ -1,5 +1,5 @@
 import './setup';
-import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
@@ -7,7 +7,6 @@ import {
   INSTITUTE_TIMEZONE,
   todayInZone,
   type AssignmentDoc,
-  type DeviceTokenDoc,
 } from '@sabeel/shared';
 import { notifyAttendanceMissing, notifyLastDay, notifyRecordingReady } from './notifyJobs';
 import { reportError } from './sentry';
@@ -56,10 +55,26 @@ import { SENTRY_DSN } from './reported';
  * serves any shape, and the symptom in production would be a device quietly
  * staying registered to a previous account.
  */
-export const onDeviceRegistered = onDocumentCreated(
+export const onDeviceRegistered = onDocumentWritten(
   { document: `${COLLECTIONS.notifications}/{uid}/devices/{token}`, secrets: [SENTRY_DSN] },
   async (event) => {
     try {
+      /*
+       * ON EVERY WRITE, NOT ONLY THE FIRST.
+       *
+       * `registerThisDevice` uses `setDoc`, which Firestore evaluates as an
+       * UPDATE once the row exists — so a re-registration fired no create at
+       * all. With `onDocumentCreated`, a duplicate pair that ever formed was
+       * permanent: neither account re-registering could clear it, and one
+       * transient failure of one invocation (a still-building index right after
+       * a deploy, say) was enough to form one. It also gives the sweep a way to
+       * run over registrations that predate it, since signing in re-writes them.
+       *
+       * A DELETE is the one write to ignore: the document is gone, so there is
+       * nothing to keep, and sweeping on it would race the deletes this handler
+       * itself performs.
+       */
+      if (!event.data?.after.exists) return;
       const rows = await getFirestore()
         .collectionGroup('devices')
         .where('token', '==', event.params.token)
@@ -71,14 +86,22 @@ export const onDeviceRegistered = onDocumentCreated(
        * together produce two invocations that can run in either order, and a
        * trigger that trusts its own params to be the winner then has each one
        * delete the other's row — both accounts lose the device, which is worse
-       * than the leak this exists to close. `registeredAt` is a total order the
-       * two invocations agree on, so both converge on the same survivor. It is
-       * written by the client, but every row here is the same physical device
-       * and therefore the same clock. The path breaks a tie, so agreement does
-       * not depend on sort stability.
+       * than the leak this exists to close. An order both invocations agree on
+       * makes them converge on the same survivor.
+       *
+       * `updateTime`, NOT the document's own `registeredAt`. That field is
+       * written by the client, and this is the one decision on the platform a
+       * client could otherwise buy: a student who wrote `registeredAt:
+       * Number.MAX_SAFE_INTEGER` onto their own row would win every future
+       * comparison, so a shared classroom device would keep delivering to them
+       * and silently stop delivering to everyone who used it afterwards. A
+       * backwards clock correction between two honest registrations does the
+       * same thing by accident. `updateTime` is Firestore's, at nanosecond
+       * resolution; the path breaks a tie so agreement does not depend on sort
+       * stability.
        */
       const ordered = rows.docs
-        .map((d) => ({ ref: d.ref, at: (d.data() as DeviceTokenDoc).registeredAt ?? 0 }))
+        .map((d) => ({ ref: d.ref, at: d.updateTime.toMillis() }))
         .sort((a, b) => b.at - a.at || a.ref.path.localeCompare(b.ref.path));
       await Promise.all(ordered.slice(1).map((r) => r.ref.delete()));
     } catch (e) {

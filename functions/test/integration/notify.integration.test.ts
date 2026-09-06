@@ -77,7 +77,17 @@ afterEach(() => {
   resetSender();
 });
 
-async function withDevice(uid: string, token = `tok-${uid}`, registeredAt = 1) {
+/*
+ * A fresh `registeredAt` per call, like the app's own `registerThisDevice`.
+ *
+ * A `set` whose content is byte-identical to what is already there does not
+ * reach the trigger, so a fixture that re-registered with a fixed timestamp was
+ * testing a write the app never makes — and made a re-registration look like
+ * something the sweep ignores.
+ */
+let registrationClock = 1;
+
+async function withDevice(uid: string, token = `tok-${uid}`, registeredAt = (registrationClock += 1)) {
   await db()
     .collection(COLLECTIONS.notifications)
     .doc(uid)
@@ -340,10 +350,10 @@ describe('a token registered to a new account leaves the old one', () => {
   }
 
   it('removes the same token from every other account', async () => {
-    await withDevice('student-a', TOKEN, 1000);
+    await withDevice('student-a', TOKEN);
     await settled('student-a', true);
 
-    await withDevice('student-b', TOKEN, 2000);
+    await withDevice('student-b', TOKEN);
     await settled('student-a', false);
     // And the account that just registered keeps it.
     expect((await devices('student-b').doc(TOKEN).get()).exists).toBe(true);
@@ -352,18 +362,44 @@ describe('a token registered to a new account leaves the old one', () => {
   /*
    * TRIGGER DELIVERY IS NOT ORDERED, and a trigger that treats its own document
    * as the winner has each invocation delete the other's row — leaving the
-   * device registered to nobody, which is worse than the leak. Both writes here
-   * land before either invocation can run.
+   * device registered to NOBODY, which is worse than the leak it exists to
+   * close. Both writes here land before either invocation can run, so the
+   * claim is about convergence, not about which account wins.
    */
-  it('converges on the newest registration however the triggers interleave', async () => {
+  it('converges on exactly one registration however the triggers interleave', async () => {
     await Promise.all([
-      withDevice('student-a', TOKEN, 1000),
-      withDevice('student-b', TOKEN, 2000),
+      withDevice('student-a', TOKEN),
+      withDevice('student-b', TOKEN),
     ]);
-    await settled('student-a', false);
+    const survivors = async () =>
+      (
+        await Promise.all(
+          ['student-a', 'student-b'].map((uid) => devices(uid).doc(TOKEN).get()),
+        )
+      ).filter((d) => d.exists).length;
+
+    for (let i = 0; i < 60 && (await survivors()) > 1; i += 1) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    // Settle, then confirm it stayed at one rather than passing through it.
     await new Promise((r) => setTimeout(r, 1500));
-    expect((await devices('student-b').doc(TOKEN).get()).exists).toBe(true);
+    expect(await survivors()).toBe(1);
   });
+
+  /*
+   * NOTE ON WHAT IS NOT TESTED HERE.
+   *
+   * The trigger is `onDocumentWritten` rather than `onDocumentCreated`, so a
+   * re-registration re-runs the sweep. That matters only for a duplicate the
+   * sweep FAILED to clear — one invocation dying on a still-building index, say
+   * — because while the sweep is working every registration finds the other row
+   * already gone and is therefore a create. There is no way to stage that state
+   * from a test: any row written here fires the sweep and is cleaned up.
+   *
+   * So the recovery path is asserted at the declaration instead, in
+   * `functions/test/unit/deviceSweep.test.ts`. Writing a behavioural test that
+   * passes under `onDocumentCreated` too would be worse than none.
+   */
 
   it('leaves an unrelated device alone', async () => {
     await withDevice('student-a', 'a-different-phone');

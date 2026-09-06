@@ -53,6 +53,8 @@ const OUTSIDER = 'stu2';
 const CLASS_MINE = 'classMine';
 const CLASS_THEIRS = 'classTheirs';
 const REC = 'rec1';
+/** Granted, with NO completion seeded — so a write to it is a CREATE. */
+const REC2 = 'rec2';
 const THEIR_REC = 'recTheirs';
 
 beforeEach(async () => {
@@ -86,6 +88,7 @@ beforeEach(async () => {
       cls(CLASS_MINE, [MINE]),
       cls(CLASS_THEIRS, [THEIRS]),
       assignment(STUDENT, REC, CLASS_MINE),
+      assignment(STUDENT, REC2, CLASS_MINE),
       assignment(OUTSIDER, THEIR_REC, CLASS_THEIRS),
       completion(STUDENT, REC),
     ]);
@@ -218,10 +221,29 @@ describe('completions: self-only client writes', () => {
     );
   });
 
+  /*
+   * A CREATE, NOT AN UPDATE — and the distinction is the whole test.
+   *
+   * `beforeEach` seeds `completions/stu1_rec1`, so a `setDoc` at that id
+   * evaluates `allow update`. With every positive case pointed there, `allow
+   * create: if false` passed the entire suite while no student could ever record
+   * a first completion — the core student action, and the one that has to work
+   * offline. So this uses a recording with a grant and NO completion yet.
+   */
   it('a student creates their own completion', async () => {
-    // REC, not an id with no grant behind it: the class a completion is filed
-    // under has to match the grant it came from, so a completion for a recording
-    // nobody assigned is refused — see the case below.
+    await assertSucceeds(
+      setDoc(doc(student().firestore(), COLLECTIONS.completions, completionId(STUDENT, REC2)), {
+        studentUid: STUDENT,
+        recordingId: REC2,
+        courseId: CLASS_MINE,
+        completed: true,
+        completedAt: 2,
+        updatedAt: 2,
+      }),
+    );
+  });
+
+  it('a student updates the completion they already have', async () => {
     await assertSucceeds(
       setDoc(doc(student().firestore(), COLLECTIONS.completions, completionId(STUDENT, REC)), {
         studentUid: STUDENT,

@@ -159,6 +159,58 @@ describe('device tokens', () => {
     );
   });
 
+  /*
+   * THE ROW IS READ BY THE SEND PATH AND ORDERED BY A TRIGGER, so a field
+   * nobody expects is a field nobody validates. `registeredAt` in particular is
+   * bounded: a row claiming to be registered in the year 50,000 is a claim about
+   * ordering, and the one decision on this platform a client should not be able
+   * to buy. (`onDeviceRegistered` orders by Firestore's own `updateTime` for
+   * exactly that reason — this is the second lock on the same door.)
+   */
+  it('does NOT let a device row carry a field the shape has no room for', async () => {
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.notifications, STUDENT, 'devices', 'tok-c'), {
+        token: 'tok-c',
+        platform: 'web',
+        registeredAt: 2,
+        priority: 'always-mine',
+      }),
+    );
+  });
+
+  it('does NOT let a device claim to have registered in the future', async () => {
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.notifications, STUDENT, 'devices', 'tok-d'), {
+        token: 'tok-d',
+        platform: 'web',
+        registeredAt: Number.MAX_SAFE_INTEGER,
+      }),
+    );
+  });
+
+  /*
+   * A whole number of milliseconds, which is what `Date.now()` is. Tested with a
+   * FLOAT rather than a string: a string fails the bound above anyway (comparing
+   * one to a number is an evaluation error, which denies), so only a number that
+   * is not an integer distinguishes `is int` from the bound.
+   */
+  it('does NOT let registeredAt be a non-integer', async () => {
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.notifications, STUDENT, 'devices', 'tok-e'), {
+        token: 'tok-e',
+        platform: 'web',
+        registeredAt: 1.5,
+      }),
+    );
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.notifications, STUDENT, 'devices', 'tok-f'), {
+        token: 'tok-f',
+        platform: 'web',
+        registeredAt: 'now',
+      }),
+    );
+  });
+
   it('does NOT let anyone read or plant a token on someone else', async () => {
     const db = other().firestore();
     await assertFails(getDocs(collection(db, COLLECTIONS.notifications, STUDENT, 'devices')));

@@ -88,7 +88,7 @@ interface Fake {
   events: {
     onProgress: (ms: number) => void;
     onEnded: () => void;
-    onError: (m: string) => void;
+    onError: (m: string | null) => void;
     onPlayingChanged: (playing: boolean) => void;
   };
   loaded: string | null;
@@ -983,10 +983,12 @@ describe('a transport change from outside the app', () => {
     pb.openPlayback(recording('rec-a'));
     await flush();
     pb.playback.play();
-    // A source that never loads: the error arrives on the status stream.
+    // A source that dies reports the fault AND reports itself paused — the
+    // session takes `playing` from the transport, never from the fault.
     players[0].events.onError('audio error 4');
-
     players[0].playing = false;
+    players[0].events.onPlayingChanged(false);
+
     pb.playback.toggle();
     // A transport that thinks it is playing over a dead source answers the next
     // tap with a pause, so the student cannot even try again.
@@ -1013,6 +1015,45 @@ describe('a transport change from outside the app', () => {
     await pb.closePlayback();
     // Nothing was heard, so nothing is written — and certainly not half a minute
     // of listening against a lecture that never started.
+    expect(docOf('rec-a')).toBeUndefined();
+  });
+
+  /*
+   * AND IT COMES BACK WHEN THE FAULT DOES.
+   *
+   * expo-audio documents `status.error` as transient — "cleared when a new
+   * source is loaded or playback resumes successfully" — so a network blip forty
+   * minutes into a two-hour lecture sets it and then clears it. Latched, that
+   * disabled the transport for good and, through the `!ready` gate on ticks,
+   * stopped counting the remaining eighty minutes while the audio kept playing:
+   * the ledger then reported a third of a lecture as the evidence.
+   */
+  it('restores the transport when a transient fault clears', async () => {
+    const pb = await load();
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    players[0].events.onProgress(10_000);
+
+    players[0].events.onError('network blip');
+    players[0].events.onProgress(20_000); // ignored — nothing is ready
+    players[0].events.onError(null);
+    players[0].events.onProgress(40_000); // counted again
+
+    await pb.closePlayback();
+    expect(docOf('rec-a')?.positionMs).toBe(40_000);
+  });
+
+  it('does not restore a transport over a source that never loaded', async () => {
+    const pb = await load();
+    holdLoad = true;
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    players[0].events.onError('audio error 4');
+    players[0].events.onError(null);
+
+    players[0].events.onProgress(30_000);
+    await pb.closePlayback();
+    // The fault clearing says nothing about a load that never finished.
     expect(docOf('rec-a')).toBeUndefined();
   });
 

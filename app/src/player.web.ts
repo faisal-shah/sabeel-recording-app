@@ -29,6 +29,10 @@ export function createPlayer(events: PlayerEvents): Player {
   el.addEventListener('error', () =>
     events.onError(el.error ? `audio error ${el.error.code}` : 'audio error'),
   );
+  // The other direction — the element recovered, so the session may re-enable
+  // its transport. `loadstart` fires on every new source, `canplay` once one is
+  // actually playable; both mean the previous failure is over.
+  el.addEventListener('canplay', () => events.onError(null));
   // The element pauses itself at the end of the media and when the browser's own
   // media keys are used, neither of which goes through `playback.pause()`.
   el.addEventListener('play', () => events.onPlayingChanged(true));

@@ -43,17 +43,31 @@ describe('pruneDetail', () => {
  * whose target does not exist until the call has run.
  */
 describe('deriveTargets', () => {
+  /*
+   * NAMED EXACTLY, not merely "non-empty". `createSession`'s payload carries a
+   * `courseId`, so a length check passed on a key that is not what the callable
+   * acted on — and would have gone on passing with `sessionId` missing from
+   * `ID_KEYS`, which is the whole reason this describe exists. These are the
+   * callables that rely on the derivation; the two that set their own targets
+   * are below.
+   */
   it.each([
-    ['deleteSession', { sessionId: 's1' }],
-    ['updateSession', { sessionId: 's1', title: 'x', date: '2026-09-06' }],
-    ['submitAttendance', { sessionId: 's1', attendance: {} }],
-    ['createSession', { courseId: 'c1', title: 'x' }],
-    ['setRecordingStatus', { recordingId: 'r1', status: 'published' }],
-    ['createEnrollment', { studentUid: 'u1', courseId: 'c1' }],
-    ['setStaffAccess', { uid: 'u1', status: 'disabled' }],
-    ['setCohortArchived', { cohortId: 'k1', archived: true }],
-  ])('names what %s acted on', (_callable, payload) => {
-    expect(Object.keys(deriveTargets(payload)).length).toBeGreaterThan(0);
+    ['deleteSession', { sessionId: 's1' }, { sessionId: 's1' }],
+    [
+      'updateSession',
+      { sessionId: 's1', title: 'x', date: '2026-09-06' },
+      { sessionId: 's1' },
+    ],
+    ['setRecordingStatus', { recordingId: 'r1', status: 'published' }, { recordingId: 'r1' }],
+    [
+      'createEnrollment',
+      { studentUid: 'u1', courseId: 'c1' },
+      { studentUid: 'u1', courseId: 'c1' },
+    ],
+    ['setStaffAccess', { uid: 'u1', status: 'disabled' }, { uid: 'u1' }],
+    ['setCohortArchived', { cohortId: 'k1', archived: true }, { cohortId: 'k1' }],
+  ])('names what %s acted on', (_callable, payload, expected) => {
+    expect(deriveTargets(payload)).toEqual(expected);
   });
 
   it('picks up every id in a payload, and nothing else', () => {

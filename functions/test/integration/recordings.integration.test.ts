@@ -278,10 +278,20 @@ describe('applyDeleteRecording', () => {
       await expect(requireDeleteRights(req, await rec(id), id)).resolves.toBeUndefined();
     });
 
-    it('refuses a manager once anything at all points at the draft', async () => {
+    /*
+     * EVERY COLLECTION, ONE AT A TIME. `seedDeps` writes a row into all five at
+     * once, so a test using it proves only that the probe looks at SOME of them
+     * — narrowing `hasRecordingHistory` to `[assignments]` would leave a manager
+     * able to permanently delete a draft carrying completions, listening
+     * progress, events and overrides, with nothing failing.
+     */
+    it.each(DEPS)('refuses a manager once %s points at the draft', async (coll) => {
       const { id } = await newDraft();
       const req = await scopedManager('mgr-1');
-      await seedDeps(id);
+      await getFirestore()
+        .collection(coll)
+        .doc(`stu-1_${id}`)
+        .set({ recordingId: id, studentUid: 'stu-1', courseId });
       await expect(requireDeleteRights(req, await rec(id), id)).rejects.toMatchObject({
         code: 'permission-denied',
       });
@@ -289,10 +299,15 @@ describe('applyDeleteRecording', () => {
       await expect(requireDeleteRights(admin(), await rec(id), id)).resolves.toBeUndefined();
     });
 
+    /*
+     * WITHOUT SEEDING ANY DEPENDENT ROW, deliberately: `publishedAt` alone must
+     * carry this. With `seedDeps` here, reverting the gate from `isDiscardable`
+     * to `isEmptyDraft` still failed on the collection probe, so the test said
+     * nothing about the predicate it was written for.
+     */
     it('refuses a manager a recording walked back to an empty draft after publishing', async () => {
       const id = await ready();
       await applyRecordingStatus({ recordingId: id, status: 'published' });
-      await seedDeps(id); // what publishing fans out
       await applyRecordingStatus({ recordingId: id, status: 'unpublished' });
       await applyRecordingStatus({ recordingId: id, status: 'draft' });
       await clearAudio(id);

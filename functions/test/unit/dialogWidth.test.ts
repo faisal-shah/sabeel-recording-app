@@ -23,13 +23,19 @@ const REPO = resolve(import.meta.dirname, '../../..');
 const read = (p: string) => readFileSync(resolve(REPO, p), 'utf8');
 
 describe('the sheet', () => {
-  // ANCHORED TO THE PANEL. An unanchored `maxWidth:` was right only by
-  // ordering — `backdrop` is declared first and simply happens not to set one,
-  // so adding one there would silently redirect this (and the sweep, which
-  // parses the same way) to a number that is not the dialog's cap.
-  const cap = Number(
-    read('app/src/components/Sheet.tsx').match(/panel:\s*\{[\s\S]*?maxWidth:\s*(\d+)/)?.[1],
-  );
+  /*
+   * ANCHORED TO THE PANEL'S OWN BLOCK, not merely "after `panel:`".
+   *
+   * `/panel:\s*\{[\s\S]*?maxWidth:/` is lazy but unbounded, so it finds the
+   * first `maxWidth:` at or after `panel: {` — which is inside the block only
+   * because `panel` happens to declare one. Move it to a style below and the
+   * same regex reads a number that is not the dialog's cap, which is exactly the
+   * ordering accident it was written to remove. Cutting the source at the block's
+   * closing brace first makes the anchor real.
+   */
+  const sheetSrc = read('app/src/components/Sheet.tsx');
+  const panelBlock = sheetSrc.slice(sheetSrc.indexOf('panel: {')).split('\n  },')[0];
+  const cap = Number(panelBlock.match(/maxWidth:\s*(\d+)/)?.[1]);
   const contentMax = Number(
     read('app/src/theme/index.ts').match(/CONTENT_MAX_WIDTH\s*=\s*(\d+)/)?.[1],
   );

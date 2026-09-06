@@ -52,6 +52,7 @@ export function createPlayer(events: PlayerEvents): Player {
   const player = createAudioPlayer(null);
 
   let playing: boolean | null = null;
+  let sourceError: string | null = null;
   const sub = player.addListener('playbackStatusUpdate', (status) => {
     /*
      * THE ERROR FIELD, WHICH NOTHING WAS READING. `onError` was reachable only
@@ -64,7 +65,15 @@ export function createPlayer(events: PlayerEvents): Player {
      * early-return branch and could not retry. The only way out was the × on
      * the docked bar.
      */
-    if (status.error) events.onError(status.error);
+    // ON CHANGE, IN BOTH DIRECTIONS. `status.error` is a sticky field, so
+    // reporting it on every update re-rendered both surfaces at the status rate
+    // for as long as a failed session stayed open — and never told anyone when
+    // it cleared, which expo-audio documents as the normal end of a transient
+    // fault.
+    if (status.error !== sourceError) {
+      sourceError = status.error;
+      events.onError(sourceError);
+    }
     if (status.currentTime != null) events.onProgress(status.currentTime * 1000);
     // Only on a CHANGE: this fires several times a second.
     if (status.playing !== playing) {
@@ -97,7 +106,15 @@ export function createPlayer(events: PlayerEvents): Player {
       await requestNotificationPermissionsAsync();
       player.setActiveForLockScreen(true);
     } catch (e) {
-      events.onError(`audio setup: ${(e as Error).message}`);
+      /*
+       * LOGGED, NOT SURFACED. Background playback or the lock-screen controls
+       * failing to configure does not stop the audio, and there is nothing the
+       * person can do — while `onError` puts a native message in a full-width
+       * red band and, since the transport follows it, refused to play a
+       * recording that had loaded perfectly. A source error is the only thing
+       * that channel is for.
+       */
+      console.warn('audio setup', (e as Error).message);
     }
   })();
 

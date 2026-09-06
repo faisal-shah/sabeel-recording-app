@@ -110,7 +110,9 @@ export function CourseDetailScreen({
    * `[...old, M2]`, which lands after the first write and drops M1's assignment
    * with no error anywhere.
    */
-  const [managerBusy, setManagerBusy] = useState<{ uid: string; want: boolean } | null>(null);
+  const [managerBusy, setManagerBusy] = useState<{ uid: string; want: boolean; was: string } | null>(
+    null,
+  );
   /*
    * HELD UNTIL THE SNAPSHOT AGREES, not until the callable answers.
    *
@@ -121,15 +123,26 @@ export function CourseDetailScreen({
    * array again. Clearing on the response fixed the shared-slot half of this
    * and left the window.
    */
+  /*
+   * SETTLED = THE SNAPSHOT MOVED, not "the snapshot says what I asked for".
+   *
+   * Waiting for the exact value is a state with no exit if somebody else edits
+   * the same list in between: two admins, or one in two tabs, and every manager
+   * row stays disabled behind a spinner until the screen is popped. Any change
+   * to the array means the listener has caught up and `on` is trustworthy
+   * again, which is all the lock needs — and if that change is not the one that
+   * was asked for, the row simply draws the truth.
+   */
   const managerSettled = managerBusy
-    ? cls.managerUids.includes(managerBusy.uid) === managerBusy.want
+    ? cls.managerUids.includes(managerBusy.uid) === managerBusy.want ||
+      cls.managerUids.join(',') !== managerBusy.was
     : true;
   const managerWriteInFlight = managerBusy !== null && !managerSettled;
   useEffect(() => {
     if (managerSettled) setManagerBusy(null);
   }, [managerSettled]);
   const runManager = async (uid: string, want: boolean, fn: () => Promise<void>) => {
-    setManagerBusy({ uid, want });
+    setManagerBusy({ uid, want, was: cls.managerUids.join(',') });
     setError(null);
     try {
       await fn();

@@ -56,9 +56,13 @@ export function StudentHomeScreen({
   // `Screen` renders the error banner itself; this only stops the screen
   // claiming to still be looking.
   const failed = useListenerFailed(['myAssignments']);
-  const checking = granted === null && !failed;
   const completions = useMyCompletions(uid);
-  const resolved = useResolvedRecordings(assignments.map((a) => a.recordingId));
+  const { resolved, resolving } = useResolvedRecordings(assignments.map((a) => a.recordingId));
+  // BOTH LEGS. The grants arriving is not the same as the screen having
+  // something to show: every row is looked up one at a time afterwards, and
+  // until those land the list is empty for a reason that is not "nothing to
+  // listen to".
+  const checking = (granted === null && !failed) || resolving;
 
   // On launch, replay any completion this device marked offline and then lost to
   // an app kill before it synced (native only; a no-op on web). Runs once the
@@ -185,6 +189,10 @@ export function StudentHomeScreen({
           this app for them. So it waits for the grants to arrive. */}
       {checking ? (
         <Empty>Checking what you have to listen to…</Empty>
+      ) : granted === null ? (
+        // Refused, not empty — and the banner above already says why. Saying
+        // "nothing to listen to" underneath it would contradict it.
+        <Empty>Your listening could not be loaded. The message above says why.</Empty>
       ) : rows.length === 0 ? (
         <Empty>Nothing to listen to right now. New recordings will appear here.</Empty>
       ) : (
@@ -315,12 +323,26 @@ async function readIfPermitted(collectionPath: string, id: string) {
  * seconds later, which cleared the screen up again and made the whole thing look
  * like nothing had happened.
  */
-function useResolvedRecordings(
-  recordingIds: string[],
-): Map<string, { recording: RecordingRow; cls: CourseRow }> {
-  const [resolved, setResolved] = useState<
-    Map<string, { recording: RecordingRow; cls: CourseRow }>
-  >(new Map());
+function useResolvedRecordings(recordingIds: string[]): {
+  resolved: Map<string, { recording: RecordingRow; cls: CourseRow }>;
+  /**
+   * Whether the reads for the CURRENT set of ids are still in flight.
+   *
+   * The map is empty until the whole loop finishes, and the loop is sequential —
+   * one get per recording plus one per uncached course. For a student with eight
+   * assignments across two courses that is ten serial round trips, and for all
+   * of them every row mapped to null and the screen said "Nothing to listen to
+   * right now. New recordings will appear here." The grants having arrived is
+   * not the same as the screen having something to show.
+   */
+  resolving: boolean;
+} {
+  // KEYED BY THE IDS IT ANSWERS FOR. A bare map cannot say whether it describes
+  // the current request or the previous one.
+  const [state, setState] = useState<{
+    key: string;
+    map: Map<string, { recording: RecordingRow; cls: CourseRow }>;
+  }>({ key: '', map: new Map() });
   const key = useMemo(() => [...new Set(recordingIds)].sort().join(','), [recordingIds]);
 
   useEffect(() => {
@@ -347,17 +369,20 @@ function useResolvedRecordings(
       } catch (e) {
         // Keep the last good list rather than showing a short one, and say so
         // off-device — this used to be an unhandled rejection nobody could see.
+        // STILL SETTLED, though: leaving `key` behind would leave the screen on
+        // "Checking…" for ever, which is the other half of the same mistake.
         captureError(e, { source: 'resolveAssignedRecordings' });
+        if (!cancelled) setState((prev) => ({ key, map: prev.map }));
         return;
       }
-      if (!cancelled) setResolved(out);
+      if (!cancelled) setState({ key, map: out });
     })();
     return () => {
       cancelled = true;
     };
   }, [key]);
 
-  return resolved;
+  return { resolved: state.map, resolving: state.key !== key };
 }
 
 const styles = StyleSheet.create({

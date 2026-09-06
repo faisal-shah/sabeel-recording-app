@@ -92,7 +92,11 @@ async function seedSession(
 /** A recording written straight to Firestore — reconcile only reads its status. */
 async function seedRecording(id: string, sessionId: string, status: RecordingDoc['status']) {
   const doc: RecordingDoc = {
-    sessionId,
+    // NAMESPACED, like the document it is written under. Left raw, the recording
+    // pointed at a session id no document has — so the emulator's own
+    // `onRecordingWritten` short-circuited on every write here, and the fixture
+    // resembled the trigger path without exercising it.
+    sessionId: ns(sessionId),
     courseId,
     cohortId,
     title: id,
