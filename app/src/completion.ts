@@ -22,9 +22,16 @@ export interface CompletionState {
 
 /**
  * The student's active obligations. Self-constrained, as the rule requires.
+ *
+ * `null` UNTIL THE FIRST SNAPSHOT. An empty array is the answer "you have
+ * nothing to listen to", and the student home renders it as exactly that
+ * sentence — "Nothing to listen to right now. New recordings will appear here."
+ * — so an empty stand-in for "nothing has arrived yet" tells a student with
+ * three recordings due that they have none, on the screen that is the whole
+ * point of the app for them.
  */
-export function useMyAssignments(uid: string | null): AssignmentRow[] {
-  return useLiveQuery<AssignmentRow[]>(
+export function useMyAssignments(uid: string | null): AssignmentRow[] | null {
+  return useLiveQuery<AssignmentRow[] | null>(
     () =>
       uid
         ? query(
@@ -37,7 +44,7 @@ export function useMyAssignments(uid: string | null): AssignmentRow[] {
     {
       label: 'myAssignments',
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as AssignmentDoc) })),
-      empty: [],
+      empty: null,
     },
   );
 }

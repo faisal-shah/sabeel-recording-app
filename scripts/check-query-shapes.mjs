@@ -165,6 +165,21 @@ const shapes = [
     'auditLog — global, newest first (admin audit view)',
     () => db.collection('auditLog').orderBy('at', 'desc').limit(AUDIT_PAGE),
   ],
+  /*
+   * THE ONE SHAPE NO SCREEN SENDS — `onDeviceRegistered`'s sweep.
+   *
+   * A COLLECTION GROUP query, and Firestore does NOT create single-field
+   * indexes for collection-group scope automatically: it needs the
+   * `fieldOverrides` entry in `firestore.indexes.json`. Nothing else here would
+   * notice a missing one, because the emulator serves any shape and the trigger
+   * fails silently from a user's point of view — the symptom is a device
+   * quietly staying registered to a previous account, which is the leak the
+   * trigger exists to close.
+   */
+  [
+    'devices — the same token under any other account (onDeviceRegistered)',
+    () => db.collectionGroup('devices').where('token', '==', ID),
+  ],
   // ---- Phase 5c: recording-ledger reads ----
   //
   // All four pin courseId. That is not an optimisation and it is not optional:

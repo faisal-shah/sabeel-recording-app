@@ -142,6 +142,31 @@ export function isEmptyDraft(recording: {
   );
 }
 
+/**
+ * A recording that can be thrown away rather than permanently deleted.
+ *
+ * `isEmptyDraft` says "needs audio" — a state a recording can arrive in from
+ * either direction. This says "and it never held anything", which is the
+ * question the delete gate is actually asking, and `publishedAt` is what answers
+ * it: set on the first publish and never cleared, so a recording walked back
+ * (`published → unpublished → draft`, then `clearAudio`) is excluded even though
+ * its shape is identical to a fresh draft's.
+ *
+ * The SERVER does not trust this — `requireDeleteRights` asks the collections,
+ * which is the only authority and also covers a recording predating the field.
+ * This is what lets the CLIENT offer the right button and the right words:
+ * "Discard … nothing is lost" over a recording with a term of listening history
+ * behind it was the confirmation getting it wrong, and a manager was shown a
+ * Discard that could only ever return permission-denied.
+ */
+export function isDiscardable(recording: {
+  audioPath: string | null;
+  status: RecordingStatus;
+  publishedAt?: number;
+}): boolean {
+  return isEmptyDraft(recording) && !recording.publishedAt;
+}
+
 /** Students only ever see published recordings. */
 export function isVisibleToStudents(status: RecordingStatus): boolean {
   return status === 'published';

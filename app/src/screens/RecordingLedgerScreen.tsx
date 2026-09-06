@@ -94,19 +94,35 @@ export function RecordingLedgerScreen({
     >
       {error ? <Notice tone="error">{error}</Notice> : null}
 
-      <View style={styles.summary}>
-        {/* The product's own words — required listening, completed, missed —
-            and not a fifth set for this screen. "Accountable" was also the one
-            label too long for its tile. */}
-        <Stat label="Required" value={rollup.total} />
-        {/* THE TONE FOLLOWS THE VALUE, never the label. Bound to the word,
-            "0 Completed" came out in the success green — a green zero at the top
-            of the accountability screen — while a healthy "0 Missed" still had
-            to be told apart from a bad one. */}
-        <Stat label="Completed" value={rollup.complete} tone={rollup.complete > 0 ? 'success' : undefined} />
-        <Stat label="Not complete" value={rollup.incomplete} />
-        <Stat label="Missed" value={rollup.missed} tone={rollup.missed > 0 ? 'danger' : undefined} />
-      </View>
+      {/* NOT UNTIL THE GRANTS ARRIVE. `rollup` is derived from `accountable`,
+          which is empty while the roster is unknown — so the first thing on the
+          page read `Required 0 / Completed 0 / Not complete 0 / Missed 0` for
+          the length of every cold load, on the screen staff consult to decide
+          who to chase. Four confident zeros are a worse answer than four
+          absent tiles. */}
+      {loading ? null : (
+        <View style={styles.summary}>
+          {/* The product's own words — required listening, completed, missed —
+              and not a fifth set for this screen. "Accountable" was also the one
+              label too long for its tile. */}
+          <Stat label="Required" value={rollup.total} />
+          {/* THE TONE FOLLOWS THE VALUE, never the label. Bound to the word,
+              "0 Completed" came out in the success green — a green zero at the
+              top of the accountability screen — while a healthy "0 Missed"
+              still had to be told apart from a bad one. */}
+          <Stat
+            label="Completed"
+            value={rollup.complete}
+            tone={rollup.complete > 0 ? 'success' : undefined}
+          />
+          <Stat label="Not complete" value={rollup.incomplete} />
+          <Stat
+            label="Missed"
+            value={rollup.missed}
+            tone={rollup.missed > 0 ? 'danger' : undefined}
+          />
+        </View>
+      )}
 
       <View style={styles.toolbar}>
         <Chips value={filter} testIdPrefix="ledger-filter" options={LEDGER_FILTERS} onChange={setFilter} />

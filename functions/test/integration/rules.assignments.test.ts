@@ -219,13 +219,16 @@ describe('completions: self-only client writes', () => {
   });
 
   it('a student creates their own completion', async () => {
+    // REC, not an id with no grant behind it: the class a completion is filed
+    // under has to match the grant it came from, so a completion for a recording
+    // nobody assigned is refused — see the case below.
     await assertSucceeds(
-      setDoc(doc(student().firestore(), COLLECTIONS.completions, completionId(STUDENT, 'rNew')), {
+      setDoc(doc(student().firestore(), COLLECTIONS.completions, completionId(STUDENT, REC)), {
         studentUid: STUDENT,
-        recordingId: 'rNew',
+        recordingId: REC,
         courseId: CLASS_MINE,
-        completed: true,
-        completedAt: 2,
+        completed: false,
+        completedAt: null,
         updatedAt: 2,
       }),
     );
@@ -239,22 +242,55 @@ describe('completions: self-only client writes', () => {
    * for ever: their write becomes an update, `resource.data.studentUid` is
    * somebody else, and `delete: if false` leaves no way back.
    */
-  it('a student cannot plant an honest completion under someone else’s id', async () => {
+  /*
+   * THE CLASS IS THE GRANT'S — the completions half of the same rule. This is
+   * the collection the ledger's completion column reads, `courseId ==` scoped,
+   * so a row filed under another class shows the student complete on their own
+   * home and NOT complete to the manager chasing them, with nothing reconciling
+   * the two.
+   */
+  it('a student cannot file a completion under another class', async () => {
     await assertFails(
-      setDoc(doc(outsider().firestore(), COLLECTIONS.completions, completionId(STUDENT, 'rNew')), {
-        studentUid: OUTSIDER,
-        recordingId: 'rNew',
+      setDoc(doc(student().firestore(), COLLECTIONS.completions, completionId(STUDENT, REC)), {
+        studentUid: STUDENT,
+        recordingId: REC,
+        courseId: CLASS_THEIRS,
+        completed: true,
+        completedAt: 2,
+        updatedAt: 2,
+      }),
+    );
+  });
+
+  it('a student cannot mark complete a recording they were never granted', async () => {
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.completions, completionId(STUDENT, 'rNever')), {
+        studentUid: STUDENT,
+        recordingId: 'rNever',
         courseId: CLASS_MINE,
         completed: true,
         completedAt: 2,
         updatedAt: 2,
       }),
     );
-    // And the rightful owner can still create theirs.
+  });
+
+  it('a student cannot plant an honest completion under someone else’s id', async () => {
+    await assertFails(
+      setDoc(doc(outsider().firestore(), COLLECTIONS.completions, completionId(STUDENT, REC)), {
+        studentUid: OUTSIDER,
+        recordingId: REC,
+        courseId: CLASS_MINE,
+        completed: true,
+        completedAt: 2,
+        updatedAt: 2,
+      }),
+    );
+    // And the rightful owner can still write theirs.
     await assertSucceeds(
-      setDoc(doc(student().firestore(), COLLECTIONS.completions, completionId(STUDENT, 'rNew')), {
+      setDoc(doc(student().firestore(), COLLECTIONS.completions, completionId(STUDENT, REC)), {
         studentUid: STUDENT,
-        recordingId: 'rNew',
+        recordingId: REC,
         courseId: CLASS_MINE,
         completed: true,
         completedAt: 2,
@@ -265,9 +301,9 @@ describe('completions: self-only client writes', () => {
 
   it('a student cannot forge a completion in someone else’s name', async () => {
     await assertFails(
-      setDoc(doc(outsider().firestore(), COLLECTIONS.completions, completionId(STUDENT, 'rNew')), {
+      setDoc(doc(outsider().firestore(), COLLECTIONS.completions, completionId(STUDENT, REC)), {
         studentUid: STUDENT,
-        recordingId: 'rNew',
+        recordingId: REC,
         courseId: CLASS_MINE,
         completed: true,
         completedAt: 2,

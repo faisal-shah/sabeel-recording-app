@@ -992,4 +992,60 @@ describe('a transport change from outside the app', () => {
     // tap with a pause, so the student cannot even try again.
     expect(players[0].playing).toBe(true);
   });
+
+  /*
+   * AND THE TRANSPORT GOES WITH IT.
+   *
+   * A failed source that leaves `ready` true draws a live scrubber, two skips
+   * and four rate chips over audio that will never play — the same screen as a
+   * working one. `ready` is not readable from here, so it is asserted through
+   * the thing it gates: `onProgress` ignores every tick until the audio is
+   * loaded, so a session that still believes it is ready RECORDS a position
+   * from a player that never played one.
+   */
+  it('takes the transport down with a failed source', async () => {
+    const pb = await load();
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    players[0].events.onError('audio error 4');
+
+    players[0].events.onProgress(30_000);
+    await pb.closePlayback();
+    // Nothing was heard, so nothing is written — and certainly not half a minute
+    // of listening against a lecture that never started.
+    expect(docOf('rec-a')).toBeUndefined();
+  });
+
+  it('can be retried after a failed source', async () => {
+    const pb = await load();
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    players[0].events.onError('audio error 4');
+
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    // A second player, not the early return — so the student can try again.
+    expect(players).toHaveLength(2);
+    expect(players[1].loaded).toBe('https://signed/audio.m4a');
+  });
+
+  it('does not become ready when a held load resolves after an error', async () => {
+    // Web's `load` settles on the element's `error` event as well as on
+    // `loadedmetadata`, because a stalled request fires neither and would hang
+    // the promise for ever. So the resolve carries no claim that anything
+    // loaded, and must not be allowed to overwrite the error with a ready
+    // transport.
+    // AFTER `load()`, which resets it — the module is reloaded per test.
+    const pb = await load();
+    holdLoad = true;
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    players[0].events.onError('audio error 4');
+    players[0].finishLoad?.();
+    await flush();
+
+    players[0].events.onProgress(30_000);
+    await pb.closePlayback();
+    expect(docOf('rec-a')).toBeUndefined();
+  });
 });

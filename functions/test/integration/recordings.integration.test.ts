@@ -278,7 +278,7 @@ describe('applyDeleteRecording', () => {
       await expect(requireDeleteRights(req, await rec(id), id)).resolves.toBeUndefined();
     });
 
-    it('refuses a manager once the draft has a single dependent row', async () => {
+    it('refuses a manager once anything at all points at the draft', async () => {
       const { id } = await newDraft();
       const req = await scopedManager('mgr-1');
       await seedDeps(id);

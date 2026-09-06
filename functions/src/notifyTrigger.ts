@@ -1,5 +1,5 @@
 import './setup';
-import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
@@ -7,6 +7,7 @@ import {
   INSTITUTE_TIMEZONE,
   todayInZone,
   type AssignmentDoc,
+  type DeviceTokenDoc,
 } from '@sabeel/shared';
 import { notifyAttendanceMissing, notifyLastDay, notifyRecordingReady } from './notifyJobs';
 import { reportError } from './sentry';
@@ -29,6 +30,59 @@ import { SENTRY_DSN } from './reported';
  * any write would send one notification per staff edit. The `sent` marker would
  * catch it anyway; this keeps the work off the wire in the first place.
  */
+/**
+ * A device registered to one account stops being registered to any other.
+ *
+ * SIGN-OUT CANNOT BE RELIED ON TO DO THIS. `unregisterThisDevice` runs while the
+ * credential still exists and is bounded so the button cannot hang offline — but
+ * a delete that has not been acknowledged when `signOut()` drops the credential
+ * is never sent, and neither is one interrupted by the app being killed. The
+ * registration that survives is a perfectly valid token, so `notifyOnce`'s
+ * pruning never touches it: the next "a recording is ready" for the student who
+ * signed OUT is delivered to the phone the next student is holding. That is a
+ * privacy leak and the most confusing notification this app could send.
+ *
+ * So the claim is settled server-side, where no credential is needed: a token is
+ * registered to exactly one account, the most recent one. This also covers the
+ * ordinary shared-device case, where nothing failed at all — two students on one
+ * phone, the first signing out cleanly, is the same end state.
+ *
+ * The collection-group query needs `devices.token` indexed at COLLECTION_GROUP
+ * scope; Firestore does not create those automatically, so it is declared in
+ * `firestore.indexes.json`.
+ */
+export const onDeviceRegistered = onDocumentCreated(
+  { document: `${COLLECTIONS.notifications}/{uid}/devices/{token}`, secrets: [SENTRY_DSN] },
+  async (event) => {
+    try {
+      const rows = await getFirestore()
+        .collectionGroup('devices')
+        .where('token', '==', event.params.token)
+        .get();
+      /*
+       * KEEP THE NEWEST, not "the one this invocation fired for".
+       *
+       * Trigger delivery is not ordered. Two registrations landing close
+       * together produce two invocations that can run in either order, and a
+       * trigger that trusts its own params to be the winner then has each one
+       * delete the other's row — both accounts lose the device, which is worse
+       * than the leak this exists to close. `registeredAt` is a total order the
+       * two invocations agree on, so both converge on the same survivor. It is
+       * written by the client, but every row here is the same physical device
+       * and therefore the same clock. The path breaks a tie, so agreement does
+       * not depend on sort stability.
+       */
+      const ordered = rows.docs
+        .map((d) => ({ ref: d.ref, at: (d.data() as DeviceTokenDoc).registeredAt ?? 0 }))
+        .sort((a, b) => b.at - a.at || a.ref.path.localeCompare(b.ref.path));
+      await Promise.all(ordered.slice(1).map((r) => r.ref.delete()));
+    } catch (e) {
+      await reportError(e, { source: 'onDeviceRegistered' });
+      throw e;
+    }
+  },
+);
+
 export const onAssignmentWritten = onDocumentWritten(
   { document: `${COLLECTIONS.assignments}/{assignmentId}`, secrets: [SENTRY_DSN] },
   async (event) => {

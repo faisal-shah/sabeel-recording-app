@@ -58,11 +58,19 @@ export async function setNotificationPref(
  * granted, and Sign out never reached `signOut(auth)` at all, leaving somebody
  * signed in on a shared device: the exact case that call exists to prevent.
  *
- * GIVING UP ON THE WAIT IS NOT GIVING UP ON THE WRITE. The SDK keeps it queued
- * and sends it when the connection returns; all that ends here is the caller's
- * blocking on it. Both writes are bookkeeping — nothing downstream reads the
- * result — so a second is long enough on a working connection and short enough
- * that nobody is stuck on a broken one.
+ * GIVING UP ON THE WAIT IS NOT GIVING UP ON THE WRITE — for the REGISTER. The
+ * SDK keeps it queued and sends it when the connection returns, and nothing
+ * drops the credential in between.
+ *
+ * IT IS FOR THE UNREGISTER, and that is deliberate rather than overlooked.
+ * `signOut` calls it and then drops the credential four lines later, so a delete
+ * that has not been acknowledged is abandoned on the previous account's queue
+ * and never sent. Waiting for it instead is worse — offline the button never
+ * returns, and the person stays signed in on a shared device, which is the case
+ * the call exists to protect. So the client stops waiting, and the leak it
+ * leaves is closed on the server: `onDeviceRegistered` removes a token from
+ * every other account the moment it is registered to a new one. That also
+ * covers the sign-out that never ran at all, which no client-side scheme can.
  */
 const WRITE_GRACE_MS = 1000;
 

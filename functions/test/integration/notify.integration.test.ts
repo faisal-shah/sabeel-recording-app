@@ -77,13 +77,13 @@ afterEach(() => {
   resetSender();
 });
 
-async function withDevice(uid: string, token = `tok-${uid}`) {
+async function withDevice(uid: string, token = `tok-${uid}`, registeredAt = 1) {
   await db()
     .collection(COLLECTIONS.notifications)
     .doc(uid)
     .collection('devices')
     .doc(token)
-    .set({ token, platform: 'web', registeredAt: 1 });
+    .set({ token, platform: 'web', registeredAt });
 }
 
 async function seedRecording(id: string, sessionId: string, status: RecordingDoc['status']) {
@@ -310,5 +310,75 @@ describe('attendanceMissing', () => {
     await seedSession('sess1', { date: '2026-08-10', attendanceSubmittedAt: null });
     expect(await notifyAttendanceMissing(db(), TODAY)).toBe(1);
     expect(await notifyAttendanceMissing(db(), '2026-08-21')).toBe(0);
+  });
+});
+
+/**
+ * A device belongs to one account at a time.
+ *
+ * The trigger is what actually enforces it, so this drives the emulator's real
+ * trigger rather than a function call: sign-out's own unregister is bounded (it
+ * must be, or the button hangs offline and somebody stays signed in on a shared
+ * device), and a delete that was never acknowledged before the credential
+ * dropped is never sent. The registration left behind is a perfectly valid
+ * token, so `notifyOnce`'s stale-token pruning never touches it — the previous
+ * student's "a recording is ready" arrives on the phone the next student is
+ * holding.
+ */
+describe('a token registered to a new account leaves the old one', () => {
+  const TOKEN = 'shared-device-token';
+  const devices = (uid: string) =>
+    db().collection(COLLECTIONS.notifications).doc(uid).collection('devices');
+
+  /** The trigger runs out of band; wait for it rather than guessing a delay. */
+  async function settled(uid: string, present: boolean) {
+    for (let i = 0; i < 60; i += 1) {
+      if ((await devices(uid).doc(TOKEN).get()).exists === present) return;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    throw new Error(`devices/${TOKEN} under ${uid} never became ${present ? 'present' : 'absent'}`);
+  }
+
+  it('removes the same token from every other account', async () => {
+    await withDevice('student-a', TOKEN, 1000);
+    await settled('student-a', true);
+
+    await withDevice('student-b', TOKEN, 2000);
+    await settled('student-a', false);
+    // And the account that just registered keeps it.
+    expect((await devices('student-b').doc(TOKEN).get()).exists).toBe(true);
+  });
+
+  /*
+   * TRIGGER DELIVERY IS NOT ORDERED, and a trigger that treats its own document
+   * as the winner has each invocation delete the other's row — leaving the
+   * device registered to nobody, which is worse than the leak. Both writes here
+   * land before either invocation can run.
+   */
+  it('converges on the newest registration however the triggers interleave', async () => {
+    await Promise.all([
+      withDevice('student-a', TOKEN, 1000),
+      withDevice('student-b', TOKEN, 2000),
+    ]);
+    await settled('student-a', false);
+    await new Promise((r) => setTimeout(r, 1500));
+    expect((await devices('student-b').doc(TOKEN).get()).exists).toBe(true);
+  });
+
+  it('leaves an unrelated device alone', async () => {
+    await withDevice('student-a', 'a-different-phone');
+    await withDevice('student-b', TOKEN);
+    await settled('student-b', true);
+    expect((await devices('student-a').doc('a-different-phone').get()).exists).toBe(true);
+  });
+
+  it('does not remove the registration it was fired for', async () => {
+    // Re-registering under the SAME account — every sign-in does this — must not
+    // race the trigger into deleting the row it just wrote.
+    await withDevice('student-a', TOKEN);
+    await settled('student-a', true);
+    await withDevice('student-a', TOKEN);
+    await new Promise((r) => setTimeout(r, 1500));
+    expect((await devices('student-a').doc(TOKEN).get()).exists).toBe(true);
   });
 });

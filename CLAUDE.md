@@ -73,7 +73,9 @@ Do not silently change any of these.
   gates a recording's metadata on an active assignment; `getPlaybackUrl` gates the
   audio on the date. Comparing `request.time` to a `YYYY-MM-DD` string in the
   institute timezone would be a second copy of the maths in `@sabeel/shared`, free
-  to drift.
+  to drift. Enforced **at minting**, precisely: a URL issued late on the last day
+  works for its full twelve hours and nothing revokes it — inside the threat
+  model, and written down at `SIGNED_URL_TTL_MS`.
 - **Students never read a session.** The attendance map holds the whole roster and
   Firestore has no field-level security, so each student's own mark is projected
   server-side onto `attendanceRecords/{uid}_{sessionId}`. The session stays

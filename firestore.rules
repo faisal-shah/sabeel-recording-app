@@ -49,6 +49,25 @@ service cloud.firestore {
             get(/databases/$(database)/documents/courses/$(courseId)).data.managerUids);
     }
 
+    /*
+     * The class a student's own grant for one recording belongs to.
+     *
+     * The three collections a student writes — listening progress, completion
+     * state, completion events — all carry a `courseId`, and every staff read of
+     * them is `courseId == && recordingId ==` because the rules require it. So
+     * `courseId` is not decoration: a row carrying the wrong one is a row the
+     * ledger never sees, while the student's own screens (filtered on
+     * `studentUid` alone) go on showing it. The grant is the only thing that can
+     * say which class a recording was owed in, so the grant is what it is
+     * checked against.
+     *
+     * One `get`, on a path built from the caller's own uid — so it is one
+     * distinct path per request and stays well inside the ten-call budget.
+     */
+    function grantedCourse(recordingId) {
+      return get(/databases/$(database)/documents/assignments/$(request.auth.uid + '_' + recordingId)).data.courseId;
+    }
+
     // ---- Staff ----
     // Read-only to clients; every write goes through the setStaffAccess
     // callable. Role and status ARE the security model, so letting clients write
@@ -266,11 +285,28 @@ service cloud.firestore {
       allow list: if (isStudent() && resource.data.studentUid == request.auth.uid)
         || staffManagesCourse(resource.data.courseId);
 
-      allow create: if mine();
-      // Both halves matter: `mine()` stops a student writing someone else's uid
-      // into the row, and the second check stops them overwriting a row that is
-      // already someone else's.
-      allow update: if mine() && resource.data.studentUid == request.auth.uid;
+      /*
+       * AND THE CLASS IS THE GRANT'S, not the writer's to choose.
+       *
+       * Every staff read of this collection is `courseId == && recordingId ==`
+       * — the rules require it — so a row carrying the wrong `courseId` is a row
+       * the ledger never sees: the manager's list counts that student as not
+       * listened while the student's own screens, which filter on `studentUid`
+       * alone, show their real progress. Nothing reconciles the two.
+       *
+       * The `get` is paid on CREATE only. Progress is rewritten every fifteen
+       * seconds for the length of a lecture, and an update that may not move
+       * `courseId` is free — so the class is fixed once, when the row is born.
+       */
+      allow create: if mine()
+        && request.resource.data.courseId == grantedCourse(request.resource.data.recordingId);
+      // Three things matter: `mine()` stops a student writing someone else's uid
+      // into the row, the studentUid check stops them overwriting a row that is
+      // already someone else's, and the courseId check stops them moving a row
+      // out of the class its grant belongs to.
+      allow update: if mine()
+        && resource.data.studentUid == request.auth.uid
+        && request.resource.data.courseId == resource.data.courseId;
       allow delete: if false;
     }
 
@@ -316,8 +352,16 @@ service cloud.firestore {
       // class-scoped.
       allow list: if (isStudent() && resource.data.studentUid == request.auth.uid)
         || staffManagesCourse(resource.data.courseId);
-      allow create: if mineC();
-      allow update: if mineC() && resource.data.studentUid == request.auth.uid;
+      // The class is the grant's, for the same reason as `listeningProgress`
+      // above — this is the collection the ledger's completion column reads, so
+      // a wrong `courseId` shows a student complete on their own home and not
+      // complete to the manager chasing them. `get` on create only; an update
+      // may not move it.
+      allow create: if mineC()
+        && request.resource.data.courseId == grantedCourse(request.resource.data.recordingId);
+      allow update: if mineC()
+        && resource.data.studentUid == request.auth.uid
+        && request.resource.data.courseId == resource.data.courseId;
       allow delete: if false;
     }
 
@@ -326,11 +370,6 @@ service cloud.firestore {
     // read their own; nothing may update or delete one, so the history cannot be
     // rewritten. Staff reading is the Phase 5 ledger.
     match /completionEvents/{eventId} {
-      /** The class a student's own grant for this recording belongs to. */
-      function grantedCourse(recordingId) {
-        return get(/databases/$(database)/documents/assignments/$(request.auth.uid + '_' + recordingId)).data.courseId;
-      }
-
       // AUTO-IDS, so there is no id to bind — the shape has to be checked
       // instead. Unvalidated, this accepted any `courseId`, any `recordingId`
       // and any `action` from any student, and `update, delete: if false` makes
@@ -347,8 +386,20 @@ service cloud.firestore {
         && request.resource.data.action in ['complete', 'uncomplete']
         && request.resource.data.at is int
         && request.resource.data.courseId == grantedCourse(request.resource.data.recordingId);
-      // Staff read a student's mark/unmark history for the ledger, class-scoped.
-      allow get, list: if (isStudent() && resource.data.studentUid == request.auth.uid)
+      /*
+       * `get` AND `list` SEPARATELY, because `resource` is null on a get of a
+       * document that does not exist and dereferencing it then is an evaluation
+       * ERROR, not a denial — the trap `listeningProgress` and `completions`
+       * already carry a null arm for. Nothing reads this by id today; declaring
+       * one statement for both would leave the first caller that does to find
+       * out.
+       */
+      allow get: if (isStudent()
+          && (resource == null || resource.data.studentUid == request.auth.uid))
+        || (resource != null && staffManagesCourse(resource.data.courseId));
+      // A list always evaluates against real documents, so no null guard is
+      // needed — and adding one would widen it.
+      allow list: if (isStudent() && resource.data.studentUid == request.auth.uid)
         || staffManagesCourse(resource.data.courseId);
       allow update, delete: if false;
     }
@@ -361,7 +412,14 @@ service cloud.firestore {
     // own (the brief lets a student see their full accountability details);
     // staff read it scoped to their class for the ledger.
     match /completionOverrides/{overrideId} {
-      allow get, list: if (isStudent() && resource.data.studentUid == request.auth.uid)
+      // Split for the same reason as `completionEvents` above: most students
+      // have no override on most recordings, so a get by id is USUALLY of a
+      // document that does not exist — and without the null arm that is a rules
+      // evaluation error rather than an answer.
+      allow get: if (isStudent()
+          && (resource == null || resource.data.studentUid == request.auth.uid))
+        || (resource != null && staffManagesCourse(resource.data.courseId));
+      allow list: if (isStudent() && resource.data.studentUid == request.auth.uid)
         || staffManagesCourse(resource.data.courseId);
       allow write: if false;
     }

@@ -125,6 +125,24 @@ describe('Phase 5 staff ledger reads', () => {
         await assertSucceeds(getDoc(doc(admin().firestore(), name, `${STUDENT}_${REC}`)));
       });
 
+      /*
+       * A GET OF A DOCUMENT THAT IS NOT THERE.
+       *
+       * `resource` is null then, and dereferencing it is a rules EVALUATION
+       * ERROR rather than a denial — so a screen asking for a student's own
+       * override on a recording that has none gets a failure, not an answer.
+       * Absence is the usual case for three of these four collections.
+       */
+      it('answers a student asking for their own row before it exists', async () => {
+        await assertSucceeds(getDoc(doc(student().firestore(), name, `${STUDENT}_never`)));
+      });
+
+      it('still refuses a manager a row that is not there', async () => {
+        // The null arm must not become a hole: no document means no courseId to
+        // check, so staff get nothing rather than everything.
+        await assertFails(getDoc(doc(mgrMine().firestore(), name, `${STUDENT}_never`)));
+      });
+
       it('a manager cannot read another class’s row', async () => {
         await assertFails(getDoc(doc(mgrTheirs().firestore(), name, `${STUDENT}_${REC}`)));
       });

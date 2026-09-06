@@ -353,15 +353,61 @@ describe('listeningProgress', () => {
     await assertFails(
       setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, theirsId), row(STUDENT)),
     );
-    // And the victim can still write their own row afterwards.
+    // And the victim can still write their own row afterwards — which is the
+    // half that matters, since the plant grants the writer nothing and exists
+    // only to lock somebody else out.
+    await testEnv.withSecurityRulesDisabled(async (c) => {
+      await setDoc(doc(c.firestore(), COLLECTIONS.assignments, assignmentId(OUTSIDER, PUBLISHED)), {
+        studentUid: OUTSIDER,
+        recordingId: PUBLISHED,
+        sessionId: 's1',
+        courseId: CLASS_MINE,
+        cohortId: 'c1',
+        dueDate: '2099-01-01',
+        active: true,
+        assignedAt: 1,
+        assignedBy: 'system',
+      });
+    });
     await assertSucceeds(
       setDoc(doc(outsider().firestore(), COLLECTIONS.listeningProgress, theirsId), row(OUTSIDER)),
     );
   });
 
-  it('does NOT let a student write their row under an id for another RECORDING', async () => {
+  /*
+   * THE CLASS IS THE GRANT'S. Every staff read of this collection is
+   * `courseId == && recordingId ==` — the rules require it — so a row carrying
+   * another class's id is a row the ledger never sees, while the student's own
+   * screens, filtered on `studentUid` alone, go on showing their progress.
+   */
+  it('does NOT let a student file their progress under another class', async () => {
     await assertFails(
-      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, `${STUDENT}_somethingElse`), row(STUDENT)),
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId), {
+        ...row(STUDENT),
+        courseId: CLASS_THEIRS,
+      }),
+    );
+  });
+
+  it('does NOT let a student move an existing row to another class', async () => {
+    await assertSucceeds(
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId), row(STUDENT)),
+    );
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId), {
+        ...row(STUDENT),
+        courseId: CLASS_THEIRS,
+        positionMs: 9000,
+      }),
+    );
+  });
+
+  it('does NOT let a student write progress for a recording they were never granted', async () => {
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, `${STUDENT}_somethingElse`), {
+        ...row(STUDENT),
+        recordingId: 'somethingElse',
+      }),
     );
   });
 

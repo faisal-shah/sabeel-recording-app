@@ -289,9 +289,19 @@ export default function App() {
                   <Stack.Screen name="StudentDetail" options={screenOptions('StudentDetail', 'Student')}>
                     {() => <StudentDetail isAdmin={isAdmin} uid={user.uid} />}
                   </Stack.Screen>
-                  <Stack.Screen name="Cohorts" options={screenOptions('Cohorts', 'Courses')}>
-                    {() => <Cohorts />}
-                  </Stack.Screen>
+                  {/* ADMINS ONLY, and registered rather than merely unlinked —
+                      the same treatment `MyCourses` gets below, for the mirror
+                      reason. A manager's Courses tab goes to `MyCourses`, so
+                      nothing navigates them here; but `/cohorts` is a URL, and
+                      for a manager the rules deny the cohorts list outright, so
+                      it rendered as a live-data error on a screen that looks
+                      like it should have worked. Unregistered, the path matches
+                      no screen and falls back to their own home. */}
+                  {isAdmin ? (
+                    <Stack.Screen name="Cohorts" options={screenOptions('Cohorts', 'Courses')}>
+                      {() => <Cohorts />}
+                    </Stack.Screen>
+                  ) : null}
                   {/* Titled for what the screen IS — one cohort: its settings and the
                       courses inside it. The route keeps its name until the id-param
                       conversion renames routes wholesale. */}
@@ -322,8 +332,14 @@ export default function App() {
                   <Stack.Screen name="ZoomImport" options={screenOptions('ZoomImport', 'Import from Zoom')}>
                     {() => <ZoomImport />}
                   </Stack.Screen>
+                  {/* REGISTERED FOR BOTH, because one route serves two views:
+                      `/audit` with no courseId is the institute-wide history
+                      (admins, from More) and `/audit?courseId=…` is one class's
+                      (managers, from the course page). Unregistering it for a
+                      manager would take their scoped view with it — so the
+                      admin-only half is refused inside the screen instead. */}
                   <Stack.Screen name="Audit" options={screenOptions('Audit', 'Audit')}>
-                    {() => <Audit />}
+                    {() => <Audit isAdmin={isAdmin} />}
                   </Stack.Screen>
                   {/* MANAGERS ONLY, and registered rather than merely unlinked:
                       it is their Courses tab, and it queries `array-contains` on
@@ -899,7 +915,7 @@ function Library({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
     />
   );
 }
-function Audit() {
+function Audit({ isAdmin }: { isAdmin: boolean }) {
   // `?? {}`, and this is the ONE guard for it: React Navigation attaches no
   // params object at all for a path with no parameters in it, so destructuring
   // the result crashes on a cold load of `/audit` — a More-menu destination
@@ -912,6 +928,7 @@ function Audit() {
   return (
     <AuditScreen
       courseId={courseId ?? null}
+      allowed={isAdmin || courseId !== undefined}
       title={courseId ? (cls?.name ?? '') : 'All courses'}
     />
   );

@@ -143,7 +143,14 @@ export const createStudent = auditedCall('createStudent', async (req, audit) => 
     : requireStaff(req);
   // courseId when enrolled at creation, so the scoped manager sees it in audit.
   if (input.courseId) audit.courseId = input.courseId;
-  return createStudentAccount(callerUid, input);
+  const created = await createStudentAccount(callerUid, input);
+  // THE ACCOUNT IT MADE. Nothing in the request names it — the uid does not
+  // exist until the line above — so the derivation had nothing to pick up, and
+  // the most privilege-adjacent thing a manager can do audited as "someone
+  // created a student", with no way to tell which.
+  audit.targets.uid = created.uid;
+  audit.detail = { email: created.email };
+  return created;
 });
 
 export interface StudentAccessInput {

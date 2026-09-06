@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRoomy } from '../useWidth';
@@ -46,9 +46,21 @@ export function DateField({ label, value, onChange }: DateFieldProps) {
     if (date) latestChange.current(toYmd(date));
   }, []);
   const handleDismiss = useCallback(() => setShow(false), []);
-  // Parse as LOCAL midnight so the picker opens on the stored day; a due date is
-  // a plain calendar date, never a UTC instant.
-  const current = value ? new Date(`${value}T00:00:00`) : new Date();
+  /*
+   * MEMOISED, because it is a dependency of the picker's own effect.
+   *
+   * `DateTimePicker`'s Android effect lists `valueTimestamp = value.getTime()`,
+   * so a `new Date()` built fresh on every render is a NEW timestamp every
+   * render, and the presented dialog is re-opened at "today" — discarding the
+   * month the person had navigated to. Only reachable with no date set, which
+   * is exactly the case a person is most likely to be browsing months in:
+   * clear "Listen by", open the picker, and any ancestor re-render (a Firestore
+   * snapshot on the screen's live queries) snaps it back.
+   *
+   * Parsed as LOCAL midnight so the picker opens on the stored day; a due date
+   * is a plain calendar date, never a UTC instant.
+   */
+  const current = useMemo(() => (value ? new Date(`${value}T00:00:00`) : new Date()), [value]);
 
   return (
     // The same reading cap `Field` takes — a ten-character date has no business

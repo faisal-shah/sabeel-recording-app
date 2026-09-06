@@ -197,9 +197,12 @@ Two more things that cost time here:
 
   **`getByTestId` is not the cure.** A testID selector is plain CSS and matches
   inside a `display:none` subtree just as happily; only `.filter({ visible: true })`
-  actually excludes the screen underneath. Both suites now route every locator
-  through helpers that carry the filter — `tap()` and `sawText()` in each file —
-  which is what makes a wait fail on the app rather than on document order.
+  actually excludes the screen underneath. `screens-e2e.mjs` routes EVERY locator
+  through helpers that carry the filter. `web-e2e.mjs` carries it in `tap()` and
+  `sawText()`, which is where the waits are — but it also makes direct
+  `page.getByTestId(...)` calls for assertions and one-off waits, and those do
+  not. Prefer the helpers; when a direct locator is unavoidable, add the filter
+  to it.
 
 ## The screens sweep
 

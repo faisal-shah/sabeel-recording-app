@@ -31,9 +31,13 @@ export async function createCohortRecord(callerUid: string, name: string) {
 
 // Cohort-level actions are not class-scoped: their audit entries carry no
 // courseId and are admin-only to read.
-export const createCohort = auditedCall('createCohort', async (req) => {
+export const createCohort = auditedCall('createCohort', async (req, audit) => {
   const uid = requireAdmin(req);
-  return createCohortRecord(uid, validateCohortName(req.data));
+  const created = await createCohortRecord(uid, validateCohortName(req.data));
+  // The id it made. The request carries only a name, so the derivation had
+  // nothing to pick up and the row named nothing at all.
+  audit.targets.cohortId = created.id;
+  return created;
 });
 
 export function validateSetCohortArchived(data: unknown): { cohortId: string; archived: boolean } {

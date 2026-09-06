@@ -23,7 +23,13 @@ const REPO = resolve(import.meta.dirname, '../../..');
 const read = (p: string) => readFileSync(resolve(REPO, p), 'utf8');
 
 describe('the sheet', () => {
-  const cap = Number(read('app/src/components/Sheet.tsx').match(/maxWidth:\s*(\d+)/)?.[1]);
+  // ANCHORED TO THE PANEL. An unanchored `maxWidth:` was right only by
+  // ordering — `backdrop` is declared first and simply happens not to set one,
+  // so adding one there would silently redirect this (and the sweep, which
+  // parses the same way) to a number that is not the dialog's cap.
+  const cap = Number(
+    read('app/src/components/Sheet.tsx').match(/panel:\s*\{[\s\S]*?maxWidth:\s*(\d+)/)?.[1],
+  );
   const contentMax = Number(
     read('app/src/theme/index.ts').match(/CONTENT_MAX_WIDTH\s*=\s*(\d+)/)?.[1],
   );

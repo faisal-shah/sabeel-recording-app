@@ -352,7 +352,22 @@ export function openPlayback(now: NowPlaying): void {
       persist();
     },
     onError: (message) => {
-      if (generation === gen) set({ error: message, playing: false });
+      /*
+       * `ready: false` TOO, or the transport stays live over a dead source.
+       *
+       * The two failure paths have to agree: a mint that throws leaves `ready`
+       * false and the player screen draws "Preparing…" with everything
+       * disabled, while an audio error used to leave a fully enabled scrubber,
+       * two skips and four rate chips over a source that never loaded. Tapping
+       * play then set `playing: true` on a player that emits no `play` event,
+       * so even the correction from `onPlayingChanged` could not fire and the
+       * pause glyph sat over silence.
+       *
+       * `openPlayback`'s idempotency guard keys on `!state.error`, so this
+       * remains retryable: leaving the screen and coming back builds a new
+       * player rather than taking the early return.
+       */
+      if (generation === gen) set({ error: message, ready: false, playing: false });
     },
     onPlayingChanged: (playing) => {
       // The lock screen, the notification controls, a phone call taking audio
@@ -382,6 +397,11 @@ export function openPlayback(now: NowPlaying): void {
       position = prior?.positionMs ?? 0;
       await p.load(url, position);
       if (generation !== gen) return;
+      // NOT OVER AN ERROR. `load` resolves on a failed source as well as a
+      // loaded one — on web it has to, or a stalled request leaves the promise
+      // pending for ever — so the error the player already reported would
+      // otherwise be overwritten here by a ready transport.
+      if (state.error) return;
       set({ ready: true, positionMs: position, listenedMs: listened });
     } catch (e) {
       // `errorText`, like every other failure a person reads: an offline tap on

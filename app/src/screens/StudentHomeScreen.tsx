@@ -17,6 +17,7 @@ import { PushNudge } from '../components/PushNudge';
 import { db } from '../firebase';
 import { captureError } from '../sentry';
 import { useMyAssignments, useMyCompletions } from '../completion';
+import { useListenerFailed } from '../liveQuery';
 import { drainCompletionOutbox } from '../completionOutbox';
 import type { CourseRow } from '../structure';
 import type { RecordingRow } from '../recordings';
@@ -45,7 +46,17 @@ export function StudentHomeScreen({
   uid: string;
   onOpen: (recording: RecordingRow, cls: CourseRow, dueDate: string) => void;
 }) {
-  const assignments = useMyAssignments(uid);
+  const granted = useMyAssignments(uid);
+  // Memoised, not a bare `?? []`: a fresh array literal every render would make
+  // every `useMemo` below it recompute on every render, which is what
+  // `exhaustive-deps` objects to — and the objection is right.
+  const assignments = useMemo(() => granted ?? [], [granted]);
+  // A REFUSAL IS NOT A LOAD: `useLiveQuery` resets to `empty` on a listener
+  // error too, so without this a denial would sit on "Checking…" for ever.
+  // `Screen` renders the error banner itself; this only stops the screen
+  // claiming to still be looking.
+  const failed = useListenerFailed(['myAssignments']);
+  const checking = granted === null && !failed;
   const completions = useMyCompletions(uid);
   const resolved = useResolvedRecordings(assignments.map((a) => a.recordingId));
 
@@ -169,7 +180,12 @@ export function StudentHomeScreen({
         </Pressable>
       ) : null}
 
-      {rows.length === 0 ? (
+      {/* "Nothing to listen to" is an ANSWER, and the wrong one shown to a
+          student with three recordings due — on the screen that is the whole of
+          this app for them. So it waits for the grants to arrive. */}
+      {checking ? (
+        <Empty>Checking what you have to listen to…</Empty>
+      ) : rows.length === 0 ? (
         <Empty>Nothing to listen to right now. New recordings will appear here.</Empty>
       ) : (
         groups

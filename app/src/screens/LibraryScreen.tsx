@@ -14,6 +14,7 @@ import {
   statusWord,
 } from '../components/ui';
 import { useAllRecordings, useCourseRecordings, type RecordingRow } from '../recordings';
+import { useListenerFailed } from '../liveQuery';
 import { useAllCoursesState, useCohortName, useMyCoursesState, type CourseRow } from '../structure';
 import { getTheme, spacing } from '../theme';
 
@@ -54,6 +55,8 @@ export function LibraryScreen({
   // manager as their access having been revoked.
   const myCoursesLoaded = useMyCoursesState(isAdmin ? null : uid);
   const myCourses = myCoursesLoaded ?? [];
+  // A refusal is not a load — see `MyCoursesScreen`.
+  const myCoursesFailed = useListenerFailed(['myCourses']);
   // A course name alone is ambiguous across cohorts; this library spans them.
   const cohortNameOf = useCohortName();
 
@@ -75,7 +78,11 @@ export function LibraryScreen({
           onOpenProgress={onOpenProgress}
         />
       ) : myCoursesLoaded === null ? (
-        <Empty>Checking your courses…</Empty>
+        <Empty>
+          {myCoursesFailed
+            ? 'Your courses could not be read. The message above says why.'
+            : 'Checking your courses…'}
+        </Empty>
       ) : myCourses.length === 0 ? (
         <Empty>You are not assigned to any courses.</Empty>
       ) : (
@@ -110,6 +117,7 @@ function AdminLibrary({
   // and the ledger it opens shows the course NAME — not the raw id (which is what
   // a placeholder `{ name: courseId }` row leaked into the ledger subtitle).
   const courses = useAllCoursesState(true);
+  const coursesFailed = useListenerFailed(['allCourses']);
   const courseById = useMemo(() => new Map((courses ?? []).map((c) => [c.id, c])), [courses]);
   const filtered = useMemo(
     () => (status === 'all' ? all : all.filter((r) => r.status === status)),
@@ -129,7 +137,7 @@ function AdminLibrary({
           load, printing a raw Firestore id where the course name goes and
           carrying it into the ledger this list opens. */}
       {courses === null ? (
-        <Empty>Loading the library…</Empty>
+        <Empty>{coursesFailed ? 'The library could not be read.' : 'Loading the library…'}</Empty>
       ) : filtered.length === 0 ? (
         <Empty>No recordings with that status.</Empty>
       ) : (

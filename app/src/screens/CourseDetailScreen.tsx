@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   Button,
@@ -110,16 +110,33 @@ export function CourseDetailScreen({
    * `[...old, M2]`, which lands after the first write and drops M1's assignment
    * with no error anywhere.
    */
-  const [managerBusy, setManagerBusy] = useState<string | null>(null);
-  const managerWriteInFlight = managerBusy !== null;
-  const runManager = async (uid: string, fn: () => Promise<void>) => {
-    setManagerBusy(uid);
+  const [managerBusy, setManagerBusy] = useState<{ uid: string; want: boolean } | null>(null);
+  /*
+   * HELD UNTIL THE SNAPSHOT AGREES, not until the callable answers.
+   *
+   * `cls` comes from a live listener on a separate channel, so it lands after
+   * the HTTP response — and in that window the row re-enabled AND STILL DREW
+   * UNCHECKED, because `on` reads `cls.managerUids`. That unchecked tick is
+   * exactly what invites the next tap, and the next tap sends the pre-write
+   * array again. Clearing on the response fixed the shared-slot half of this
+   * and left the window.
+   */
+  const managerSettled = managerBusy
+    ? cls.managerUids.includes(managerBusy.uid) === managerBusy.want
+    : true;
+  const managerWriteInFlight = managerBusy !== null && !managerSettled;
+  useEffect(() => {
+    if (managerSettled) setManagerBusy(null);
+  }, [managerSettled]);
+  const runManager = async (uid: string, want: boolean, fn: () => Promise<void>) => {
+    setManagerBusy({ uid, want });
     setError(null);
     try {
       await fn();
     } catch (e) {
       setError(errorText(e));
-    } finally {
+      // The write failed, so the snapshot will never agree — release the lock
+      // rather than wedging every row behind a change that is not coming.
       setManagerBusy(null);
     }
   };
@@ -238,7 +255,7 @@ export function CourseDetailScreen({
             ) : (
               assignableManagers.map((s) => {
                   const on = cls.managerUids.includes(s.uid);
-                  const pending = managerBusy === s.uid;
+                  const pending = managerWriteInFlight && managerBusy?.uid === s.uid;
                   return (
                     <Pressable
                       key={s.uid}
@@ -256,7 +273,7 @@ export function CourseDetailScreen({
                       // list would silently undo the first.
                       disabled={managerWriteInFlight}
                       onPress={() =>
-                        void runManager(s.uid, () =>
+                        void runManager(s.uid, !on, () =>
                           setCourseManagers({
                             courseId: cls.id,
                             managerUids: on

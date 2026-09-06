@@ -52,6 +52,16 @@ export const EMULATOR_STORAGE_BUCKET = `${EMULATOR_PROJECT_ID}.appspot.com`;
  * rules out Firebase's `getDownloadURL()`, whose download token never expires.
  * Twelve hours comfortably exceeds any single listening session, so a URL never
  * dies mid-playback.
+ *
+ * AND IT SPILLS PAST THE DEADLINE, by up to its own length. `getPlaybackUrl`
+ * refuses once the listen-by date has gone, but a URL minted at 23:50 on that
+ * date keeps working until noon the next day, and nothing revokes one — not
+ * unpublishing, not unenrolling, not disabling the account. That is inside the
+ * documented threat model (a determined listener extracting audio from their own
+ * device is accepted), but "the deadline is enforced at the audio" reads as
+ * absolute and is not: it is enforced at MINTING. Shortening the TTL narrows the
+ * window at the cost of re-minting mid-lecture; twelve hours is chosen so a
+ * two-hour session started at any point in an evening finishes on one URL.
  */
 export const SIGNED_URL_TTL_MS = 12 * 60 * 60 * 1000;
 

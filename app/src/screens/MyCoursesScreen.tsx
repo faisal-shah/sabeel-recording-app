@@ -1,4 +1,5 @@
 import { Empty, Grid, Notice, Screen, SectionTitle } from '../components/ui';
+import { useListenerFailed } from '../liveQuery';
 import { useMyCoursesState, type CourseRow } from '../structure';
 import { CourseCard } from './CoursesScreen';
 
@@ -27,11 +28,20 @@ export function MyCoursesScreen({
    */
   const loaded = useMyCoursesState(uid);
   const courses = loaded ?? [];
+  // A REFUSAL IS NOT A LOAD. `useLiveQuery` resets to `empty` on a listener
+  // error as well as before the first snapshot, so without this a denial would
+  // sit on "Checking your courses…" for ever — the trap `today.ts` documents.
+  // `Screen` shows the error banner itself; this only has to stop claiming to
+  // still be looking.
+  const failed = useListenerFailed(['myCourses']);
+  const checking = loaded === null && !failed;
   return (
     <Screen title="Your courses" subtitle="Everything you run, and the way in to each" width="list">
       <SectionTitle>Courses{loaded === null ? '' : ` (${courses.length})`}</SectionTitle>
-      {loaded === null ? (
+      {checking ? (
         <Empty>Checking your courses…</Empty>
+      ) : loaded === null ? (
+        <Empty>Your courses could not be read. The message above says why.</Empty>
       ) : courses.length === 0 ? (
         <>
           <Empty>You are not assigned to any courses yet.</Empty>

@@ -675,8 +675,8 @@ why?" always has an answer.
 
 Times are the institute's, not your device's — the same clock as every **Listen
 by** date, so the two are comparable wherever you are reading from. The screen
-shows the most recent 200 changes and says so when it is full; nothing is
-deleted, and older history is still in the record.
+shows a fixed number of the most recent changes and says how many when it is
+full; nothing is deleted, and older history is still in the record.
 
 ## 3.4 Disable and archive — don't delete
 

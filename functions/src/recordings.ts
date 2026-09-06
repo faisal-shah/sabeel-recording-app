@@ -7,7 +7,7 @@ import {
   INSTITUTE_TIMEZONE,
   audioStoragePath,
   canTransition,
-  isEmptyDraft,
+  isDiscardable,
   publishBlockers,
   todayInZone,
   type RecordingDoc,
@@ -354,10 +354,17 @@ export async function requireDeleteRights(
   rec: RecordingDoc,
   recordingId: string,
 ): Promise<void> {
-  if (isEmptyDraft(rec) && !(await hasRecordingHistory(recordingId))) {
-    await requireCourseScope(req, rec.courseId);
-    return;
-  }
+  // AUTHORIZE FIRST, THEN PROBE. Course scope is the floor either way — an admin
+  // passes it without a read — so checking it up front means a manager acting on
+  // a class that is not theirs is refused before five collection queries are
+  // spent finding out whether the recording had history.
+  await requireCourseScope(req, rec.courseId);
+  // `isDiscardable` is the same question the CLIENT asks, so the button it
+  // offers and the words on the confirmation match what happens here. The
+  // collection probe is still the authority: it also covers a recording written
+  // before `publishedAt` existed, and anything that put a dependent row there by
+  // another route.
+  if (isDiscardable(rec) && !(await hasRecordingHistory(recordingId))) return;
   requireAdmin(req);
 }
 

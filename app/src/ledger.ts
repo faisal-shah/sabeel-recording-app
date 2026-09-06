@@ -19,7 +19,7 @@ import {
   type ListeningProgressDoc,
 } from '@sabeel/shared';
 import { db, functions } from './firebase';
-import { useLiveQuery } from './liveQuery';
+import { useListenerFailed, useLiveQuery } from './liveQuery';
 import { useStudents } from './students';
 import { useCourseSessions } from './sessions';
 import { useRoster } from './structure';
@@ -239,6 +239,14 @@ export function useRecordingLedger(
   );
   const students = useStudents(true);
   const nameByUid = useMemo(() => new Map(students.map((s) => [s.uid, s.displayName])), [students]);
+  // The four listeners this join reads. Matched on the LABEL, so a refusal on
+  // any of them ends the loading state rather than leaving it for ever.
+  const failed = useListenerFailed([
+    'ledgerAssignments',
+    'ledgerCompletions',
+    'ledgerOverrides',
+    'ledgerProgress',
+  ]);
 
   return useMemo(() => {
     const row = (
@@ -265,7 +273,12 @@ export function useRecordingLedger(
       };
     };
 
-    const loading = assignments === null;
+    // A REFUSAL IS NOT A LOAD. `useLiveQuery` resets to `empty` on a listener
+    // error as well as before the first snapshot, and `empty` here is the same
+    // null — so a manager removed from the class mid-view would sit on
+    // "Checking who holds this recording…" for ever. `today.ts` carries the same
+    // guard for the same reason.
+    const loading = assignments === null && !failed;
     const granted = assignments ?? new Map<string, AssignmentDoc>();
     const status = session.attendance;
     // Re-stating dueDate after the spread is what narrows the row to a
@@ -317,7 +330,7 @@ export function useRecordingLedger(
         today,
       ),
     };
-  }, [assignments, completions, overrides, progress, nameByUid, recording.durationSec, session.attendance, today]);
+  }, [assignments, failed, completions, overrides, progress, nameByUid, recording.durationSec, session.attendance, today]);
 }
 
 // ------------------------------------------------------------ class-level ---
@@ -524,18 +537,20 @@ export interface AuditRow extends AuditEntryDoc {
  * The audit log, newest first. A manager passes their courseId (scoped read); an
  * admin passes null for the unconstrained global view.
  */
-export function useAudit(courseId: string | null): AuditRow[] {
+export function useAudit(courseId: string | null, enabled = true): AuditRow[] {
   return useLiveQuery<AuditRow[]>(
     () =>
-      courseId === null
-        ? query(collection(db, COLLECTIONS.auditLog), orderBy('at', 'desc'), limit(AUDIT_PAGE))
-        : query(
-            collection(db, COLLECTIONS.auditLog),
-            where('courseId', '==', courseId),
-            orderBy('at', 'desc'),
-            limit(AUDIT_PAGE),
-          ),
-    [courseId],
+      !enabled
+        ? null
+        : courseId === null
+          ? query(collection(db, COLLECTIONS.auditLog), orderBy('at', 'desc'), limit(AUDIT_PAGE))
+          : query(
+              collection(db, COLLECTIONS.auditLog),
+              where('courseId', '==', courseId),
+              orderBy('at', 'desc'),
+              limit(AUDIT_PAGE),
+            ),
+    [courseId, enabled],
     {
       label: 'audit',
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as AuditEntryDoc) })),

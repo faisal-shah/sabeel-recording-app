@@ -43,7 +43,10 @@ export function StudentAttendanceScreen({
 }) {
   const today = todayInZone(INSTITUTE_TIMEZONE);
   const marks = useMyAttendance(uid, cls.id);
-  const assignments = useMyAssignments(uid);
+  // Memoised rather than a bare `?? []`: a fresh literal every render would
+  // make every `useMemo` below recompute every render.
+  const granted = useMyAssignments(uid);
+  const assignments = useMemo(() => granted ?? [], [granted]);
   const completions = useMyCompletions(uid);
 
   const bySession = useMemo(

@@ -307,6 +307,14 @@ export const submitAttendance = auditedCall('submitAttendance', async (req, audi
  * Refuses a session whose recording is published (unpublish/archive first) so a
  * delete can never pull a live recording out from under students. Cascades the
  * recording (and its assignments/completions/progress) then the session.
+ *
+ * THE CASCADE IS DELIBERATE, and the UI asking for the other order is not a rule
+ * this contradicts: `SessionDetailScreen` offers Delete only when the session
+ * has no recording, so a person is walked through removing the recording first
+ * and sees what they are destroying. An admin may delete either directly, so
+ * cascading here grants nothing the same admin could not do in two calls —
+ * which is exactly why the missing `requireAdmin` mattered and the missing
+ * ordering check does not.
  */
 export const deleteSession = auditedCall('deleteSession', async (req, audit) => {
   const d = req.data as { sessionId?: unknown };

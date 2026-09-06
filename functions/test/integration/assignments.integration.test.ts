@@ -85,7 +85,7 @@ async function seedSession(
     createdBy: ADMIN,
     updatedAt: 1,
   };
-  await db().collection(COLLECTIONS.sessions).doc(id).set(doc);
+  await db().collection(COLLECTIONS.sessions).doc(ns(id)).set(doc);
   return doc;
 }
 
@@ -107,13 +107,13 @@ async function seedRecording(id: string, sessionId: string, status: RecordingDoc
     createdBy: ADMIN,
     updatedAt: 1,
   };
-  await db().collection(COLLECTIONS.recordings).doc(id).set(doc);
-  await db().collection(COLLECTIONS.sessions).doc(sessionId).update({ recordingId: id });
+  await db().collection(COLLECTIONS.recordings).doc(ns(id)).set(doc);
+  await db().collection(COLLECTIONS.sessions).doc(ns(sessionId)).update({ recordingId: ns(id) });
   return doc;
 }
 
 const getAssignment = async (uid: string, recId: string) =>
-  (await db().collection(COLLECTIONS.assignments).doc(assignmentId(uid, recId)).get()).data() as
+  (await db().collection(COLLECTIONS.assignments).doc(assignmentId(uid, ns(recId))).get()).data() as
     | AssignmentDoc
     | undefined;
 
@@ -121,14 +121,14 @@ const countActive = async (recId: string) =>
   (
     await db()
       .collection(COLLECTIONS.assignments)
-      .where('recordingId', '==', recId)
+      .where('recordingId', '==', ns(recId))
       .where('active', '==', true)
       .get()
   ).size;
 
 /** Reconcile a session by id, reading the current session + recording docs. */
 async function reconcile(sessionId: string) {
-  const session = (await db().collection(COLLECTIONS.sessions).doc(sessionId).get()).data() as
+  const session = (await db().collection(COLLECTIONS.sessions).doc(ns(sessionId)).get()).data() as
     | SessionDoc
     | undefined;
   const rec = session?.recordingId
@@ -136,13 +136,32 @@ async function reconcile(sessionId: string) {
         | RecordingDoc
         | undefined)
     : undefined;
-  await reconcileSessionAssignments(db(), sessionId, session, rec);
+  await reconcileSessionAssignments(db(), ns(sessionId), session, rec);
 }
 
 let cohortId: string;
 let courseId: string;
 
+/*
+ * A DOCUMENT ID IS NEVER REUSED ACROSS TESTS, and that is not tidiness.
+ *
+ * `clearAll` deletes this file's sessions and recordings, and each deletion
+ * fires `onSessionWritten` / `onRecordingWritten` in the Functions emulator —
+ * asynchronously, on its own schedule. With a fixed id like `sess`, the trigger
+ * for the PREVIOUS test's deletion could land after the NEXT test had seeded a
+ * session under the same id, and reconcile it against a session that no longer
+ * exists: every grant deactivated, in a test that had done nothing wrong. It
+ * failed a few runs in a hundred, in a different test each time.
+ *
+ * Production never reuses an id — sessions and recordings get auto-ids — so
+ * this makes the fixture behave like the thing it is testing. The helpers below
+ * namespace, so the test bodies keep reading `'sess'` and `'r1'`.
+ */
+let testRun = 0;
+const ns = (id: string) => `${id}-run${testRun}`;
+
 beforeEach(async () => {
+  testRun += 1;
   await clearAll();
   ({ id: cohortId } = await createCohortRecord(ADMIN, 'Autumn 2026'));
   ({ id: courseId } = await createCourseRecord(ADMIN, { cohortId, name: 'Hikam' }));
@@ -178,7 +197,7 @@ describe('reconcileSessionAssignments', () => {
     expect(await countActive('r1')).toBe(0);
 
     // Submit attendance → now assigned.
-    await db().collection(COLLECTIONS.sessions).doc('sess').update({ attendanceSubmittedAt: 1 });
+    await db().collection(COLLECTIONS.sessions).doc(ns('sess')).update({ attendanceSubmittedAt: 1 });
     await reconcile('sess');
     expect(await getAssignment('s1', 'r1')).toMatchObject({ active: true });
 
@@ -198,7 +217,7 @@ describe('reconcileSessionAssignments', () => {
     // s2 was actually present after all — the grant goes, the row stays.
     await db()
       .collection(COLLECTIONS.sessions)
-      .doc('sess')
+      .doc(ns('sess'))
       .update({ attendance: { s1: 'excused', s2: 'present' } });
     await reconcile('sess');
     expect(await getAssignment('s1', 'r1')).toMatchObject({ active: true });
@@ -216,7 +235,7 @@ describe('reconcileSessionAssignments', () => {
 
     await db()
       .collection(COLLECTIONS.sessions)
-      .doc('sess')
+      .doc(ns('sess'))
       .update({ attendance: { s1: 'absent' } });
     await reconcile('sess');
     expect((await getAssignment('s1', 'r1'))?.active).toBe(false);
@@ -241,7 +260,7 @@ describe('reconcileSessionAssignments', () => {
     await reconcile('sess');
     expect(await countActive('r1')).toBe(2);
 
-    await db().collection(COLLECTIONS.recordings).doc('r1').update({ status: 'unpublished' });
+    await db().collection(COLLECTIONS.recordings).doc(ns('r1')).update({ status: 'unpublished' });
     await reconcile('sess');
     expect(await countActive('r1')).toBe(0);
     expect((await getAssignment('s1', 'r1'))?.active).toBe(false);
@@ -257,7 +276,7 @@ describe('reconcileSessionAssignments', () => {
     await reconcile('sess');
     expect((await getAssignment('s1', 'r1'))?.dueDate).toBe('2026-08-01');
 
-    await db().collection(COLLECTIONS.sessions).doc('sess').update({ dueDate: '2026-08-10' });
+    await db().collection(COLLECTIONS.sessions).doc(ns('sess')).update({ dueDate: '2026-08-10' });
     await reconcile('sess');
     expect((await getAssignment('s1', 'r1'))?.dueDate).toBe('2026-08-10');
   });
@@ -281,15 +300,15 @@ describe('reconcileAttendanceRecords — the student-visible projection', () => 
     (
       await db()
         .collection(COLLECTIONS.attendanceRecords)
-        .doc(attendanceRecordId(uid, sessionId))
+        .doc(attendanceRecordId(uid, ns(sessionId)))
         .get()
     ).data() as AttendanceRecordDoc | undefined;
 
   const project = async (sessionId: string) => {
-    const session = (await db().collection(COLLECTIONS.sessions).doc(sessionId).get()).data() as
+    const session = (await db().collection(COLLECTIONS.sessions).doc(ns(sessionId)).get()).data() as
       | SessionDoc
       | undefined;
-    await reconcileAttendanceRecords(db(), sessionId, session);
+    await reconcileAttendanceRecords(db(), ns(sessionId), session);
   };
 
   it('projects EVERY mark, not just the granted ones', async () => {
@@ -322,7 +341,7 @@ describe('reconcileAttendanceRecords — the student-visible projection', () => 
     await project('sess');
     expect(await mirror('s1', 'sess')).toBeUndefined();
 
-    await db().collection(COLLECTIONS.sessions).doc('sess').update({ attendanceSubmittedAt: 1 });
+    await db().collection(COLLECTIONS.sessions).doc(ns('sess')).update({ attendanceSubmittedAt: 1 });
     await project('sess');
     expect(await mirror('s1', 'sess')).toMatchObject({ status: 'excused' });
   });
@@ -334,7 +353,7 @@ describe('reconcileAttendanceRecords — the student-visible projection', () => 
 
     await db()
       .collection(COLLECTIONS.sessions)
-      .doc('sess')
+      .doc(ns('sess'))
       .update({ attendance: { s1: 'present' } });
     await project('sess');
     expect(await mirror('s1', 'sess')).toMatchObject({ status: 'present' });
@@ -346,7 +365,7 @@ describe('reconcileAttendanceRecords — the student-visible projection', () => 
   it('drops every row when the session is deleted', async () => {
     await seedSession('sess', { attendance: { s1: 'excused' }, submitted: true });
     await project('sess');
-    await db().collection(COLLECTIONS.sessions).doc('sess').delete();
+    await db().collection(COLLECTIONS.sessions).doc(ns('sess')).delete();
     await project('sess');
     expect(await mirror('s1', 'sess')).toBeUndefined();
   });
@@ -357,7 +376,7 @@ describe('reconcileAttendanceRecords — the student-visible projection', () => 
     await project('sess');
     const all = await db()
       .collection(COLLECTIONS.attendanceRecords)
-      .where('sessionId', '==', 'sess')
+      .where('sessionId', '==', ns('sess'))
       .get();
     expect(all.size).toBe(2);
   });

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   allowedTransitions,
-  isEmptyDraft,
+  isDiscardable,
   publishBlockers,
   unbreakableDate,
   type AttendanceStatus,
@@ -556,9 +556,13 @@ function RecordingCard({
   // one, or after Remove audio. Only say something is wrong once nothing is in
   // flight — otherwise a healthy upload reads as broken for its whole duration.
   const needsAudio = !r.audioPath && !uploading;
-  // Discarding an empty draft destroys nothing, so it is not the admin-only
-  // permanent delete (server agrees — see isEmptyDraft).
-  const canDiscard = isEmptyDraft(r);
+  // Discarding a recording that never held anything destroys nothing, so it is
+  // not the admin-only permanent delete. NOT `isEmptyDraft`, which is only
+  // "needs audio": a recording walked back from published has that same shape
+  // with its whole ledger intact, and the server refuses a manager there — so
+  // this used to offer a manager a button that could only fail, and an admin the
+  // words "nothing is lost" over a term of listening history.
+  const canDiscard = isDiscardable(r);
 
   // Takes over the card for the same reason ConfirmDanger does: a confirmation
   // that leaves Publish and Delete tappable underneath it is not a confirmation.

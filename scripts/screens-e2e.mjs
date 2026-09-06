@@ -237,7 +237,10 @@ const COLUMN_CAPS = [PLAYER_MAX_WIDTH, CONTENT_MAX_WIDTH, LIST_MAX_WIDTH];
  * screens toured with a sheet OPEN are checked against this instead.
  */
 const sheetSrc = await readFile(resolve(ROOT, 'app/src/components/Sheet.tsx'), 'utf8');
-const SHEET_MAX_WIDTH = Number(sheetSrc.match(/maxWidth:\s*(\d+)/)?.[1]);
+// Anchored to the `panel:` style, not the first `maxWidth:` in the file — see
+// the note in `functions/test/unit/dialogWidth.test.ts`, which reads it the same
+// way and asserts the number is a dialog width.
+const SHEET_MAX_WIDTH = Number(sheetSrc.match(/panel:\s*\{[\s\S]*?maxWidth:\s*(\d+)/)?.[1]);
 if (!SHEET_MAX_WIDTH) throw new Error('the panel width cap is no longer in Sheet.tsx');
 
 /**

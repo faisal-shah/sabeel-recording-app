@@ -13,8 +13,29 @@ const t = getTheme();
  * Audit history, newest first. A manager passes their courseId (scoped); an admin
  * passes null for the global view.
  */
-export function AuditScreen({ courseId, title }: { courseId: string | null; title: string }) {
-  const entries = useAudit(courseId);
+export function AuditScreen({
+  courseId,
+  title,
+  allowed,
+}: {
+  courseId: string | null;
+  title: string;
+  /**
+   * Whether this reader may see THIS view of the log.
+   *
+   * One route, two views: the institute-wide history is admin-only, a class's
+   * own is open to the manager who runs it. A manager reaching `/audit` with no
+   * course — by typing it, or by a bookmark — was served the wide view, whose
+   * query the rules refuse, so the screen came up titled "All courses" with a
+   * live-data error across the top. That reads as something broken rather than
+   * as something not theirs.
+   */
+  allowed: boolean;
+}) {
+  // NOT SUBSCRIBED when the view is not this reader's: the wide query is one the
+  // rules refuse a manager, and a refusal paints the live-data banner over the
+  // explanation below.
+  const entries = useAudit(courseId, allowed);
   /*
    * NAMES, NOT UIDS — on the one screen whose whole job is "who did what".
    *
@@ -28,8 +49,8 @@ export function AuditScreen({ courseId, title }: { courseId: string | null; titl
    * An id that resolves to nothing is still printed: a deleted account, or the
    * `seed-admin` an import writes, is better shown as itself than as blank.
    */
-  const staff = useDecidedStaff(true);
-  const students = useStudents(true);
+  const staff = useDecidedStaff(allowed);
+  const students = useStudents(allowed);
   const people = useMemo(
     () =>
       new Map<string, string>([
@@ -38,6 +59,17 @@ export function AuditScreen({ courseId, title }: { courseId: string | null; titl
       ]),
     [staff, students],
   );
+
+  if (!allowed) {
+    return (
+      <Screen title="Audit history" subtitle="Who changed what, and when" width="list">
+        <Notice tone="info">
+          The institute-wide history is for administrators. Open one of your courses and choose
+          Audit history to see everything that happened in it.
+        </Notice>
+      </Screen>
+    );
+  }
 
   return (
     <Screen title={title} subtitle="Every change, who made it and when" width="list">

@@ -22,9 +22,29 @@ export interface AuditContext {
   detail?: Record<string, unknown>;
 }
 
-const ID_KEYS = ['recordingId', 'studentUid', 'cohortId', 'courseId', 'uid'] as const;
+/*
+ * The id fields a callable's payload may carry, picked up automatically so most
+ * callables need not set `audit.targets` at all.
+ *
+ * `sessionId` was missing, and it is the one an irreversible act names:
+ * `deleteSession({ sessionId })` derived `{}`, so the log recorded that a
+ * session — and its recording, its whole ledger and the class's attendance for
+ * that day — had been destroyed, without saying which. `updateSession` was the
+ * same, on the call that reopens a closed recording by moving its due date.
+ *
+ * `deriveTargets`'s tests in `functions/test/unit/audited.test.ts` hold each of
+ * these payload shapes to naming something.
+ */
+const ID_KEYS = [
+  'recordingId',
+  'sessionId',
+  'studentUid',
+  'cohortId',
+  'courseId',
+  'uid',
+] as const;
 
-function deriveTargets(data: unknown): Record<string, string> {
+export function deriveTargets(data: unknown): Record<string, string> {
   const out: Record<string, string> = {};
   const d = (data ?? {}) as Record<string, unknown>;
   for (const k of ID_KEYS) if (typeof d[k] === 'string' && d[k]) out[k] = d[k] as string;

@@ -1,7 +1,7 @@
 import './setup';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { getFirestore } from 'firebase-admin/firestore';
-import { COLLECTIONS, type RecordingDoc, type SessionDoc } from '@sabeel/shared';
+import { COLLECTIONS, type SessionDoc } from '@sabeel/shared';
 import { applyRecordingFanout, applySessionFanout } from './assignmentsFanout';
 import { reconcileAttendanceRecords } from './attendanceMirror';
 import { reportError } from './sentry';
@@ -28,12 +28,9 @@ export const onRecordingWritten = onDocumentWritten(
   { document: `${COLLECTIONS.recordings}/{recordingId}`, secrets: [SENTRY_DSN] },
   async (event) => {
     try {
-      await applyRecordingFanout(
-        getFirestore(),
-        event.params.recordingId,
-        event.data?.before.data() as RecordingDoc | undefined,
-        event.data?.after.data() as RecordingDoc | undefined,
-      );
+      // The id is all it needs: the fanout re-reads the recording itself, so a
+      // redelivered or out-of-order event cannot act on a stale snapshot.
+      await applyRecordingFanout(getFirestore(), event.params.recordingId);
     } catch (e) {
       await reportError(e, { source: 'onRecordingWritten' });
       throw e;

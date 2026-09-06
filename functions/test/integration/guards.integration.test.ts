@@ -9,11 +9,12 @@ import { requireAdmin, requireCourseScope, requireStaff } from '../../src/guards
  * The write side of authorization — which `firestore.rules` cannot cover at all.
  *
  * THE RULES DENY EVERY CLIENT WRITE TO THE STRUCTURAL COLLECTIONS, so the rules
- * suites can only ever prove that. Every mutation in this product goes through a
- * callable, and `requireCourseScope` is the single gate deciding "may you touch
- * this class?" for fifteen of them. It had no test of any kind: deleting the
- * membership check left every suite in the repo green while any manager could
- * act on any class in the institute.
+ * suites can only ever prove that. Every staff mutation in this product goes
+ * through a callable, and `requireCourseScope` decides "may you touch this
+ * class?" for sixteen of them — the only gate on fourteen, and the floor under
+ * the two permanent deletions, which add `requireAdmin` on top. It had no test
+ * of any kind: deleting the membership check left every suite in the repo green
+ * while any manager could act on any class in the institute.
  *
  * A `CallableRequest` here is the two fields the guards read. Building it by
  * hand is the point — the guards must be judged on the TOKEN and on the class

@@ -4,6 +4,7 @@ import {
   audioStoragePath,
   canPublish,
   canTransition,
+  isDiscardable,
   isEmptyDraft,
   isVisibleToStudents,
   listenedFraction,
@@ -128,14 +129,53 @@ describe('isEmptyDraft', () => {
     }
   });
 
-  it('agrees with publishBlockers: an empty draft can never have been published', () => {
-    // This is the invariant the relaxed delete guard leans on — no audio means
-    // publish is blocked, and assignments only fan out on publish, so an empty
-    // draft provably has no dependent history to destroy.
+  /*
+   * THE CLAIM THIS TEST USED TO MAKE WAS FALSE, and it is worth keeping the
+   * correction where the wrong version stood. `isEmptyDraft` is "needs audio",
+   * not "was never published": no audio blocks publishing NOW, and a recording
+   * that WAS published can be walked back into exactly this shape
+   * (`published → unpublished → draft`, then `clearAudio`) with a term of
+   * assignments and completions still pointing at it.
+   */
+  it('says nothing about what a recording used to be', () => {
     const empty = { audioPath: null, status: 'draft' as RecordingStatus };
     expect(isEmptyDraft(empty)).toBe(true);
     expect(publishBlockers(empty)).toContain('audio');
+    // The same shape, once published: still "needs audio", and no longer
+    // something anyone may discard.
+    expect(isEmptyDraft({ ...empty, publishedAt: 1 })).toBe(true);
+    expect(isDiscardable({ ...empty, publishedAt: 1 })).toBe(false);
   });
+});
+
+/**
+ * Which recordings may be thrown away rather than permanently deleted.
+ *
+ * The distinction the delete gate turns on, and the words the confirmation uses:
+ * "Discard … nothing is lost" over a recording with listening history behind it
+ * is the confirmation lying, and a manager offered a Discard the server refuses
+ * is a button that can only fail.
+ */
+describe('isDiscardable', () => {
+  it('accepts a draft that has never been published', () => {
+    expect(isDiscardable({ audioPath: null, status: 'draft' })).toBe(true);
+    expect(isDiscardable({ audioPath: null, status: 'needsAttention' })).toBe(true);
+  });
+
+  it('refuses one that was published and walked back', () => {
+    expect(isDiscardable({ audioPath: null, status: 'draft', publishedAt: 1 })).toBe(false);
+  });
+
+  it('refuses one that still holds audio, published or not', () => {
+    expect(isDiscardable({ audioPath: 'recordings/r1/audio.m4a', status: 'draft' })).toBe(false);
+  });
+
+  it.each(['published', 'unpublished', 'archived'] as RecordingStatus[])(
+    'refuses a %s recording outright',
+    (status) => {
+      expect(isDiscardable({ audioPath: null, status })).toBe(false);
+    },
+  );
 });
 
 describe('isVisibleToStudents', () => {

@@ -128,27 +128,25 @@ export async function reconcileSessionAssignments(
 }
 
 /**
- * React to a recording write: reconcile its session's obligations. A deleted
- * recording deactivates everything pointing at it.
+ * React to a recording write: reconcile its session's obligations. A recording
+ * that is gone deactivates everything pointing at it.
  *
- * The event payload decides only WHETHER to reconcile (deleted or not) — never
- * WHAT to write. See applySessionFanout for why.
+ * THE EVENT PAYLOAD DECIDES NOTHING — not what to write, and not whether the
+ * recording still exists. The delete branch used to read the event's `after`,
+ * which is the one thing `applySessionFanout`'s docblock says not to do: delivery
+ * is at-least-once and unordered, so a delete event arriving after the document
+ * at that id exists again deactivated a live grant. Production never reuses a
+ * recording id, so this was only ever reachable in a fixture — but a trigger
+ * that trusts a stale snapshot for a destructive branch is the wrong shape, and
+ * it made three unrelated suites fail a few runs in a hundred, in a different
+ * test each time.
  */
-export async function applyRecordingFanout(
-  db: Firestore,
-  recordingId: string,
-  _before: RecordingDoc | undefined,
-  after: RecordingDoc | undefined,
-): Promise<void> {
-  if (!after || !after.sessionId) {
-    // Deleted, or a malformed recording with no session — nothing to reconcile.
-    await deactivateAssignmentsForRecording(db, recordingId);
-    return;
-  }
+export async function applyRecordingFanout(db: Firestore, recordingId: string): Promise<void> {
   const rec = (await db.collection(COLLECTIONS.recordings).doc(recordingId).get()).data() as
     | RecordingDoc
     | undefined;
   if (!rec?.sessionId) {
+    // Gone, or malformed with no session — nothing left to reconcile against.
     await deactivateAssignmentsForRecording(db, recordingId);
     return;
   }
