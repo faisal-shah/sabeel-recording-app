@@ -30,11 +30,21 @@ export interface TodayItem {
   recordingId: string | null;
   /** Days past due (negative = still to come). Drives the ordering. */
   age: number;
+  /**
+   * Students are locked out of something until this is cleared.
+   *
+   * Two kinds qualify and it is worth being exact about which. An un-taken
+   * register grants nobody anything, and an UNPUBLISHED recording takes back
+   * access every excused student already had. A draft has granted nothing yet
+   * and a missing recording is not a lockout — those are work, not a closed
+   * door. This is what the tab's badge counts.
+   */
+  blocking: boolean;
 }
 
 export interface TodayQueue {
   items: TodayItem[];
-  /** Rows that grant nobody anything until they are cleared — the tab's badge. */
+  /** How many rows are `blocking` — the number on the tab. */
   blocking: number;
   /** No snapshot has arrived yet. Distinct from an empty queue, which is news. */
   loading: boolean;
@@ -214,6 +224,7 @@ function useTodayQueue(
           kind: 'attendance',
           recordingId: null,
           age: met,
+          blocking: true,
           detail:
             met === 0
               ? 'Met today. Nobody has access until attendance is taken.'
@@ -231,6 +242,7 @@ function useTodayQueue(
             kind: 'recording',
             recordingId: null,
             age: met,
+            blocking: false,
             detail: 'Attendance is in. The recording has not been added yet.',
           });
         }
@@ -248,6 +260,9 @@ function useTodayQueue(
           kind: 'publish',
           recordingId: rec.id,
           age: met,
+          // Unpublishing REVOKES access every excused student had; a draft has
+          // granted nothing yet.
+          blocking: rec.status === 'unpublished',
           detail:
             rec.status === 'needsAttention'
               ? 'The import needs attention before it can be published.'
@@ -266,6 +281,7 @@ function useTodayQueue(
             key: `close-${s.id}`,
             kind: 'closing',
             recordingId: rec.id,
+            blocking: false,
             // Negative, so a deadline further off sorts below a nearer one under
             // the same descending comparison the overdue rows use.
             age: -left,
@@ -283,7 +299,7 @@ function useTodayQueue(
     );
     return {
       items: out,
-      blocking: out.filter((i) => i.kind === 'attendance').length,
+      blocking: out.filter((i) => i.blocking).length,
       loading: false,
       failed,
       scoped: subscribed,

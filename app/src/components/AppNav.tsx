@@ -131,11 +131,13 @@ export function AppNav({
   variant: 'bar' | 'rail';
   active: RouteName;
   /**
-   * Sessions whose attendance is not in, and which therefore grant nobody
-   * anything. The ONLY thing in this app that gets a badge: under the
-   * excused-only policy it is the one failure that is invisible from every
-   * other screen, and a badge that means "several things are somewhat
-   * outstanding" teaches people to ignore it.
+   * How many things are keeping students locked out — an un-taken register, or
+   * a recording unpublished after the fact. See `TodayItem.blocking`.
+   *
+   * The ONLY thing in this app that gets a badge, and it is drawn narrowly on
+   * purpose: a count that also included work merely outstanding would be a
+   * number that is never zero, and a badge that is never zero is one people
+   * learn to ignore.
    */
   blocking: number;
   onNavigate: (route: RouteName, mode: 'tab' | 'push') => void;
