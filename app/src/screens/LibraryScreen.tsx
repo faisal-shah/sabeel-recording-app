@@ -224,6 +224,10 @@ function RecordingLine({
           {r.date ? ` · ${r.date}` : ''}
         </Text>
       </View>
+      {/* Pushed to the foot of the card. The cards in a row are the same height,
+          but a title that wraps used to drop its own actions below its
+          neighbours' — level outlines with a ragged row of buttons inside. */}
+      <View style={styles.actions}>
       <Row>
         {r.audioPath ? (
           <Button
@@ -242,11 +246,13 @@ function RecordingLine({
           />
         ) : null}
       </Row>
+      </View>
     </Card>
   );
 }
 
 const styles = StyleSheet.create({
+  actions: { marginTop: 'auto' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginBottom: spacing(4) },
   chip: { paddingVertical: spacing(1), paddingHorizontal: spacing(3), borderRadius: 999, borderWidth: 1, borderColor: t.border.strong },
   chipOn: { backgroundColor: t.accent.base, borderColor: t.accent.base },
