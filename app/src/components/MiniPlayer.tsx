@@ -30,12 +30,11 @@ const t = getTheme();
  * Two shapes, and the difference is not decoration:
  *
  *  - NARROW it sits directly on top of the tab bar as a single compact row —
- *    artwork-less: the title, play/pause, and a dismiss. NO SKIP CONTROLS, and
- *    that is deliberate rather than a width that ran out: the whole strip is
- *    one tap from the full transport, and three more targets on a 320px row
- *    would leave the title too short to identify the lecture, which is the one
- *    thing the strip has to do. Pause is the control you reach for without
- *    looking; skipping is a control you look at.
+ *    artwork-less: the title, back 15, play/pause and a dismiss. Skipping BACK
+ *    earns its place on a phone even though skipping forward does not: the
+ *    phone is where someone listens hands-free, and "I missed that sentence" is
+ *    the reason anyone reaches for a bar they are not looking at. Scrubbing
+ *    forward is a control you look at, and it is one tap away on the player.
  *  - WIDE it spans the content area beneath the rail with the transport laid
  *    out inline: back 15 · play/pause · forward 30, elapsed and remaining, and
  *    a full-width progress line. There is room for the controls, so putting
@@ -113,7 +112,7 @@ export function MiniPlayer({
           It cannot match the column of the screen it happens to be docked under
           — it outlives every screen, and knowing which one is showing is not
           its business — so it takes the widest and caps the title too. */}
-      <View style={styles.inner}>
+      <View style={[styles.inner, wide ? styles.innerWide : null]}>
       <Pressable
         testID="mini-player-open"
         accessibilityRole="button"
@@ -135,10 +134,13 @@ export function MiniPlayer({
           some Android builds — which is exactly why `Transport` draws its
           glyphs. Sharing them is how the two views cannot drift.
 
-          The title is capped, so the spacer takes the slack: without it the
-          whole cluster packs left and leaves a hole where the dismiss should
-          be. */}
-      <View style={styles.spacer} />
+          On a wide bar the title is capped, so a spacer takes the slack:
+          without it the whole cluster packs left and leaves a hole where the
+          dismiss should be. */}
+      {/* WIDE ONLY. On a phone there is no slack to take: the title column had
+          94px left after the transport, which identifies no lecture at all. The
+          transport is the last thing in the row there, so it needs no pushing. */}
+      {wide ? <View style={styles.spacer} /> : null}
 
       {/* BACK AT EVERY WIDTH, forward only where there is room. The phone is
           the surface someone listens on hands-free, and "I missed that
@@ -193,7 +195,10 @@ export function MiniPlayer({
 
 const styles = StyleSheet.create({
   bar: {
-    paddingHorizontal: spacing(4),
+    // Tight on a phone, because every pixel here is one the title does not get:
+    // at 320 the transport is three 44px targets and the name of the lecture has
+    // to live in what is left.
+    paddingHorizontal: spacing(3),
     paddingVertical: spacing(2),
     minHeight: 56,
     // Surface, like the bar it sits on — see `AppNav`.
@@ -202,10 +207,11 @@ const styles = StyleSheet.create({
     borderTopColor: t.border.strong,
   },
   barWide: { paddingHorizontal: spacing(6), minHeight: 64 },
+  innerWide: { gap: spacing(3) },
   inner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing(3),
+    gap: spacing(2),
     width: '100%',
     maxWidth: LAYOUT_WIDTHS.list,
     alignSelf: 'center',

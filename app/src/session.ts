@@ -138,6 +138,17 @@ export function useSession(): Session {
 
       if (!user) {
         pushRegisteredFor = null;
+        // NOT ONLY `signOut()`. Playback is a module-level session now, so
+        // nothing unmounts it — and this branch is every INVOLUNTARY end: a
+        // disabled account whose refresh token is rejected, a sign-out in
+        // another tab, a deleted account. Without this the foreground service
+        // kept streaming a lecture with the app showing the sign-in screen and
+        // no control anywhere to stop it, and a 12-hour signed URL — bound to a
+        // recording, not to an account — stayed in the cache for whoever signed
+        // in next. Fire and forget: the final write is refused once the
+        // credential is gone, and stopping is the point.
+        void closePlayback();
+        forgetPlaybackUrls();
         setSession({ phase: 'signedOut' });
         return;
       }
@@ -160,6 +171,15 @@ export function useSession(): Session {
         // nothing. Being disabled mid-session is the case that matters: the
         // claim flips under a screen that is still subscribed.
         setLiveDataSession(isReady(claims, profile));
+        // The DISABLED case never reaches the branch above: the claim flips
+        // while the credential is still valid, and `App` swaps the whole
+        // navigator for the disabled screen — taking the player screen and the
+        // docked bar with it, and leaving the audio running with nothing to
+        // stop it. Ending the session is part of closing the account's access.
+        if (!isReady(claims, profile)) {
+          void closePlayback();
+          forgetPlaybackUrls();
+        }
         setSession({ phase: 'signedIn', user, profile, claims });
         if (isReady(claims, profile)) stopPoll();
 

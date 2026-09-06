@@ -455,9 +455,9 @@ function Shell({
       role={role}
       email={email}
       onClose={() => setMoreOpen(false)}
-      onNavigate={(route, mode) => {
+      onNavigate={(route) => {
         setMoreOpen(false);
-        go(route, mode);
+        go(route, 'push');
       }}
     />
   );

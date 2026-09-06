@@ -71,7 +71,7 @@ export function StudentLedgerScreen({
         <Grid min={330}>
           {rows.map((r) => (
             <View key={r.recordingId} style={styles.row}>
-              <View style={{ flex: 1 }}>
+              <View style={styles.rowMain}>
                 <Text style={styles.title}>{r.title}</Text>
                 {r.source === 'override' ? (
                   <Text style={styles.override}>Override: {r.overrideReason}</Text>
@@ -101,7 +101,19 @@ function styleFor(r: StudentLedgerItem, today: string) {
 
 const styles = StyleSheet.create({
   chips: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginBottom: spacing(4), flexWrap: 'wrap' },
-  chip: { paddingVertical: spacing(1), paddingHorizontal: spacing(3), borderRadius: 999, borderWidth: 1, borderColor: t.border.strong },
+  // 44 TALL, like every other target in the app. A filter chip is a control
+  // people tap on a phone, and at 24px two wrapped rows of them sat a
+  // finger-width apart. The sweep reports small targets and never fails them,
+  // which is how four screens' worth stayed at half size.
+  chip: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingVertical: spacing(2),
+    paddingHorizontal: spacing(4),
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: t.border.strong,
+  },
   chipOn: { backgroundColor: t.accent.base, borderColor: t.accent.base },
   chipText: { fontSize: 13, fontWeight: '600', color: t.text.secondary },
   chipTextOn: { color: t.accent.onAccent },
@@ -111,6 +123,12 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    // WRAPS AT 320. Side by side, a title of any length and a "Listen by
+    // 2026-09-09" ran into each other with no gap at all — the words touching
+    // on one baseline and the rest of the title wrapping under the date.
+    flexWrap: 'wrap',
+    columnGap: spacing(3),
+    rowGap: spacing(2),
     backgroundColor: t.bg.surface,
     borderRadius: 12,
     padding: spacing(4),
@@ -120,6 +138,9 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 16, fontWeight: '600', color: t.text.primary },
   override: { fontSize: 13, color: t.text.accent, marginTop: spacing(1) },
+  // `minWidth` is what makes the wrap happen: below it the title and the status
+  // cannot share a line, so the status moves to its own.
+  rowMain: { flexGrow: 1, flexShrink: 1, flexBasis: 200, minWidth: 200 },
   status: { fontSize: 13, fontWeight: '700' },
   ok: { color: t.feedback.success },
   bad: { color: t.feedback.danger },

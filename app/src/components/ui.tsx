@@ -18,6 +18,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { CONTENT_MAX_WIDTH, LAYOUT_WIDTHS, getTheme, spacing, type LayoutWidth } from '../theme';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useListenerError } from '../liveQuery';
 import { useRoomy, useWide } from '../useWidth';
@@ -64,8 +65,7 @@ export function Screen({ title, subtitle, status, parent, width = 'read', action
    */
   actions?: ReactNode;
   /** The state of the thing this screen is about. Rendered as a lamp on the
-   *  LEFT of the heading, with the heading centred against it — the same shape
-   *  on a phone and on a wide screen. */
+   *  lede line under the title — see `StatusLight`. */
   status?: string;
   /**
    * The thing this screen belongs to, as the first part of the subtitle and a
@@ -508,13 +508,15 @@ export function StatusChip({ status }: { status: string }) {
 }
 
 /**
- * The status of the thing a whole screen is about: a lamp with its word beneath
- * it, sitting to the LEFT of the heading with the title centred against it.
+ * The status of the thing a whole screen is about: a dot and its word, side by
+ * side on the lede line beneath the title.
  *
  * Distinct from `StatusChip`, which is an inline tag in a list row. Set beside a
  * page heading a chip reads as an afterthought stuck to the end of the name; a
- * lamp reads as the state of the thing, is findable in the same spot on every
- * screen, and costs no vertical space of its own.
+ * lamp reads as the state of the thing and is findable in the same spot on every
+ * screen. It sits BELOW the title rather than left of it because a gutter to the
+ * left pushed the H1 68px right of every section label under it — see the note
+ * in `Screen`.
  */
 function StatusLight({ status }: { status: string }) {
   return (
@@ -582,19 +584,19 @@ export function Grid({ min, children }: { min: number; children: ReactNode }) {
    */
   const cols = Math.max(1, Math.min(fits, cells.length));
   /*
-   * And a cell never grows past the width at which two columns would have fitted
-   * — because at that width the grid would have chosen two. Without the cap, a
-   * manager with one course got a single card spanning the whole page, which is
-   * the stretched-phone look the grid exists to avoid.
+   * EVERY SECTION ENDS AT THE SAME RIGHT EDGE, so a short row is a wide cell
+   * rather than a narrow one floating in a gap.
+   *
+   * Capping the cell instead — at the width two columns would have needed —
+   * gave a page four sections ending at four different x positions, and put the
+   * NARROWEST card under the heading that matters most, because the one thing
+   * blocking every student's access is usually the only row in its group.
    */
-  const maxCell = min * 2 + gap;
   // FLOORED. `cols * cell + gap * (cols - 1)` is exactly the container width in
   // real arithmetic, but Yoga rounds child widths to the pixel grid — a fraction
   // over and the last cell wraps onto a line of its own at a fixed narrow width.
   const cell =
-    width > 0 && fits > 1
-      ? Math.min(Math.floor((width - gap * (cols - 1)) / cols), maxCell)
-      : undefined;
+    width > 0 && fits > 1 ? Math.floor((width - gap * (cols - 1)) / cols) : undefined;
 
   return (
     <View style={styles.grid} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
@@ -840,7 +842,11 @@ export function ConfirmDanger({
             busy={busy}
             onPress={onConfirm}
           />
-          <Button label="Cancel" variant="secondary" disabled={busy} onPress={() => setOpen(false)} />
+          {/* Quiet everywhere Cancel appears — a sheet's dismiss, an inline
+              editor's, a confirmation's. Filled sage, it was the most legible
+              control on a card whose primary is correctly disabled until a
+              reason is typed. */}
+          <Button label="Cancel" variant="quiet" disabled={busy} onPress={() => setOpen(false)} />
         </Row>
       </View>
     );
@@ -895,10 +901,15 @@ export function Collapsible({
         onPress={() => setOpen((v) => !v)}
         style={styles.collapseHead}
       >
-        {/* Text-presentation glyphs, not an icon font or emoji — same rule as
-            IconButton. These two share a baseline, which the arrowhead pair
-            (⌄ ›) did not: the open state sat visibly below the label. */}
-        <Text style={styles.collapseCaret}>{open ? '▾' : '▸'}</Text>
+        {/* The icon set the rest of the app draws with, not a text glyph. A
+            literal ▸ is the only place a typed shape stood in for an icon, and
+            it renders at whatever weight the platform font gives it — beside a
+            Material bar and Material rail it read as a different vocabulary. */}
+        <MaterialIcons
+          name={open ? 'expand-more' : 'chevron-right'}
+          size={20}
+          color={t.text.secondary}
+        />
         <Text style={styles.collapseTitle}>{label}</Text>
       </Pressable>
       {open ? children : null}
@@ -1066,7 +1077,6 @@ const styles = StyleSheet.create({
     marginTop: spacing(4),
     marginBottom: spacing(2),
   },
-  collapseCaret: { fontSize: 13, fontWeight: '700', color: t.text.secondary, width: 12 },
   collapseTitle: {
     fontSize: 13,
     fontWeight: '700',
@@ -1245,7 +1255,9 @@ const styles = StyleSheet.create({
   // look for first.
   lightDot: { width: 12, height: 12, borderRadius: 6 },
   // secondary, not muted: the status word is content, and true taupe is ~2.7:1.
-  lightText: { fontSize: 11, color: t.text.secondary, marginTop: spacing(1), textAlign: 'center' },
+  // No `marginTop` or `textAlign`: those are from the column layout this lamp
+  // used to have, and in a row they align the dot and the word to nothing.
+  lightText: { fontSize: 11, color: t.text.secondary },
   rowCard: {
     // Fills its grid cell — see the note on `card`.
     flexGrow: 1,

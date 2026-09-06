@@ -17,15 +17,20 @@ export function AuditScreen({ courseId, title }: { courseId: string | null; titl
   return (
     <Screen title={title} subtitle="Every change, who made it and when" width="list">
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
-      {entries.length === 0 ? (
-        <Empty>No audit entries yet.</Empty>
-      ) : (
-        <Grid min={330}>
-          {entries.map((e) => (
-            <AuditCard key={e.id} entry={e} />
-          ))}
-        </Grid>
-      )}
+      {/* A handle for "the log rendered", which the layout sweep anchors on —
+          this screen is a read-only list and has no control of its own to wait
+          for. Wraps both states, so an empty log is an arrival too. */}
+      <View testID="audit-list">
+        {entries.length === 0 ? (
+          <Empty>No audit entries yet.</Empty>
+        ) : (
+          <Grid min={330}>
+            {entries.map((e) => (
+              <AuditCard key={e.id} entry={e} />
+            ))}
+          </Grid>
+        )}
+      </View>
     </Screen>
   );
 }

@@ -253,7 +253,19 @@ function RecordingLine({
 const styles = StyleSheet.create({
   actions: { marginTop: 'auto' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginBottom: spacing(4) },
-  chip: { paddingVertical: spacing(1), paddingHorizontal: spacing(3), borderRadius: 999, borderWidth: 1, borderColor: t.border.strong },
+  // 44 TALL, like every other target in the app. A filter chip is a control
+  // people tap on a phone, and at 24px two wrapped rows of them sat a
+  // finger-width apart. The sweep reports small targets and never fails them,
+  // which is how four screens' worth stayed at half size.
+  chip: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingVertical: spacing(2),
+    paddingHorizontal: spacing(4),
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: t.border.strong,
+  },
   chipOn: { backgroundColor: t.accent.base, borderColor: t.accent.base },
   chipText: { fontSize: 12, fontWeight: '600', color: t.text.secondary },
   chipTextOn: { color: t.accent.onAccent },

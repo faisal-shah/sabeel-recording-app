@@ -131,15 +131,20 @@ export function CourseDetailScreen({
       {/* Course-level accountability at a glance. Zeroes out when archived (no
           active assignments), while the recordings' history stays. */}
       <Card>
+        {/* Three stats on one line, each an unbreakable run. Ordinary spaces let
+            a 320px wrap split "37" from "not complete" and then run the tail of
+            one stat into the head of the next. */}
         <Text style={styles.ledgerLine}>
-          <Text style={styles.ledgerNum}>{ledger.rollup.total}</Text> required listening
+          <Text style={styles.ledgerNum}>{ledger.rollup.total}</Text>
+          {'\u00A0required\u00A0listening'}
           {'   '}
-          <Text style={styles.ledgerNum}>{ledger.rollup.incomplete}</Text> not complete
+          <Text style={styles.ledgerNum}>{ledger.rollup.incomplete}</Text>
+          {'\u00A0not\u00A0complete'}
           {'   '}
           <Text style={[styles.ledgerNum, ledger.rollup.missed > 0 ? styles.missedNum : null]}>
             {ledger.rollup.missed}
-          </Text>{' '}
-          missed
+          </Text>
+          {'\u00A0missed'}
         </Text>
         <Button testID="nav-audit" label="Audit history" variant="secondary" onPress={onOpenAudit} />
       </Card>
@@ -300,7 +305,7 @@ export function CourseDetailScreen({
                     />
                     <Button
                       label="Cancel"
-                      variant="secondary"
+                      variant="quiet"
                       disabled={busy === `rm-${r.id}`}
                       onPress={() => setConfirmRemove(null)}
                     />

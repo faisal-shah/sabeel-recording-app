@@ -94,6 +94,7 @@ export function StaffScreen({ selfUid, header }: { selfUid: string; header?: Rea
               ) : (
                 <Row>
                   <Button
+                    testID={`staff-role-${s.email}`}
                     label={s.role === 'admin' ? 'Make manager' : 'Make admin'}
                     variant="secondary"
                     busy={busyUid === s.uid}

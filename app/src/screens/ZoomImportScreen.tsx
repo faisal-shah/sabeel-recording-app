@@ -98,14 +98,26 @@ export function ZoomImportScreen({
             <Text style={[styles.chipText, status === s ? styles.chipTextOn : null]}>{s}</Text>
           </Pressable>
         ))}
-        <Pressable
-          testID="zoom-hide-short"
-          onPress={() => setHideShort((v) => !v)}
-          style={[styles.chip, hideShort ? styles.chipOn : null]}
-        >
-          <Text style={[styles.chipText, hideShort ? styles.chipTextOn : null]}>hide &lt;2 min</Text>
-        </Pressable>
       </View>
+
+      {/* ITS OWN ROW, AND ITS OWN SHAPE. This is an independent toggle, not a
+          fourth member of the one-of-three filter above it — drawn as the same
+          raspberry pill, "available" and "hide <2 min" read as two selections
+          in one group. A tick and a square say "on/off"; a filled pill says
+          "chosen". */}
+      <Pressable
+        testID="zoom-hide-short"
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: hideShort }}
+        accessibilityLabel="Hide recordings under two minutes"
+        onPress={() => setHideShort((v) => !v)}
+        style={styles.toggle}
+      >
+        <View style={[styles.box, hideShort ? styles.boxOn : null]}>
+          {hideShort ? <Text style={styles.tick}>✓</Text> : null}
+        </View>
+        <Text style={styles.toggleText}>Hide recordings under 2 minutes</Text>
+      </Pressable>
 
       {error ? <Notice tone="error">{error}</Notice> : null}
       {loading && rows === null ? (
@@ -173,7 +185,38 @@ function ZoomRow({
 
 const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginTop: spacing(2), marginBottom: spacing(2) },
-  chip: { paddingVertical: spacing(1), paddingHorizontal: spacing(3), borderRadius: 999, borderWidth: 1, borderColor: t.border.strong },
+  // 44 TALL, like every other target in the app. A filter chip is a control
+  // people tap on a phone, and at 24px two wrapped rows of them sat a
+  // finger-width apart. The sweep reports small targets and never fails them,
+  // which is how four screens' worth stayed at half size.
+  chip: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingVertical: spacing(2),
+    paddingHorizontal: spacing(4),
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: t.border.strong,
+  },
+  toggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(3),
+    minHeight: 44,
+    marginTop: spacing(2),
+  },
+  box: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: t.border.strong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  boxOn: { backgroundColor: t.accent.base, borderColor: t.accent.base },
+  tick: { fontSize: 14, fontWeight: '700', color: t.accent.onAccent, lineHeight: 16 },
+  toggleText: { fontSize: 14, color: t.text.primary },
   chipOn: { backgroundColor: t.accent.base, borderColor: t.accent.base },
   chipText: { fontSize: 12, fontWeight: '600', color: t.text.secondary },
   chipTextOn: { color: t.accent.onAccent },

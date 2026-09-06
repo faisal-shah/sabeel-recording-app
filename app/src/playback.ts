@@ -138,6 +138,22 @@ let dirty = false;
 // displayed position at the target and ignore those stale ticks, so the thumb
 // does not snap backwards right after it is dropped.
 let seekTarget: number | null = null;
+/*
+ * WHEN THE HOLD WAS SET, because a target the player can never report would
+ * otherwise hold for ever.
+ *
+ * `durationSec` is genuinely nullable — a phone upload supplies none — so
+ * `skipForward` cannot clamp, and a stored duration longer than the file has
+ * the same effect: the seek lands clamped at the real end and no tick ever
+ * comes within 1500ms of the target. Every later tick was then discarded, so
+ * position and listened time froze for the rest of the session and the frozen
+ * numbers are what the ledger shows. `onEnded` clears the hold too, but only
+ * fires when the end is reached WHILE PLAYING — seeking past it while paused
+ * never gets there.
+ */
+let seekAt = 0;
+/** How long a seek may hold the display before stale ticks are accepted again. */
+const SEEK_HOLD_MS = 2_000;
 // Who the progress belongs to. Staff listen with no student uid and write none.
 let owner: { studentUid: string | null; recordingId: string; courseId: string } | null = null;
 // Bumped on every open; a load that resolves after a newer open is discarded.
@@ -271,15 +287,33 @@ export function openPlayback(now: NowPlaying): void {
   lastWrite = 0;
   dirty = false;
   seekTarget = null;
+  seekAt = 0;
   state = { ...IDLE, now };
   listeners.forEach((l) => l(state));
 
   const p = createPlayer({
     onProgress: (ms) => {
       if (generation !== gen) return;
+      // Before the audio is loaded a tick reports nothing about this recording,
+      // and acting on one is not harmless: `position` is still the zero set at
+      // open, `lastWrite` is 0 so the very first tick persists immediately, and
+      // `mergeProgress` takes the NEWER positionMs — so a tick that arrives
+      // between `replace()` and `seekTo()` writes a zero over the student's
+      // saved place in a two-hour lecture.
+      if (!state.ready) return;
       if (seekTarget !== null) {
-        if (Math.abs(ms - seekTarget) > 1500) return;
-        seekTarget = null;
+        if (Math.abs(ms - seekTarget) <= 1500) {
+          seekTarget = null;
+        } else if (Date.now() - seekAt < SEEK_HOLD_MS) {
+          return;
+        } else {
+          // Unreachable target. Take the player's word for where it is.
+          seekTarget = null;
+          lastTick = Date.now();
+          position = ms;
+          set({ positionMs: ms });
+          return;
+        }
       }
       // Count only forward movement at roughly real-time speed as "listened".
       // A seek forward must not manufacture listening that never happened.
@@ -382,6 +416,7 @@ export function closePlayback(): Promise<void> {
   dirty = false;
   lastTick = null;
   seekTarget = null;
+  seekAt = 0;
   if (state.now || state.ready || state.playing) {
     state = IDLE;
     listeners.forEach((l) => l(state));
@@ -444,6 +479,7 @@ export const playback = {
     player?.seek(ms);
     position = ms;
     seekTarget = ms;
+    seekAt = Date.now();
     lastTick = Date.now();
     dirty = true;
     set({ positionMs: ms });

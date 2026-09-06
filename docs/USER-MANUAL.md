@@ -262,13 +262,13 @@ the thing.
 - **Waiting to publish** — a recording is added but still a draft, or an import
   needs attention before it can go out.
 - **No recording yet** — attendance is in, the audio isn't.
+- **Closing soon** — access to a recording ends within the week; a good moment
+  to see who still hasn't listened.
 
 The number on the **Today** tab counts everything that is blocking access right
 now: a register not yet submitted, and a recording that was published and has
 since been unpublished. A draft that has never been published is waiting on you
 but is blocking nobody, so it is in the list without being in the count.
-- **Closing soon** — access to a recording ends within the week; a good moment
-  to see who still hasn't listened.
 
 A card disappears the moment you close the gap, and the count goes with it. An
 empty Today is the answer, not a blank screen: it means attendance is in, every
@@ -436,14 +436,14 @@ recorded is kept.
 </div>
 
 Open a published recording's **Listening progress** (from its session) to see
-exactly where things stand. Up top, four counts: **accountable** (the students
-you excused, the only ones who can open it), **complete**, **incomplete**, and
+exactly where things stand. Up top, four counts: **required** (the students you
+excused, the only ones who can open it), **completed**, **not complete**, and
 **missed**.
 
 The screen has five parts:
 
-- **The accountable list** — the students you excused, each with how much they've
-  listened, when they last listened, and their status: **Complete**,
+- **The required list** — the students you excused, each with how much they've
+  listened, when they last listened, and their status: **Completed**,
   **Not complete**, or **Missed**. The **filter chips** — *Not complete / Missed
   / All* — open on **Not complete**, so you land on exactly the people who still
   need a nudge.

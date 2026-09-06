@@ -147,7 +147,8 @@ describe('opening and closing', () => {
     expect(players).toHaveLength(2);
     expect(players[0].unloaded).toBe(true);
     expect(players[1].loaded).toBe('https://signed/audio.m4a');
-    // And the second session is the one every surface now describes.
+    // And the write the first session fired on its way out landed on the first
+    // session's document, not on the one that replaced it.
     expect(stored?.recordingId).toBe('rec-a');
   });
 

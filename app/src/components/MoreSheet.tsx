@@ -40,7 +40,8 @@ export function MoreSheet({
   role: Role;
   email: string;
   onClose: () => void;
-  onNavigate: (route: keyof RootStackParamList, mode: 'tab' | 'push') => void;
+  /** Always a push: a More destination is somewhere you come back from. */
+  onNavigate: (route: keyof RootStackParamList) => void;
 }) {
   const [sent, setSent] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
@@ -56,7 +57,7 @@ export function MoreSheet({
             label="Audit history"
             detail="Every change, who made it and when"
             testID="more-audit"
-            onPress={() => onNavigate('Audit', 'push')}
+            onPress={() => onNavigate('Audit')}
           />
         </>
       ) : null}
@@ -66,7 +67,7 @@ export function MoreSheet({
         label="Notifications"
         detail="Choose which messages this device receives"
         testID="more-notifications"
-        onPress={() => onNavigate('Notifications', 'push')}
+        onPress={() => onNavigate('Notifications')}
       />
       {/* STUDENTS ONLY, and it is a first-party reset — an emailed link, no
           third-party login service involved, so it triggers nothing under
@@ -109,7 +110,7 @@ export function MoreSheet({
       {IS_DEV && !isStudent ? (
         <SheetOption
           label="Design tokens"
-          onPress={() => onNavigate('Tokens', 'push')}
+          onPress={() => onNavigate('Tokens')}
         />
       ) : null}
       <SheetOption

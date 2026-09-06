@@ -274,6 +274,8 @@ export async function seedWorld({ db, auth, browser, base }) {
   /** The student the student tour signs in as: on the long-named row, so their own
    *  screens carry the longest strings too. */
   const STUDENT = students[0];
+  /** The one seeded as disabled — the only row inside the "Disabled" section. */
+  const DISABLED_STUDENT = students[students.length - 1];
 
   const COHORT = 'sw-autumn';
   const COURSE = 'sw-hikam';
@@ -502,20 +504,10 @@ export async function seedWorld({ db, auth, browser, base }) {
   }
 
 
-  return {
-    adminUid,
-    managerUid,
-    students,
-    STUDENT,
-    STUDENT_PASSWORD,
-    COHORT,
-    COURSE,
-    LONG_COURSE,
-    LONG_COURSE_NAME,
-    missed,
-    dueSoon,
-    done,
-  };
+  // WHAT A TOUR NEEDS TO NAME A THING, and nothing else. Twelve handles were
+  // returned and four were read; the rest were a standing invitation to reach
+  // past the fixture's own vocabulary into its internals.
+  return { STUDENT, DISABLED_STUDENT, STUDENT_PASSWORD, missed, dueSoon };
 }
 
 export { byId, byName, backButton, tap };

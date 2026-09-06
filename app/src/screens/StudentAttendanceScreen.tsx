@@ -75,7 +75,11 @@ export function StudentAttendanceScreen({
   );
 
   return (
-    <Screen title={cls.name} subtitle="Your attendance" width="list">
+    /* READ, like the two student screens this is opened FROM. A student's home
+       and class list are both the reading width; leaving this one at the list
+       width slid the page 230px left and made it 460px wider on a routine tap,
+       under a rail that had not moved. */
+    <Screen title={cls.name} subtitle="Your attendance" width="read">
       {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
 
       {/* WHAT THEY STILL OWE COMES FIRST, and in their words. Three attendance

@@ -164,7 +164,11 @@ export function CourseAttendanceScreen({
               {s.assigned > 0 ? (
                 <Text style={styles.catchup}>
                   Required listening: {s.completed} of {s.assigned} completed
-                  {s.missed > 0 ? <Text style={styles.missed}>{`  ·  ${s.missed} missed`}</Text> : null}
+                  {/* The separator rides with the words AFTER it, or a wrap left
+                      every row ending in a dangling "·". */}
+                  {s.missed > 0 ? (
+                    <Text style={styles.missed}>{`\u00A0\u00A0·\u00A0${s.missed} missed`}</Text>
+                  ) : null}
                 </Text>
               ) : (
                 <Text style={styles.hint}>No required listening</Text>

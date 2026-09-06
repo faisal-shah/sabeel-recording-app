@@ -206,9 +206,9 @@ describe('the order', () => {
       ],
       [recording('r1', 'published'), recording('r2', 'draft')],
     );
-    const kinds = q.items.map((i) => i.kind);
-    expect(kinds).toEqual([...KIND_ORDER].filter((k) => kinds.includes(k)));
-    expect(kinds[0]).toBe('attendance');
+    // All four, in KIND_ORDER — the length matters as much as the sequence, or
+    // an expectation derived from the actual passes when a kind is dropped.
+    expect(q.items.map((i) => i.kind)).toEqual([...KIND_ORDER]);
   });
 
   it('within a kind, the longest outstanding comes first', () => {

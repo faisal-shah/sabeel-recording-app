@@ -40,14 +40,17 @@ and commit messages, and renaming them would strand every one of those.
   work queue as the staff landing screen.**
 
   Three designs were built behind `?nav=a|b|c` and compared against one seeded
-  world at both widths; **B** was chosen and the other two deleted. Five rounds
+  world at both widths; **B** was chosen and the other two deleted. Six rounds
   of independent review followed, and every one of them found real defects — the
   most serious being a teardown race that made playing a second recording leave
   a permanently dead transport; a `closePlayback` that erased a student's place
   in a two-hour lecture whenever a session was closed before it loaded; a
   multi-device catch-up applied once per queued write, which turned a laptop's
   fifteen minutes into forty-four in the number the ledger presents as evidence;
-  and a roster with no `orderBy` behind the register staff mark by hand. What
+  a roster with no `orderBy` behind the register staff mark by hand; and audio
+  that kept playing out of a foreground service, with no control anywhere to
+  stop it, when an account was disabled mid-lecture — because hoisting playback
+  out of the player screen removed the unmount that used to end it. What
   survived:
 
   **The chrome.** A bottom bar below `WIDE_BREAKPOINT` (900) and a 76px activity
@@ -107,8 +110,8 @@ and commit messages, and renaming them would strand every one of those.
   measuring the DOM. The sweep says a layout is not broken; it never says it is
   good.
 
-  Green on this machine: lint, typecheck, knip, 254 unit, 254 emulator, 935/935
-  sweep at five widths, and 107/107 web e2e. **Not yet run on a device** — this
+  Green on this machine: lint, typecheck, knip, 254 unit, 254 emulator,
+  1038/1038 sweep at five widths, and 107/107 web e2e. **Not yet run on a device** — this
   box has no hardware virtualization, and the playback refactor touches exactly
   the seam a browser cannot reach, so the pre-release AVD pass is mandatory
   before any release.

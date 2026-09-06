@@ -190,7 +190,9 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
               )
             }
           />
-          <Button label="Cancel" variant="secondary" onPress={() => setEditing(false)} />
+          {/* Quiet, like a sheet's dismiss. Filled, it was the loudest control
+              in an editor whose Save is the reason the editor is open. */}
+          <Button label="Cancel" variant="quiet" onPress={() => setEditing(false)} />
         </Row>
       </Card>
     );
@@ -578,7 +580,7 @@ function RecordingCard({
           />
           <Button
             label="Cancel"
-            variant="secondary"
+            variant="quiet"
             disabled={busy === `clear-${r.id}`}
             onPress={() => setConfirmClear(false)}
           />

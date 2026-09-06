@@ -181,10 +181,19 @@ export function SessionsScreen({
   );
 }
 
+/**
+ * One step of a session's progress: done, or still to do.
+ *
+ * THE OUTSTANDING STATE IS THE LOUD ONE. It was the other way round — done wore
+ * the brand accent and outstanding was grey-on-grey — so a screen of finished
+ * sessions was a wall of pink and today's class, with attendance not taken and
+ * no recording, was the palest card on the page. Staff read this list to find
+ * work; a list that highlights the finished rows points them away from it.
+ */
 function Tag({ on, onLabel, offLabel }: { on: boolean; onLabel: string; offLabel: string }) {
   return (
-    <View style={[styles.tag, on ? styles.tagOn : styles.tagOff]}>
-      <Text style={[styles.tagText, on ? styles.tagTextOn : styles.tagTextOff]}>
+    <View style={[styles.tag, on ? styles.tagDone : styles.tagTodo]}>
+      <Text style={[styles.tagText, on ? styles.tagTextDone : styles.tagTextTodo]}>
         {on ? onLabel : offLabel}
       </Text>
     </View>
@@ -197,9 +206,11 @@ const styles = StyleSheet.create({
   date: { fontSize: 13, color: t.text.secondary, marginTop: 2 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginTop: spacing(3) },
   tag: { paddingVertical: spacing(1), paddingHorizontal: spacing(3), borderRadius: 999, borderWidth: 1 },
-  tagOn: { backgroundColor: t.bg.accentSoft, borderColor: t.accent.base },
-  tagOff: { backgroundColor: t.bg.inset, borderColor: t.border.strong },
+  // Gold, the app's "waiting on you" register — the same one the work queue's
+  // blocking card wears.
+  tagTodo: { backgroundColor: t.bg.goldSoft, borderColor: t.accent.gold },
+  tagDone: { backgroundColor: 'transparent', borderColor: t.border.subtle },
   tagText: { fontSize: 12, fontWeight: '600' },
-  tagTextOn: { color: t.accent.base },
-  tagTextOff: { color: t.text.secondary },
+  tagTextTodo: { color: t.accent.goldText },
+  tagTextDone: { color: t.text.secondary },
 });

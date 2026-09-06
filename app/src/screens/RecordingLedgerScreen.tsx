@@ -100,7 +100,11 @@ export function RecordingLedgerScreen({
             and not a fifth set for this screen. "Accountable" was also the one
             label too long for its tile. */}
         <Stat label="Required" value={rollup.total} />
-        <Stat label="Completed" value={rollup.complete} tone="success" />
+        {/* THE TONE FOLLOWS THE VALUE, never the label. Bound to the word,
+            "0 Completed" came out in the success green — a green zero at the top
+            of the accountability screen — while a healthy "0 Missed" still had
+            to be told apart from a bad one. */}
+        <Stat label="Completed" value={rollup.complete} tone={rollup.complete > 0 ? 'success' : undefined} />
         <Stat label="Not complete" value={rollup.incomplete} />
         <Stat label="Missed" value={rollup.missed} tone={rollup.missed > 0 ? 'danger' : undefined} />
       </View>
@@ -341,7 +345,7 @@ function LedgerRowCard({
               }
             />
           ) : null}
-          <Button label="Cancel" variant="secondary" onPress={() => setOpen(false)} />
+          <Button label="Cancel" variant="quiet" onPress={() => setOpen(false)} />
         </View>
       ) : (
         <View style={styles.actions}>
@@ -420,9 +424,12 @@ const styles = StyleSheet.create({
   bad: { color: t.feedback.danger },
   warn: { color: t.feedback.warning },
   chips: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginBottom: spacing(4), flexWrap: 'wrap' },
+  // 44 tall, like every other target — see `LibraryScreen`.
   chip: {
-    paddingVertical: spacing(1),
-    paddingHorizontal: spacing(3),
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingVertical: spacing(2),
+    paddingHorizontal: spacing(4),
     borderRadius: 999,
     borderWidth: 1,
     borderColor: t.border.strong,

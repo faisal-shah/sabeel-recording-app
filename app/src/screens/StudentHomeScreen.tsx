@@ -167,9 +167,11 @@ export function StudentHomeScreen({
           .filter((g) => g.rows.length > 0)
           .map((g) => (
             <View key={g.bucket} style={styles.group}>
-              <Text style={[styles.groupLabel, g.bucket === 'missed' ? styles.missedLabel : null]}>
-                {g.label}
-              </Text>
+              {/* No special treatment. Alarm red on the one group a student
+                  can do nothing about — sitting over cards deliberately quieted
+                  for the same reason — made one of four peer headings read as an
+                  error state. "Missed" is already the word. */}
+              <Text style={styles.groupLabel}>{g.label}</Text>
               {g.rows.map((row) => (
                 <TaskCard
                   key={row.key}
@@ -353,7 +355,6 @@ const styles = StyleSheet.create({
     color: t.text.secondary,
     marginBottom: spacing(2),
   },
-  missedLabel: { color: t.feedback.danger },
   card: {
     flexDirection: 'row',
     alignItems: 'center',

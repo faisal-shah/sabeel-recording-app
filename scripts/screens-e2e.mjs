@@ -246,7 +246,7 @@ const auth = admin.auth();
 await resetEmulators();
 const browser = await chromium.launch();
 const world = await seedWorld({ db, auth, browser, base: BASE });
-const { STUDENT, STUDENT_PASSWORD, missed, dueSoon } = world;
+const { STUDENT, DISABLED_STUDENT, STUDENT_PASSWORD, missed, dueSoon } = world;
 
 
 // ---- assertions ------------------------------------------------------------
@@ -766,7 +766,7 @@ const TAB_ROOTS = new Set([
   'miniplayer',
 ]);
 
-const STAFF_SCREENS = 28;
+const STAFF_SCREENS = 29;
 
 async function tourStaff(page, tag) {
   const counter = { seen: 0 };
@@ -796,7 +796,7 @@ async function tourStaff(page, tag) {
   await visit('staff', async () => {
     await tap(byId(page, 'tab-people'));
     await tap(byId(page, 'segment-staff'));
-  });
+  }, 'staff-role-manager@oursabeel.com');
   // The create sheet OPEN — a form that exists in no other state, and the one
   // affordance that is absent entirely on a native build.
   await visit('students-add', async () => {
@@ -808,7 +808,9 @@ async function tourStaff(page, tag) {
   await visit('students-disabled', async () => {
     await tap(byId(page, 'tab-people'));
     await tap(byId(page, 'students-disabled'));
-  }, 'students-disabled');
+    // A ROW inside the section, not the section's own header: the collapsible's
+    // Pressable renders open or closed, so anchoring on it asserts nothing.
+  }, `student-open-${DISABLED_STUDENT.email}`);
   await visit('student', async () => {
     await tap(byId(page, 'tab-people'));
     await tap(byId(page, `student-open-${STUDENT.email}`));
@@ -842,7 +844,7 @@ async function tourStaff(page, tag) {
     await tap(byId(page, 'cohort-open-Autumn 2026'));
     await tap(byId(page, 'courses-add'));
   }, 'course-create');
-  await visit('course', openCourse);
+  await visit('course', openCourse, 'nav-sessions');
   // A roster removal CONFIRMS IN PLACE — the row is replaced by a warning and
   // two buttons, which is more than fits where the row was.
   await visit('course-remove-confirm', async () => {
@@ -869,7 +871,7 @@ async function tourStaff(page, tag) {
     await tap(byId(page, 'nav-sessions'));
     await tap(byId(page, 'sessions-add'));
   }, 'session-create');
-  await visit('session', openSession);
+  await visit('session', openSession, 'recording-ledger');
   // The session editor: four fields and a Save/Cancel row that exist nowhere
   // else, and 320px is where they run out of room.
   await visit('session-editing', async () => {
@@ -886,7 +888,7 @@ async function tourStaff(page, tag) {
     await openSession();
     await tap(byId(page, 'recording-ledger'));
     await tap(byId(page, `override-open-${STUDENT.name}`));
-  }, 'ledger-filter-all');
+  }, `override-reason-${STUDENT.name}`)
   await visit('student-ledger', async () => {
     await openCourse();
     await tap(byId(page, `student-ledger-${STUDENT.email}`));
@@ -901,16 +903,20 @@ async function tourStaff(page, tag) {
   await visit('player', async () => {
     await tap(byId(page, 'tab-library'));
     await tap(byId(page, `library-listen-${missed.title}`));
-  });
-  await visit('audit', () => more('more-audit'));
+  }, 'player-scrubber');
+  // The overflow sheet ITSELF, open. It is the one wholly new component of the
+  // nav shell, it is a modal panel inside a 320px viewport, and the tours all
+  // passed straight through it to an option — so nothing had ever measured it.
+  await visit('more', () => tap(byId(page, 'tab-more')), 'more-privacy');
+  await visit('audit', () => more('more-audit'), 'audit-list');
   await visit('notifications', () => more('more-notifications'), 'notify-attendanceMissing');
   await checkDeviceState(page, tag);
   await visit('tokens', async () => {
     await tap(byId(page, 'tab-more'));
     await tap(byName(page, 'Design tokens'));
-  });
+  }, 'tokens-sheet');
 
-  check(`${tag} reached every staff screen`, counter.seen === STAFF_SCREENS,
+  check(`${tag} toured as many staff screens as the tour lists`, counter.seen === STAFF_SCREENS,
     `${counter.seen}/${STAFF_SCREENS}`);
 }
 
@@ -940,11 +946,11 @@ async function tourManager(page, tag) {
 
   await visit('home', async () => {});
   await visit('my-courses', () => tap(byId(page, 'tab-courses')), 'course-open-Hikam Foundations');
-  await visit('course', openCourse);
+  await visit('course', openCourse, 'nav-sessions');
   await visit('audit-scoped', async () => {
     await openCourse();
     await tap(byId(page, 'nav-audit'));
-  });
+  }, 'audit-list');
   await visit('library', () => tap(byId(page, 'tab-library')), 'library-filter-all');
   // People, and one student's page. A manager's People tab is not an admin's
   // with rows removed: the student page swaps a whole query for a per-course
@@ -974,13 +980,13 @@ async function tourManager(page, tag) {
     await openSession();
     await tap(byId(page, 'recording-ledger'));
     await tap(byId(page, `override-open-${STUDENT.name}`));
-  }, 'ledger-filter-all');
+  }, `override-reason-${STUDENT.name}`)
 
   check(`${tag} toured as many manager screens as the tour lists`, counter.seen === MANAGER_SCREENS,
     `${counter.seen}/${MANAGER_SCREENS}`);
 }
 
-const STUDENT_SCREENS = 6;
+const STUDENT_SCREENS = 7;
 
 async function tourStudent(page, tag) {
   const counter = { seen: 0 };
@@ -993,7 +999,7 @@ async function tourStudent(page, tag) {
   await visit('class-record', async () => {
     await tap(byId(page, 'tab-classes'));
     await tap(byId(page, 'myclass-Hikam Foundations'));
-  });
+  }, `attendance-${missed.title}`);
   // An open recording: the transport, the scrubber and the speed chips, which
   // are the only fixed-width row in the app.
   // The home screen promotes the most urgent OPEN recording to a hero card and
@@ -1014,10 +1020,13 @@ async function tourStudent(page, tag) {
     // check passes, and the tour still reports having reached every screen.
     await byId(page, 'mini-player').waitFor({ timeout: 15_000 });
   });
+  // A student's More is a different sheet: no audit row, and a password reset
+  // staff do not get.
+  await visit('more', () => tap(byId(page, 'tab-more')), 'more-password');
   await visit('notifications', async () => {
     await tap(byId(page, 'tab-more'));
     await tap(byId(page, 'more-notifications'));
-  });
+  }, 'notify-recordingReady');
   await checkDeviceState(page, tag);
 
   /*
