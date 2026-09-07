@@ -408,6 +408,13 @@ well under 30 MB. (Uploading audio rather than a video file is the single bigges
 thing that keeps this app free to run.) The recording takes its title, date, and
 notes from the session, so you don't retype them.
 
+**Or say it wasn't recorded.** Some classes aren't, and until you say so the app
+keeps asking: **Today** shows the session as waiting for its recording, and you
+get the "attendance still not taken" reminder every morning. **This class was not
+recorded** stops both. It changes nothing else — the register stays exactly as it
+is, and the marks in it still count — and **It was recorded after all** puts the
+session back if you change your mind.
+
 <div class="pair">
 <figure class="ph"><img src="manual/img/17b-session-no-recording-phone.png" alt="A session with no recording yet, on a phone"><figcaption>On a phone</figcaption></figure>
 <figure class="wd"><img src="manual/img/17b-session-no-recording-desktop.png" alt="A session with no recording yet, on a computer"><figcaption>On a computer</figcaption></figure>
