@@ -4,8 +4,9 @@ import {
   isSuccessResponse,
 } from '@react-native-google-signin/google-signin';
 import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
 import { WEB_CLIENT_ID } from '../firebase-config';
-import { auth } from '../firebase';
+import { auth, functions } from '../firebase';
 
 /**
  * Staff Google sign-in on Android (web sibling: google.web.ts).
@@ -41,6 +42,40 @@ export async function googleSignOut(): Promise<void> {
   await GoogleSignin.signOut().catch(() => undefined);
 }
 
+const accountExists = httpsCallable<{ idToken: string }, { exists: boolean }>(
+  functions,
+  'accountExists',
+);
+
+/** Refused because no account exists — `messageFor` turns this into the copy. */
+class NoAccountError extends Error {
+  readonly code = 'auth/no-account';
+  constructor() {
+    super('No account for that sign-in.');
+    this.name = 'NoAccountError';
+  }
+}
+
+/**
+ * THIS APP DOES NOT CREATE ACCOUNTS, AND MUST NOT LEARN HOW.
+ *
+ * `signInWithCredential` is the line that would create one, so nothing may reach
+ * it until an account is known to exist. `GoogleSignin.signIn()` above it is
+ * pure Google OAuth — it yields a token and touches nothing in this Firebase
+ * project — which is the only reason there is a window to check in.
+ *
+ * There is deliberately no sign-up affordance anywhere in this app, and the
+ * refusal names no website. Both stores stop requiring in-app account deletion
+ * only while the app neither creates an account nor points at somewhere that
+ * does, and "sign in on the website first" is the second of those two triggers
+ * stated almost verbatim. The real instruction belongs in the onboarding email,
+ * out of band, where it does not count — at the cost of one support question per
+ * new colleague. Read `sabeel-institute-kanban/docs/STORE-RELEASE.md` before
+ * adding anything friendlier here.
+ *
+ * This file is the NATIVE half of the seam. `google.web.ts` is the web half and
+ * keeps creating accounts, which is why nothing here has to detect a platform.
+ */
 export async function signInWithGoogle(): Promise<void> {
   ensureConfigured();
   try {
@@ -49,6 +84,16 @@ export async function signInWithGoogle(): Promise<void> {
     if (!isSuccessResponse(response)) return; // user backed out
     const idToken = response.data.idToken;
     if (!idToken) throw new Error('Google returned no ID token.');
+
+    const { data } = await accountExists({ idToken });
+    if (!data.exists) {
+      // Google still remembers the chosen account, and `signIn()` would silently
+      // reuse it — so somebody who picked the wrong one could never switch.
+      // Clear it, or the refusal is a dead end rather than a retry.
+      await googleSignOut();
+      throw new NoAccountError();
+    }
+
     await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
   } catch (e) {
     const code = (e as { code?: string }).code;

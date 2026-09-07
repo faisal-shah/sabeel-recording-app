@@ -36,6 +36,63 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-09-07 — **The app can no longer create an account, which is what keeps it
+  off the hook for in-app account deletion.**
+
+  The decision is not this app's — it is
+  `sabeel-institute-kanban/docs/STORE-RELEASE.md`, taken 2026-08-18 for all three
+  apps — but only half of it had been implemented here. `CAN_CREATE_ACCOUNTS`
+  already kept "Add a student" off the Android build. What was missing is the
+  half that matters more: **staff Google sign-in still created an account for
+  anybody**, and relied on the auth trigger to delete it again a moment later.
+  Creation followed by cleanup is still creation, and it is exactly the state
+  Kanban replaced.
+
+  **Why it is worth the code.** Apple 5.1.1(v) and Play both require in-app
+  account DELETION only if an app supports account CREATION — and Play triggers
+  as well if the app "directs the user to an app account creation flow outside of
+  the app". Satisfy neither and neither requirement is engaged. What that avoids
+  is not a button: it is having to decide what happens to a student's academic
+  record when they delete themselves, on a product whose whole subject is
+  retained records. FERPA gives a right to inspect and amend, never to erase.
+
+  `accountExists` verifies **Google's** ID token — not Firebase's, which is a
+  different issuer and the confusing part — pins the audience to the web OAuth
+  client id so a token minted for another client cannot be replayed, and asks
+  Auth whether that address has an account. `signInWithCredential` is the line
+  that would create one, and nothing reaches it until the answer is yes.
+
+  **Only the Google door needed it.** `signInWithEmailAndPassword` cannot bring an
+  account into existence — it fails when there is none — so the student door was
+  never a trigger. Worth stating because the shared doc's "the mobile refusal
+  applies to both doors" reads as though both needed building.
+
+  **Two consequences, both intended.** A new colleague cannot sign in on the
+  phone until they have signed in on the web once; the instruction goes in the
+  onboarding email, because putting it in the app is the second trigger stated
+  almost verbatim. And the refusal names no website: "This account isn't set up
+  for the app yet. Contact your administrator."
+
+  **What the tests assert is an absence.** Seven emulator tests on the callable,
+  each checking the **user count** afterwards rather than the boolean — a version
+  answering `exists: false` while quietly minting a record would pass a
+  return-value test and fail the only promise anyone cares about. Two of them are
+  the awkward cases: a real colleague on the allowed domain whose account does
+  not exist yet is refused like any stranger, and an unverified address is refused
+  even when it matches a real account. Five unit tests on the ordering, the
+  load-bearing one being that `signInWithCredential` is never reached; shown to
+  fail with the gate bypassed.
+
+  **Still unverified, and it is the assertion the store claim rests on.** The
+  native round trip — a personal Google account with no account here, refused on
+  a device against production, with Auth confirming no record was created — has
+  not been run. It needs a Google account this session did not have. Kanban ran
+  the equivalent on 2026-08-18; do it before submitting.
+
+  The shared decision record was also stale about this app and has been
+  corrected: it said the student email/password system did not exist and asked
+  for two labelled sign-in doors to be built. Both have existed for some time.
+
 - 2026-09-07 — **Four decisions taken in review, and one field renamed to say
   what it means.**
 

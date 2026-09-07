@@ -30,6 +30,7 @@ export {
 } from './recordings';
 export { listZoomRecordings, importZoomRecording, retryZoomImport } from './zoomImport';
 export { getPlaybackUrl } from './playback';
+export { accountExists } from './accountExists';
 export { onRecordingWritten, onSessionWritten } from './assignmentsTrigger';
 export { onAssignmentWritten, onDeviceRegistered, onMorning } from './notifyTrigger';
 export { overrideCompletion, clearCompletionOverride } from './overrides';

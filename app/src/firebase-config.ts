@@ -35,8 +35,7 @@ export const firebaseConfig = {
  * classic source of the opaque DEVELOPER_ERROR. Only used by the native seam;
  * the emulator dev sign-in path never reads it.
  */
-export const WEB_CLIENT_ID =
-  '977423479850-k1r54fn135p62fa165n8gfngbafssv5q.apps.googleusercontent.com';
+export { GOOGLE_WEB_CLIENT_ID as WEB_CLIENT_ID } from '@sabeel/shared';
 
 /**
  * The WEB PUSH public key (VAPID), from Firebase console → Project settings →

@@ -283,6 +283,57 @@ of "accountability starts at enrolment" is that a returning student should only
 be accountable for sessions marked after their return. The app does the first.
 If you want the second, say so and it changes in one place.
 
+### 5b. The no-account-creation gate — DONE (2026-09-07)
+
+Nothing owed here; recorded so the next reader does not re-litigate it. The
+Android app can no longer bring an account into existence: `accountExists`
+verifies the Google token and `app/src/auth/google.ts` refuses before
+`signInWithCredential`, which is the line that would create one. That is what
+keeps Apple 5.1.1(v) and Play's deletion requirement disengaged, and it is worth
+knowing it is load-bearing before anyone "simplifies" the sign-in path.
+
+Two consequences to expect rather than treat as bugs:
+
+- **A new colleague cannot sign in on the phone until they have signed in on the
+  web once.** That is the design, not a defect. The instruction goes in the
+  onboarding email — it must NOT go in the app, because naming an external
+  sign-up route is Play's second trigger word for word.
+- The refusal says "This account isn't set up for the app yet. Contact your
+  administrator." and names no website, deliberately.
+
+- [ ] **FAISAL — the one check nobody has run, and the store claim rests on it.**
+      Tests cover the callable and the ordering; only a device covers the round
+      trip. Kanban did the equivalent on 2026-08-18. On a phone, on the RELEASE
+      build (production, not emulators):
+
+      1. Tap **Sign in with Google** and pick a personal Google account that has
+         no account in this project.
+      2. Expect: *"This account isn't set up for the app yet. Contact your
+         administrator."* — and no sign-in.
+      3. Then the assertion that actually matters, checked in Firebase rather
+         than inferred from the screen. **Ask about the exact address you used**
+         — `auth/user-not-found` is the pass:
+
+         ```sh
+         ADDR=you@gmail.com node -e "const a=require('firebase-admin');\
+         a.initializeApp({projectId:'sabeel-class-recordings'});\
+         a.auth().getUserByEmail(process.env.ADDR)\
+         .then(u=>{console.log('FAIL — an account exists:',u.uid,u.providerData.map(p=>p.providerId));process.exit(1)})\
+         .catch(e=>{console.log(e.code==='auth/user-not-found'?'PASS — no account was created':'unexpected: '+e.code);process.exit(0)})"
+         ```
+
+         Do NOT check this by counting accounts on non-institute domains, which
+         is the obvious thing and is wrong here: **students sign in with personal
+         addresses**, so production legitimately holds gmail.com accounts (six as
+         of 2026-09-07, all provider `password`). The sibling apps are staff-only
+         and can use that shortcut; this one cannot. A stray Google sign-in would
+         show up as an address carrying the **`google.com`** provider that is not
+         on `oursabeel.com`.
+
+      4. Then sign in with a Workspace account immediately afterwards and confirm
+         it works — which also proves the Google account chooser was cleared, and
+         that a person who picked the wrong account can still switch.
+
 ### 6. The three static pages the stores need — RELEASE BLOCKER
 
 The app's More menu already links to `PRIVACY_URL`

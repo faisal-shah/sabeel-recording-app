@@ -174,6 +174,14 @@ function messageFor(e: unknown): string {
       // One message for all three: distinguishing them tells an attacker which
       // addresses are registered.
       return 'That email and password do not match an account.';
+    case 'auth/no-account':
+      /*
+       * NAMES NO WEBSITE, ON PURPOSE. The honest instruction — "sign in on the
+       * website first" — is the exact sentence Play's second trigger forbids, and
+       * saying it would oblige this app to ship an account-deletion flow. See
+       * `auth/google.ts`.
+       */
+      return "This account isn't set up for the app yet. Contact your administrator.";
     case 'auth/user-disabled':
       return 'That account has been disabled. Ask your teacher.';
     case 'auth/too-many-requests':

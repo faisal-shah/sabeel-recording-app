@@ -94,6 +94,16 @@ Do not silently change any of these.
   `oursabeel.com` *and* approved by an admin — the domain check is server-side, the
   client `hd` hint is UX only. Students use email/password accounts created by
   staff. Managers are scoped **class by class**; cohort assignment grants nothing.
+- **The Android app never creates an account, and must not learn how.** Both
+  stores require in-app account DELETION only if an app supports account
+  CREATION — and Play also triggers if the app merely *points* at a sign-up flow
+  elsewhere. Satisfying neither trigger is what lets this app ship without a
+  deletion flow that would have to decide what happens to a student's academic
+  record. So: `CAN_CREATE_ACCOUNTS` keeps creation on web, `accountExists` gates
+  `signInWithCredential`, and **no screen names the website as somewhere to get
+  an account** — no link, no sentence, however helpful it would be. The refusal
+  says "Contact your administrator." Decision record:
+  `sabeel-institute-kanban/docs/STORE-RELEASE.md`.
 - **Disable, archive, unpublish — don't delete.** Permanent deletion of anything
   carrying **listening history** is admin-only, needs strong confirmation, and is
   audited. Two deletions are deliberately a manager's: removing a completion

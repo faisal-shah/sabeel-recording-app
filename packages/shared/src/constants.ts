@@ -142,3 +142,22 @@ export const QUEUE_SCOPE = { admin: 30, manager: 10 } as const;
  * Anything older is a data question, not a screen question.
  */
 export const AUDIT_PAGE = 200;
+
+/**
+ * The WEB OAuth client id (client_type: 3) from `google-services.json`.
+ *
+ * SHARED because two sides must agree on it. The native Google Sign-In SDK
+ * passes it as `webClientId` to obtain a token, and `accountExists` pins it as
+ * the expected AUDIENCE when verifying that token — without which a token minted
+ * for any other OAuth client would verify happily and the gate would open for a
+ * stranger. Two copies of one id is exactly the drift that would be invisible
+ * until it mattered.
+ *
+ * Not a secret, in the same way the Firebase web config is not: an OAuth client
+ * id is public by design and ships in every client bundle.
+ *
+ * It must be the *web* client id even on Android — passing the Android one is a
+ * classic source of the opaque `DEVELOPER_ERROR`.
+ */
+export const GOOGLE_WEB_CLIENT_ID =
+  '977423479850-k1r54fn135p62fa165n8gfngbafssv5q.apps.googleusercontent.com';
