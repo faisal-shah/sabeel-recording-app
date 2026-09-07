@@ -1374,7 +1374,21 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     marginBottom: spacing(4),
   },
-  headText: { flexShrink: 1, flexGrow: 1 },
+  /*
+   * `minWidth` IS WHAT MAKES THE ROW WRAP. `headRow` is `flexWrap: 'wrap'`, but
+   * a wrap only happens when something does not FIT — and with no floor this
+   * column shrinks indefinitely, so the row never overflows and the actions
+   * never move down. The title just gets narrower until it breaks mid-word:
+   * measured on a Pixel 6, "Hikam Foundations" beside Sessions + Attendance
+   * report rendered as "Hikam / Foundat / ions".
+   *
+   * The sweep cannot see this. It asserts nothing is clipped, nothing overlaps
+   * and the column caps — all true of a crushed heading — and react-native-web
+   * does not reproduce Yoga's `flexShrink: 0` default on the actions beside it,
+   * so the squeeze never happens in a browser at any width. Same defect as the
+   * ledger tiles' "Accountabl / e", same remedy. Device-only, both times.
+   */
+  headText: { flexShrink: 1, flexGrow: 1, minWidth: 220 },
   light: {
     flexDirection: 'row',
     alignItems: 'center',
