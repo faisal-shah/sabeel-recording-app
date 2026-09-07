@@ -72,6 +72,13 @@ async function assignToStudents(
 /**
  * Of the excused, those still enrolled in the class.
  *
+ * THE SAME RULE `submitAttendance` ALREADY APPLIES, re-applied here. That
+ * callable filters the map it stores to actively-enrolled students — "the
+ * snapshot is the roster at submit time" — so a mark can only ever be written
+ * for somebody enrolled. This is that rule at RECONCILE time, which is the
+ * moment it was missing: a snapshot taken months ago is not evidence that its
+ * roster is still the roster.
+ *
  * UNENROLMENT HAS TO STICK, and without this it did not. `setEnrollmentActive`
  * calls `deactivateStudentAssignmentsInCourse`, which switches the grants off —
  * and then the next write to ANY session in that course (a title fix, a moved

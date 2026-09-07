@@ -105,14 +105,13 @@ export function validateSetEnrollmentActive(data: unknown): SetEnrollmentActiveI
  * snapshot keeps a student's mark for ever, and the reconcile rebuilt the grants
  * from it alone.
  *
- * RE-ENROLLING is the direction that is NOT settled here, and the app says two
- * different things about it: this function's original note said accountability
- * starts fresh from the next session marked, while the recording ledger tells
- * staff that "re-enrolling or republishing restores the grant". Since the
- * reconcile is stateless, what actually happens today is the ledger's version —
- * a re-enrolled student is back in the target set the next time anything
- * reconciles that session. Tracked in `TODO.md` as a decision for Faisal rather
- * than settled by whichever sentence was easier to make true.
+ * RE-ENROLLING restores them, the next time anything reconciles that session —
+ * which is what the manual and the recording ledger both promise staff on
+ * screen ("re-enrolling them or republishing restores it"). An earlier note here
+ * claimed the opposite ("accountability starts fresh from the next session
+ * marked"); it was the odd one out, and the reconcile being stateless means the
+ * ledger's version is what the code has always done. `TODO.md` asks Faisal to
+ * confirm the policy rather than leaving three statements to drift again.
  */
 export async function applyEnrollmentActive(input: SetEnrollmentActiveInput) {
   const db = getFirestore();

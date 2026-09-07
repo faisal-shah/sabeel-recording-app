@@ -263,26 +263,25 @@ currently debug-signed) and **its** SHA-1 registered.
   to remember. App Check (above) raises the bar; only a token bound to the
   device by the platform would close it.
 
-### A decision only you can make: what re-enrolling restores
+### Confirm one behaviour: what re-enrolling restores
 
-Unenrolling a student turns their obligations in that class off, and now stays
-that way — a later edit to any session used to switch them back on, which is
-fixed. What is not settled is the opposite direction, where the app has been
-saying two different things:
+Nothing is broken here — the app, the manual and the ledger now all say the same
+thing, which they did not before. Worth one look because it is a policy choice
+rather than a bug.
 
-- `applyEnrollmentActive` said "re-enrolling does not restore past obligations —
-  accountability starts fresh from the next session marked".
-- The recording ledger tells staff, on screen, that a lapsed grant means the
-  student "was unenrolled from the class, or this recording was unpublished.
-  Re-enrolling or republishing restores the grant."
+Unenrolling a student turns their obligations in that class off, and now STAYS
+off: a later edit to any session in the course used to switch them back on days
+afterwards, which is fixed. Re-enrolling them restores those obligations the
+next time anything touches that session — which is exactly what the manual and
+the recording ledger promise on screen ("re-enrolling them or republishing
+restores it"). An internal comment used to claim the opposite; it has been
+corrected to match.
 
-Today the ledger's version is what happens: the fan-out is stateless, so a
-re-enrolled student is granted again the next time anything reconciles that
-session. **Which do you want?** Restoring is friendlier to a student who left
-and came back mid-term; not restoring matches "accountability starts at
-enrolment" and means a returning student is only accountable for sessions marked
-after their return. Say which, and the other sentence gets deleted rather than
-quietly kept.
+**The choice:** restoring is friendlier to a student who left and came back
+mid-term — their term's listening picks up where it was. The alternative reading
+of "accountability starts at enrolment" is that a returning student should only
+be accountable for sessions marked after their return. The app does the first.
+If you want the second, say so and it changes in one place.
 
 ### 6. The three static pages the stores need — RELEASE BLOCKER
 
