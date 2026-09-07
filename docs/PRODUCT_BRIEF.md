@@ -91,6 +91,14 @@ Both paths produce the same draft recording workflow before publishing.
 
 ### Zoom import
 
+**Any staff member may LIST the institute's Zoom recordings; only a scoped
+manager may import one** (decision, 2026-09-07). The Zoom API's list is not
+class-specific — a cloud recording carries a title, a date and a duration, and
+nothing that says which course it belongs to — so filtering it per manager would
+be guesswork. Staff are a small, approved, single-institute group, and titles and
+dates are not sensitive; importing, which is what actually creates a recording
+and grants access, is course-scoped as everything else is.
+
 - Admins configure the central Sabeel Zoom account or approved connected Zoom source.
 - Managers can import recordings from approved Zoom sources for their assigned class scopes.
 - Staff see a list of available Zoom cloud recordings.
@@ -167,6 +175,23 @@ The grant **closes when the session's due date passes**. It is not deleted: the 
 
 There is no separate "assign to everyone" action and no per-recording roster fan-out. "Everyone must listen" is expressed by marking everyone **excused** for that session.
 
+### Leaving and returning
+
+**Unenrolling a student closes their obligations in that course, and they stay
+closed until the student is enrolled again.** The register keeps their mark — an
+attendance record is what happened on the day and outlives the enrolment — but a
+mark alone grants nothing: the fan-out only ever grants students who are
+currently enrolled, so no later edit to a session can quietly hand access back.
+
+**Re-enrolling restores the obligations that are still open, and only those**
+(decision, 2026-09-07). A recording whose Listen by date passed while the student
+was out of the class does not come back: handing one back would create an
+obligation already over — against "nothing is ever born expired" — and announce
+it, since a new grant sends "a recording is ready… listen by <a date last term>"
+over audio the server then refuses. The student is not recorded as having missed
+a window they were not enrolled for. Staff keep the record either way: the
+recording ledger goes on listing them under **Excused, access closed**.
+
 ### Late enrollment
 
 Accountability starts at enrollment: a student is only ever granted sessions whose attendance was taken **after** they enrolled (they are in that session's snapshot). A student enrolled after a session's attendance was submitted is never retroactively granted it. To let a late enrollee catch up on an earlier session, staff re-take that session's attendance and mark them **excused** — re-submitting reconciles and grants them. If that session's due date has already passed, staff move it forward first.
@@ -181,6 +206,7 @@ There is no course archive to browse: a student's list of what they may listen t
 - The due date is the last on-time day: a recording due the 25th is open all through the 25th and closes on the 26th.
 - A due date may **become** past by the passage of time, but nothing ever writes one that has already gone. Publishing a recording onto a session whose deadline has passed is refused, as is excusing anyone for it.
 - A student who has already pressed play keeps that playback session: a signed URL lives up to 12 hours from minting. Individual URLs cannot be revoked, which is a documented and accepted property of the design.
+- **A completion that arrives after the deadline still counts, and carries the date the student's own device recorded** (decision, 2026-09-07). The app gives a student no way to mark one late — past the listen-by date the player is a closed screen with no control — so the only writes that arrive late are ones made ON TIME and queued offline. Rejecting those would punish exactly the student who did the work on a poor connection, and enforcing it would mean putting date arithmetic into `firestore.rules`, which the deadline invariant rules out. The trade accepted: the ledger's completion dates are the student's device clock, so they are evidence of what a student did, not proof of when a server saw it.
 
 ## Student experience
 
@@ -232,7 +258,11 @@ Completion is student-attested. Playback progress is audit evidence.
 - A recording completed **in time** is never recast as missed, however far past its due date the ledger is read.
 - There is no required listened-percentage threshold.
 - The ledger shows listened percent, last listened, completion time, and pending sync state.
-- Students can see their own full accountability details.
+- Students can see their own full accountability details — including a recording
+that has CLOSED, where the transport is gone but their record is not: how much
+they listened, whether it counted, and a teacher's override with its reason if
+there is one. "Your listening record is kept" is a sentence the screen has to be
+able to back.
 - Students can unmark a recording complete. Completion and uncompletion actions are recorded.
 
 ### Offline completion

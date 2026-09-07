@@ -11,7 +11,7 @@ import { Notice } from '../components/ui';
 import { Scrubber } from '../components/Scrubber';
 import { Transport } from '../components/Transport';
 import { IDLE, closePlayback, formatClock, openPlayback, playback, usePlayback } from '../playback';
-import { useCompletion, setCompleted } from '../completion';
+import { useCompletion, useMyListening, setCompleted } from '../completion';
 import { useListenerError } from '../liveQuery';
 import { useCohortName, type CourseRow } from '../structure';
 import type { RecordingRow } from '../recordings';
@@ -123,6 +123,13 @@ export function PlayerScreen({
               ? 'This recording has not been assigned to you. Your teacher marks who needs to listen when they take the register.'
               : `This recording closed on ${dueDate}. Your listening record is kept — ask your teacher if you need it reopened.`}
         </Notice>
+        {/* AND THE RECORD ITSELF, which "is kept" above promises and the screen
+            used not to show. A student who finished a recording on time could
+            not see that they had, from the day it closed — they had to ask.
+            The transport is gone; the account of what they did is not. */}
+        {studentUid !== null && dueDate !== null ? (
+          <ClosedRecord studentUid={studentUid} recording={recording} />
+        ) : null}
       </ScrollView>
     );
   }
@@ -296,6 +303,39 @@ function Hero({
  * false-rejected on sync. Writes go straight to Firestore and work offline; a
  * queued write shows as "Pending sync" until it lands.
  */
+/**
+ * What a student did with a recording that has since closed.
+ *
+ * Read-only by construction: the transport is gone, Mark complete is gone, and
+ * an override is a teacher's to change. What remains is the account the brief
+ * promises them — how much they listened, and whether it counted.
+ */
+function ClosedRecord({
+  studentUid,
+  recording,
+}: {
+  studentUid: string;
+  recording: RecordingRow;
+}) {
+  const stored = useMyListening(studentUid, recording.id);
+  const { completed, override } = useCompletion(studentUid, recording.id);
+  // Nothing was ever played and nothing was ever marked: there is no record to
+  // show, and an empty panel saying "0%" is worse than no panel.
+  if (!stored && !completed && !override) return null;
+  const listened = listenedFraction(stored?.listenedMs ?? 0, recording.durationSec);
+  return (
+    <View style={styles.closedRecord}>
+      <Text style={styles.closedRecordTitle}>Your record</Text>
+      <Text style={styles.closedRecordLine}>{Math.round(listened * 100)}% listened</Text>
+      <Text style={styles.closedRecordLine}>
+        {completed ? '✓ Completed' : 'Not marked complete'}
+        {override ? ' — marked by your teacher' : ''}
+      </Text>
+      {override ? <Text style={styles.closedRecordLine}>{override.reason}</Text> : null}
+    </View>
+  );
+}
+
 function CompletionControl({
   studentUid,
   recordingId,
@@ -375,6 +415,15 @@ function CompletionControl({
 
 const styles = StyleSheet.create({
   canvas: { flex: 1, backgroundColor: t.bg.canvas },
+  closedRecord: {
+    backgroundColor: t.bg.surface,
+    borderRadius: 8,
+    padding: spacing(4),
+    marginTop: spacing(4),
+    gap: spacing(1),
+  },
+  closedRecordTitle: { fontSize: 16, fontWeight: '600', color: t.text.primary },
+  closedRecordLine: { fontSize: 14, color: t.text.secondary },
   content: {
     padding: spacing(5),
     paddingBottom: spacing(12),

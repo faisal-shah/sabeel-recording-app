@@ -70,6 +70,16 @@ beforeEach(async () => {
       entry('mine', CLASS_MINE),
       entry('theirs', CLASS_THEIRS),
       entry('global', null), // a class-less entry (cohort/staff change)
+      // The same shape, but performed BY the manager: creating a student without
+      // naming a course. See the "own actions" cases below.
+      setDoc(doc(db, COLLECTIONS.auditLog, 'mineGlobal'), {
+        at: 2,
+        actorUid: MINE,
+        actorRole: 'manager',
+        action: 'createStudent',
+        courseId: null,
+        targets: { uid: 'newStudent' },
+      }),
     ]);
   });
 });
@@ -104,6 +114,41 @@ describe('auditLog reads', () => {
 
   it('a manager cannot read a class-less (admin-only) entry', async () => {
     await assertFails(getDoc(doc(mgrMine().firestore(), COLLECTIONS.auditLog, 'global')));
+  });
+
+  /*
+   * WHAT THEY DID THEMSELVES — the other half, and the reason it exists.
+   *
+   * A manager may create a student account without naming a course, which is
+   * deliberate: teachers do intake. That entry belongs to no class, so the
+   * class-scoped arm hid the most privilege-adjacent action a manager has from
+   * the manager who performed it. Reading your own actions discloses nothing you
+   * did not do.
+   */
+  it('a manager reads a class-less entry they performed themselves', async () => {
+    await assertSucceeds(getDoc(doc(mgrMine().firestore(), COLLECTIONS.auditLog, 'mineGlobal')));
+  });
+
+  it('…and can list them, constrained to their own uid', async () => {
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(mgrMine().firestore(), COLLECTIONS.auditLog),
+          where('actorUid', '==', MINE),
+        ),
+      ),
+    );
+  });
+
+  it('but not somebody else’s, which is what makes it their OWN actions', async () => {
+    await assertFails(
+      getDocs(
+        query(
+          collection(mgrMine().firestore(), COLLECTIONS.auditLog),
+          where('actorUid', '==', ADMIN),
+        ),
+      ),
+    );
   });
 
   it('a manager cannot list unconstrained (would expose other courses + global)', async () => {

@@ -4,7 +4,7 @@ import { AUDIT_PAGE, INSTITUTE_TIMEZONE, stampInZone } from '@sabeel/shared';
 import { useDecidedStaff } from '../staff';
 import { useStudents } from '../students';
 import { Empty, Grid, Notice, Screen } from '../components/ui';
-import { useAudit, type AuditRow } from '../ledger';
+import { useAudit, useMyAudit, type AuditRow } from '../ledger';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -108,6 +108,50 @@ const PERSON_TARGETS: Record<string, string> = {
   studentUid: 'student',
   uid: 'account',
 };
+
+/**
+ * A staff member's own actions, wherever they happened.
+ *
+ * The same card as the class-scoped view, from a different query: `actorUid ==
+ * me`. It exists because a manager may create a student account without naming
+ * a course, and that entry belongs to no class — so the one action a manager
+ * most needs to be able to account for was the one their audit view could not
+ * show them.
+ */
+export function MyAuditScreen({ uid }: { uid: string }) {
+  const entries = useMyAudit(uid);
+  const staff = useDecidedStaff(true);
+  const students = useStudents(true);
+  const people = useMemo(
+    () =>
+      new Map<string, string>([
+        ...staff.map((r) => [r.uid, r.displayName] as const),
+        ...students.map((r) => [r.uid, r.displayName] as const),
+      ]),
+    [staff, students],
+  );
+
+  return (
+    <Screen title="Your actions" subtitle="Everything you have changed, newest first" width="list">
+      {entries.length >= AUDIT_PAGE ? (
+        <Notice tone="info">
+          The most recent {AUDIT_PAGE} changes. Older history is kept but is not shown here.
+        </Notice>
+      ) : null}
+      <View testID={entries.length === 0 ? 'my-audit-empty' : 'my-audit-list'}>
+        {entries.length === 0 ? (
+          <Empty>You have not changed anything yet.</Empty>
+        ) : (
+          <Grid min={330}>
+            {entries.map((e) => (
+              <AuditCard key={e.id} entry={e} people={people} />
+            ))}
+          </Grid>
+        )}
+      </View>
+    </Screen>
+  );
+}
 
 function AuditCard({ entry: e, people }: { entry: AuditRow; people: Map<string, string> }) {
   const detail = e.detail ? Object.entries(e.detail).map(([k, v]) => `${k}: ${String(v)}`).join(' · ') : '';

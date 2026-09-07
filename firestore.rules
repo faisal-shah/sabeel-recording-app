@@ -448,7 +448,19 @@ service cloud.firestore {
     // ADMIN-ONLY — which is exactly "managers manage audit within their courses".
     // The `courseId != null` guard also keeps a manager's list query constrained.
     match /auditLog/{entryId} {
+      /*
+       * AND WHAT THEY DID THEMSELVES, wherever it happened.
+       *
+       * A manager may create a student account without naming a course — which
+       * is deliberate, teachers do intake — and that entry has `courseId: null`,
+       * so the class-scoped arm above hid the most privilege-adjacent thing a
+       * manager can do from the manager who did it. Reading your own actions
+       * discloses nothing: you performed them. It is a zero-read arm, and a
+       * query constrained by `actorUid == request.auth.uid` needs no class
+       * lookup at all.
+       */
       allow get, list: if isAdmin()
+        || (isStaff() && resource.data.actorUid == request.auth.uid)
         || (isStaff() && resource.data.courseId != null
             && request.auth.uid in
                get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.managerUids);

@@ -31,7 +31,7 @@ import { RecordingLedgerScreen } from './src/screens/RecordingLedgerScreen';
 import { StudentLedgerScreen } from './src/screens/StudentLedgerScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { ZoomImportScreen } from './src/screens/ZoomImportScreen';
-import { AuditScreen } from './src/screens/AuditScreen';
+import { AuditScreen, MyAuditScreen } from './src/screens/AuditScreen';
 import { NotificationsScreen } from './src/screens/NotificationsScreen';
 import { StudentAttendanceScreen } from './src/screens/StudentAttendanceScreen';
 import { StudentCoursesScreen } from './src/screens/StudentCoursesScreen';
@@ -109,6 +109,7 @@ const STAFF_PATHS = {
   ZoomImport: 'sessions/:sessionId/import',
   Library: 'library',
   Audit: 'audit',
+  MyAudit: 'my-actions',
   MyCourses: 'my-courses',
   Tokens: 'tokens',
 } as const;
@@ -341,6 +342,16 @@ export default function App() {
                   <Stack.Screen name="Audit" options={screenOptions('Audit', 'Audit')}>
                     {() => <Audit isAdmin={isAdmin} />}
                   </Stack.Screen>
+                  {/* MANAGERS ONLY, and registered rather than merely unlinked —
+                      the same treatment `MyCourses` and `Cohorts` get. An admin's
+                      Institute-wide view already contains their own actions, so
+                      for them this path would be a narrower copy of a screen they
+                      have; unregistered, it falls back to their home. */}
+                  {isAdmin ? null : (
+                    <Stack.Screen name="MyAudit" options={screenOptions('MyAudit', 'Your actions')}>
+                      {() => <MyAudit uid={user.uid} />}
+                    </Stack.Screen>
+                  )}
                   {/* MANAGERS ONLY, and registered rather than merely unlinked:
                       it is their Courses tab, and it queries `array-contains` on
                       their own uid — so for an admin the same URL would render a
@@ -932,6 +943,10 @@ function Audit({ isAdmin }: { isAdmin: boolean }) {
       title={courseId ? (cls?.name ?? '') : 'All courses'}
     />
   );
+}
+
+function MyAudit({ uid }: { uid: string }) {
+  return <MyAuditScreen uid={uid} />;
 }
 
 function MyCourses({ uid }: { uid: string }) {

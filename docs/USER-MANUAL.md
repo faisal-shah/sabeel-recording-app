@@ -114,8 +114,10 @@ its date. Tap any card to open it and listen.
 
 **Every recording has a closing date.** After it passes you can no longer play
 that recording — the card stays on your list marked *Missed*, so you can still
-see what it was, but the audio is closed. If you need it reopened, ask your
-teacher: they can move the date.
+see what it was, but the audio is closed. Opening it shows **Your record**: how
+much of it you listened to, and whether it was marked complete. Nothing you did
+is lost when a recording closes. If you need it reopened, ask your teacher: they
+can move the date.
 
 One thing worth knowing: if you finish a recording and mark it complete *before*
 the date, it stays **Completed** forever. It is never turned into a "missed" the
@@ -513,6 +515,13 @@ An override **wins over the student's own mark**. If you mark someone complete a
 they later fiddle with their own status, your override stands. To undo it, open
 the row again and **Remove override** — the status falls back to whatever the
 student's own listening says. Every override, and every removal, is audited.
+
+**The student sees it too**, with the reason you typed — on their player, in
+their list, and in what the app counts as outstanding. Somebody you have marked
+complete stops being asked to listen and stops getting the last-day reminder, and
+they cannot unmark what you set. Write the reason for them as much as for the
+record: "Caught up with the teacher one-on-one" is read by the person it is
+about.
 
 ## 2.8 One student's ledger
 

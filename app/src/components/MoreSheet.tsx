@@ -64,6 +64,19 @@ export function MoreSheet({
       ) : null}
 
       <SheetSection label="You" />
+      {/* A MANAGER'S OWN ACTIONS, which their class-scoped audit view cannot
+          show: creating a student account without naming a course produces an
+          entry belonging to no course, so the one thing a manager most needs to
+          be able to point at was the one thing they could not see. An admin's
+          Institute view already contains it. */}
+      {role === 'manager' ? (
+        <SheetOption
+          label="Your actions"
+          detail="Everything you have changed, newest first"
+          testID="more-my-audit"
+          onPress={() => onNavigate('MyAudit')}
+        />
+      ) : null}
       <SheetOption
         label="Notifications"
         detail="Choose which messages this device receives"

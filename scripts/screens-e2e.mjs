@@ -941,7 +941,13 @@ const TAB_ROOTS = new Set([
  * and the declaration is checked in both directions. Everything else in the app
  * has something to press, and a screen that stops having one is news.
  */
-const READ_ONLY_SCREENS = new Set(['audit', 'audit-scoped', 'tokens', 'class-record']);
+const READ_ONLY_SCREENS = new Set([
+  'audit',
+  'audit-scoped',
+  'my-audit',
+  'tokens',
+  'class-record',
+]);
 
 const STAFF_SCREENS = 29;
 
@@ -1105,7 +1111,7 @@ async function tourStaff(page, tag) {
     `${counter.seen}/${STAFF_SCREENS}`);
 }
 
-const MANAGER_SCREENS = 9;
+const MANAGER_SCREENS = 10;
 
 /**
  * A manager sees the same screens with fewer rows AND fewer controls, which is a
@@ -1136,6 +1142,14 @@ async function tourManager(page, tag) {
     await openCourse();
     await tap(byId(page, 'nav-audit'));
   }, 'audit-list');
+  // A manager's OWN actions, which the class-scoped view above cannot contain:
+  // creating a student without naming a course produces an entry belonging to no
+  // class. Only a manager has this screen — an admin's institute-wide view is
+  // already a superset — so an admin's run is no evidence about it.
+  await visit('my-audit', async () => {
+    await tap(byId(page, 'tab-more'));
+    await tap(byId(page, 'more-my-audit'));
+  }, 'my-audit-list');
   await visit('library', () => tap(byId(page, 'tab-library')), 'library-filter-all');
   // People, and one student's page. A manager's People tab is not an admin's
   // with rows removed: the student page swaps a whole query for a per-course

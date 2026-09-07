@@ -1,14 +1,16 @@
 import { useMemo } from 'react';
-import { addDoc, collection, query, where } from 'firebase/firestore';
+import { addDoc, collection, doc, query, where } from 'firebase/firestore';
 import {
   COLLECTIONS,
   type AssignmentDoc,
   type CompletionDoc,
   type CompletionEventDoc,
   type CompletionOverrideDoc,
+  type ListeningProgressDoc,
+  progressId,
 } from '@sabeel/shared';
 import { db } from './firebase';
-import { useLiveQuery } from './liveQuery';
+import { useLiveDocState, useLiveQuery } from './liveQuery';
 import { persistCompletionState } from './completionOutbox';
 
 export interface AssignmentRow extends AssignmentDoc {
@@ -116,6 +118,32 @@ export function useMyCompletions(uid: string | null): Map<string, CompletionStat
     }
     return merged;
   }, [own, overrides]);
+}
+
+/**
+ * How much of one recording this student has listened to, from the stored row.
+ *
+ * SEPARATE FROM THE PLAYBACK SESSION, which only knows what it has played this
+ * time — and never opens at all for a recording that has closed. The brief
+ * promises a student "their own full accountability details"; without this, the
+ * moment a listen-by date passed the screen became one sentence and the student
+ * could no longer see what they had done, including a recording they finished on
+ * time. The rules already let them read their own row.
+ */
+export function useMyListening(
+  uid: string | null,
+  recordingId: string,
+): { listenedMs: number } | null {
+  return useLiveDocState<{ listenedMs: number } | null>(
+    () => (uid ? doc(db, COLLECTIONS.listeningProgress, progressId(uid, recordingId)) : null),
+    [uid, recordingId],
+    {
+      label: 'myListening',
+      map: (snap) =>
+        snap.exists() ? { listenedMs: (snap.data() as ListeningProgressDoc).listenedMs } : null,
+      empty: null,
+    },
+  ).value;
 }
 
 /**

@@ -552,6 +552,35 @@ export interface AuditRow extends AuditEntryDoc {
  * The audit log, newest first. A manager passes their courseId (scoped read); an
  * admin passes null for the unconstrained global view.
  */
+/**
+ * What this staff member has done, wherever they did it.
+ *
+ * A manager's class-scoped view cannot show a course-less entry, and creating a
+ * student account without naming a course produces exactly one — so the most
+ * privilege-adjacent thing a manager can do was invisible to the manager who did
+ * it. This is the other half: their own actions, by `actorUid`, needing no class
+ * lookup and disclosing nothing they did not perform.
+ */
+export function useMyAudit(uid: string | null): AuditRow[] {
+  return useLiveQuery<AuditRow[]>(
+    () =>
+      uid
+        ? query(
+            collection(db, COLLECTIONS.auditLog),
+            where('actorUid', '==', uid),
+            orderBy('at', 'desc'),
+            limit(AUDIT_PAGE),
+          )
+        : null,
+    [uid],
+    {
+      label: 'myAudit',
+      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as AuditEntryDoc) })),
+      empty: [],
+    },
+  );
+}
+
 export function useAudit(courseId: string | null, enabled = true): AuditRow[] {
   return useLiveQuery<AuditRow[]>(
     () =>

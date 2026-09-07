@@ -36,6 +36,9 @@ export type RootStackParamList = {
   ZoomImport: { sessionId: string };
   /** Omit courseId for the admin's unscoped view; a manager passes their own. */
   Audit: { courseId?: string };
+  /** A staff member's own actions — see `MoreSheet`. No params: it is always
+   *  the signed-in person's, which is what makes it readable without a class. */
+  MyAudit: undefined;
   /** A student's own classes, and one class's attendance record. */
   MyClasses: undefined;
   MyClassRecord: { courseId: string };
