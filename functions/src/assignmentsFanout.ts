@@ -3,7 +3,9 @@ import {
   COLLECTIONS,
   accountableUids,
   assignmentId,
+  enrollmentId,
   type AssignmentDoc,
+  type EnrollmentDoc,
   type RecordingDoc,
   type SessionDoc,
 } from '@sabeel/shared';
@@ -67,6 +69,39 @@ async function assignToStudents(
   }
 }
 
+/**
+ * Of the excused, those still enrolled in the class.
+ *
+ * UNENROLMENT HAS TO STICK, and without this it did not. `setEnrollmentActive`
+ * calls `deactivateStudentAssignmentsInCourse`, which switches the grants off —
+ * and then the next write to ANY session in that course (a title fix, a moved
+ * due date, a re-submitted register) re-ran this reconcile, which rebuilt the
+ * target set from the attendance snapshot alone and switched them straight back
+ * on. The attendance map keeps a student's mark for ever, by design; enrolment
+ * is the thing that says whether they are still in the class.
+ *
+ * That silently contradicted three places that promise otherwise: the rules
+ * gate a recording on an ACTIVE assignment, `getPlaybackUrl` mints on one, and
+ * the ledger tells staff in as many words that a lapsed grant means the student
+ * "was unenrolled from the class… Re-enrolling or republishing restores the
+ * grant" — which is also now true, since re-enrolling puts them back in this
+ * set on the next reconcile.
+ *
+ * One batched read, and only when there is somebody to check.
+ */
+async function stillEnrolled(
+  db: Firestore,
+  courseId: string,
+  studentUids: string[],
+): Promise<string[]> {
+  if (studentUids.length === 0) return [];
+  const refs = studentUids.map((uid) =>
+    db.collection(COLLECTIONS.enrollments).doc(enrollmentId(uid, courseId)),
+  );
+  const rows = await db.getAll(...refs);
+  return studentUids.filter((_uid, i) => (rows[i].data() as EnrollmentDoc | undefined)?.active);
+}
+
 /** Deactivate active obligations for a recording whose student is NOT in `keep`. */
 async function deactivateExcept(
   db: Firestore,
@@ -121,7 +156,8 @@ export async function reconcileSessionAssignments(
           | undefined);
 
   const ready = !!rec && rec.status === 'published' && !!session.attendanceSubmittedAt;
-  const target = ready ? accountableUids(session.attendance) : [];
+  const excused = ready ? accountableUids(session.attendance) : [];
+  const target = await stillEnrolled(db, session.courseId, excused);
 
   await assignToStudents(db, session, sessionId, recId, target, 'system');
   await deactivateExcept(db, recId, new Set(target));

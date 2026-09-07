@@ -62,8 +62,7 @@ export function StudentHomeScreen({
   // something to show: every row is looked up one at a time afterwards, and
   // until those land the list is empty for a reason that is not "nothing to
   // listen to".
-  const checking = (granted === null && !failed) || resolving;
-
+  //
   // On launch, replay any completion this device marked offline and then lost to
   // an app kill before it synced (native only; a no-op on web). Runs once the
   // student is signed in, so the replayed writes carry their auth.
@@ -108,6 +107,22 @@ export function StudentHomeScreen({
    * group, where the student is owed the record of what closed and when, and
    * the hero falls through to the first thing still open.
    */
+  /*
+   * BOTH LEGS, AND ONLY WHEN THERE IS NOTHING TO SHOW.
+   *
+   * The grants arriving is not the same as the screen having something to show:
+   * every row is looked up one at a time afterwards, and until those land the
+   * list is empty for a reason that is not "nothing to listen to".
+   *
+   * `resolving` also turns true again on every change to the assignment set —
+   * being excused from one more session re-resolves the lot — so without the
+   * `rows.length` leg a fully rendered screen was replaced by "Checking…" for
+   * ten round trips each time a grant arrived, with the hero card still sitting
+   * above it. A warm update replaces the rows in place; only a cold one has
+   * nothing to replace.
+   */
+  const checking = ((granted === null && !failed) || resolving) && rows.length === 0;
+
   const next = rows.find((r) => r.bucket === 'dueSoon' || r.bucket === 'upcoming') ?? null;
   const listed = next ? rows.filter((r) => r.key !== next.key) : rows;
 

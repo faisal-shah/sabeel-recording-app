@@ -249,6 +249,40 @@ currently debug-signed) and **its** SHA-1 registered.
 - **App Check**: Play Integrity (Android) + reCAPTCHA Enterprise (web), plus
   **debug tokens** for the `tb_emu` AVD and local web — without those it locks
   out our own dev builds. Wired but not enforced until then.
+- **A known residual on shared devices, for you to be aware of rather than
+  act on.** A push token carries no proof of who holds the device, and no rule
+  can invent one — any signed-in account may register any token string under
+  its own id. `onDeviceRegistered` makes a token belong to the most recent
+  registration, which is what stops one student's notifications arriving on the
+  next student's phone after a sign-out that failed to unregister. The cost is
+  that somebody who has personally used a shared device, and so has seen its
+  token on their own record, could re-register it later and quietly stop
+  delivery to whoever holds it now. It needs deliberate effort, it only reaches
+  devices they have used, and nothing is disclosed — but if a classroom tablet
+  ever stops receiving notifications for no apparent reason, this is the thing
+  to remember. App Check (above) raises the bar; only a token bound to the
+  device by the platform would close it.
+
+### A decision only you can make: what re-enrolling restores
+
+Unenrolling a student turns their obligations in that class off, and now stays
+that way — a later edit to any session used to switch them back on, which is
+fixed. What is not settled is the opposite direction, where the app has been
+saying two different things:
+
+- `applyEnrollmentActive` said "re-enrolling does not restore past obligations —
+  accountability starts fresh from the next session marked".
+- The recording ledger tells staff, on screen, that a lapsed grant means the
+  student "was unenrolled from the class, or this recording was unpublished.
+  Re-enrolling or republishing restores the grant."
+
+Today the ledger's version is what happens: the fan-out is stateless, so a
+re-enrolled student is granted again the next time anything reconciles that
+session. **Which do you want?** Restoring is friendlier to a student who left
+and came back mid-term; not restoring matches "accountability starts at
+enrolment" and means a returning student is only accountable for sessions marked
+after their return. Say which, and the other sentence gets deleted rather than
+quietly kept.
 
 ### 6. The three static pages the stores need — RELEASE BLOCKER
 

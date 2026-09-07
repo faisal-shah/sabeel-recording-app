@@ -301,7 +301,7 @@ export const clearRecordingAudio = auditedCall('clearRecordingAudio', async (req
 // Everything that references a recording by id, so a permanent delete leaves no
 // orphans. All are keyed on a `recordingId` field (single-field equality → no
 // composite index needed).
-const RECORDING_DEPENDENTS = [
+export const RECORDING_DEPENDENTS = [
   COLLECTIONS.assignments,
   COLLECTIONS.completions,
   COLLECTIONS.completionEvents,
@@ -424,17 +424,32 @@ export async function applyDeleteRecording(recordingId: string) {
   return { recordingId, courseId: rec.courseId };
 }
 
+/**
+ * The whole of "delete this recording": decide who may, then destroy it.
+ *
+ * SEPARATED FROM THE WRAPPER so a test can drive the two together, which is the
+ * only way to assert what this actually promises — that a caller who may not
+ * delete leaves every listening record exactly where it was. Testing the gate
+ * alone proves it throws; it does not prove nothing was destroyed, and the
+ * order of those two steps is the whole of the guarantee. Same reasoning as
+ * every other core in this file.
+ */
+export async function applyRecordingDelete(
+  req: CallableRequest,
+  recordingId: string,
+): Promise<{ recordingId: string; courseId: string }> {
+  const snap = await getFirestore().collection(COLLECTIONS.recordings).doc(recordingId).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'No such recording.');
+  await requireDeleteRights(req, snap.data() as RecordingDoc, recordingId);
+  return applyDeleteRecording(recordingId);
+}
+
 export const deleteRecording = auditedCall('deleteRecording', async (req, audit) => {
   const d = req.data as { recordingId?: unknown };
   if (typeof d?.recordingId !== 'string' || !d.recordingId) {
     throw new HttpsError('invalid-argument', 'recordingId is required.');
   }
-  const snap = await getFirestore().collection(COLLECTIONS.recordings).doc(d.recordingId).get();
-  if (!snap.exists) throw new HttpsError('not-found', 'No such recording.');
-  const rec = snap.data() as RecordingDoc;
-  await requireDeleteRights(req, rec, d.recordingId);
-
-  const res = await applyDeleteRecording(d.recordingId);
+  const res = await applyRecordingDelete(req, d.recordingId);
   audit.courseId = res.courseId; // recordingId target is auto-picked from req.data
   return { recordingId: res.recordingId };
 });

@@ -36,7 +36,24 @@ const COHORT = 'coh-notify';
 let outbox: { tokens: string[]; message: PushMessage }[] = [];
 let staleTokens: string[] = [];
 
+/*
+ * NEW SESSION AND RECORDING IDS EACH TEST.
+ *
+ * `recursiveDelete` clears this file's recordings and sessions, and each
+ * deletion fires `onRecordingWritten` / `onSessionWritten`, which reconcile
+ * against a document that is now gone and deactivate every assignment on it.
+ * The Functions emulator delivers those on its own schedule, so one could land
+ * after the next test had re-seeded `assignments/s1_r1` with `active: true` —
+ * and the `lastDay` cases then find nothing to notify about. Same shape as the
+ * flakes already fixed in three sibling files; production never reuses an id
+ * either. The test bodies keep saying `'r1'` and `'sess1'`; the helpers
+ * namespace.
+ */
+let testRun = 0;
+const ns = (id: string) => `${id}-run${testRun}`;
+
 beforeEach(async () => {
+  testRun += 1;
   outbox = [];
   staleTokens = [];
   setSender(async (tokens, message): Promise<SendOutcome> => {
@@ -98,7 +115,7 @@ async function withDevice(uid: string, token = `tok-${uid}`, registeredAt = (reg
 
 async function seedRecording(id: string, sessionId: string, status: RecordingDoc['status']) {
   const rec: RecordingDoc = {
-    sessionId,
+    sessionId: ns(sessionId),
     courseId: COURSE,
     cohortId: COHORT,
     title: 'Session 3 — Patience',
@@ -113,14 +130,14 @@ async function seedRecording(id: string, sessionId: string, status: RecordingDoc
     createdBy: ADMIN,
     updatedAt: 1,
   };
-  await db().collection(COLLECTIONS.recordings).doc(id).set(rec);
+  await db().collection(COLLECTIONS.recordings).doc(ns(id)).set(rec);
 }
 
 function grant(studentUid: string, recordingId: string, dueDate = '2026-08-20'): AssignmentDoc {
   return {
     studentUid,
-    recordingId,
-    sessionId: 'sess1',
+    recordingId: ns(recordingId),
+    sessionId: ns('sess1'),
     courseId: COURSE,
     cohortId: COHORT,
     dueDate,
@@ -147,7 +164,7 @@ async function seedSession(id: string, fields: Partial<SessionDoc>) {
     updatedAt: 1,
     ...fields,
   };
-  await db().collection(COLLECTIONS.sessions).doc(id).set(s);
+  await db().collection(COLLECTIONS.sessions).doc(ns(id)).set(s);
 }
 
 describe('recordingReady', () => {
@@ -236,11 +253,11 @@ describe('lastDay', () => {
     await seedRecording('r1', 'sess1', 'published');
     await db()
       .collection(COLLECTIONS.assignments)
-      .doc(assignmentId('s1', 'r1'))
+      .doc(assignmentId('s1', ns('r1')))
       .set(grant('s1', 'r1', TODAY));
     await db()
       .collection(COLLECTIONS.assignments)
-      .doc(assignmentId('s2', 'r1'))
+      .doc(assignmentId('s2', ns('r1')))
       .set(grant('s2', 'r1', '2026-08-25'));
 
     expect(await notifyLastDay(db(), TODAY)).toBe(1);
@@ -253,14 +270,14 @@ describe('lastDay', () => {
     await seedRecording('r1', 'sess1', 'published');
     await db()
       .collection(COLLECTIONS.assignments)
-      .doc(assignmentId('s1', 'r1'))
+      .doc(assignmentId('s1', ns('r1')))
       .set(grant('s1', 'r1', TODAY));
     await db()
       .collection(COLLECTIONS.completions)
-      .doc('s1_r1')
+      .doc(assignmentId('s1', ns('r1')))
       .set({
         studentUid: 's1',
-        recordingId: 'r1',
+        recordingId: ns('r1'),
         courseId: COURSE,
         completed: true,
         completedAt: 1,
@@ -276,7 +293,7 @@ describe('lastDay', () => {
     await seedRecording('r1', 'sess1', 'published');
     await db()
       .collection(COLLECTIONS.assignments)
-      .doc(assignmentId('s1', 'r1'))
+      .doc(assignmentId('s1', ns('r1')))
       .set(grant('s1', 'r1', TODAY));
     expect(await notifyLastDay(db(), TODAY)).toBe(1);
     expect(await notifyLastDay(db(), TODAY)).toBe(0);

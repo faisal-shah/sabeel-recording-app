@@ -89,16 +89,28 @@ export const onDeviceRegistered = onDocumentWritten(
        * than the leak this exists to close. An order both invocations agree on
        * makes them converge on the same survivor.
        *
-       * `updateTime`, NOT the document's own `registeredAt`. That field is
-       * written by the client, and this is the one decision on the platform a
-       * client could otherwise buy: a student who wrote `registeredAt:
-       * Number.MAX_SAFE_INTEGER` onto their own row would win every future
-       * comparison, so a shared classroom device would keep delivering to them
-       * and silently stop delivering to everyone who used it afterwards. A
-       * backwards clock correction between two honest registrations does the
-       * same thing by accident. `updateTime` is Firestore's, at nanosecond
-       * resolution; the path breaks a tie so agreement does not depend on sort
-       * stability.
+       * `updateTime`, NOT the document's own `registeredAt`. That field is written
+       * by the client, so a student who wrote `Number.MAX_SAFE_INTEGER` onto
+       * their own row would win every future comparison — and a backwards clock
+       * correction between two honest registrations does the same by accident.
+       * `updateTime` is Firestore's, at nanosecond resolution; the path breaks a
+       * tie so agreement does not depend on sort stability.
+       *
+       * WHAT THIS STILL DOES NOT STOP, stated rather than glossed. FCM tokens
+       * carry no proof of possession, and the rules cannot invent one: any
+       * active account may write ANY token string under its own uid. So a
+       * student who has used a shared device — and therefore read its token off
+       * their own registration — can re-register it later from anywhere, become
+       * the newest row, and have this sweep delete the current holder's. That
+       * turns a leak (their notifications reaching a device someone else is
+       * holding, which is what happened before the sweep existed) into a leak
+       * plus a silent denial for the rightful holder.
+       *
+       * It is not a reason to drop the sweep: the failure it fixes is the
+       * ordinary one — a sign-out whose unregister never reached the backend —
+       * and that has no attacker in it at all. But the residual is real, it is
+       * bounded to devices the attacker has personally used, and it is written
+       * down in `TODO.md` rather than left implied by an over-confident comment.
        */
       const ordered = rows.docs
         .map((d) => ({ ref: d.ref, at: d.updateTime.toMillis() }))

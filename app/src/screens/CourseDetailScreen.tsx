@@ -110,9 +110,14 @@ export function CourseDetailScreen({
    * `[...old, M2]`, which lands after the first write and drops M1's assignment
    * with no error anywhere.
    */
-  const [managerBusy, setManagerBusy] = useState<{ uid: string; want: boolean; was: string } | null>(
-    null,
-  );
+  const [managerBusy, setManagerBusy] = useState<{
+    uid: string;
+    want: boolean;
+    /** The array as it stood when the write was sent. */
+    was: string;
+    /** Whether the callable has answered. */
+    returned: boolean;
+  } | null>(null);
   /*
    * HELD UNTIL THE SNAPSHOT AGREES, not until the callable answers.
    *
@@ -124,32 +129,44 @@ export function CourseDetailScreen({
    * and left the window.
    */
   /*
-   * SETTLED = THE SNAPSHOT MOVED, not "the snapshot says what I asked for".
+   * SETTLED = THE CALLABLE ANSWERED **AND** THE SNAPSHOT MOVED.
    *
-   * Waiting for the exact value is a state with no exit if somebody else edits
-   * the same list in between: two admins, or one in two tabs, and every manager
-   * row stays disabled behind a spinner until the screen is popped. Any change
-   * to the array means the listener has caught up and `on` is trustworthy
-   * again, which is all the lock needs — and if that change is not the one that
-   * was asked for, the row simply draws the truth.
+   * Both halves are load-bearing, and each was tried alone.
+   *
+   * The response alone is not enough: `cls` comes from a live listener on a
+   * separate channel, so in the gap the row re-enables and still draws
+   * UNCHECKED — which is what invites the next tap, and the next tap sends the
+   * pre-write array again.
+   *
+   * The snapshot alone is not enough either: another admin editing the same list
+   * while your write is in flight moves the array, which released the lock
+   * mid-write and reproduced the very clobber it exists to stop. And waiting for
+   * the EXACT value has no exit at all when somebody else's edit is the one that
+   * lands.
+   *
+   * So: wait for the response, then for any movement in the array. If that
+   * movement is not the change that was asked for, the row simply draws the
+   * truth, which is the honest outcome of two people editing at once.
    */
   const managerSettled = managerBusy
-    ? cls.managerUids.includes(managerBusy.uid) === managerBusy.want ||
-      cls.managerUids.join(',') !== managerBusy.was
+    ? managerBusy.returned &&
+      (cls.managerUids.includes(managerBusy.uid) === managerBusy.want ||
+        cls.managerUids.join(',') !== managerBusy.was)
     : true;
   const managerWriteInFlight = managerBusy !== null && !managerSettled;
   useEffect(() => {
     if (managerSettled) setManagerBusy(null);
   }, [managerSettled]);
   const runManager = async (uid: string, want: boolean, fn: () => Promise<void>) => {
-    setManagerBusy({ uid, want, was: cls.managerUids.join(',') });
+    setManagerBusy({ uid, want, was: cls.managerUids.join(','), returned: false });
     setError(null);
     try {
       await fn();
+      setManagerBusy((b) => (b && b.uid === uid ? { ...b, returned: true } : b));
     } catch (e) {
       setError(errorText(e));
-      // The write failed, so the snapshot will never agree — release the lock
-      // rather than wedging every row behind a change that is not coming.
+      // The write failed, so no snapshot is coming — release the lock rather
+      // than wedging every row behind a change that will never arrive.
       setManagerBusy(null);
     }
   };

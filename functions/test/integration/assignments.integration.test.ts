@@ -16,7 +16,8 @@ import {
 } from '@sabeel/shared';
 import { createCohortRecord } from '../../src/cohorts';
 import { createCourseRecord } from '../../src/courses';
-import { createEnrollmentRecord } from '../../src/enrollments';
+import { applyEnrollmentActive, createEnrollmentRecord } from '../../src/enrollments';
+import { playbackDenial } from '../../src/playback';
 import {
   reconcileSessionAssignments,
   deactivateStudentAssignmentsInCourse,
@@ -296,6 +297,49 @@ describe('unenrolment', () => {
     await deactivateStudentAssignmentsInCourse(db(), courseId, 's1');
     expect((await getAssignment('s1', 'r1'))?.active).toBe(false);
     expect((await getAssignment('s2', 'r1'))?.active).toBe(true);
+  });
+
+  /*
+   * WHAT UNENROLMENT PROMISES: the student can no longer open the recording,
+   * and it stays that way while ordinary work goes on in the class.
+   *
+   * Asserted through `playbackDenial`, which is what actually decides whether
+   * audio is handed over, rather than through the `active` flag it reads. The
+   * flag is the mechanism; being unable to listen is the promise, and a test
+   * that watches the flag would go on passing if the gate ever stopped
+   * consulting it.
+   *
+   * The bug this covers: the attendance map keeps a student's mark for ever, by
+   * design, so a reconcile that rebuilt its target set from attendance alone
+   * switched an unenrolled student's grant straight back on — and any write to
+   * any session in the course re-runs one. A title fix, a moved due date, a
+   * re-submitted register. Access came back days after staff had removed it,
+   * with nothing on any screen saying so.
+   */
+  it('leaves the student unable to play, through ordinary later edits', async () => {
+    await seedSession('sess', { attendance: { s1: 'excused', s2: 'excused' }, submitted: true });
+    await seedRecording('r1', 'sess', 'published');
+    await reconcile('sess');
+    const canPlay = async (uid: string) =>
+      playbackDenial({
+        claims: { role: 'student', status: 'active' },
+        recording: { status: 'published', audioPath: `recordings/${ns('r1')}/audio.m4a` },
+        cls: { effectiveActive: true, archivedAccess: false, managerUids: [] },
+        uid,
+        assignment: (await getAssignment(uid, 'r1')) ?? null,
+        today: '2026-07-10',
+      });
+    expect(await canPlay('s1')).toBeNull(); // granted, before anything changes
+
+    await applyEnrollmentActive({ studentUid: 's1', courseId, active: false });
+    expect(await canPlay('s1')).toBe('not-assigned');
+
+    // The kind of edit that happens all term — and used to hand the audio back.
+    await db().collection(COLLECTIONS.sessions).doc(ns('sess')).update({ title: 'Renamed' });
+    await reconcile('sess');
+    expect(await canPlay('s1')).toBe('not-assigned');
+    // And a classmate who is still enrolled is untouched throughout.
+    expect(await canPlay('s2')).toBeNull();
   });
 });
 

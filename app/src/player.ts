@@ -1,5 +1,6 @@
 import { createAudioPlayer, setAudioModeAsync, requestNotificationPermissionsAsync } from 'expo-audio';
 import type { Player, PlayerEvents } from './playerTypes';
+import { captureError } from './sentry';
 
 type NativePlayer = ReturnType<typeof createAudioPlayer>;
 
@@ -107,14 +108,20 @@ export function createPlayer(events: PlayerEvents): Player {
       player.setActiveForLockScreen(true);
     } catch (e) {
       /*
-       * LOGGED, NOT SURFACED. Background playback or the lock-screen controls
+       * REPORTED, NOT SURFACED. Background playback or the lock-screen controls
        * failing to configure does not stop the audio, and there is nothing the
        * person can do — while `onError` puts a native message in a full-width
        * red band and, since the transport follows it, refused to play a
        * recording that had loaded perfectly. A source error is the only thing
        * that channel is for.
+       *
+       * But it still has to leave evidence somewhere a person will look: this
+       * module's own header says missing any of the three setup calls fails
+       * QUIETLY, and a console line on somebody's phone is the definition of
+       * quiet. `captureError` is where every other invisible failure in this app
+       * goes.
        */
-      console.warn('audio setup', (e as Error).message);
+      captureError(e, { source: 'audioSetup' });
     }
   })();
 

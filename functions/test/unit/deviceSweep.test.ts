@@ -28,8 +28,17 @@ const SRC = readFileSync(
   'utf8',
 );
 
-/** The declaration through to the end of its handler options. */
-const declaration = SRC.slice(SRC.indexOf('export const onDeviceRegistered'));
+/**
+ * JUST THIS DECLARATION — cut at the next export.
+ *
+ * Slicing to the end of the file swept in `onAssignmentWritten` and `onMorning`,
+ * so the delete-guard assertion below would have gone on passing with the guard
+ * removed from this handler and an identical line present in a later one. It is
+ * unique today; the anchor should not depend on that.
+ */
+const from = SRC.indexOf('export const onDeviceRegistered');
+const next = SRC.indexOf('\nexport const', from + 1);
+const declaration = SRC.slice(from, next === -1 ? undefined : next);
 
 describe('the device sweep is bound to every write', () => {
   it('found the declaration', () => {

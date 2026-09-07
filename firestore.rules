@@ -273,11 +273,16 @@ service cloud.firestore {
       // `resource` is NULL when the document does not exist, and dereferencing
       // it then is a rules evaluation error — not a denial. That is what a
       // first-time listener hits, because resume reads the progress document
-      // before anything has ever written one. Allowing the miss leaks nothing:
-      // there is no document to read, and the id is `${uid}_${recordingId}`,
-      // which the caller already knows.
+      // before anything has ever written one.
+      //
+      // BOUND TO THE CALLER'S OWN ID. `resource == null` on its own answers
+      // about ANY id, and these are `${uid}_${recordingId}` — so
+      // absent-is-allowed against present-is-denied would tell one student
+      // whether a named classmate had ever played a named recording.
       allow get: if (isStudent()
-          && (resource == null || resource.data.studentUid == request.auth.uid))
+          && (resource == null
+                ? progressId.split('_')[0] == request.auth.uid
+                : resource.data.studentUid == request.auth.uid))
         || (resource != null && staffManagesCourse(resource.data.courseId));
       // A list always evaluates against real documents, so no guard is needed —
       // and adding one would widen it. Staff read it for the ledger's
@@ -345,8 +350,12 @@ service cloud.firestore {
           && completionId == request.resource.data.studentUid + '_'
               + request.resource.data.recordingId;
       }
+      // Bound to the caller's own id, like `listeningProgress` above: an
+      // unbound null arm would answer about any `${uid}_${recordingId}`.
       allow get: if (isStudent()
-          && (resource == null || resource.data.studentUid == request.auth.uid))
+          && (resource == null
+                ? completionId.split('_')[0] == request.auth.uid
+                : resource.data.studentUid == request.auth.uid))
         || (resource != null && staffManagesCourse(resource.data.courseId));
       // Staff read the roster's completions for the recording/class ledger,
       // class-scoped.
@@ -387,19 +396,17 @@ service cloud.firestore {
         && request.resource.data.at is int
         && request.resource.data.courseId == grantedCourse(request.resource.data.recordingId);
       /*
-       * `get` AND `list` SEPARATELY, because `resource` is null on a get of a
-       * document that does not exist and dereferencing it then is an evaluation
-       * ERROR, not a denial — the trap `listeningProgress` and `completions`
-       * already carry a null arm for. Nothing reads this by id today; declaring
-       * one statement for both would leave the first caller that does to find
-       * out.
+       * NO NULL ARM HERE, unlike its neighbours — and the difference is the id.
+       *
+       * `listeningProgress`, `completions` and `completionOverrides` are keyed
+       * `${studentUid}_${recordingId}`, so a null arm can be bound to the
+       * caller's own id and answers only about their own row. These ids are
+       * auto-generated: there is nothing to bind, so an "absent is readable" arm
+       * would answer about anybody's, and nothing reads this collection by id in
+       * the first place. A `list` always evaluates against real documents, so it
+       * needs no guard.
        */
-      allow get: if (isStudent()
-          && (resource == null || resource.data.studentUid == request.auth.uid))
-        || (resource != null && staffManagesCourse(resource.data.courseId));
-      // A list always evaluates against real documents, so no null guard is
-      // needed — and adding one would widen it.
-      allow list: if (isStudent() && resource.data.studentUid == request.auth.uid)
+      allow get, list: if (isStudent() && resource.data.studentUid == request.auth.uid)
         || staffManagesCourse(resource.data.courseId);
       allow update, delete: if false;
     }
@@ -412,12 +419,21 @@ service cloud.firestore {
     // own (the brief lets a student see their full accountability details);
     // staff read it scoped to their class for the ledger.
     match /completionOverrides/{overrideId} {
-      // Split for the same reason as `completionEvents` above: most students
-      // have no override on most recordings, so a get by id is USUALLY of a
-      // document that does not exist — and without the null arm that is a rules
-      // evaluation error rather than an answer.
+      /*
+       * A NULL ARM BOUND TO THE CALLER'S OWN ID.
+       *
+       * Most students have no override on most recordings, so a get by id is
+       * usually of a document that does not exist — and without a null arm that
+       * is a rules evaluation error rather than an answer. But `resource == null`
+       * on its own answers about ANY id, and these are `${uid}_${recordingId}`:
+       * absent-is-allowed against present-is-denied would tell a student whether
+       * staff had overridden a named classmate on a named recording. Binding the
+       * id keeps the answer to their own row.
+       */
       allow get: if (isStudent()
-          && (resource == null || resource.data.studentUid == request.auth.uid))
+          && (resource == null
+                ? overrideId.split('_')[0] == request.auth.uid
+                : resource.data.studentUid == request.auth.uid))
         || (resource != null && staffManagesCourse(resource.data.courseId));
       allow list: if (isStudent() && resource.data.studentUid == request.auth.uid)
         || staffManagesCourse(resource.data.courseId);
@@ -479,18 +495,24 @@ service cloud.firestore {
       // id-must-match check refuses on both arms.
       match /devices/{token} {
         allow get, list, delete: if isMine();
-        // `hasOnly`, like the preferences document above: this row is read by
-        // the send path and ordered by a trigger, so a field nobody expects is a
-        // field nobody validates. `registeredAt` is a display value only —
-        // `onDeviceRegistered` orders by Firestore's own `updateTime` precisely
-        // so a client cannot buy that decision — but it is bounded anyway, so a
-        // row cannot claim to have been registered in the year 50,000.
+        /*
+         * `hasOnly`, like the preferences document above: this row is read by
+         * the send path and ordered by a trigger, so a field nobody expects is a
+         * field nobody validates.
+         *
+         * NOT BOUNDED AGAINST `request.time`, deliberately. `registeredAt` is
+         * the device's own `Date.now()` and nothing on the server reads it —
+         * `onDeviceRegistered` orders by Firestore's `updateTime` precisely so a
+         * client cannot buy that decision. A bound would therefore protect
+         * nothing while refusing a phone whose clock runs fast, and the client
+         * does not wait for this write, so that refusal is silent: the settings
+         * screen would report a registered, working device whose push is dead.
+         */
         allow create, update: if isMine()
           && request.resource.data.keys().hasOnly(['token', 'platform', 'registeredAt'])
           && request.resource.data.token == token
           && request.resource.data.platform is string
-          && request.resource.data.registeredAt is int
-          && request.resource.data.registeredAt <= request.time.toMillis() + 60000;
+          && request.resource.data.registeredAt is int;
       }
 
       // Server-only, both ways. This is the idempotency marker the send path

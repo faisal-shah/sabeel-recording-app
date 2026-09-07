@@ -1032,15 +1032,32 @@ describe('a transport change from outside the app', () => {
     const pb = await load();
     pb.openPlayback(recording('rec-a'));
     await flush();
+    pb.playback.play();
+    wait(10_000);
     players[0].events.onProgress(10_000);
 
     players[0].events.onError('network blip');
+    wait(10_000);
     players[0].events.onProgress(20_000); // ignored — nothing is ready
     players[0].events.onError(null);
+    wait(20_000);
     players[0].events.onProgress(40_000); // counted again
 
     await pb.closePlayback();
     expect(docOf('rec-a')?.positionMs).toBe(40_000);
+    /*
+     * AND THE LISTENED TOTAL, which is the number the regression destroyed —
+     * the ledger presents it as evidence, and a latched `ready` froze it at the
+     * moment of the blip while the audio played on.
+     *
+     * Position is last-write-wins, so it would read correctly even with every
+     * tick discarded; listening only accrues from ticks that were COUNTED. Ten
+     * seconds to the first tick, then thirty across the fault: the 20s tick
+     * contributes nothing because nothing was ready when it arrived, and the
+     * 40s tick's advance is measured from the last position the session
+     * accepted.
+     */
+    expect(docOf('rec-a')?.listenedMs).toBe(40_000);
   });
 
   it('does not restore a transport over a source that never loaded', async () => {

@@ -178,22 +178,7 @@ describe('device tokens', () => {
     );
   });
 
-  it('does NOT let a device claim to have registered in the future', async () => {
-    await assertFails(
-      setDoc(doc(student().firestore(), COLLECTIONS.notifications, STUDENT, 'devices', 'tok-d'), {
-        token: 'tok-d',
-        platform: 'web',
-        registeredAt: Number.MAX_SAFE_INTEGER,
-      }),
-    );
-  });
-
-  /*
-   * A whole number of milliseconds, which is what `Date.now()` is. Tested with a
-   * FLOAT rather than a string: a string fails the bound above anyway (comparing
-   * one to a number is an evaluation error, which denies), so only a number that
-   * is not an integer distinguishes `is int` from the bound.
-   */
+  /** A whole number of milliseconds, which is what `Date.now()` is. */
   it('does NOT let registeredAt be a non-integer', async () => {
     await assertFails(
       setDoc(doc(student().firestore(), COLLECTIONS.notifications, STUDENT, 'devices', 'tok-e'), {

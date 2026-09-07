@@ -19,6 +19,8 @@ import {
   applyDeleteRecording,
   applyRecordingStatus,
   clearAudio,
+  RECORDING_DEPENDENTS,
+  applyRecordingDelete,
   createRecordingDraft,
   finalizeRecording,
   requireDeleteRights,
@@ -202,13 +204,14 @@ describe('clearAudio', () => {
 });
 
 describe('applyDeleteRecording', () => {
-  const DEPS = [
-    COLLECTIONS.assignments,
-    COLLECTIONS.completions,
-    COLLECTIONS.completionEvents,
-    COLLECTIONS.listeningProgress,
-    COLLECTIONS.completionOverrides,
-  ];
+  /*
+   * THE PRODUCTION LIST, not a copy of it. Retyped here, adding a sixth
+   * dependent collection would silently stop this file covering it: `it.each`
+   * would skip it, and `depCount` — which counts only what the fixture seeded —
+   * would still report a clean cascade while the new collection's rows were left
+   * orphaned pointing at a recording that no longer exists.
+   */
+  const DEPS = RECORDING_DEPENDENTS;
   async function seedDeps(recordingId: string) {
     const db = getFirestore();
     const s = 'stu-1';
@@ -285,18 +288,31 @@ describe('applyDeleteRecording', () => {
      * able to permanently delete a draft carrying completions, listening
      * progress, events and overrides, with nothing failing.
      */
-    it.each(DEPS)('refuses a manager once %s points at the draft', async (coll) => {
+    /*
+     * THE PROMISE: a caller who may not delete leaves every listening record
+     * exactly where it was. Driven through `applyRecordingDelete`, which is the
+     * gate AND the cascade in the order the callable runs them — asserting the
+     * gate alone proves it throws, not that nothing was destroyed, and the order
+     * of those two steps is the whole guarantee.
+     */
+    it.each(DEPS)('refuses a manager, and destroys nothing, once %s exists', async (coll) => {
       const { id } = await newDraft();
       const req = await scopedManager('mgr-1');
       await getFirestore()
         .collection(coll)
         .doc(`stu-1_${id}`)
         .set({ recordingId: id, studentUid: 'stu-1', courseId });
-      await expect(requireDeleteRights(req, await rec(id), id)).rejects.toMatchObject({
+
+      await expect(applyRecordingDelete(req, id)).rejects.toMatchObject({
         code: 'permission-denied',
       });
+      expect(await depCount(id)).toBe(1);
+      expect(await recExists(id)).toBe(true);
+
       // And an admin still may — this is a question of WHO, not of whether.
-      await expect(requireDeleteRights(admin(), await rec(id), id)).resolves.toBeUndefined();
+      await expect(applyRecordingDelete(admin(), id)).resolves.toMatchObject({ recordingId: id });
+      expect(await depCount(id)).toBe(0);
+      expect(await recExists(id)).toBe(false);
     });
 
     /*
@@ -318,9 +334,10 @@ describe('applyDeleteRecording', () => {
       expect(walkedBack.status).toBe('draft');
 
       const req = await scopedManager('mgr-1');
-      await expect(requireDeleteRights(req, walkedBack, id)).rejects.toMatchObject({
+      await expect(applyRecordingDelete(req, id)).rejects.toMatchObject({
         code: 'permission-denied',
       });
+      expect(await recExists(id)).toBe(true);
     });
 
     it('refuses a manager an archived recording outright', async () => {

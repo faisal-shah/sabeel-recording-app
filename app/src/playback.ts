@@ -151,11 +151,16 @@ let dirty = false;
 // does not snap backwards right after it is dropped.
 let seekTarget: number | null = null;
 /**
- * Whether THIS session's source ever loaded.
+ * Whether THIS session's `load()` call has come back.
  *
- * `onError` clears `ready` while a fault stands and restores it when the fault
- * clears — and this is what it restores it to. Without it a recovery would
- * enable the transport over a source that had never loaded in the first place.
+ * Not "the audio is playable", and the difference is worth being exact about:
+ * on web `load` deliberately settles on a failed source too (a stalled request
+ * fires neither `loadedmetadata` nor anything else, so waiting on success alone
+ * hangs for ever), and on native it does not await `replace()` at all. What this
+ * excludes is therefore the narrow case of a load still IN FLIGHT — which is
+ * exactly the one that matters here: `onError` restores `ready` when a fault
+ * clears, and without this a `canplay`-driven clear arriving before the load
+ * returned would enable the transport over a session that had not started.
  */
 let loadedOk = false;
 /*

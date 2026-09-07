@@ -97,8 +97,22 @@ export function validateSetEnrollmentActive(data: unknown): SetEnrollmentActiveI
  *
  * `active: false` is what removal means here — the row, and everything hanging
  * off it, stays for the accountability record. Unenrolling turns this student's
- * obligations in the course off (history kept). Re-enrolling does not restore
- * past obligations — accountability starts fresh from the next session marked.
+ * obligations in the course off (history kept).
+ *
+ * AND THE FAN-OUT KEEPS THEM OFF: `reconcileSessionAssignments` filters its
+ * target set by active enrolment, so a later edit to any session in the course
+ * cannot switch them back on. Without that filter it did — the attendance
+ * snapshot keeps a student's mark for ever, and the reconcile rebuilt the grants
+ * from it alone.
+ *
+ * RE-ENROLLING is the direction that is NOT settled here, and the app says two
+ * different things about it: this function's original note said accountability
+ * starts fresh from the next session marked, while the recording ledger tells
+ * staff that "re-enrolling or republishing restores the grant". Since the
+ * reconcile is stateless, what actually happens today is the ledger's version —
+ * a re-enrolled student is back in the target set the next time anything
+ * reconciles that session. Tracked in `TODO.md` as a decision for Faisal rather
+ * than settled by whichever sentence was easier to make true.
  */
 export async function applyEnrollmentActive(input: SetEnrollmentActiveInput) {
   const db = getFirestore();

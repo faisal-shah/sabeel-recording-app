@@ -63,15 +63,38 @@ const STUDENT = 'stu1';
 const OUTSIDER = 'stu2';
 const CLASS_MINE = 'classMine';
 const CLASS_THEIRS = 'classTheirs';
-const PUBLISHED = 'recPublished';
+/*
+ * A FRESH SET OF RECORDING IDS PER TEST.
+ *
+ * `clearFirestore()` deletes this file's recordings, and each deletion fires
+ * `onRecordingWritten` → `applyRecordingFanout`, which re-reads the recording,
+ * finds it gone and deactivates every assignment pointing at that id. The
+ * Functions emulator delivers that on its own schedule, so it could land AFTER
+ * the next test had re-seeded `assignments/stu1_recPublished` with
+ * `active: true` — and the student arm of `/recordings` needs an active grant,
+ * so a test failed having done nothing wrong. Same shape as the flakes already
+ * fixed in `rules.attendance.test.ts` and `assignments.integration.test.ts`, and
+ * production never reuses an id either: recordings get auto-ids.
+ *
+ * `let`, not `const`, so the ids can be reassigned before each test — which is
+ * why nothing at describe level may derive from them (see `listeningProgress`).
+ */
+let run = 0;
+let PUBLISHED = '';
 /** Published in the student's own course, but they were never excused for it. */
-const UNGRANTED = 'recUngranted';
+let UNGRANTED = '';
 /** Published, but their grant was withdrawn (corrected to present, unpublished…). */
-const WITHDRAWN = 'recWithdrawn';
-const DRAFT = 'recDraft';
-const THEIR_REC = 'recTheirs';
+let WITHDRAWN = '';
+let DRAFT = '';
+let THEIR_REC = '';
 
 beforeEach(async () => {
+  run += 1;
+  PUBLISHED = `recPublished-run${run}`;
+  UNGRANTED = `recUngranted-run${run}`;
+  WITHDRAWN = `recWithdrawn-run${run}`;
+  DRAFT = `recDraft-run${run}`;
+  THEIR_REC = `recTheirs-run${run}`;
   await testEnv.clearFirestore();
   await testEnv.clearStorage();
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
@@ -88,20 +111,27 @@ beforeEach(async () => {
         createdBy: ADMIN,
       });
     /*
-     * A SESSION PER RECORDING, WITH ATTENDANCE THAT AGREES WITH THE GRANT —
-     * even though these tests only read a recording's status and course.
+     * EVERY RECORDING POINTS AT A SESSION, AND NO SESSION POINTS BACK.
      *
      * The Functions emulator runs against this same project, so every write here
-     * fires `onRecordingWritten` → `applyRecordingFanout`, which re-reads both
-     * documents and reconciles. A fixture whose session says something different
-     * from its seeded grant is therefore RACING that trigger to undo its own
-     * setup: with no `sessionId` at all, or a session that does not exist, the
-     * reconcile deactivates every grant on the recording — including the one the
-     * student-read cases depend on. It failed about one run in a hundred, which
-     * is the worst rate to debug.
+     * fires `onRecordingWritten` → `applyRecordingFanout`. Its first branch is
+     * `if (!rec?.sessionId) deactivateAssignmentsForRecording(...)` — so a
+     * recording with no session, which is what this fixture used to write, told
+     * the trigger to switch off every grant on it, INCLUDING the active one the
+     * student-read cases depend on. It failed about one run in a hundred.
      *
-     * So each recording gets a session whose submitted attendance produces the
-     * grant the fixture wants, which is what production would have written.
+     * A `sessionId` takes it past that branch and into
+     * `reconcileSessionAssignments`, which returns immediately unless the SESSION
+     * names a recording (`session.recordingId`). Leaving that null is what keeps
+     * the reconcile off these grants entirely, and it is deliberate: this file
+     * seeds an ACTIVE grant on a DRAFT recording, which is a defence-in-depth
+     * case production cannot produce — the fan-out only ever grants a published
+     * one — so a fully wired session would deactivate it and the test asserting
+     * "not even with a grant" would start passing because there was no grant.
+     *
+     * The attendance below is therefore a description of the world, not a
+     * mechanism: nothing reads it. It is written so the fixture says what it
+     * means, not to make the trigger do anything.
      */
     const sess = (id: string, courseId: string, attendance: Record<string, string>) =>
       setDoc(doc(db, COLLECTIONS.sessions, id), {
@@ -150,8 +180,9 @@ beforeEach(async () => {
         assignedAt: 1,
         assignedBy: 'system',
       });
-    // Excused → the reconcile grants and keeps granting. Present → it grants
-    // nobody, which is what "never excused" and "grant withdrawn" both need.
+    // Excused where a grant is seeded, present where one is not — so the
+    // attendance and the grants tell the same story. Neither drives anything;
+    // see the note on `sess` above.
     const EXCUSED = { [STUDENT]: 'excused' };
     const PRESENT = { [STUDENT]: 'present' };
     await Promise.all([
@@ -344,8 +375,10 @@ describe('storage: audio object', () => {
 });
 
 describe('listeningProgress', () => {
-  const mineId = `${STUDENT}_${PUBLISHED}`;
-  const theirsId = `${OUTSIDER}_${PUBLISHED}`;
+  // FUNCTIONS, not consts: the ids are reassigned in `beforeEach`, and a value
+  // captured here would be the previous test's.
+  const mineId = () => `${STUDENT}_${PUBLISHED}`;
+  const theirsId = () => `${OUTSIDER}_${PUBLISHED}`;
   const row = (uid: string) => ({
     studentUid: uid,
     recordingId: PUBLISHED,
@@ -359,16 +392,16 @@ describe('listeningProgress', () => {
     // The first-time resume path. Without a null guard this is not a denial but
     // a rules EVALUATION ERROR, which surfaces to the app as a broken player.
     await assertSucceeds(
-      getDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId)),
+      getDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId())),
     );
   });
 
   it('lets a student create and update their own row', async () => {
     await assertSucceeds(
-      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId), row(STUDENT)),
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId()), row(STUDENT)),
     );
     await assertSucceeds(
-      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId), {
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId()), {
         ...row(STUDENT),
         positionMs: 5000,
       }),
@@ -377,7 +410,7 @@ describe('listeningProgress', () => {
 
   it('does NOT let a student write a row carrying someone else\'s uid', async () => {
     await assertFails(
-      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, theirsId), row(OUTSIDER)),
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, theirsId()), row(OUTSIDER)),
     );
   });
 
@@ -393,7 +426,7 @@ describe('listeningProgress', () => {
    */
   it('does NOT let a student plant an honest row under someone else\'s id', async () => {
     await assertFails(
-      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, theirsId), row(STUDENT)),
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, theirsId()), row(STUDENT)),
     );
     // And the victim can still write their own row afterwards — which is the
     // half that matters, since the plant grants the writer nothing and exists
@@ -412,7 +445,7 @@ describe('listeningProgress', () => {
       });
     });
     await assertSucceeds(
-      setDoc(doc(outsider().firestore(), COLLECTIONS.listeningProgress, theirsId), row(OUTSIDER)),
+      setDoc(doc(outsider().firestore(), COLLECTIONS.listeningProgress, theirsId()), row(OUTSIDER)),
     );
   });
 
@@ -424,7 +457,7 @@ describe('listeningProgress', () => {
    */
   it('does NOT let a student file their progress under another class', async () => {
     await assertFails(
-      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId), {
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId()), {
         ...row(STUDENT),
         courseId: CLASS_THEIRS,
       }),
@@ -433,10 +466,10 @@ describe('listeningProgress', () => {
 
   it('does NOT let a student move an existing row to another class', async () => {
     await assertSucceeds(
-      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId), row(STUDENT)),
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId()), row(STUDENT)),
     );
     await assertFails(
-      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId), {
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId()), {
         ...row(STUDENT),
         courseId: CLASS_THEIRS,
         positionMs: 9000,
@@ -455,11 +488,11 @@ describe('listeningProgress', () => {
 
   it('does NOT let a student overwrite a row that is already someone else\'s', async () => {
     await testEnv.withSecurityRulesDisabled(async (c) => {
-      await setDoc(doc(c.firestore(), COLLECTIONS.listeningProgress, theirsId), row(OUTSIDER));
+      await setDoc(doc(c.firestore(), COLLECTIONS.listeningProgress, theirsId()), row(OUTSIDER));
     });
     // Even claiming their own uid in the payload must not let them clobber it.
     await assertFails(
-      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, theirsId), row(STUDENT)),
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, theirsId()), row(STUDENT)),
     );
   });
 
@@ -480,26 +513,26 @@ describe('listeningProgress', () => {
 
   it('does not let a student read another student\'s row', async () => {
     await testEnv.withSecurityRulesDisabled(async (c) => {
-      await setDoc(doc(c.firestore(), COLLECTIONS.listeningProgress, theirsId), row(OUTSIDER));
+      await setDoc(doc(c.firestore(), COLLECTIONS.listeningProgress, theirsId()), row(OUTSIDER));
     });
     await assertFails(
-      getDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, theirsId)),
+      getDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, theirsId())),
     );
   });
 
   it('does not let staff touch progress — that is the Phase 5 ledger', async () => {
     await assertFails(getDocs(collection(mine().firestore(), COLLECTIONS.listeningProgress)));
     await assertFails(
-      setDoc(doc(admin().firestore(), COLLECTIONS.listeningProgress, mineId), row(STUDENT)),
+      setDoc(doc(admin().firestore(), COLLECTIONS.listeningProgress, mineId()), row(STUDENT)),
     );
   });
 
   it('never allows deletion', async () => {
     await testEnv.withSecurityRulesDisabled(async (c) => {
-      await setDoc(doc(c.firestore(), COLLECTIONS.listeningProgress, mineId), row(STUDENT));
+      await setDoc(doc(c.firestore(), COLLECTIONS.listeningProgress, mineId()), row(STUDENT));
     });
     await assertFails(
-      deleteDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId)),
+      deleteDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, mineId())),
     );
   });
 });

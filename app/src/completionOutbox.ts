@@ -56,8 +56,21 @@ async function forget(id: string): Promise<void> {
 function fireAndForget(id: string, state: CompletionDoc): void {
   void setDoc(doc(db, COLLECTIONS.completions, id), state)
     .then(() => forget(id))
-    .catch(() => {
-      /* stays in the outbox; drainCompletionOutbox retries next launch */
+    .catch((e: { code?: string }) => {
+      /*
+       * A REFUSAL IS FINAL; ANYTHING ELSE IS WORTH RETRYING.
+       *
+       * Retrying everything means an entry the server will never accept is
+       * re-sent on every launch for the life of the install. The reachable case
+       * is small but real: mark complete offline, the app is killed before it
+       * syncs, and the recording is permanently deleted in the meantime — the
+       * cascade takes the assignment with it, so the rule can no longer find the
+       * grant the write has to name. There is nothing left to write it against.
+       *
+       * Everything else — offline, a dropped connection, a server hiccup — keeps
+       * the entry, which is the whole point of the outbox.
+       */
+      if (e?.code === 'permission-denied') void forget(id);
     });
 }
 

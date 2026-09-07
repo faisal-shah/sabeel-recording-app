@@ -78,11 +78,18 @@ describe('deriveTargets', () => {
   });
 
   /*
-   * The two whose target does not exist until the call has run — the id is
+   * THE CREATES, whose target does not exist until the call has run — the id is
    * assigned by the create itself, so there is nothing in the request to derive
    * and the callable must set it. Asserted from the other side: these payloads
    * SHOULD derive nothing, which is what makes the explicit assignment load
    * bearing rather than belt and braces.
+   *
+   * Six callables set `audit.targets` themselves (`createStudent`,
+   * `createCohort`, `createSession`, `submitAttendance`, `createRecording`,
+   * `importZoomRecording`); only these two would audit as `{}` without it. The
+   * others name something either way, and the ones whose explicit target is the
+   * NEW id are asserted end to end in `scripts/web-e2e.mjs`, against the real
+   * wrapper — the only place a callable's audit row can actually be read.
    */
   it.each([
     ['createStudent', { displayName: 'A Student', email: 'a@example.com' }],

@@ -133,8 +133,32 @@ describe('Phase 5 staff ledger reads', () => {
        * override on a recording that has none gets a failure, not an answer.
        * Absence is the usual case for three of these four collections.
        */
-      it('answers a student asking for their own row before it exists', async () => {
+      /*
+       * A GET OF A DOCUMENT THAT IS NOT THERE.
+       *
+       * `resource` is null then, and dereferencing it is a rules EVALUATION
+       * ERROR rather than a denial — so a screen asking for a student's own row
+       * on a recording that has none gets a failure, not an answer. Absence is
+       * the usual case for three of these four collections.
+       *
+       * `completionEvents` is the exception: its ids are auto-generated, so
+       * there is nothing to bind a null arm to and nothing reads it by id, and
+       * an unbound arm would answer about anybody's row.
+       */
+      const idBound = name !== COLLECTIONS.completionEvents;
+
+      it.runIf(idBound)('answers a student asking for their own row before it exists', async () => {
         await assertSucceeds(getDoc(doc(student().firestore(), name, `${STUDENT}_never`)));
+      });
+
+      /*
+       * AND ONLY ABOUT THEIR OWN. Absent-is-allowed against present-is-denied is
+       * an existence oracle, and these ids are `${uid}_${recordingId}` — so an
+       * unbound arm would tell one student whether a named classmate had a row
+       * on a named recording.
+       */
+      it.runIf(idBound)('does not answer for a row under someone else’s id', async () => {
+        await assertFails(getDoc(doc(student().firestore(), name, `${OUTSIDER}_never`)));
       });
 
       it('still refuses a manager a row that is not there', async () => {
