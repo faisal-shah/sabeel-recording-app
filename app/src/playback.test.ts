@@ -94,6 +94,8 @@ interface Fake {
   loaded: string | null;
   /** The position `load` was asked to start at. */
   startedAt: number | null;
+  /** What `load` was told the OS should display. */
+  announced: { title: string; courseName: string } | null;
   unloaded: boolean;
   playing: boolean;
   /** Resolves a `load` held open by `holdLoad`. */
@@ -121,6 +123,7 @@ vi.mock('./player', () => ({
     const fake: Fake = {
       events,
       loaded: null,
+      announced: null,
       startedAt: null,
       unloaded: false,
       playing: false,
@@ -128,9 +131,10 @@ vi.mock('./player', () => ({
     };
     players.push(fake);
     return {
-      load: (url: string, startMs: number) => {
+      load: (url: string, startMs: number, meta: { title: string; courseName: string }) => {
         fake.loaded = url;
         fake.startedAt = startMs;
+        fake.announced = meta;
         if (!holdLoad) return Promise.resolve();
         return new Promise<void>((resolve) => {
           fake.finishLoad = resolve;
@@ -215,6 +219,29 @@ describe('opening and closing', () => {
     await flush();
     expect(callable).toHaveBeenCalledWith({ recordingId: 'rec-a' });
     expect(players[0].loaded).toBe('https://signed/audio.m4a');
+  });
+
+  /*
+   * WHAT THE OS IS TOLD, not that a setter was called.
+   *
+   * The lock screen and the notification name what is playing, and for five
+   * versions they named nothing: the metadata never left this module, so
+   * `dumpsys media_session` read `metadata: null` and a two-hour lecture showed
+   * transport controls over a blank title. The player seam is where the session
+   * hands that over, so this asserts the handover carries both lines a person
+   * reads — the session and the class it belongs to.
+   *
+   * It cannot see the notification itself; that stays a device check. It does
+   * catch the call site dropping the argument again, which is how it was lost.
+   */
+  it('tells the player what the lock screen should say', async () => {
+    const pb = await load();
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    expect(players[0].announced).toEqual({
+      title: 'Session rec-a',
+      courseName: 'Hikam Foundations',
+    });
   });
 
   it('re-opening the SAME recording does not restart it', async () => {

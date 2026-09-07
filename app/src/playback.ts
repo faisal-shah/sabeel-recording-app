@@ -419,7 +419,7 @@ export function openPlayback(now: NowPlaying): void {
       const prior = saved?.data() as ListeningProgressDoc | undefined;
       listened = prior?.listenedMs ?? 0;
       position = prior?.positionMs ?? 0;
-      await p.load(url, position);
+      await p.load(url, position, { title: now.title, courseName: now.courseName });
       if (generation !== gen) return;
       // THE SOURCE IS LOADED — remembered, so `onError` can put the transport
       // back when a transient fault clears. NOT ready while an error stands:

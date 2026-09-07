@@ -1,5 +1,5 @@
 import { createAudioPlayer, setAudioModeAsync, requestNotificationPermissionsAsync } from 'expo-audio';
-import type { Player, PlayerEvents } from './playerTypes';
+import type { NowPlayingMeta, Player, PlayerEvents } from './playerTypes';
 import { captureError } from './sentry';
 
 type NativePlayer = ReturnType<typeof createAudioPlayer>;
@@ -86,6 +86,10 @@ export function createPlayer(events: PlayerEvents): Player {
   const detach = () => sub.remove();
   current = { player, detach };
 
+  /** The last thing handed to `load`, and whether the OS is listening yet. */
+  let meta: { title: string; artist: string } | null = null;
+  let lockScreenActive = false;
+
   void (async () => {
     try {
       /*
@@ -105,7 +109,18 @@ export function createPlayer(events: PlayerEvents): Player {
         interruptionMode: 'doNotMix',
       });
       await requestNotificationPermissionsAsync();
-      player.setActiveForLockScreen(true);
+      /*
+       * THE METADATA HAS TO BE PASSED HERE TOO, not only in `load`.
+       *
+       * This setup is async and `load` is not ordered against it, so either can
+       * finish first. `updateLockScreenMetadata` documents itself as a no-op
+       * unless the player is already active for the lock screen — so a `load`
+       * that lands first would be silently discarded, which is the state this
+       * app shipped in: `dumpsys media_session` reported `metadata: null` and
+       * the notification drew transport controls over a blank title.
+       */
+      lockScreenActive = true;
+      player.setActiveForLockScreen(true, meta ?? undefined);
     } catch (e) {
       /*
        * REPORTED, NOT SURFACED. Background playback or the lock-screen controls
@@ -126,8 +141,12 @@ export function createPlayer(events: PlayerEvents): Player {
   })();
 
   return {
-    async load(url, startMs) {
+    async load(url, startMs, now: NowPlayingMeta) {
+      // The class is the "artist" line, which is where Android and the lock
+      // screen put the second row under the title.
+      meta = { title: now.title, artist: now.courseName };
       player.replace({ uri: url });
+      if (lockScreenActive) player.updateLockScreenMetadata(meta);
       if (startMs > 0) await player.seekTo(startMs / 1000);
     },
     play: () => player.play(),

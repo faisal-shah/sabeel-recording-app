@@ -58,8 +58,20 @@ export function createPlayer(events: PlayerEvents): Player {
   el.addEventListener('pause', () => events.onPlayingChanged(false));
 
   return {
-    async load(url, startMs) {
+    async load(url, startMs, now) {
       el.src = url;
+      /*
+       * The browser's own media panel and the hardware media keys read this,
+       * which is the web's version of what the lock screen shows on native.
+       * Guarded because Safari and older browsers ship no `mediaSession`, and a
+       * missing now-playing panel must not stop a lecture loading.
+       */
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: now.title,
+          artist: now.courseName,
+        });
+      }
       /*
        * Seeking before metadata has loaded is silently dropped, so wait for it —
        * but SETTLE ON FAILURE TOO. A request that stalls or 403s fires `error`

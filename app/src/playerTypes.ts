@@ -33,8 +33,21 @@ export interface PlayerEvents {
   onPlayingChanged: (playing: boolean) => void;
 }
 
+/**
+ * What the OS should say is playing, on the lock screen and in the notification.
+ *
+ * It travels with `load` rather than through a setter of its own because the
+ * only moment it is ever needed is the moment a source is swapped in, and a
+ * second call would be a second thing to forget — which is how the transport
+ * shipped for five versions showing controls over a blank title.
+ */
+export interface NowPlayingMeta {
+  title: string;
+  courseName: string;
+}
+
 export interface Player {
-  load: (url: string, startMs: number) => Promise<void>;
+  load: (url: string, startMs: number, meta: NowPlayingMeta) => Promise<void>;
   play: () => void;
   pause: () => void;
   seek: (ms: number) => void;
