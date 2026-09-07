@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Sabeel Class Recordings</title>
+<!--
+  A STATIC page, served outside the app bundle on purpose.
+
+  Both stores require a privacy policy reachable by a crawler and by a reviewer
+  who is not signed in, and Apple 5.1.1(i) requires it reachable from inside the
+  app as well. Every route in this app is behind authentication, so a
+  client-side /privacy would return an empty shell to exactly the two readers who
+  have to be able to fetch it. Expo copies app/public/ into dist-web verbatim,
+  and firebase.json rewrites /privacy here AHEAD of the SPA catch-all.
+
+  No navigation and no sign-in link, deliberately: the page sits on the same
+  domain as the app, and the less it looks like a way in, the better. See
+  sabeel-institute-kanban/docs/STORE-RELEASE.md.
+-->
+<style>
+  :root {
+    color-scheme: light;
+    --ivory: #F6EBDD; --raspberry: #83114F; --gold: #C6A15B;
+    --ink: #3A2F28; --muted: #6A5748;
+  }
+  body {
+    background: var(--ivory); color: var(--ink);
+    font-family: system-ui, -apple-system, sans-serif;
+    max-width: 40rem; margin: 0 auto; padding: 3rem 1.5rem 5rem;
+    line-height: 1.65;
+  }
+  h1 { color: var(--raspberry); font-size: 1.6rem; margin-bottom: .25rem; }
+  h2 { color: var(--raspberry); font-size: 1.05rem; margin: 2.25rem 0 .5rem; }
+  .updated { color: var(--muted); margin-top: 0; font-size: .9rem; }
+  hr { border: 0; border-top: 1px solid var(--gold); margin: 2rem 0; opacity: .5; }
+  a { color: var(--raspberry); }
+  table { border-collapse: collapse; width: 100%; margin: .5rem 0 1rem; }
+  th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid rgba(165,141,122,.4); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: .85rem; }
+  .note { color: var(--muted); font-size: .92rem; }
+  code { font-size: .9em; }
+</style>
+</head>
+<body>
+
+<h1>Privacy Policy</h1>
+<p class="updated">Sabeel Class Recordings &middot; last updated 7 September 2026</p>
+
+<p>Sabeel Class Recordings is a private application used by the students and
+staff of Sabeel Institute to listen to recordings of the institute&rsquo;s own
+classes. It is not a public service, and you cannot sign yourself up: staff
+accounts are the institute&rsquo;s <code>@oursabeel.com</code> Workspace accounts
+and must be approved by an administrator, and student accounts are created by a
+teacher.</p>
+
+<h2>What we collect</h2>
+
+<table>
+  <tr><th>Information</th><th>Where it comes from</th><th>Why</th></tr>
+  <tr>
+    <td>Your name and email address</td>
+    <td>Your teacher, when they set up your account. For staff, your Google
+        Workspace account when you sign in</td>
+    <td>To identify you on class registers and listening records</td>
+  </tr>
+  <tr>
+    <td>Which recordings you have listened to, how much of each, and where you
+        stopped</td>
+    <td>The app, as you listen</td>
+    <td>To return you to your place, and to record listening the class requires</td>
+  </tr>
+  <tr>
+    <td>Your attendance, and whether you completed required listening</td>
+    <td>Your teacher, and your own confirmation in the app</td>
+    <td>It is the academic record of the class</td>
+  </tr>
+  <tr>
+    <td>The class recordings themselves</td>
+    <td>Recorded by the institute, in class or on Zoom</td>
+    <td>They are what the application exists to deliver</td>
+  </tr>
+  <tr>
+    <td>Whether this device may receive notifications, and a device token</td>
+    <td>Your phone or browser, if you turn notifications on</td>
+    <td>To tell you a recording is ready or a deadline is near</td>
+  </tr>
+  <tr>
+    <td>Crash and error diagnostics</td>
+    <td>The app, automatically</td>
+    <td>So faults can be found and fixed</td>
+  </tr>
+</table>
+
+<p><strong>Crash reports carry no name, no email address and no account
+identifier.</strong> This application attaches no user identity to them at all.
+That is enforced in the code, not by policy alone.</p>
+
+<p>We do not use advertising, we do not track you across other apps or websites,
+and we do not sell or share your information with anyone for their own
+purposes.</p>
+
+<h2>Who else can see it</h2>
+
+<p>These service providers process this information on the institute&rsquo;s
+behalf, under agreements requiring them to protect it to the same standard set
+out here and to use it only to provide their service:</p>
+
+<ul>
+  <li><strong>Google</strong> &mdash; sign-in for staff accounts.</li>
+  <li><strong>Google Cloud and Firebase</strong> &mdash; where the application,
+      its database and the audio recordings are hosted, in the United States.</li>
+  <li><strong>Zoom</strong> &mdash; where a class is taught on Zoom, the recording
+      is made and held in the institute&rsquo;s own Zoom account before it is
+      brought into this application.</li>
+  <li><strong>Sentry</strong> &mdash; crash and error diagnostics.</li>
+</ul>
+
+<h2>Who can hear a recording</h2>
+
+<p>Recordings are not public and are not shared outside the institute. A student
+can open a recording only for a class they were excused from, and only until the
+listen-by date their teacher set; after that the audio closes. The links the app
+uses to play audio expire, so one cannot be passed on and used later.</p>
+
+<h2>How long we keep it</h2>
+
+<p>Attendance, required listening and completion are the <strong>academic record
+of the class</strong>. They belong to Sabeel Institute rather than to the
+individual, and are retained as institutional records &mdash; that remains true
+after somebody finishes or leaves a course. Class recordings are retained by the
+institute for as long as they are useful to it.</p>
+
+<p>Your <em>account</em> is a different thing: your sign-in credentials, your
+profile, your contact details and your notification settings are removed when
+your account is removed.</p>
+
+<h2>Deleting your account</h2>
+
+<p>Email <a href="mailto:privacy@oursabeel.com">privacy@oursabeel.com</a> from the
+address on your account and ask us to delete it. We will confirm and act within
+<strong>30 days</strong>.</p>
+
+<p>Deleting your account removes your ability to sign in, your profile, your
+contact details and your notification settings. It does not remove the academic
+record described above, which the institute retains in the same way it retains
+any other record of what happened in a class.</p>
+
+<p class="note">You can also ask us at the same address what information we hold
+about you, or ask us to correct it if it is wrong.</p>
+
+<h2>Children</h2>
+
+<p>This application is offered to adult students of the institute. It is not
+intended for and is not offered to children under 13.</p>
+
+<h2>Changes</h2>
+
+<p>If this policy changes materially we will update the date at the top and tell
+account holders by email.</p>
+
+<hr>
+
+<p class="note">Questions about this policy:
+<a href="mailto:privacy@oursabeel.com">privacy@oursabeel.com</a></p>
+
+</body>
+</html>

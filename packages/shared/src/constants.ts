@@ -84,15 +84,20 @@ export const SIGNED_URL_REFRESH_MS = 60 * 60 * 1000;
  * to them — which means a static page plus a Hosting rewrite ahead of the
  * catch-all, since `**` currently rewrites everything to the SPA.
  *
- * THE PAGE DOES NOT EXIST YET, and the host is not settled either. The link is
- * live in the More menu, so until both are, following it answers with nothing a
- * reviewer would accept. Tracked in `TODO.md`; it is a release blocker, not a
- * nice-to-have.
+ * THE WEB APP'S OWN DOMAIN, decided 2026-09-07. It was a guess at
+ * `recordings.oursabeel.com`, which is attached to nothing — so the one link a
+ * reviewer is guaranteed to follow led nowhere. The page is
+ * `app/public/privacy.html`, copied into the export by Expo and rewritten here
+ * by `firebase.json` ahead of the `**` catch-all. Keep this in step with that
+ * rewrite: they are two halves of one address.
+ *
+ * If a custom domain is ever attached to this Hosting site, change it here and
+ * nowhere else, and check the rewrite still answers an anonymous `curl`.
  *
  * Absolute, not a relative path: it is opened from the native apps as well as
  * the browser, where there is no origin to be relative to.
  */
-export const PRIVACY_URL = 'https://recordings.oursabeel.com/privacy';
+export const PRIVACY_URL = 'https://sabeel-class-recordings.web.app/privacy';
 
 /**
  * How many courses the staff work queue may span in one query, per role.

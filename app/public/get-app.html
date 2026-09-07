@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Get the app — Sabeel Class Recordings</title>
+<!--
+  Static, rewritten from /get-app ahead of the SPA catch-all.
+
+  THIS DIRECTION IS UNRESTRICTED. Web pointing at the app is fine; it is the app
+  pointing at a web sign-up flow that would oblige this app to ship in-app
+  account deletion. Nothing in the APK or on any app screen may link here, or
+  name this page, or say "create your account on the website" — see
+  sabeel-institute-kanban/docs/STORE-RELEASE.md before adding a helpful line
+  anywhere in the app.
+-->
+<style>
+  :root {
+    color-scheme: light;
+    --ivory: #F6EBDD; --raspberry: #83114F; --gold: #C6A15B;
+    --ink: #3A2F28; --muted: #6A5748; --sage: #C3CAB1;
+  }
+  body {
+    background: var(--ivory); color: var(--ink);
+    font-family: system-ui, -apple-system, sans-serif;
+    max-width: 40rem; margin: 0 auto; padding: 3rem 1.5rem 5rem;
+    line-height: 1.65;
+  }
+  h1 { color: var(--raspberry); font-size: 1.6rem; margin-bottom: .25rem; }
+  h2 { color: var(--raspberry); font-size: 1.05rem; margin: 2.25rem 0 .5rem; }
+  .updated { color: var(--muted); margin-top: 0; font-size: .9rem; }
+  hr { border: 0; border-top: 1px solid var(--gold); margin: 2rem 0; opacity: .5; }
+  a { color: var(--raspberry); }
+  .note { color: var(--muted); font-size: .92rem; }
+  .button {
+    display: block; text-decoration: none; font-weight: 600;
+    border: 1px solid var(--gold); border-radius: .6rem;
+    padding: .85rem 1rem; margin: .6rem 0; background: #FBF6F0;
+  }
+  .button small { display: block; font-weight: 400; color: var(--muted); }
+  .button[aria-disabled="true"] { border-color: var(--muted); color: var(--muted); }
+</style>
+</head>
+<body>
+
+<h1>Get the app</h1>
+<p class="updated">Sabeel Class Recordings</p>
+
+<h2>You can just use this website</h2>
+<p>Class Recordings works in any browser, on a phone or a computer, with nothing
+to install. The app is worth having if you listen on a phone: it keeps playing
+when you lock the screen or switch to something else.</p>
+
+<h2>Sign in here first</h2>
+<p><strong>Before you install the app, sign in on this website once.</strong> The
+phone app does not set up new accounts &mdash; it only signs in accounts that
+already exist. If you install it first, it may tell you the account is not set up
+yet, and this is why.</p>
+<p class="note">If you have already used Class Recordings in a browser, you are
+done; go ahead and install.</p>
+
+<h2>Android</h2>
+<a class="button"
+   href="https://faisal-shah.github.io/sabeel-recording-app/">
+  Download for Android
+  <small>Direct download, with installation instructions on the page.</small>
+</a>
+
+<h2>iPhone and iPad</h2>
+<a class="button" aria-disabled="true" href="#">
+  App Store
+  <small>Not yet available &mdash; use the website on an iPhone for now.</small>
+</a>
+
+<hr>
+<p class="note">Trouble signing in? <a href="/support">Support</a> &middot;
+<a href="/privacy">Privacy policy</a></p>
+
+</body>
+</html>

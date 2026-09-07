@@ -224,6 +224,22 @@ firebase deploy --only functions        # add --force when functions were rename
 firebase deploy --only hosting
 ```
 
+### `accountExists` must be LIVE before an APK that calls it ships
+
+The native Google door asks `accountExists` before it will exchange a credential,
+so on a build that has the gate, a missing callable is not a degraded sign-in —
+**it is no staff sign-in at all**. The order is therefore not just a deploy
+convention:
+
+1. `firebase deploy --only functions` (the callable),
+2. *then* build and publish the APK.
+
+The web app is unaffected either way — `google.web.ts` has no gate and creates
+accounts as it always has — so a hosting deploy carries no such constraint. And
+the reverse mistake is harmless: the callable can sit deployed and uncalled for
+as long as you like, which is why it is worth deploying it early rather than in
+the same rush as a release.
+
 ### One-off: the excused-only migration (2026-08-14)
 
 The switch to excused-only access needs one data step, and it goes **after

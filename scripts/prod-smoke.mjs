@@ -36,6 +36,31 @@ check(handler.ok, `/__/auth/handler -> ${handler.status}`);
 const init = await (await fetch(`${BASE}/__/firebase/init.json`)).json();
 check(init.projectId === PROJECT_ID, `init.json projectId ${init.projectId}`);
 
+/*
+ * THE THREE PAGES A STORE REVIEWER READS, fetched the way they will fetch them:
+ * anonymously, with no session and no JavaScript.
+ *
+ * The failure this catches is a rewrite ordering mistake, and it is silent: `**`
+ * rewrites everything to the SPA, so a `/privacy` that lands after it answers
+ * 200 with the app shell. Status alone therefore proves nothing — what is
+ * asserted is that the POLICY is in the body and the app shell is not.
+ * Apple 5.1.1(i) and Play both hang off this actually answering.
+ */
+for (const [path, marker] of [
+  ['/privacy', 'Privacy Policy'],
+  ['/support', 'Support'],
+  ['/get-app', 'Get the app'],
+]) {
+  const res = await fetch(`${BASE}${path}`);
+  const body = await res.text();
+  const isSpaShell = body.includes('/_expo/static/js/web/');
+  check(
+    res.ok && body.includes(marker) && !isSpaShell,
+    `${path} answers anonymously with the static page` +
+      (isSpaShell ? ' — got the app shell, so the rewrite is behind `**`' : ''),
+  );
+}
+
 const browser = await chromium.launch();
 const page = await browser.newPage();
 

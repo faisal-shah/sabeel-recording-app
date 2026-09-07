@@ -334,31 +334,32 @@ Two consequences to expect rather than treat as bugs:
          it works — which also proves the Google account chooser was cleared, and
          that a person who picked the wrong account can still switch.
 
-### 6. The three static pages the stores need — RELEASE BLOCKER
+### 6. The three static pages the stores need — BUILT (2026-09-07)
 
-The app's More menu already links to `PRIVACY_URL`
-(`https://recordings.oursabeel.com/privacy`), and **no page answers it** — that
-host is not attached to this Hosting site (the app lives on
-`sabeel-class-recordings.web.app`) and no privacy asset exists. Whether the link
-404s or lands on the app depends on the host you pick below; either way a
-reviewer does not find a policy. Apple 5.1.1(i) requires the policy reachable
-inside the app, and a store reviewer does not sign in, so a client-side route
-behind auth looks empty to them.
+Done and tested; **one thing left, and it is yours.**
 
-- [ ] **Confirm the host.** `recordings.oursabeel.com` is the agent's guess; the
-      constant in `@sabeel/shared` follows whatever you decide.
-- [ ] **`/privacy`** — what is collected, every third party with access (Google
-      sign-in, Firebase/Cloud, Sentry), retention, and **how to request
-      deletion**. That last clause is not removed by the no-account-creation
-      exemption: the exemption removes the button, not the route.
-- [ ] **`/support`** — App Store Connect requires a support URL.
-- [ ] **`/get-app`** — a durable page linking the builds, linked from the
-      signed-in web UI. Web pointing at the app is unrestricted; only the app
-      pointing at web sign-up is the problem.
-- [ ] Decide the deletion-request address (the sibling apps settled on one
-      shared address) and put it in the policy.
-- [ ] Serve all three as static files with Hosting rewrites **ahead of** the
-      `**` catch-all, and check each answers an anonymous `curl`.
+They live in `app/public/` (Expo copies that into the export verbatim) and
+`firebase.json` rewrites `/privacy`, `/support` and `/get-app` to them **ahead of
+the `**` catch-all** — behind it they would answer 200 with the app shell, which
+is the silent way this breaks. `functions/test/unit/hostingPages.test.ts` guards
+the ordering and that each destination exists; `npm run smoke:prod` fetches all
+three from the deployed site anonymously and checks the body is the page rather
+than the shell.
+
+The host is the web app's own domain, `sabeel-class-recordings.web.app`. The
+earlier guess, `recordings.oursabeel.com`, is attached to nothing, so the one
+link a reviewer is guaranteed to follow led nowhere. `PRIVACY_URL` now matches
+the rewrite, and a test asserts they agree.
+
+- [ ] **FAISAL — create `privacy@oursabeel.com`.** All three pages name it as the
+      address for deleting an account, asking what is held, and correcting it, and
+      the policy promises a response within 30 days. It does not exist yet. Make
+      it a Workspace group with **two** admins on it, so the policy does not go
+      stale when one person changes role. This is the same address the sibling
+      apps settled on (2026-08-18).
+- [ ] **FAISAL — read the privacy policy.** It should be read by somebody who did
+      not write it. It describes what this app actually does, but the claims about
+      retention are the institute's to stand behind, not mine.
 
 ## Before Phase 6 (Zoom)
 
