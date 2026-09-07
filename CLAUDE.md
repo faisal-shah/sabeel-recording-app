@@ -167,6 +167,34 @@ code-level check. Never claim a screen works because the code looks right.
 **A check that cannot fail is a screenshot generator.** A tour wrapped in a
 try/catch that logs and continues reports success either way.
 
+### Test the promise, not the mechanism
+
+**A test that asserts the wrong thing is worse than no test.** No test leaves a
+gap somebody may still notice; a passing test that watches the wrong thing
+certifies the defect, and every reader after that stops looking. Three fixes in
+this repo shipped with tests that passed while the code was wrong, and each was
+found by a reviewer reading the test rather than by the test failing.
+
+So, before writing one, say what the code PROMISES a person — in their words —
+and assert that:
+
+- **Assert the observable the promise lives in.** Unenrolment promises "the
+  student can no longer open the recording", so assert `playbackDenial`, which is
+  what withholds the audio — not `assignment.active`, which is the flag it
+  happens to read. The delete gate promises "a caller who may not delete destroys
+  nothing", so drive the callable's core and assert the ledger rows are still
+  there — not that a guard threw. Asserting the flag left "cascade first, check
+  second" passing; asserting the promise fails it.
+- **Choose the mutation from the intent.** Not "what line can I delete and see
+  red", but "what wrong behaviour would a reader still ship with this green".
+  Then check that mutation actually fails.
+- **A fixture that cannot arise in production tests nothing.** A recording with
+  no session, an active grant on a draft, a completion written where one already
+  exists: each of those made a test pass for a reason the app can never produce.
+- **When a property genuinely cannot be tested, say so in the test file** and
+  assert what can be. A behavioural test that would pass either way is the thing
+  this section exists to prevent.
+
 ### The browser is the default surface for verification
 
 **Prove a change on the web app unless it touches a seam a browser cannot
