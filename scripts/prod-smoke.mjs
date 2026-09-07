@@ -51,13 +51,32 @@ for (const [path, marker] of [
   ['/support', 'Support'],
   ['/get-app', 'Get the app'],
 ]) {
-  const res = await fetch(`${BASE}${path}`);
-  const body = await res.text();
-  const isSpaShell = body.includes('/_expo/static/js/web/');
+  /*
+   * RETRIED, because these three race a deploy and nothing else here does.
+   * Until the first deploy that added them, `**` sent these paths to the app
+   * shell, and the edge goes on serving that for a few seconds after a release
+   * completes — measured on 2026-09-07, all three failed immediately after a
+   * deploy and passed a minute later. Reported once as a rewrite fault, that
+   * reads as a config bug and sends you to firebase.json, which is correct.
+   *
+   * Bounded and short so a genuine fault still fails: a rewrite behind the
+   * catch-all, or a destination file nobody exported, does not start working
+   * after twenty seconds. `hostingPages.test.ts` catches both of those before a
+   * deploy anyway.
+   */
+  let ok = false;
+  let sawShell = false;
+  for (let attempt = 0; attempt < 5 && !ok; attempt += 1) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 5000));
+    const res = await fetch(`${BASE}${path}`, { cache: 'no-store' });
+    const body = await res.text();
+    sawShell = body.includes('/_expo/static/js/web/');
+    ok = res.ok && body.includes(marker) && !sawShell;
+  }
   check(
-    res.ok && body.includes(marker) && !isSpaShell,
+    ok,
     `${path} answers anonymously with the static page` +
-      (isSpaShell ? ' — got the app shell, so the rewrite is behind `**`' : ''),
+      (sawShell ? ' — got the app shell, so the rewrite is behind `**`' : ''),
   );
 }
 

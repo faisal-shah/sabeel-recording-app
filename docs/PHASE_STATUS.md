@@ -1172,6 +1172,40 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-09-07 (store prep) — **The account gate and the three public pages, live —
+  and the lockfile fix paid for itself.**
+
+  `accountExists` deployed and **ACTIVE**, which is worth recording for a reason
+  beyond the feature: it is a brand-new function, and a new function is exactly
+  the case that broke the v0.5.0 deploy twice — a cache miss forces Cloud Build
+  to resolve dependencies from scratch, and with no lockfile in `functions/` that
+  resolution crashes. With `functions/package-lock.json` committed it deployed
+  first time, no stub, no `--force`. 32 gen-2 functions, all ACTIVE.
+
+  **Deployed deliberately ahead of any APK that calls it.** On a build carrying
+  the gate, a missing callable is not a degraded sign-in — it is no staff sign-in
+  at all. Written into `docs/DEPLOY.md` so the order is not rediscovered.
+
+  **The three pages answer anonymously**, on the web app's own domain:
+  `/privacy`, `/support`, `/get-app`, each fetched with no session and checked to
+  be the page rather than the app shell. `smoke:prod` green on all ten checks.
+  `PRIVACY_URL` now resolves — it previously pointed at
+  `recordings.oursabeel.com`, attached to nothing, so the one link a reviewer is
+  guaranteed to follow led nowhere.
+
+  **A false failure worth keeping.** The first `smoke:prod` after the deploy
+  reported all three as "the rewrite is behind `**`" — which is a precise and
+  entirely wrong diagnosis. The rewrites were right and the files were exported;
+  the edge was still serving the cached catch-all response for those paths, and a
+  minute later everything passed. Reported once, that sends you to
+  `firebase.json` to fix something that is not broken. The check now retries for
+  twenty seconds, bounded so a real fault still fails — verified by pointing the
+  same logic at a path with no rewrite, which is still correctly detected as the
+  app shell.
+
+  Neither of these is in anyone's hands yet: no APK contains the gate, and the
+  live web bundle is the one that ships with the next release.
+
 - 2026-09-07 (v0.5.1) — **Both defects the device pass found, shipped — and a
   third thing it turned up about the fixture.**
 
