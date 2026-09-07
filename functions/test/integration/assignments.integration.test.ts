@@ -339,6 +339,23 @@ describe('submitting a register', () => {
     expect(await marks('sess')).toEqual({ s1: 'excused' });
   });
 
+  /*
+   * WHAT THE CONFIRMATION SAYS. The screen renders this number verbatim —
+   * "Attendance submitted for N students" — over the roster the person just
+   * marked. Counting the stored map instead reported the departed students too,
+   * so a register of ten confirmed thirteen.
+   */
+  it('reports the size of the register that was submitted', async () => {
+    await seedSession('sess', { dueDate: '2099-01-01', attendance: {}, submitted: false });
+    await submit('sess', { s1: 'excused', s2: 'present' });
+    await applyEnrollmentActive({ studentUid: 's1', courseId, active: false });
+
+    const res = await submit('sess', { s2: 'present', s3: 'present' });
+    expect(res.marked).toBe(2);
+    // …while the mark it preserved is still there.
+    expect(await marks('sess')).toEqual({ s1: 'excused', s2: 'present', s3: 'present' });
+  });
+
   it('lets a correction change a current student’s own mark', async () => {
     await seedSession('sess', { dueDate: '2099-01-01', attendance: {}, submitted: false });
     await submit('sess', { s1: 'excused' });
@@ -371,8 +388,61 @@ describe('unenrolment', () => {
    * each recording afterwards. Two documents and a comment described a behaviour
    * the code did not have.
    */
+  /*
+   * THROUGH THE PATH THE APP TAKES.
+   *
+   * The previous version of this drove `applyEnrollmentActive({active:true})`
+   * and passed — while the app has no button that calls it. Staff re-enrol by
+   * tapping "Add a student", which lists anyone not currently enrolled and calls
+   * `createEnrollment`; that reactivated the row and reconciled nothing, so the
+   * fix was green in the test and absent in the product. A test that exercises a
+   * path nobody can reach is the worst kind: it reports the promise as kept.
+   */
+  it('gives the audio back when staff re-add the student, as the app does', async () => {
+    await seedSession('sess', { dueDate: '2099-01-01', attendance: { s1: 'excused' }, submitted: true });
+    await seedRecording('r1', 'sess', 'published');
+    await reconcile('sess');
+    const canPlay = async () =>
+      playbackDenial({
+        claims: { role: 'student', status: 'active' },
+        recording: { status: 'published', audioPath: `recordings/${ns('r1')}/audio.m4a` },
+        cls: { effectiveActive: true, archivedAccess: false, managerUids: [] },
+        uid: 's1',
+        assignment: (await getAssignment('s1', 'r1')) ?? null,
+        today: '2026-07-10',
+      });
+
+    await applyEnrollmentActive({ studentUid: 's1', courseId, active: false });
+    expect(await canPlay()).toBe('not-assigned');
+
+    await createEnrollmentRecord(ADMIN, { studentUid: 's1', courseId });
+    expect(await canPlay()).toBeNull();
+  });
+
+  /*
+   * AND NOT AN OBLIGATION THAT IS ALREADY OVER.
+   *
+   * A session whose listen-by date went while the student was out of the class
+   * must not come back as a fresh grant: "nothing is ever born expired", and a
+   * new active assignment is a false→true edge that pushes "a recording is
+   * ready… listen by <a date last term>" at them over audio the server then
+   * refuses. Their record of it survives in the deactivated assignment, which is
+   * what the ledger's "Excused, access closed" group reads.
+   */
+  it('does not hand back an obligation whose deadline passed while they were away', async () => {
+    await seedSession('closed', { dueDate: '2020-01-01', attendance: { s1: 'excused' }, submitted: true });
+    await seedRecording('rClosed', 'closed', 'published');
+    await reconcile('closed');
+    await applyEnrollmentActive({ studentUid: 's1', courseId, active: false });
+
+    await createEnrollmentRecord(ADMIN, { studentUid: 's1', courseId });
+    expect((await getAssignment('s1', 'rClosed'))?.active).toBe(false);
+  });
+
   it('gives the audio back when the student is re-enrolled', async () => {
-    await seedSession('sess', { attendance: { s1: 'excused' }, submitted: true });
+    // A LIVE session: a closed one deliberately does not come back — see the
+    // case above.
+    await seedSession('sess', { dueDate: '2099-01-01', attendance: { s1: 'excused' }, submitted: true });
     await seedRecording('r1', 'sess', 'published');
     await reconcile('sess');
     const canPlay = async () =>
@@ -396,9 +466,9 @@ describe('unenrolment', () => {
     // Excused in one session, present in another: coming back must not turn the
     // second into an obligation. The grant is re-derived, never restored from a
     // copy.
-    await seedSession('sess', { attendance: { s1: 'excused' }, submitted: true });
+    await seedSession('sess', { dueDate: '2099-01-01', attendance: { s1: 'excused' }, submitted: true });
     await seedRecording('r1', 'sess', 'published');
-    await seedSession('sess2', { attendance: { s1: 'present' }, submitted: true });
+    await seedSession('sess2', { dueDate: '2099-01-01', attendance: { s1: 'present' }, submitted: true });
     await seedRecording('r2', 'sess2', 'published');
     await reconcile('sess');
     await reconcile('sess2');

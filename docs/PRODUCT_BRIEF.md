@@ -135,7 +135,7 @@ flowchart LR
 
 Title, date, due date, and shared notes live on the **session**, not the recording — set when the session is created and edited there. So the only thing a recording needs before publish is its **audio**; everything student-facing is inherited from the session it belongs to. (The session's title/notes/date are denormalised onto the recording so students, who cannot read sessions, can still see them.)
 
-Session date defaults to the meeting date. Due date is optional. Notes are visible to everyone who can access the recording — they are not private staff notes. File attachments are out of scope for the first release.
+Session date defaults to the meeting date. Due date is **required** — see *Due dates* below; it is the day access closes, so a blank one would mean permanent access. Notes are visible to everyone who can access the recording — they are not private staff notes. File attachments are out of scope for the first release.
 
 ### Recording statuses
 
@@ -149,9 +149,11 @@ Session date defaults to the meeting date. Due date is optional. Notes are visib
 
 Staff edit a recording's student-facing metadata (title, date, notes) by editing its **session**; the change propagates to the recording's denormalised copy and is recorded in audit history. A recording belongs to one session for its life — there is no "move to another course" on the recording itself.
 
-Accountability follows the session's attendance, so it is corrected by re-taking attendance (which reconciles assignments), not by editing the recording. Archive hides a recording from default views and preserves history. Unpublish removes current accountability and preserves audit history.
+Accountability follows the session's attendance, so it is corrected by re-taking attendance (which reconciles assignments), not by editing the recording. **Archive and unpublish both close the recording to everyone who was excused** — the fan-out grants on `published` and on nothing else, so the two are identical to a student. They differ only in what they say to staff: unpublish means "not ready", archive means "the term is over". Both preserve audit history, and the ledger keeps every row.
 
-Permanent deletion of recordings, students, courses, or ledger history is Admin-only, requires strong confirmation, and is recorded in the audit log. Normal operations should use disable, archive, or unpublish.
+Permanent deletion of anything carrying **listening history** — a recording with grants, completions or progress behind it, a student, a course, a session — is Admin-only, requires strong confirmation, and is recorded in the audit log. Normal operations should use disable, archive, or unpublish.
+
+Two deletions are deliberately left to a manager, because neither destroys listening history and both are ordinary corrections to their own class: **removing a completion override** they set (the override is a staff judgement, and the audit log keeps the record of setting and removing it, each with its required reason), and **removing the audio from an unpublished draft** so a bad file can be replaced. A draft that has ever been published is not one of these — the server checks the collections, not the status.
 
 ## Assignment, access, and accountability
 
@@ -217,13 +219,9 @@ Required first-release playback features:
 - Playback speed.
 - Background audio.
 - Mark complete.
-- Optional in-app offline downloads.
-- Manual download management with storage usage shown.
 - Cross-device progress sync when online.
 
-Students may save audio inside the app for offline listening. The app should not offer external audio file export/download in the first release.
-
-Students manage downloaded recordings manually. Auto-delete policies are not required initially.
+**Offline downloads are DEFERRED and are not in the first release** (`docs/PHASE_STATUS.md`, 2026-07-22, reconfirmed 2026-09-06). Recordings stream; nothing is stored on the device, which is what `docs/USER-MANUAL.md` tells students. When it is picked up, the shape below is the intent: audio saved inside the app only — never an external file export — with students managing what they have kept, and no auto-delete policy required initially.
 
 ### Completion
 

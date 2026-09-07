@@ -72,6 +72,18 @@ export async function createEnrollmentRecord(callerUid: string, input: Enrollmen
     enrolledBy: callerUid,
   };
   await ref.set(doc);
+  /*
+   * A RE-ENROLMENT RESTORES; A FIRST ENROLMENT HAS NOTHING TO RESTORE.
+   *
+   * This is the path the app actually takes: the only re-enrol affordance staff
+   * have is "Add a student", which lists anyone not currently enrolled —
+   * including somebody removed earlier in the term — and calls this. So a fix
+   * wired only to `setEnrollmentActive` fixed nothing a person could reach.
+   *
+   * Skipped for a genuinely new student, where the reconcile would be pure cost:
+   * they are in no attendance snapshot, so it can only ever grant them nothing.
+   */
+  if (existing.exists) await reconcileCourseAssignments(db, input.courseId);
   return { id, ...doc };
 }
 
@@ -120,7 +132,15 @@ export async function applyEnrollmentActive(input: SetEnrollmentActiveInput) {
   const ref = db
     .collection(COLLECTIONS.enrollments)
     .doc(enrollmentId(input.studentUid, input.courseId));
-  if (!(await ref.get()).exists) throw new HttpsError('not-found', 'No such enrolment.');
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'No such enrolment.');
+
+  // Nothing to do, and worth returning early rather than repeating: the
+  // reconcile below is O(sessions × roster), and a callable that re-runs it on
+  // every press is a button that costs more the more it is pressed.
+  if ((snap.data() as EnrollmentDoc).active === input.active) {
+    return { studentUid: input.studentUid, courseId: input.courseId, active: input.active };
+  }
 
   const update: Record<string, unknown> = { active: input.active };
   if (!input.active) update.unenrolledAt = Date.now();

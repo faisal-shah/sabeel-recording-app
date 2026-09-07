@@ -423,7 +423,12 @@ Each recording moves through a few states:
   Draft to be fixed, then out again.
 - **Archived** — filed away at the end of a term. Like unpublishing, it closes
   the recording to everyone who was excused, so **Today** raises it if you
-  archive one whose Listen by date has not passed yet. One tap puts it back.
+  archive one whose Listen by date has not passed yet. One tap puts it back —
+  while that date is still ahead. Once it has passed, Publish is greyed out and
+  the card says why: publishing then would give nobody access, so move the
+  session's **Listen by** date forward first, which reopens it for everyone
+  excused. Archiving at the end of a term, after the dates have gone, is
+  therefore filing rather than something to undo.
 
 ## 2.5 How a recording becomes required listening
 
@@ -475,9 +480,12 @@ The screen has five parts:
   To let one of them catch up, mark them **Excused** on the session and submit
   again.
 - **Excused, access closed** — students you excused whose access has since been
-  withdrawn, because they were unenrolled from the class or the recording was
-  unpublished. Nothing is required of them and they can't open it; re-enrolling
-  them or republishing restores it.
+  withdrawn: they were unenrolled from the class, or the recording was
+  unpublished or archived. Nothing is required of them and they can't open it.
+  Re-enrolling them, or publishing the recording again, restores it — for
+  anything still inside its **Listen by** date. A session whose date has already
+  passed stays closed, so nobody comes back to an obligation they had no chance
+  to meet.
 - **Also listened** — listening from someone who no longer holds the recording,
   for example a student you excused, who listened, and whom you then corrected to
   present. Kept as history.
@@ -752,4 +760,5 @@ cohort isn't enough.
 
 **Where did a recording go?** It may have been **unpublished** (back to draft) or
 its course **archived**. Both are reversible — check the session or the course
-settings.
+settings. If the session's **Listen by** date has passed, move it forward before
+publishing again; the card on the session says so.

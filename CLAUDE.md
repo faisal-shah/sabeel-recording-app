@@ -94,8 +94,13 @@ Do not silently change any of these.
   `oursabeel.com` *and* approved by an admin — the domain check is server-side, the
   client `hd` hint is UX only. Students use email/password accounts created by
   staff. Managers are scoped **class by class**; cohort assignment grants nothing.
-- **Disable, archive, unpublish — don't delete.** Permanent deletion is admin-only,
-  needs strong confirmation, and is audited.
+- **Disable, archive, unpublish — don't delete.** Permanent deletion of anything
+  carrying **listening history** is admin-only, needs strong confirmation, and is
+  audited. Two deletions are deliberately a manager's: removing a completion
+  override they set, and removing the audio from an unpublished draft so a bad
+  file can be replaced. Neither destroys history, both are audited with a
+  required reason, and both are ordinary corrections to their own class — see
+  `docs/PRODUCT_BRIEF.md`.
 - **BRAND COLORS ARE FIXED.** `docs/BRAND.md` and the shared `sabeel-color-scheme`
   skill are the authority. Single light theme, **no dark mode**. Never hardcode a
   colour; the ESLint rule will reject it. `app/src/theme/palette.ts` is the only

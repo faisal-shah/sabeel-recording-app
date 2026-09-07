@@ -318,7 +318,13 @@ export async function applySubmitAttendance(
     attendanceSubmittedBy: uid,
     updatedAt: Date.now(),
   });
-  return { sessionId: d.sessionId, marked: Object.keys(attendance).length };
+  /*
+   * WHAT THE PERSON JUST MARKED, not the size of the stored map. The screen says
+   * "Attendance submitted for N students" over a list of the current roster, and
+   * the merged map also holds marks for anybody who has left the class since —
+   * so counting it reported thirteen over a register of ten.
+   */
+  return { sessionId: d.sessionId, marked: Object.keys(raw).filter((u) => roster.has(u)).length };
 }
 
 export const submitAttendance = auditedCall('submitAttendance', (req, audit) =>

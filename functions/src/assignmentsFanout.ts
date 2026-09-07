@@ -1,9 +1,11 @@
 import { type Firestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
+  INSTITUTE_TIMEZONE,
   accountableUids,
   assignmentId,
   enrollmentId,
+  todayInZone,
   type AssignmentDoc,
   type EnrollmentDoc,
   type RecordingDoc,
@@ -207,9 +209,25 @@ export async function reconcileCourseAssignments(db: Firestore, courseId: string
     .collection(COLLECTIONS.sessions)
     .where('courseId', '==', courseId)
     .get();
+  const today = todayInZone(INSTITUTE_TIMEZONE);
   for (const doc of sessions.docs) {
     const session = doc.data() as SessionDoc;
     if (!session.recordingId) continue;
+    /*
+     * ONLY WHAT IS STILL OPEN. Restoring a session whose listen-by date went
+     * while the student was out of the class would MINT an obligation already
+     * past — the thing the product forbids in as many words ("nothing is ever
+     * born expired"; no callable excuses anyone for a session whose deadline has
+     * gone). It would also be announced: a brand-new active assignment is a
+     * false→true edge, so `onAssignmentWritten` would push "a recording is
+     * ready… listen by <a date last March>" at somebody, over audio
+     * `getPlaybackUrl` then refuses.
+     *
+     * Their record of it is not lost — the deactivated assignment stays, and the
+     * ledger goes on listing them under "Excused, access closed", which is what
+     * that group is for.
+     */
+    if (session.dueDate < today) continue;
     const rec = (
       await db.collection(COLLECTIONS.recordings).doc(session.recordingId).get()
     ).data() as RecordingDoc | undefined;

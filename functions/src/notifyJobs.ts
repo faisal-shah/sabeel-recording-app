@@ -2,10 +2,12 @@ import { type Firestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
   attendanceMissingMessage,
+  effectiveCompletion,
   lastDayMessage,
   recordingReadyMessage,
   type AssignmentDoc,
   type CompletionDoc,
+  type CompletionOverrideDoc,
   type CourseDoc,
   type RecordingDoc,
   type SessionDoc,
@@ -99,13 +101,24 @@ export async function notifyLastDay(db: Firestore, today: string): Promise<numbe
   let sent = 0;
   for (const doc of due.docs) {
     const a = doc.data() as AssignmentDoc;
-    const completion = (
-      await db
-        .collection(COLLECTIONS.completions)
-        .doc(`${a.studentUid}_${a.recordingId}`)
-        .get()
-    ).data() as CompletionDoc | undefined;
-    if (completion?.completed) continue;
+    /*
+     * THE EFFECTIVE COMPLETION, which is the student's own mark UNLESS staff
+     * have overridden it. Reading `completions` alone meant a student a staff
+     * member had already marked complete — "caught up with the teacher
+     * one-on-one", the reason the override exists — was still told on the last
+     * day that they had a recording to listen to. Every screen in the product
+     * uses `effectiveCompletion` for exactly this; the one thing that speaks to
+     * a student unprompted did not.
+     */
+    const [completionSnap, overrideSnap] = await Promise.all([
+      db.collection(COLLECTIONS.completions).doc(`${a.studentUid}_${a.recordingId}`).get(),
+      db.collection(COLLECTIONS.completionOverrides).doc(`${a.studentUid}_${a.recordingId}`).get(),
+    ]);
+    const effective = effectiveCompletion(
+      completionSnap.data() as CompletionDoc | undefined,
+      overrideSnap.data() as CompletionOverrideDoc | undefined,
+    );
+    if (effective.completed) continue;
 
     const rec = (
       await db.collection(COLLECTIONS.recordings).doc(a.recordingId).get()

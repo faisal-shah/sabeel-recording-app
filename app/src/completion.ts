@@ -1,9 +1,11 @@
+import { useMemo } from 'react';
 import { addDoc, collection, query, where } from 'firebase/firestore';
 import {
   COLLECTIONS,
   type AssignmentDoc,
   type CompletionDoc,
   type CompletionEventDoc,
+  type CompletionOverrideDoc,
 } from '@sabeel/shared';
 import { db } from './firebase';
 import { useLiveQuery } from './liveQuery';
@@ -18,6 +20,17 @@ export interface CompletionState {
   completed: boolean;
   /** The write has not yet reached the server — shown as "Pending sync". */
   pending: boolean;
+  /**
+   * A teacher set this, not the student.
+   *
+   * The brief promises a student "their own full accountability details", the
+   * rules grant them the read for that reason in as many words, and the manual
+   * tells them "if a teacher has overridden your status, their mark takes
+   * precedence — that's by design". No student screen read it: a student a
+   * teacher had already marked complete still saw the recording as outstanding,
+   * still sat under Due soon, and still got the last-day reminder.
+   */
+  override?: { completed: boolean; reason: string };
 }
 
 /**
@@ -57,7 +70,7 @@ export function useMyAssignments(uid: string | null): AssignmentRow[] | null {
  * "Pending sync" badge would otherwise stick forever.
  */
 export function useMyCompletions(uid: string | null): Map<string, CompletionState> {
-  return useLiveQuery<Map<string, CompletionState>>(
+  const own = useLiveQuery<Map<string, CompletionState>>(
     () =>
       uid
         ? query(collection(db, COLLECTIONS.completions), where('studentUid', '==', uid))
@@ -81,6 +94,55 @@ export function useMyCompletions(uid: string | null): Map<string, CompletionStat
       includeMetadataChanges: true,
     },
   );
+  const overrides = useMyOverrides(uid);
+  /*
+   * FOLDED IN HERE, so every student surface gets it at once. The alternative —
+   * each screen joining the two itself — is how the staff side and the student
+   * side came to disagree in the first place: `effectiveCompletion` was applied
+   * on one and not the other, and nobody could see it from either.
+   */
+  return useMemo(() => {
+    if (overrides.size === 0) return own;
+    const merged = new Map(own);
+    for (const [recordingId, override] of overrides) {
+      const mine = merged.get(recordingId);
+      merged.set(recordingId, {
+        completed: override.completed,
+        // A staff mark is on the server by definition; only the student's own
+        // write can be waiting to sync.
+        pending: override.completed === mine?.completed ? (mine?.pending ?? false) : false,
+        override,
+      });
+    }
+    return merged;
+  }, [own, overrides]);
+}
+
+/**
+ * The overrides a teacher has set on this student's own recordings.
+ *
+ * Self-constrained, as the rule requires — `firestore.rules` lets a student read
+ * their own and nobody else's.
+ */
+function useMyOverrides(uid: string | null): Map<string, { completed: boolean; reason: string }> {
+  return useLiveQuery<Map<string, { completed: boolean; reason: string }>>(
+    () =>
+      uid
+        ? query(collection(db, COLLECTIONS.completionOverrides), where('studentUid', '==', uid))
+        : null,
+    [uid],
+    {
+      label: 'myOverrides',
+      map: (snap) =>
+        new Map(
+          snap.docs.map((d) => {
+            const data = d.data() as CompletionOverrideDoc;
+            return [data.recordingId, { completed: data.completed, reason: data.reason }];
+          }),
+        ),
+      empty: new Map(),
+    },
+  );
 }
 
 /**
@@ -88,7 +150,7 @@ export function useMyCompletions(uid: string | null): Map<string, CompletionStat
  * Pending-sync state and cross-device completion both reflect immediately.
  */
 export function useCompletion(uid: string | null, recordingId: string): CompletionState {
-  return useLiveQuery<CompletionState>(
+  const own = useLiveQuery<CompletionState>(
     () =>
       uid
         ? query(
@@ -111,6 +173,14 @@ export function useCompletion(uid: string | null, recordingId: string): Completi
       empty: { completed: false, pending: false },
       includeMetadataChanges: true,
     },
+  );
+  // The teacher's mark takes precedence, which is what the manual tells the
+  // student — and what the player used to be the last screen not to show.
+  const overrides = useMyOverrides(uid);
+  const override = overrides.get(recordingId);
+  return useMemo(
+    () => (override ? { completed: override.completed, pending: false, override } : own),
+    [own, override],
   );
 }
 

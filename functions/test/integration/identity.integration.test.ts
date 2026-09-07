@@ -91,6 +91,33 @@ describe('applyStaffAccess', () => {
     expect(await claimsOf('m1')).toMatchObject({ role: 'admin', status: 'active' });
   });
 
+  /*
+   * WHAT DISABLING PROMISES: "switch off access while keeping their history" —
+   * one sentence in the manual, covering students and staff alike.
+   *
+   * Asserted on the AUTH USER, because that is what actually stops a sign-in.
+   * Setting the claim alone left a removed manager working normally until their
+   * token refreshed, which is up to an hour of writing to classes they had just
+   * been taken off — and the student path had done both since Phase 1, so the
+   * two populations quietly kept different promises.
+   */
+  it('disabling a staff member stops them signing in, not just their claims', async () => {
+    await seedStaff('d1', 'manager', 'active');
+    await applyStaffAccess(ADMIN, { uid: 'd1', status: 'disabled' });
+
+    expect((await getAuth().getUser('d1')).disabled).toBe(true);
+    expect(await claimsOf('d1')).toMatchObject({ status: 'disabled' });
+  });
+
+  it('re-enabling one lets them back in', async () => {
+    await seedStaff('d2', 'manager', 'active');
+    await applyStaffAccess(ADMIN, { uid: 'd2', status: 'disabled' });
+    await applyStaffAccess(ADMIN, { uid: 'd2', status: 'active' });
+
+    expect((await getAuth().getUser('d2')).disabled).toBe(false);
+    expect(await claimsOf('d2')).toMatchObject({ role: 'manager', status: 'active' });
+  });
+
   it('refuses to let an admin demote or disable THEMSELVES', async () => {
     // Without this the last admin can lock the institute out of its own user
     // management, with no way back that does not involve redeploying bootstrap.

@@ -208,8 +208,9 @@ export function RecordingLedgerScreen({
           <SectionTitle>Excused, access closed ({lapsed.length})</SectionTitle>
           <Notice tone="info">
             Excused at the session, but their grant is no longer active — they were unenrolled from
-            the class, or this recording was unpublished. Nothing is required of them, and they
-            can&apos;t open it. Re-enrolling or republishing restores the grant.
+            the class, or this recording was unpublished or archived. Nothing is required of them,
+            and they can&apos;t open it. Re-enrolling them, or publishing the recording again,
+            restores it — for anything still inside its listen-by date.
           </Notice>
           <Grid min={300}>
             {lapsed.map((r) => (

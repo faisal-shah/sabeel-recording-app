@@ -56,6 +56,20 @@ export async function applyStaffAccess(callerUid: string, input: StaffAccessInpu
     status: input.status ?? current.status,
   };
 
+  /*
+   * DISABLE THE AUTH USER TOO, exactly as the student path does.
+   *
+   * Claims only change when a token refreshes, which is up to an hour — so
+   * setting `status: 'disabled'` and stopping there left a removed manager
+   * working normally for the rest of that hour, writing to their classes. The
+   * manual makes one promise for both populations ("Disable a student or staff
+   * member to switch off access while keeping their history"), and only one of
+   * them kept it.
+   *
+   * `updateUser` first: if it throws, nothing has changed. Claims after, so a
+   * re-enable restores the account and its role in the same order.
+   */
+  await getAuth().updateUser(input.uid, { disabled: next.status === 'disabled' });
   await getAuth().setCustomUserClaims(input.uid, next);
 
   const update: Record<string, unknown> = { ...next };

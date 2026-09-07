@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
+  INSTITUTE_TIMEZONE,
   allowedTransitions,
   isDiscardable,
+  isOverdue,
   publishBlockers,
+  todayInZone,
   unbreakableDate,
   type AttendanceStatus,
   type RecordingStatus,
@@ -539,6 +542,20 @@ function RecordingCard({
   onPlay: (recording: RecordingRow, session: SessionRow) => void;
 }) {
   const blockers = publishBlockers(r);
+  /*
+   * THE SESSION'S DEADLINE IS A PUBLISH BLOCKER TOO, and it was the one the
+   * screen did not know about.
+   *
+   * `allowedTransitions` describes the recording's own lifecycle; the server
+   * additionally refuses to publish onto a session whose listen-by date has gone
+   * ("Move it before publishing, or nobody will be able to listen"). So an
+   * end-of-term ARCHIVED recording — the case the manual calls reversible with
+   * "one tap puts it back" — drew a Publish button that could only ever return
+   * an error. This app's rule is that a control which cannot succeed is not
+   * offered; the card says why instead, and the way back is real: move the
+   * session's Listen by date forward first.
+   */
+  const deadlinePassed = isOverdue(session.dueDate, todayInZone(INSTITUTE_TIMEZONE));
   const moves = allowedTransitions(r.status).filter((to) => to !== 'needsAttention');
   // Removing audio DELETES the object from Storage — the file is gone, and a
   // Zoom import has to be re-imported while a manual upload needs the original
@@ -681,7 +698,9 @@ function RecordingCard({
               testID={`recording-${to}`}
               label={LABELS[to]}
               variant={to === 'published' ? 'primary' : 'secondary'}
-              disabled={uploading || (to === 'published' && blockers.length > 0)}
+              disabled={
+                uploading || (to === 'published' && (blockers.length > 0 || deadlinePassed))
+              }
               busy={busy === `status-${r.id}`}
               onPress={() => onRun(`status-${r.id}`, () => setRecordingStatus({ recordingId: r.id, status: to }))}
             />
@@ -695,6 +714,16 @@ function RecordingCard({
             />
           ) : null}
         </Row>
+
+        {/* SAY WHY THE BUTTON IS OFF, or a greyed Publish reads as a broken app.
+            Only when publishing is a move on offer at all — a live recording has
+            no Publish to explain. */}
+        {moves.includes('published') && deadlinePassed ? (
+          <Notice tone="info">
+            This session&apos;s Listen by date has passed, so publishing would give nobody access.
+            Move the date forward on the session above first.
+          </Notice>
+        ) : null}
 
         {r.status === 'published' ? (
           <View style={styles.ledgerRow}>

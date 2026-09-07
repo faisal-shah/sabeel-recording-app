@@ -212,11 +212,24 @@ export function PlayerScreen({
             {Math.round(listened * 100)}% of this recording listened. Your place is saved
             automatically, so you can carry on from another device.
           </Text>
+          {/*
+            LISTENED TIME ALONE. `positionMs > 0` counted a SEEK as playing — so
+            opening a recording and tapping +30s once, with no audio played at
+            all, unlocked Mark complete. That is the product's only precondition
+            on completion, and three documents state it as "you do have to press
+            play first".
+
+            `listenedMs` is the honest measure: `onProgress` only adds to it for
+            forward movement at roughly real time, and refuses a jump, which is
+            the same rule the ledger's evidence is built on. A resumed session is
+            still covered — the stored total is restored when the session opens,
+            so a student who listened yesterday is not asked to prove it again.
+          */}
           <CompletionControl
             studentUid={studentUid}
             recordingId={recording.id}
             courseId={recording.courseId}
-            everPlayed={state.listenedMs > 0 || state.positionMs > 0}
+            everPlayed={state.listenedMs > 0}
           />
         </>
       ) : (
@@ -294,7 +307,27 @@ function CompletionControl({
   courseId: string;
   everPlayed: boolean;
 }) {
-  const { completed, pending } = useCompletion(studentUid, recordingId);
+  const { completed, pending, override } = useCompletion(studentUid, recordingId);
+
+  /*
+   * A TEACHER'S MARK IS THEIRS TO EXPLAIN, AND NOT THE STUDENT'S TO UNDO.
+   *
+   * The manual tells the student "if a teacher has overridden your status, their
+   * mark takes precedence — that's by design", and until now no student screen
+   * showed one at all: a student a teacher had marked complete still saw the
+   * recording as outstanding. Offering Unmark here would also be a lie, because
+   * the override wins whatever the student writes underneath it.
+   */
+  if (override) {
+    return (
+      <View>
+        <Text style={override.completed ? styles.completedText : styles.gateHint}>
+          {override.completed ? '✓ Completed — marked by your teacher' : 'Your teacher has marked this not complete'}
+        </Text>
+        <Text style={styles.gateHint}>{override.reason}</Text>
+      </View>
+    );
+  }
 
   if (completed) {
     return (
