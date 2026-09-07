@@ -1115,6 +1115,64 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-09-07 (v0.5.1) — **Both defects the device pass found, shipped — and a
+  third thing it turned up about the fixture.**
+
+  A patch release for the two faults recorded above, on every surface: web
+  deployed and verified live (bundle inlines `02dbc0a`, contains `0.5.1`,
+  contains `EXPO_PUBLIC_USE_EMULATORS` zero times, `.map` returns `text/html`,
+  `smoke:prod` green), tag `v0.5.1`, four APKs on both release homes, and the
+  download page and published manual both reading 0.5.1.
+
+  **The lock screen and the notification now name what is playing.**
+  `setActiveForLockScreen(true)` was being called with no metadata argument, so
+  the OS had nothing to display and drew transport controls over a blank space
+  — on the notification, the lock screen, and any car or Bluetooth display.
+  Every version has shipped that way. The title now travels with `load`, and is
+  applied twice on purpose: the audio setup is async and is not ordered against
+  `load`, and `updateLockScreenMetadata` is a documented no-op until the player
+  is active for the lock screen, so whichever finishes last carries it. Web
+  feeds the same values to `navigator.mediaSession`.
+
+  Confirmed on the device: `dumpsys media_session` went from `metadata: null` to
+  `metadata: size=4, description=Session 2 — Knowledge and Certainty, Hikam
+  Foundations`, and the shade shows those two lines where it showed none.
+
+  **A defect the emulator fixture cannot catch, and nearly caused a false
+  alarm.** The seeded recording does not actually PLAY: the session sits in
+  `ERROR(7) Source error` with the position frozen, while the app's transport
+  looks enabled and reports a duration. That read exactly like a regression in
+  the change under test. Removing the metadata call and re-running produced the
+  identical error, which is what settled it — the same recording plays correctly
+  against production, verified earlier the same day, so this is the storage
+  emulator, not the app and not the fix.
+
+  Worth writing down because of WHY it went unnoticed: the sweep only needs a
+  duration to render a transport, and `seed-world.mjs` says so in as many words
+  — "it has to actually decode: the transport renders disabled until the media
+  reports a duration". Decoding a header is all any automated check has ever
+  asked of that fixture. **Nothing in this repo plays audio to the end**, on any
+  surface, and the one place it could be noticed is a device pass.
+
+  **What that leaves unproven, stated rather than glossed.** The metadata was
+  confirmed against the emulator build. Production playback was NOT re-exercised
+  for this release: no student in the live project has an open grant today, and
+  opening one is a production write standing in for a build — the mistake this
+  release's own runbook change exists to stop. The before-state, a blank title
+  over genuinely playing production audio, was seen on v0.5.0; the after-state
+  was seen on the emulator. The path between them is the same `load` call on the
+  same build type.
+
+  **The mid-word title fix** verified on the device too: "Hikam Foundations"
+  reads on one line and the two actions wrap onto their own row, which is what
+  `headRow`'s `flexWrap` was for all along.
+
+  Gate green on this machine: lint, typecheck, knip, **359 unit** (the new one
+  asserts the session hands the player what to display, and was shown to fail
+  with the argument dropped), **383 emulator** (2 skipped), **1108/1108** sweep.
+  Release APK confirmed on the AVD as `versionName=0.5.1`, `versionCode=26`,
+  labelled `v0.5.1 · 02dbc0a`, with no dev sign-in panel.
+
 - 2026-09-07 (later) — **The half of the device pass that was skipped, run
   properly — and it found a defect that had already shipped.**
 
