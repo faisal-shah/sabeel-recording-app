@@ -6,6 +6,31 @@ rules deployed, `.firebaserc` aliased to `sabeel-class-recordings`, and
 the order, the traps, and the versioned release cycle so a deploy is never
 improvised. (The Android build ships separately — see "Cutting a release".)
 
+## The device pass, before any of it
+
+**Mandatory, and it comes first** — `CLAUDE.md` requires a real Android pass
+before every release, and it is the only thing in this project that can. The web
+suites cover layout, flows, rules, data and copy; they cannot reach the seams
+below, and this app leans on them harder than its siblings because its whole
+subject is long audio.
+
+Install the release APK (step 3), then work through:
+
+| Seam | What to actually do |
+|---|---|
+| **Background audio** | Start a recording, leave the app, confirm it keeps playing and the notification shows the right title |
+| **Lock screen** | Pause, resume, and seek from the lock-screen controls |
+| **Seek and rate** | Scrub a long recording; change the rate; confirm the position survives both |
+| **Resume** | Kill the app mid-recording, reopen, confirm it resumes where it was |
+| **Offline** | Turn the network off: mark a recording complete, confirm "Pending sync", restore the network, confirm it clears |
+| **Push** | Confirm a notification arrives and opens the right screen |
+| **Keyboard** | Every text field: the field stays visible above the keyboard |
+| **Gestures** | Long-press and swipe paths |
+| **Safe area** | Notch and gesture bar on both orientations |
+| **Flex/wrap** | Long class and student names — Yoga defaults `flexShrink` to 0, and a real device is the only place that shows |
+
+A screenshot is not the check for any row above except the last two.
+
 ## Cutting a release (versioned Android + web)
 
 A release bumps one version and ships it to both surfaces. In order:
