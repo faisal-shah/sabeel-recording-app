@@ -14,22 +14,92 @@ suites cover layout, flows, rules, data and copy; they cannot reach the seams
 below, and this app leans on them harder than its siblings because its whole
 subject is long audio.
 
-Install the release APK (step 3), then work through:
+### It takes TWO builds, and conflating them costs you seams
 
-| Seam | What to actually do |
-|---|---|
-| **Background audio** | Start a recording, leave the app, confirm it keeps playing and the notification shows the right title |
-| **Lock screen** | Pause, resume, and seek from the lock-screen controls |
-| **Seek and rate** | Scrub a long recording; change the rate; confirm the position survives both |
-| **Resume** | Kill the app mid-recording, reopen, confirm it resumes where it was |
-| **Offline** | Turn the network off: mark a recording complete, confirm "Pending sync", restore the network, confirm it clears |
-| **Push** | Confirm a notification arrives and opens the right screen |
-| **Keyboard** | Every text field: the field stays visible above the keyboard |
-| **Gestures** | Long-press and swipe paths |
-| **Safe area** | Notch and gesture bar on both orientations |
-| **Flex/wrap** | Long class and student names — Yoga defaults `flexShrink` to 0, and a real device is the only place that shows |
+**The release APK proves the artifact.** Only it can show that what ships is a
+production build — `versionName`, the `v<version> · <commit>` label, and the
+**absent** dev sign-in panel — and only it, pointed at production, can exercise
+signed-URL minting, real FCM delivery and the deployed rules. There is no FCM in
+an emulator.
+
+**And it is the worst possible build for everything else.** It has no dev
+sign-in row, so staff are a Google identity you must hold real credentials for;
+and it can only show you the data production happens to hold that day, which may
+be no open grant at all — and therefore no playable audio, on the release of an
+audio app.
+
+**A debug build against the emulator suite reaches all of that.**
+`app/src/auth/devSignIn.ts` mints staff identities straight through the Auth
+emulator, and `scripts/lib/seed-world.mjs` hands you an admin, a manager, a
+disabled student, deliberately long names and an **open, incomplete** assignment
+on demand. The rows below are Yoga, the IME, gestures and the offline outbox:
+native behaviours that do not care whether the backend is production or an
+emulator.
+
+So: run the release APK for the rows marked **release**, and a debug build for
+the rest. "Do the device pass on the release APK" means *prove the shipped
+artifact with the shipped artifact*. It has never meant that the release APK is
+the only build allowed on the device, and reading it that way silently converts
+every seam it cannot reach into a seam nobody checks — which is exactly what
+happened on 2026-09-07, and is how the course header below reached production.
+
+**Never bend production to reach a seam.** Re-seeding the live project or moving
+a real due date to open a grant is a production write standing in for a build you
+could have run for free.
+
+| Seam | Build | What to actually do |
+|---|---|---|
+| **Build identity** | release | `versionName` matches `app.json`, the sign-in label reads `v<version> · <commit>`, and the dev sign-in panel is **absent** |
+| **Push** | release | Confirm a notification arrives, carries the app's own icon under the `sabeel-alerts` channel rather than "Miscellaneous", and opens the right screen |
+| **Playback reaches the audio** | release | A signed URL is minted against production and the recording actually plays |
+| **Background audio** | either | Start a recording, leave the app, confirm it keeps playing and the notification shows the right title |
+| **Lock screen** | either | Pause, resume, and seek from the lock-screen controls |
+| **Seek and rate** | either | Scrub a long recording; change the rate; confirm the position survives both |
+| **Resume** | either | Kill the app mid-recording, reopen, confirm it resumes where it was |
+| **Offline** | debug | Turn the network off: mark a recording complete, confirm "Pending sync", restore the network, confirm it clears — needs an **incomplete** grant, which the seeded world has and production may not |
+| **Staff screens** | debug | Today's queue, the not-recorded control, the notification switches, the attendance report — staff sign-in needs the dev row |
+| **Keyboard** | debug | Every text field: the field stays visible above the keyboard |
+| **Gestures** | debug | Long-press and swipe paths |
+| **Safe area** | either | Notch and gesture bar (the app is `screenOrientation="portrait"`, so there is only one orientation to check) |
+| **Flex/wrap** | debug | Long class and student names — Yoga defaults `flexShrink` to 0, and a real device is the only place that shows. The seeded world carries names chosen to break this |
 
 A screenshot is not the check for any row above except the last two.
+
+### Running the debug half
+
+Two rules decide the shape of this, and both were learned by getting them wrong:
+
+- **`EXPO_PUBLIC_USE_EMULATORS` is read from the environment that started
+  METRO**, not from the APK.
+- **Do NOT reach for `expo run:android --no-bundler`** to reuse a dev server you
+  started yourself. The app builds, installs, signs in and looks completely
+  healthy — and never picks up another source edit. Metro logs the rebuild, the
+  served bundle contains the change, and the device goes on rendering the old
+  one, so every "the fix did not work" reading is a lie. Let `expo run:android`
+  start its own Metro.
+
+The seed needs a web dev server (staff are Google identities the Admin SDK
+cannot mint, so `seedWorld` drives the app's own dev sign-in row and lets
+`onUserCreate` provision them). So seed first, stop that server, then hand the
+port to `run:android`:
+
+```sh
+scripts/emulator.sh headless &                                  # the AVD
+bash scripts/free-emulator-ports.sh
+npm run build -w @sabeel/shared && npm run build -w functions    # the emulator loads functions/lib
+npx firebase emulators:start --project demo-sabeel-recordings \
+  --only firestore,auth,storage,functions                       # leave running
+
+( cd app && EXPO_PUBLIC_USE_EMULATORS=1 npx expo start --web --port 8081 --clear ) &
+npm run seed:emulators        # prints the student's credentials and the fixture ids
+kill %2                       # release 8081
+
+( cd app && EXPO_PUBLIC_USE_EMULATORS=1 npx expo run:android )   # its own Metro
+```
+
+The emulators bind loopback, which the AVD reaches as `10.0.2.2` — already wired
+in `app/src/env.ts`. And `adb root` drops every `adb reverse` mapping, so avoid
+it while a debug build is attached, or restore the mapping afterwards.
 
 ## Cutting a release (versioned Android + web)
 

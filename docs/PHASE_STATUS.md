@@ -1115,6 +1115,67 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-09-07 (later) — **The half of the device pass that was skipped, run
+  properly — and it found a defect that had already shipped.**
+
+  The v0.5.0 pass above recorded eight seams as unreachable: staff screens
+  needed a Google account, the offline outbox needed an incomplete grant
+  production did not have. Both were reachable the whole time. `devSignIn.ts`
+  mints staff identities through the AUTH EMULATOR, and `seed-world.mjs` builds
+  any data shape on demand — so a **debug build against the emulator suite**
+  reaches every one of them.
+
+  **The reasoning error is worth keeping**, because the runbook invited it.
+  "Do the device pass on the release APK" is about proving the shipped artifact
+  is a production build; it was read as "the release APK is the only build
+  allowed on the device", which silently converted every seam that build cannot
+  reach into a seam nobody checks. Two builds, two jobs — `docs/DEPLOY.md` now
+  says which rows belong to which, and the seeded world is available as
+  `npm run seed:emulators`.
+
+  It also cost a production write: the demo seed was re-run and a real session's
+  due date moved forward, to open a grant so audio could be played at all. The
+  emulator world has an open, incomplete grant sitting in it.
+
+  **FOUND, on the staff course screen: a page title broken mid-word.** "Hikam
+  Foundations" rendered as **"Hikam / Foundat / ions"** on a Pixel 6, with
+  "Sessions, roster and listening" crushed to three lines beside it. `headRow`
+  is `flexWrap: 'wrap'` and was meant to drop the actions onto their own line,
+  but `headText` had `flexShrink: 1` with no floor — so it shrank instead, the
+  row never overflowed, and it never wrapped. `headActions` carries no
+  `flexShrink`, which Yoga defaults to 0, so all of the give came from the
+  title. Fixed with `minWidth: 220`; the actions now wrap and the heading reads
+  on one line.
+
+  Same defect class, and the same remedy, as the ledger tiles' "Accountabl / e"
+  in the v0.4.3 pass. **Nothing else could have caught it.** The sweep asserts
+  that nothing is clipped, nothing overlaps and the column caps — all true of a
+  crushed heading — and react-native-web does not reproduce Yoga's
+  `flexShrink: 0` default, so the squeeze does not happen in a browser at any
+  width. It is device-only, twice now.
+
+  **Verified on the device, as a student and as staff:** the Today work queue
+  with its blocking badge; marking a class not recorded, which took the row off
+  Today live (**7 waiting → 6**) and left the register untouched, with "It was
+  recorded after all" to undo; an admin who manages no class seeing NO
+  notification switches and the sentence naming who does get them; the
+  by-student attendance report listing an unenrolled student as *No longer
+  enrolled* with her seven excused still counting; and the **offline outbox** —
+  airplane mode on, mark complete, "Pending sync", airplane mode off, the badge
+  clears and the row lands in Firestore. Long class and student names wrap
+  correctly everywhere else that was looked at.
+
+  **A trap that wasted an hour and is now written down.** `expo run:android
+  --no-bundler`, pointed at a dev server started separately, produces an app that
+  installs, signs in and looks entirely healthy — and never picks up another
+  source edit. Metro logs the rebuild, the served bundle contains the change, and
+  the device goes on rendering the old one. Every "the fix did not work" reading
+  during that hour was false; the fix had been correct since the first attempt.
+  Let `expo run:android` start its own Metro.
+
+  Still not reached: long-press and swipe gesture paths beyond scrolling, and
+  Zoom import, which has no credentials.
+
 - 2026-09-07 — **v0.5.0 shipped to every surface, and the device pass paid for
   itself twice — once by finding a defect, once by disproving one.**
 
