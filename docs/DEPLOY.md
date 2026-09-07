@@ -206,21 +206,13 @@ that have not landed.
   `package.json` makes `npm install` 404. Handled: `functions/esbuild.config.mjs`
   inlines `@sabeel/*` and leaves real npm deps external. Verify with
   `grep -c 'require("@sabeel/shared")' functions/lib/index.js` — it must be 0.
-- **`npm error Cannot read properties of null (reading 'edgesOut')` in Cloud
-  Build.** `firebase deploy` ships only `functions/`, and if there is no
-  lockfile there the Node buildpack runs `npm install --package-lock-only` to
-  generate one — which crashes under the builder's npm. Deploys survive this
-  for a long time because unchanged functions restore a cached build layer and
-  never reach that step; the first genuinely NEW function gets a cache miss and
-  cannot. `functions/package-lock.json` is committed to keep the buildpack off
-  that path, and is pinned to the versions the suite ran against rather than to
-  whatever a fresh resolution returns. Regenerate it (in a scratch directory,
-  from `functions/package.json`) whenever a functions dependency changes.
-- **A failed function create leaves a FAILED stub with no trigger**, and the
-  next deploy reads that stub as an HTTPS function and refuses to convert it to
-  a background one — so the second error hides the first. Delete the stub
-  (`gcloud functions delete <name> --region=us-central1 --gen2`) and fix the
-  real cause before redeploying.
+- **`functions/package-lock.json` is committed, and must stay in step.**
+  Without it a cold Cloud Build cannot resolve this codebase's dependencies at
+  all, and the failure is invisible until the first genuinely new function —
+  see the `expo-firebase-stack` skill for the mechanism and the recovery. It is
+  pinned to the versions the suite runs against, so regenerate it whenever a
+  dependency in `functions/package.json` changes, and check
+  `npm ci --dry-run --omit=dev` accepts the pair before deploying.
 - **Eventarc permission denied** on the first deploy of a Firestore-trigger
   function. Propagation lag; retry after a few minutes.
 - **Secret Manager 403** for every bound secret on first deploy — grant the
