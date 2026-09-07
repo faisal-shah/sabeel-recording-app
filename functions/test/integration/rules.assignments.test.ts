@@ -69,8 +69,14 @@ beforeEach(async () => {
         recordingId,
         courseId,
         cohortId: 'c1',
-        dueDate: null,
-        source: 'publish',
+        // A REAL ASSIGNMENT SHAPE. `dueDate` was null and there was a `source`
+        // field, and neither can exist: the due date is required — "a blank one
+        // would mean permanent access" — and the reconcile from a session's
+        // attendance is the only writer, so nothing ever sets a source. Nothing
+        // here reads either field, which is exactly why they went unnoticed;
+        // what a fixture asserts is that this is a document the system contains,
+        // and the next person to need one copies it from here.
+        dueDate: '2099-01-01',
         active: true,
         assignedAt: 1,
         assignedBy: 'system',
@@ -188,8 +194,7 @@ describe('assignments: writes are server-only', () => {
         recordingId: 'new',
         courseId: CLASS_MINE,
         cohortId: 'c1',
-        dueDate: null,
-        source: 'publish',
+        dueDate: '2099-01-01',
         active: true,
         assignedAt: 1,
         assignedBy: STUDENT,

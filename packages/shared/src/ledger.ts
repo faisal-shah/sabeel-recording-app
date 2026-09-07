@@ -120,6 +120,16 @@ export interface StudentAttendanceRow {
   completed: number;
   /** …of which incomplete and past due, so no longer openable. */
   missed: number;
+  /**
+   * They have a mark in this course's register but are no longer on its roster.
+   *
+   * The register is kept when someone is unenrolled — "an attendance record is
+   * what happened on the day and outlives the enrolment" — so their marks go on
+   * counting in every session's totals. Dropping them from this half meant the
+   * two cuts of one report stopped adding up, and a student who left mid-term
+   * simply vanished from the only view that says what they did.
+   */
+  departed: boolean;
 }
 
 export interface AttendanceReport {
@@ -147,6 +157,7 @@ export function attendanceReport(input: {
     attendance: Record<string, AttendanceStatus>;
     attendanceSubmittedAt: number | null;
   }[];
+  /** The CURRENT roster — everyone actively enrolled, marked or not. */
   rosterUids: string[];
   assignments: { studentUid: string; completed: boolean; dueDate: string }[];
   today: string;
@@ -180,7 +191,28 @@ export function attendanceReport(input: {
     catchUp.set(a.studentUid, c);
   }
 
-  const studentRows: StudentAttendanceRow[] = rosterUids.map((uid) => {
+  /*
+   * THE ROSTER, PLUS ANYONE THE REGISTER REMEMBERS.
+   *
+   * A submitted register is a record of who was in the room that day, and it
+   * survives an unenrolment on purpose. So the session half of this report goes
+   * on counting a departed student in its present/absent/excused totals — while
+   * this half listed the active roster alone, and the two stopped reconciling:
+   * a class of ten showing nine rows and ten marks, with nothing on screen to
+   * explain the tenth.
+   *
+   * Order matters and is not alphabetical here: the current roster first, in the
+   * order it was given, then the departed appended. Sorting is the caller's job
+   * (it holds the names); what this fixes is which people appear at all.
+   */
+  const departed = new Set<string>();
+  for (const s of submitted) {
+    for (const uid of Object.keys(s.attendance)) {
+      if (!rosterUids.includes(uid)) departed.add(uid);
+    }
+  }
+
+  const studentRows: StudentAttendanceRow[] = [...rosterUids, ...departed].map((uid) => {
     let present = 0;
     let absent = 0;
     let excused = 0;
@@ -193,7 +225,7 @@ export function attendanceReport(input: {
       else notMarked++;
     }
     const c = catchUp.get(uid) ?? { assigned: 0, completed: 0, missed: 0 };
-    return { studentUid: uid, present, absent, excused, notMarked, ...c };
+    return { studentUid: uid, present, absent, excused, notMarked, ...c, departed: departed.has(uid) };
   });
 
   return {

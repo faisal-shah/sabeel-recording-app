@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AppState, StyleSheet, View } from 'react-native';
+import { AppState, StyleSheet, Text, View } from 'react-native';
 import {
   NOTIFICATION_DESCRIPTION,
   PUSH_DEVICE_MESSAGE,
@@ -14,6 +14,7 @@ import { registerThisDevice, setNotificationPref, useNotificationPrefs } from '.
 import { canOpenPushSettings, openPushSettings, pushPromptState } from '../push';
 import { getTheme } from '../theme';
 import { errorText } from '../errors';
+import { useMyCoursesState } from '../structure';
 
 const t = getTheme();
 
@@ -97,7 +98,23 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
     })();
   };
 
-  const kinds: NotificationKind[] = isStudent ? STUDENT_KINDS : STAFF_KINDS;
+  /*
+   * THE STAFF MESSAGE GOES TO A CLASS'S MANAGERS, so only they get its switch.
+   *
+   * `notifyAttendanceMissing` sends to `course.managerUids` and to nobody else.
+   * An admin who runs the institute but manages no class was shown a switch for
+   * a message that could never arrive — a control whose only possible effect was
+   * to turn off something already silent. Reading their own classes is the same
+   * question the work queue asks, and it answers itself for a manager, who is by
+   * definition in at least one.
+   */
+  const myCourses = useMyCoursesState(isStudent ? null : uid, 'notifications');
+  const managesAClass = (myCourses?.length ?? 0) > 0;
+  const kinds: NotificationKind[] = isStudent
+    ? STUDENT_KINDS
+    : managesAClass
+      ? STAFF_KINDS
+      : [];
 
   const toggle = (kind: NotificationKind, next: boolean) =>
     void (async () => {
@@ -156,6 +173,15 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
 
       <SectionTitle>Send me</SectionTitle>
       <Card>
+        {/* NEVER AN EMPTY CARD. An admin who manages no class has no switches,
+            and a bare ring with nothing in it reads as a screen that failed to
+            load rather than as an answer. */}
+        {kinds.length === 0 ? (
+          <Text style={styles.none} testID="notify-none">
+            Messages about a class go to the people who manage it. You are not
+            assigned to any class, so there is nothing to send you.
+          </Text>
+        ) : null}
         {kinds.map((kind, i) => (
           <View key={kind} style={i > 0 ? styles.divided : undefined}>
             <SwitchRow
@@ -174,4 +200,5 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
 
 const styles = StyleSheet.create({
   divided: { borderTopWidth: 1, borderTopColor: t.border.subtle },
+  none: { fontSize: 14, color: t.text.secondary, lineHeight: 20 },
 });

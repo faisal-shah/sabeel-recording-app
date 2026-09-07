@@ -56,6 +56,59 @@ describe('attendanceReport', () => {
     expect(byUid.b).toMatchObject({ assigned: 1, completed: 1, missed: 0 });
     expect(byUid.c).toMatchObject({ assigned: 1, completed: 0, missed: 0 });
   });
+
+  it('flags nobody as departed when everyone marked is still enrolled', () => {
+    expect(report().students.every((s) => s.departed === false)).toBe(true);
+  });
+
+  /*
+   * A STUDENT WHO LEFT MID-TERM IS STILL IN THE REGISTER.
+   *
+   * Unenrolling keeps their marks — "an attendance record is what happened on
+   * the day and outlives the enrolment" — so every session's counts go on
+   * including them. Listing the active roster alone meant the two halves of one
+   * report stopped reconciling: a manager reading "3 present" on a session and
+   * counting two rows underneath had nothing on screen to explain the third, and
+   * the person who withdrew had no record at all in the only view that says what
+   * each student did.
+   *
+   * THE TEST IS THE RECONCILIATION, not the presence of a row: the sum of the
+   * per-student marks equals the sum of the per-session marks. That is the
+   * promise, and it is what an alternative fix — dropping them from the session
+   * counts too — would also have to satisfy.
+   */
+  it('keeps a departed student, flagged, so the two halves of the report agree', () => {
+    const r = attendanceReport({
+      sessions: [
+        mkSession('s1', { a: 'present', gone: 'excused' }, true),
+        mkSession('s2', { a: 'absent', gone: 'absent' }, true),
+      ],
+      // `gone` was unenrolled after both registers were submitted.
+      rosterUids: ['a'],
+      assignments: [],
+      today: '2026-07-15',
+    });
+
+    const departed = r.students.find((s) => s.studentUid === 'gone');
+    expect(departed).toMatchObject({ departed: true, present: 0, absent: 1, excused: 1, notMarked: 0 });
+    expect(r.students.find((s) => s.studentUid === 'a')).toMatchObject({ departed: false });
+
+    const marksByStudent = r.students.reduce((n, s) => n + s.present + s.absent + s.excused, 0);
+    const marksBySession = r.sessions.reduce((n, s) => n + s.present + s.absent + s.excused, 0);
+    expect(marksByStudent).toBe(marksBySession);
+    expect(marksBySession).toBe(4);
+  });
+
+  it('does not resurrect someone marked only in a register that was never submitted', () => {
+    const r = attendanceReport({
+      sessions: [mkSession('s1', { a: 'present', ghost: 'present' }, false)],
+      rosterUids: ['a'],
+      assignments: [],
+      today: '2026-07-15',
+    });
+    // An un-taken register counts nobody, so it names nobody either.
+    expect(r.students.map((s) => s.studentUid)).toEqual(['a']);
+  });
 });
 
 describe('attendance split', () => {

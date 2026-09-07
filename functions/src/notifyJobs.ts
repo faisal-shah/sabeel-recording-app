@@ -164,7 +164,9 @@ export async function notifyAttendanceMissing(
   let sent = 0;
   for (const doc of stale.docs) {
     const s = doc.data() as SessionDoc;
-    if (s.archived) continue;
+    // Marked as not recorded: there is no audio for a missing register to lock
+    // anyone out of, which is the entire reason this message exists.
+    if (s.notRecorded) continue;
     const course = (await db.collection(COLLECTIONS.courses).doc(s.courseId).get()).data() as
       | CourseDoc
       | undefined;

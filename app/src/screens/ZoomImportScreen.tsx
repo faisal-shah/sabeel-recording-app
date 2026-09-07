@@ -39,10 +39,13 @@ export function ZoomImportScreen({
   session,
   cls,
   onImported,
+  onOpenImported,
 }: {
   session: SessionRow;
   cls: { id: string; name: string };
   onImported: () => void;
+  /** Open a recording this institute already imported — see the row below. */
+  onOpenImported: (recordingId: string) => void;
 }) {
   const [from, setFrom] = useState(defaultFrom());
   const [to, setTo] = useState(ymd(new Date()));
@@ -129,7 +132,13 @@ export function ZoomImportScreen({
         <Empty>No recordings match. Widen the date range or the filters, then Load.</Empty>
       ) : (
         filtered.map((r) => (
-          <ZoomRow key={r.meetingUuid} row={r} sessionId={session.id} onImported={onImported} />
+          <ZoomRow
+            key={r.meetingUuid}
+            row={r}
+            sessionId={session.id}
+            onImported={onImported}
+            onOpenImported={onOpenImported}
+          />
         ))
       )}
     </Screen>
@@ -140,9 +149,11 @@ function ZoomRow({
   row,
   sessionId,
   onImported,
+  onOpenImported,
 }: {
   row: ZoomImportRow;
   sessionId: string;
+  onOpenImported: (recordingId: string) => void;
   onImported: () => void;
 }) {
   const [busy, setBusy] = useState(false);
@@ -170,9 +181,26 @@ function ZoomRow({
         {(row.sizeBytes / 1048576).toFixed(1)} MB
       </Text>
       {row.alreadyImported ? (
-        <Text style={styles.imported}>
-          ✓ Already imported{row.importedCourseName ? ` into ${row.importedCourseName}` : ''}
-        </Text>
+        /*
+          TAPPABLE, because the sentence alone leaves staff stuck.
+          The picker lists the whole Zoom account, so most of what a manager sees
+          part-way through a term is already imported — and "already imported
+          into Hikam Foundations" as flat text sends them off to find it by hand,
+          in a library that lists every recording in the institute. The row knows
+          exactly which one it is. It is not a Button: this is a link out of a
+          list, not the action the card is offering.
+        */
+        <Pressable
+          testID={`zoom-open-${row.topic.trim() || row.meetingUuid}`}
+          accessibilityRole="link"
+          onPress={() => onOpenImported(row.alreadyImported as string)}
+          style={styles.importedRow}
+        >
+          <Text style={styles.imported}>
+            ✓ Already imported{row.importedCourseName ? ` into ${row.importedCourseName}` : ''} —
+            open it
+          </Text>
+        </Pressable>
       ) : (
         <Button
           testID={`zoom-import-${row.topic.trim() || row.meetingUuid}`}
@@ -188,6 +216,7 @@ function ZoomRow({
 
 const styles = StyleSheet.create({
   filter: { marginTop: spacing(2), marginBottom: spacing(2) },
+  importedRow: { minHeight: 44, justifyContent: 'center' },
   toggle: {
     flexDirection: 'row',
     alignItems: 'center',

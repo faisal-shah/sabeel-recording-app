@@ -129,14 +129,6 @@ describe('Phase 5 staff ledger reads', () => {
        * A GET OF A DOCUMENT THAT IS NOT THERE.
        *
        * `resource` is null then, and dereferencing it is a rules EVALUATION
-       * ERROR rather than a denial — so a screen asking for a student's own
-       * override on a recording that has none gets a failure, not an answer.
-       * Absence is the usual case for three of these four collections.
-       */
-      /*
-       * A GET OF A DOCUMENT THAT IS NOT THERE.
-       *
-       * `resource` is null then, and dereferencing it is a rules EVALUATION
        * ERROR rather than a denial — so a screen asking for a student's own row
        * on a recording that has none gets a failure, not an answer. Absence is
        * the usual case for three of these four collections.

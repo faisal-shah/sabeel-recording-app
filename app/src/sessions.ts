@@ -19,7 +19,7 @@ export const createSession = call<
 >('createSession');
 
 export const updateSession = call<
-  { sessionId: string; date?: string; title?: string; dueDate?: string | null; notes?: string },
+  { sessionId: string; date?: string; title?: string; dueDate?: string | null; notes?: string; notRecorded?: boolean },
   { sessionId: string }
 >('updateSession');
 

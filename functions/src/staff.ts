@@ -66,8 +66,23 @@ export async function applyStaffAccess(callerUid: string, input: StaffAccessInpu
    * member to switch off access while keeping their history"), and only one of
    * them kept it.
    *
-   * `updateUser` first: if it throws, nothing has changed. Claims after, so a
-   * re-enable restores the account and its role in the same order.
+   * ORDER: auth user, then claims, then the mirror — and the mirror LAST on
+   * purpose. There are three writes and no transaction spanning Auth and
+   * Firestore, so a failure between them is a state someone has to get out of.
+   * Writing the mirror last makes every interim state fail SAFE and repair by
+   * repetition:
+   *
+   *   - Disabling, claims throw → the account is already shut out of Auth while
+   *     the mirror still reads active. Tighter than intended, never looser.
+   *   - Enabling, claims throw → they can sign in again but every guard still
+   *     reads `status: 'disabled'` from the token, so they land on the gate.
+   *     Again tighter than intended.
+   *
+   * In both, the screen still shows the OLD status, so the admin's next move is
+   * to press the same button — which re-runs all three writes idempotently and
+   * lands the intended state. Writing the mirror first would invert this: the
+   * screen would report the change as done while the enforcement had not
+   * happened, and there would be no control left that looked like the repair.
    */
   await getAuth().updateUser(input.uid, { disabled: next.status === 'disabled' });
   await getAuth().setCustomUserClaims(input.uid, next);

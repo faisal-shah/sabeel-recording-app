@@ -111,6 +111,14 @@ export function PlayerScreen({
   if (!allowed) {
     return (
       <ScrollView style={styles.canvas} contentContainerStyle={styles.content}>
+        {/* THE BANNER BELONGS ON THIS BRANCH TOO. It used to sit only on the
+            playable return, which cost nothing while this branch subscribed to
+            nothing. It now mounts three listeners for `ClosedRecord`, and a
+            refused one resolves to an EMPTY value — so without this, a failed
+            read of the student's own listening row renders as a confident
+            account of what they did, on the screen they have no other way to
+            check. */}
+        {listenerError ? <Notice tone="error">{listenerError}</Notice> : null}
         <Hero recording={recording} courseName={cls.name} cohortName={cohortName} />
         {/* THREE REASONS, and each says something different to do about it.
             "Closed on <date>" needs a date; a student who holds no grant at all
@@ -317,16 +325,34 @@ function ClosedRecord({
   studentUid: string;
   recording: RecordingRow;
 }) {
-  const stored = useMyListening(studentUid, recording.id);
+  const { value: stored, resolved } = useMyListening(studentUid, recording.id);
   const { completed, override } = useCompletion(studentUid, recording.id);
+  // WAIT FOR THE ANSWER. `null` before the first snapshot and `null` for "never
+  // played it" are the same value, and the completions listener regularly wins
+  // the race — so rendering early tells a student who finished the recording on
+  // time that they listened to none of it, then corrects itself.
+  if (!resolved) return null;
   // Nothing was ever played and nothing was ever marked: there is no record to
   // show, and an empty panel saying "0%" is worse than no panel.
   if (!stored && !completed && !override) return null;
-  const listened = listenedFraction(stored?.listenedMs ?? 0, recording.durationSec);
   return (
     <View style={styles.closedRecord}>
       <Text style={styles.closedRecordTitle}>Your record</Text>
-      <Text style={styles.closedRecordLine}>{Math.round(listened * 100)}% listened</Text>
+      {/*
+        ONLY WHEN THERE IS ONE TO STATE, and never as a percentage of a duration
+        the recording does not have. `listenedFraction` returns 0 for a null
+        `durationSec` — which a phone upload supplies — so a student who listened
+        to the whole thing was told "0% listened", as the final word, on a
+        recording they can no longer open. With no duration the honest figure is
+        the time itself.
+      */}
+      {stored ? (
+        <Text style={styles.closedRecordLine}>
+          {recording.durationSec
+            ? `${Math.round(listenedFraction(stored.listenedMs, recording.durationSec) * 100)}% listened`
+            : `${formatClock(stored.listenedMs)} listened`}
+        </Text>
+      ) : null}
       <Text style={styles.closedRecordLine}>
         {completed ? '✓ Completed' : 'Not marked complete'}
         {override ? ' — marked by your teacher' : ''}

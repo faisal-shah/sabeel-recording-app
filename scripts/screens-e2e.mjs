@@ -947,6 +947,12 @@ const READ_ONLY_SCREENS = new Set([
   'my-audit',
   'tokens',
   'class-record',
+  // An admin who manages no class has no switches — the one staff message goes
+  // to a course's managers, so the screen names who gets it instead of offering
+  // a control that could do nothing. A MANAGER's `notifications` is deliberately
+  // NOT here: it has the switch, and the guard runs in both directions, so the
+  // day an admin's screen grows a control the declaration fails.
+  'notifications-none',
 ]);
 
 const STAFF_SCREENS = 29;
@@ -1037,22 +1043,28 @@ async function tourStaff(page, tag) {
     await openCourse();
     await tap(byId(page, `roster-remove-${STUDENT.email}`));
   }, `roster-remove-confirm-${STUDENT.email}`);
+  /*
+   * ANCHORED ON A ROW, NOT ON THE CHROME.
+   *
+   * The Export button renders — disabled — beside "No sessions in this course
+   * yet", so anchoring on it measured whichever state the screen happened to be
+   * in and would have reported the two widest grids in the app as sound while
+   * showing nothing at all. A row can only be there if the data arrived, which
+   * is what this screen is for. (The segment cannot serve: `Segmented` renders
+   * every option's testID whichever is selected, so it cannot say which view is
+   * on screen — hence a row of THIS view.)
+   */
   await visit('course-attendance', async () => {
     await openCourse();
     await tap(byId(page, 'nav-attendance'));
-    // The EXPORT, not a segment: `Segmented` renders every option's testID
-    // whichever is selected, so a segment cannot say which view is on screen.
-  }, 'attendance-export-sessions');
+  }, `attendance-session-${missed.title}`);
   // The per-student tab: the widest grid in the app, and the other half of the
   // screen above.
   await visit('course-attendance-students', async () => {
     await openCourse();
     await tap(byId(page, 'nav-attendance'));
     await tap(byId(page, 'attendance-tab-students'));
-    // The EXPORT, not the other tab's segment: `Segmented` renders every
-    // option's testID whichever is selected, so anchoring on one of them goes
-    // green on the view this visit exists to leave.
-  }, 'attendance-export-students');
+  }, `attendance-student-${STUDENT.name}`);
   await visit('sessions', async () => {
     await openCourse();
     await tap(byId(page, 'nav-sessions'));
@@ -1084,12 +1096,31 @@ async function tourStaff(page, tag) {
     await openCourse();
     await tap(byId(page, `student-ledger-${STUDENT.email}`));
   }, 'student-export');
+  /*
+   * MEASURED IN ITS ERROR STATE, AND SAID SO.
+   *
+   * The picker loads on mount, the emulator suite has no Zoom credentials, and
+   * `listZoomRecordings` therefore throws — so what these five widths measure is
+   * the date range, the filters and an error line. The picker's ROWS, which is
+   * where a layout would actually break, are laid out at no width at all here
+   * and cannot be until this run can reach a Zoom account.
+   *
+   * The `zoom-load` button renders in every state, so it could never have told
+   * anyone that. The assertion below does: if credentials ever arrive, it fails,
+   * and whoever is holding it then extends the tour to a row.
+   */
   await visit('zoom-import', async () => {
     await openCourse();
     await tap(byId(page, 'nav-sessions'));
     await tap(byId(page, 'session-open-Session 6 — Today (recording pending)'));
     await tap(byId(page, 'recording-import-zoom'));
   }, 'zoom-load');
+  check(
+    `${tag} / zoom import is toured WITHOUT credentials — its rows are unmeasured`,
+    (await page.locator('[data-testid^="zoom-import-"]').count()) === 0 &&
+      (await page.locator('[data-testid^="zoom-open-"]').count()) === 0,
+    'the picker loaded rows: extend this tour to measure one',
+  );
   await visit('library', () => tap(byId(page, 'tab-library')), 'library-filter-all');
   await visit('player', async () => {
     await tap(byId(page, 'tab-library'));
@@ -1100,7 +1131,17 @@ async function tourStaff(page, tag) {
   // passed straight through it to an option — so nothing had ever measured it.
   await visit('more', () => tap(byId(page, 'tab-more')), 'more-privacy');
   await visit('audit', () => more('more-audit'), 'audit-list');
-  await visit('notifications', () => more('more-notifications'), 'notify-attendanceMissing');
+  /*
+   * AN ADMIN'S NOTIFICATIONS SCREEN HAS NO SWITCHES.
+   *
+   * The one staff message — "attendance still not taken" — is sent to a course's
+   * `managerUids`, and an admin who manages no class is in none of them, so the
+   * screen states that instead of offering a control that could do nothing. That
+   * sentence is a paragraph rather than a row, and 320px is where a paragraph in
+   * a card runs out of room, so it is toured as its own screen. The switch row
+   * itself is measured on the manager's tour, where it renders.
+   */
+  await visit('notifications-none', () => more('more-notifications'), 'notify-none');
   await checkDeviceState(page, tag);
   await visit('tokens', async () => {
     await tap(byId(page, 'tab-more'));
@@ -1111,7 +1152,7 @@ async function tourStaff(page, tag) {
     `${counter.seen}/${STAFF_SCREENS}`);
 }
 
-const MANAGER_SCREENS = 10;
+const MANAGER_SCREENS = 11;
 
 /**
  * A manager sees the same screens with fewer rows AND fewer controls, which is a
@@ -1180,6 +1221,13 @@ async function tourManager(page, tag) {
     await tap(byId(page, 'recording-ledger'));
     await tap(byId(page, `override-open-${STUDENT.name}`));
   }, `override-reason-${STUDENT.name}`);
+  // The staff switch row, which only a manager has — see the note on the admin's
+  // notifications visit above.
+  await visit('notifications', async () => {
+    await tap(byId(page, 'tab-more'));
+    await tap(byId(page, 'more-notifications'));
+  }, 'notify-attendanceMissing');
+  await checkDeviceState(page, tag);
 
   check(`${tag} toured as many manager screens as the tour lists`, counter.seen === MANAGER_SCREENS,
     `${counter.seen}/${MANAGER_SCREENS}`);

@@ -63,9 +63,12 @@ export function CourseAttendanceScreen({
   };
 
   const exportStudents = () => {
-    const header = ['Student', 'Present', 'Absent', 'Excused', 'Not marked', 'Required listening', 'Completed', 'Missed'];
+    const header = ['Student', 'Enrolled', 'Present', 'Absent', 'Excused', 'Not marked', 'Required listening', 'Completed', 'Missed'];
     const body = studentRows.map((s) => [
       nameOf(s.studentUid),
+      // The file is read months later by someone reconciling counts. A row of
+      // marks for a name that is no longer on the roster needs the reason on it.
+      s.departed ? 'no longer enrolled' : 'yes',
       `${s.present}`,
       `${s.absent}`,
       `${s.excused}`,
@@ -157,6 +160,13 @@ export function CourseAttendanceScreen({
                 onPress={() => onOpenStudent(s.studentUid)}
               >
                 <Text style={styles.name}>{nameOf(s.studentUid)}</Text>
+                {/* WHY A NAME THAT IS NOT ON THE ROSTER IS HERE. Their marks
+                    still count in every session's totals above, so leaving them
+                    out made the two halves of one report disagree — and left no
+                    account at all of a student who withdrew mid-term. */}
+                {s.departed ? (
+                  <Text style={styles.departed}>No longer enrolled</Text>
+                ) : null}
                 <Text style={styles.counts}>
                   <Text style={styles.countValue}>{s.present}</Text> present
                   {'   '}
@@ -198,6 +208,7 @@ const styles = StyleSheet.create({
   },
   name: { fontSize: 15, fontWeight: '600', color: t.text.primary },
   hint: { fontSize: 13, color: t.text.secondary },
+  departed: { fontSize: 12, color: t.text.secondary, fontStyle: 'italic', marginTop: spacing(1) },
   counts: { fontSize: 14, color: t.text.secondary, marginTop: spacing(1) },
   /*
    * ONE WEIGHT, NO TONE. A breakdown is three facts, not three verdicts, and

@@ -193,8 +193,24 @@ describe('canPlayNow', () => {
     expect(canPlayNow(live, '2020-01-01', null, TODAY)).toBe(true);
   });
 
-  it('but an archived course still does', () => {
-    expect(canPlayNow(archived, '2020-01-01', null, TODAY)).toBe(false);
+  /*
+   * AND NEITHER CLOSES A CLASS TO STAFF.
+   *
+   * Both of a student's two closures — the deadline, and archiving with
+   * listening off — are a student's. The server has always read them that way:
+   * `playbackDenial` returns from its staff branch before reaching either, so a
+   * class manager is served the audio for an archived course. This said the
+   * opposite, and the disagreement showed up as a player with no transport and
+   * the STUDENT's message on it — "ask your teacher if you need access again" —
+   * shown to the teacher being asked.
+   *
+   * Staff keeping access is what makes that sentence answerable: somebody has to
+   * hear the recording to decide whether to turn listening back on. Settled
+   * 2026-09-07; see `docs/PHASE_STATUS.md`.
+   */
+  it('nor does an archived course with listening off', () => {
+    expect(canPlayNow(archived, '2020-01-01', null, TODAY)).toBe(true);
+    expect(canPlayNow(archivedButOpen, '2020-01-01', null, TODAY)).toBe(true);
   });
 
   /*

@@ -86,6 +86,7 @@ export function StudentHomeScreen({
           dueDate: a.dueDate,
           bucket,
           pending: state?.pending ?? false,
+          override: state?.override ?? null,
         };
       })
       .filter((x): x is TaskRow => x !== null)
@@ -247,6 +248,8 @@ interface TaskRow {
   dueDate: string;
   bucket: DueBucket;
   pending: boolean;
+  /** Set by a teacher, and not the student's to change — see the note on the card. */
+  override: { completed: boolean; reason: string } | null;
 }
 
 /**
@@ -265,6 +268,25 @@ function TaskCard({ row, onOpen }: { row: TaskRow; onOpen: () => void }) {
           {row.recording.title}
         </Text>
         <Text style={styles.course}>{row.cls.name}</Text>
+        {/*
+          WHY THIS ROW IS WHERE IT IS, when a teacher put it there.
+
+          An override of `completed: false` sends a recording the student had
+          already finished back to the top of this list, and the player offers
+          them no Mark complete underneath it — correctly, since the override
+          wins whatever they write. Without this line the card is
+          indistinguishable from an ordinary outstanding task, so the student
+          sees an obligation reappear, taps it, and finds nothing they can do.
+          The reason is the teacher's own words and belongs on the card that
+          raised the question.
+        */}
+        {row.override ? (
+          <Text style={styles.overrideNote}>
+            {row.override.completed
+              ? `Marked complete by your teacher — ${row.override.reason}`
+              : `Your teacher marked this not complete — ${row.override.reason}`}
+          </Text>
+        ) : null}
       </View>
       <View style={styles.cardMeta}>
         {row.pending ? <Text style={styles.pending}>Pending sync</Text> : null}
@@ -468,4 +490,5 @@ const styles = StyleSheet.create({
   missed: { color: t.text.secondary, fontWeight: '400' },
   doneChip: { fontSize: 13, color: t.feedback.success, fontWeight: '600' },
   pending: { fontSize: 12, color: t.feedback.warning, fontWeight: '600', marginBottom: spacing(1) },
+  overrideNote: { fontSize: 12, color: t.text.secondary, marginTop: spacing(1), fontStyle: 'italic' },
 });

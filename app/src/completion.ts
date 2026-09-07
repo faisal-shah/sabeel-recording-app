@@ -107,12 +107,20 @@ export function useMyCompletions(uid: string | null): Map<string, CompletionStat
     if (overrides.size === 0) return own;
     const merged = new Map(own);
     for (const [recordingId, override] of overrides) {
-      const mine = merged.get(recordingId);
       merged.set(recordingId, {
         completed: override.completed,
-        // A staff mark is on the server by definition; only the student's own
-        // write can be waiting to sync.
-        pending: override.completed === mine?.completed ? (mine?.pending ?? false) : false,
+        /*
+         * NEVER PENDING under an override.
+         *
+         * "Pending sync" tells a student their own tap has not reached the
+         * server yet. When a teacher's mark is what is being displayed, that
+         * sentence is about a different value than the one on screen — the
+         * override is on the server by definition — so carrying the student's
+         * flag through would put "Pending sync" beside a figure that is not
+         * theirs and is not pending. Their queued write is real and still goes;
+         * it simply does not change what this shows.
+         */
+        pending: false,
         override,
       });
     }
@@ -129,11 +137,17 @@ export function useMyCompletions(uid: string | null): Map<string, CompletionStat
  * moment a listen-by date passed the screen became one sentence and the student
  * could no longer see what they had done, including a recording they finished on
  * time. The rules already let them read their own row.
+ *
+ * RETURNS `resolved`, NOT JUST THE VALUE. Before the first snapshot the answer
+ * is `null`, which is indistinguishable from "this student never played it" —
+ * and a caller that renders the value directly states 0% as fact during the
+ * window before the document arrives, on the one screen whose whole purpose is
+ * to be the student's kept account of what they did.
  */
 export function useMyListening(
   uid: string | null,
   recordingId: string,
-): { listenedMs: number } | null {
+): { value: { listenedMs: number } | null; resolved: boolean } {
   return useLiveDocState<{ listenedMs: number } | null>(
     () => (uid ? doc(db, COLLECTIONS.listeningProgress, progressId(uid, recordingId)) : null),
     [uid, recordingId],
@@ -143,7 +157,7 @@ export function useMyListening(
         snap.exists() ? { listenedMs: (snap.data() as ListeningProgressDoc).listenedMs } : null,
       empty: null,
     },
-  ).value;
+  );
 }
 
 /**

@@ -158,7 +158,7 @@ async function seedSession(id: string, fields: Partial<SessionDoc>) {
     recordingId: null,
     attendance: {},
     attendanceSubmittedAt: null,
-    archived: false,
+    notRecorded: false,
     createdAt: 1,
     createdBy: ADMIN,
     updatedAt: 1,
@@ -201,6 +201,28 @@ describe('recordingReady', () => {
     await seedRecording('r1', 'sess1', 'published');
     expect(await notifyRecordingReady(db(), grant('s1', 'r1'))).toBe(false);
     expect(outbox).toHaveLength(0);
+  });
+
+  /*
+   * THE SWITCH IS PER MESSAGE, and the test above cannot say so.
+   *
+   * The promise on the settings screen is three independent switches — the
+   * screen renders one row per kind and the manual describes them one at a
+   * time. `prefEnabled(prefs, kind)` reading the wrong key, or ignoring `kind`
+   * altogether (`prefs?.recordingReady !== false`), satisfies every assertion
+   * above: the one switch that IS tested is the one such a version would read.
+   * A student who turned off "A recording is ready" would then be silenced on
+   * every message in the product, and nobody would learn it from this file.
+   *
+   * So each kind is proved twice over: its own switch stops it, and somebody
+   * else's switch does not. The second half is the one that discriminates.
+   */
+  it('is not silenced by a DIFFERENT switch being off', async () => {
+    await withDevice('s1');
+    await db().collection(COLLECTIONS.notifications).doc('s1').set({ lastDay: false });
+    await seedRecording('r1', 'sess1', 'published');
+    expect(await notifyRecordingReady(db(), grant('s1', 'r1'))).toBe(true);
+    expect(outbox).toHaveLength(1);
   });
 
   it('notifies someone who has never opened the settings screen', async () => {
@@ -287,6 +309,77 @@ describe('lastDay', () => {
     expect(outbox).toHaveLength(0);
   });
 
+  it('stops for the student who turned THIS reminder off, and not for another switch', async () => {
+    await withDevice('s1');
+    await withDevice('s2');
+    await seedRecording('r1', 'sess1', 'published');
+    for (const uid of ['s1', 's2']) {
+      await db()
+        .collection(COLLECTIONS.assignments)
+        .doc(assignmentId(uid, ns('r1')))
+        .set(grant(uid, 'r1', TODAY));
+    }
+    // s1 turned off the last-day reminder; s2 turned off a different one.
+    await db().collection(COLLECTIONS.notifications).doc('s1').set({ lastDay: false });
+    await db().collection(COLLECTIONS.notifications).doc('s2').set({ recordingReady: false });
+
+    expect(await notifyLastDay(db(), TODAY)).toBe(1);
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0].tokens).toEqual(['tok-s2']);
+  });
+
+  /*
+   * NOBODY IS REMINDED ABOUT SOMETHING THEY CANNOT OPEN.
+   *
+   * Both filters guard the same promise from opposite sides — a grant that was
+   * withdrawn (unenrolled, or corrected from excused to present) and a recording
+   * that is not published. Either one removed sends a push saying "last day to
+   * listen" for audio `getPlaybackUrl` will refuse, which reads as the app
+   * losing something the student was told they had.
+   */
+  it('says nothing about a grant that has been withdrawn', async () => {
+    await withDevice('s1');
+    await seedRecording('r1', 'sess1', 'published');
+    await db()
+      .collection(COLLECTIONS.assignments)
+      .doc(assignmentId('s1', ns('r1')))
+      .set({ ...grant('s1', 'r1', TODAY), active: false });
+    expect(await notifyLastDay(db(), TODAY)).toBe(0);
+    expect(outbox).toHaveLength(0);
+  });
+
+  it('says nothing about a recording that is not published', async () => {
+    await withDevice('s1');
+    await seedRecording('r1', 'sess1', 'draft');
+    await db()
+      .collection(COLLECTIONS.assignments)
+      .doc(assignmentId('s1', ns('r1')))
+      .set(grant('s1', 'r1', TODAY));
+    expect(await notifyLastDay(db(), TODAY)).toBe(0);
+    expect(outbox).toHaveLength(0);
+  });
+
+  /*
+   * WHAT IT SAYS, not just that it was sent. Every other assertion here counts
+   * recipients, so the whole block passes with `recordingReadyMessage` in this
+   * job's place — which would tell a student on the closing morning that the
+   * recording "is yours to listen to until" today, an invitation rather than a
+   * deadline, in the one message that exists to be a deadline.
+   */
+  it('says the recording CLOSES, and names the class and the day', async () => {
+    await withDevice('s1');
+    await seedRecording('r1', 'sess1', 'published');
+    await db()
+      .collection(COLLECTIONS.assignments)
+      .doc(assignmentId('s1', ns('r1')))
+      .set(grant('s1', 'r1', TODAY));
+    expect(await notifyLastDay(db(), TODAY)).toBe(1);
+    expect(outbox[0].message).toEqual({
+      title: 'Hikam Foundations: last day to listen',
+      body: `Session 3 — Patience closes at the end of ${TODAY}.`,
+    });
+  });
+
   it('runs a second morning without repeating itself', async () => {
     // The sweep fires every day regardless of whether yesterday's finished.
     await withDevice('s1');
@@ -337,6 +430,63 @@ describe('attendanceMissing', () => {
     await seedSession('sess1', { date: '2026-08-10', attendanceSubmittedAt: null });
     expect(await notifyAttendanceMissing(db(), TODAY)).toBe(1);
     expect(await notifyAttendanceMissing(db(), '2026-08-21')).toBe(0);
+  });
+
+  /*
+   * THE GRACE PERIOD, AT ITS EDGES.
+   *
+   * "Leaves a teacher alone for the first couple of days" is asserted at zero
+   * days and the notification at ten — a gap wide enough to hide any value of
+   * `graceDays` between 1 and 10. Both directions past the boundary are real
+   * failures with a person on the end of them: shortened, a teacher is nagged
+   * the morning after class about a register they were always going to take;
+   * lengthened, a class sits locked out of a published recording for the best
+   * part of a week with nothing said. The default is 2, so the last silent day
+   * is one day back and the first spoken one is two.
+   */
+  it('is still silent one day after the meeting, and speaks on the second', async () => {
+    await withDevice('mgr1');
+    await seedSession('sess1', { date: '2026-08-19', attendanceSubmittedAt: null });
+    expect(await notifyAttendanceMissing(db(), TODAY)).toBe(0);
+    await seedSession('sess2', { date: '2026-08-18', attendanceSubmittedAt: null });
+    expect(await notifyAttendanceMissing(db(), TODAY)).toBe(1);
+  });
+
+  /*
+   * A CLASS SOMEBODY SAID WAS NOT RECORDED. The whole reason this message exists
+   * is that an un-taken register locks a class out of a published recording —
+   * so where there is no recording, chasing the register every morning for the
+   * rest of the term is noise with nothing behind it.
+   */
+  it('leaves a session marked as not recorded alone', async () => {
+    await withDevice('mgr1');
+    await seedSession('sess1', { date: '2026-08-10', attendanceSubmittedAt: null, notRecorded: true });
+    expect(await notifyAttendanceMissing(db(), TODAY)).toBe(0);
+    // …and the same session, unmarked, is chased — so the silence is the flag's
+    // doing and not the fixture's.
+    await seedSession('sess2', { date: '2026-08-10', attendanceSubmittedAt: null });
+    expect(await notifyAttendanceMissing(db(), TODAY)).toBe(1);
+  });
+
+  /*
+   * THE STAFF SWITCH, and the same discriminator as the two student blocks: a
+   * manager who turned a DIFFERENT message off still gets this one. Without the
+   * second half, `prefEnabled` ignoring its `kind` argument passes here too.
+   */
+  it('stops for the manager who turned it off', async () => {
+    await withDevice('mgr1');
+    await db().collection(COLLECTIONS.notifications).doc('mgr1').set({ attendanceMissing: false });
+    await seedSession('sess1', { date: '2026-08-10', attendanceSubmittedAt: null });
+    expect(await notifyAttendanceMissing(db(), TODAY)).toBe(0);
+    expect(outbox).toHaveLength(0);
+  });
+
+  it('is not silenced by a DIFFERENT switch being off', async () => {
+    await withDevice('mgr1');
+    await db().collection(COLLECTIONS.notifications).doc('mgr1').set({ lastDay: false });
+    await seedSession('sess1', { date: '2026-08-10', attendanceSubmittedAt: null });
+    expect(await notifyAttendanceMissing(db(), TODAY)).toBe(1);
+    expect(outbox[0].tokens).toEqual(['tok-mgr1']);
   });
 });
 

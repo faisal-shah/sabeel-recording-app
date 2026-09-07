@@ -270,7 +270,7 @@ for (const c of courses) {
       recordingId,
       attendance, attendanceSubmittedAt: attendanceTaken ? start + i * 7 * day + 3600000 : null,
       ...(attendanceTaken ? { attendanceSubmittedBy: 'demo-seed' } : {}),
-      archived: false, createdAt: start + i * 7 * day, createdBy: 'demo-seed',
+      notRecorded: false, createdAt: start + i * 7 * day, createdBy: 'demo-seed',
       updatedAt: start + i * 7 * day, ...DEMO }));
     sessionCount++;
 

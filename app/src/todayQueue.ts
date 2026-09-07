@@ -190,7 +190,10 @@ export function buildTodayQueue({
   const out: TodayItem[] = [];
 
   for (const s of sessions ?? []) {
-    if (s.archived) continue;
+    // A class somebody has said was not recorded raises nothing here: no
+    // register to chase, no recording to wait for. It is the only exit from the
+    // "no recording yet" card, which otherwise stays for the life of the course.
+    if (s.notRecorded) continue;
     const courseName = names.get(s.courseId) ?? '';
     // Days since the meeting: `daysUntilDue` counts whole calendar days
     // between two date-only strings, which is exactly this with the arguments

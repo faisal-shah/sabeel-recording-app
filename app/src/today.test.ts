@@ -39,7 +39,7 @@ function session(
     recordingId: null,
     attendance: {},
     attendanceSubmittedAt: 1,
-    archived: false,
+    notRecorded: false,
     createdAt: 1,
     createdBy: 'admin',
     updatedAt: 1,
@@ -124,9 +124,23 @@ describe('what becomes work', () => {
     expect(q.items).toHaveLength(0);
   });
 
-  it('an archived session is not work at all', () => {
-    const q = build([session('s1', { archived: true, attendanceSubmittedAt: null })]);
-    expect(q.items).toHaveLength(0);
+  /*
+   * THE ONE EXIT FROM A CARD THAT OTHERWISE NEVER LEAVES.
+   *
+   * A class that met and was never recorded raises "no recording yet", and that
+   * card has no expiry — unlike the publish row, which retires at the listen-by
+   * date. Marking the session as not recorded is what clears it, and the same
+   * flag stops the morning reminder. The control belongs to whoever runs the
+   * class; this is the whole of its effect here.
+   *
+   * ASSERTED AGAINST ITS OWN CONTROL: the identical session without the flag
+   * DOES raise work, so an empty queue cannot pass because the fixture was
+   * uninteresting.
+   */
+  it('a session marked as not recorded is not work at all', () => {
+    const fields = { attendanceSubmittedAt: null };
+    expect(build([session('s1', { ...fields, notRecorded: true })]).items).toHaveLength(0);
+    expect(build([session('s1', fields)]).items.length).toBeGreaterThan(0);
   });
 
   it('a published recording well inside its deadline is not work', () => {

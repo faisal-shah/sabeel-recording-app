@@ -245,8 +245,22 @@ export function canPlayNow(
   studentUid: string | null,
   today: string,
 ): boolean {
+  /*
+   * STAFF FIRST, AND BEFORE THE COURSE CHECK.
+   *
+   * Both ways a student's access ends — the deadline, and archiving a class with
+   * listening off — are about students, and `playbackDenial` on the server has
+   * always read them that way: its staff branch returns before either. This read
+   * them in the other order and cut staff off from an archived class's audio,
+   * while the server went on serving it — so the transport vanished and the
+   * screen showed the student's own sentence, "ask your teacher if you need
+   * access again", to the teacher.
+   *
+   * That sentence is the reason staff keep access: someone has to be able to
+   * hear the recording to decide whether to turn listening back on.
+   */
+  if (studentUid === null) return true;
   if (!canPlayFromCourse(cls)) return false;
-  if (studentUid === null) return true; // staff: no deadline of their own
   return dueDate !== null && !isOverdue(dueDate, today);
 }
 

@@ -87,6 +87,11 @@ let UNGRANTED = '';
 let WITHDRAWN = '';
 let DRAFT = '';
 let THEIR_REC = '';
+/**
+ * Published, granted, and its listen-by date is in the PAST — the state every
+ * recording ends in. See the assertion that names it below.
+ */
+let CLOSED = '';
 
 beforeEach(async () => {
   run += 1;
@@ -95,6 +100,7 @@ beforeEach(async () => {
   WITHDRAWN = `recWithdrawn-run${run}`;
   DRAFT = `recDraft-run${run}`;
   THEIR_REC = `recTheirs-run${run}`;
+  CLOSED = `recClosed-run${run}`;
   await testEnv.clearFirestore();
   await testEnv.clearStorage();
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
@@ -144,7 +150,7 @@ beforeEach(async () => {
         recordingId: null,
         attendance,
         attendanceSubmittedAt: 1,
-        archived: false,
+        notRecorded: false,
         createdAt: 1,
         createdBy: ADMIN,
         updatedAt: 1,
@@ -168,14 +174,19 @@ beforeEach(async () => {
       });
     // The grant. A student reads a recording through this document and nothing
     // else, so every student-read case below is really a case about one of these.
-    const grant = (recordingId: string, active: boolean, sessionId: string) =>
+    const grant = (
+      recordingId: string,
+      active: boolean,
+      sessionId: string,
+      dueDate = '2099-01-01',
+    ) =>
       setDoc(doc(db, COLLECTIONS.assignments, assignmentId(STUDENT, recordingId)), {
         studentUid: STUDENT,
         recordingId,
         sessionId,
         courseId: CLASS_MINE,
         cohortId: 'c1',
-        dueDate: '2099-01-01',
+        dueDate,
         active,
         assignedAt: 1,
         assignedBy: 'system',
@@ -193,14 +204,18 @@ beforeEach(async () => {
       sess(`${WITHDRAWN}-s`, CLASS_MINE, PRESENT),
       sess(`${DRAFT}-s`, CLASS_MINE, EXCUSED),
       sess(`${THEIR_REC}-s`, CLASS_THEIRS, {}),
+      sess(`${CLOSED}-s`, CLASS_MINE, EXCUSED),
       rec(PUBLISHED, CLASS_MINE, 'published', `${PUBLISHED}-s`),
       rec(UNGRANTED, CLASS_MINE, 'published', `${UNGRANTED}-s`),
       rec(WITHDRAWN, CLASS_MINE, 'published', `${WITHDRAWN}-s`),
       rec(DRAFT, CLASS_MINE, 'draft', `${DRAFT}-s`),
       rec(THEIR_REC, CLASS_THEIRS, 'published', `${THEIR_REC}-s`),
+      rec(CLOSED, CLASS_MINE, 'published', `${CLOSED}-s`),
       grant(PUBLISHED, true, `${PUBLISHED}-s`),
       grant(WITHDRAWN, false, `${WITHDRAWN}-s`),
       grant(DRAFT, true, `${DRAFT}-s`),
+      // Active, and its deadline went by years ago. See the assertion below.
+      grant(CLOSED, true, `${CLOSED}-s`, '2020-01-01'),
       setDoc(doc(db, COLLECTIONS.enrollments, enrollmentId(STUDENT, CLASS_MINE)), {
         studentUid: STUDENT,
         courseId: CLASS_MINE,
@@ -282,6 +297,29 @@ describe('recordings: student reads', () => {
     await assertFails(getDoc(doc(outsider().firestore(), COLLECTIONS.recordings, PUBLISHED)));
   });
 
+  /*
+   * THE DEADLINE IS ENFORCED AT THE AUDIO, NOT HERE — and this is the assertion
+   * that holds the rules to it.
+   *
+   * Every other grant in this file is dated 2099, so the whole suite passes with
+   * a date comparison added to the student arm, or with the fan-out flipping
+   * `active:false` on expiry. Either would look like a tightening and neither
+   * would be: the product promises a student a Missed card "rather than
+   * disappearing — a student is owed the record of what closed and when", the
+   * closed player promises "your listening record is kept", and both are built
+   * out of exactly this read. `StudentHomeScreen` resolves each assignment with
+   * `readIfPermitted` and skips what comes back empty, so a refusal here does
+   * not raise an error anywhere — every closed recording simply vanishes from
+   * every student's home, silently.
+   *
+   * The deadline lives in `getPlaybackUrl`, where it is one comparison in
+   * `@sabeel/shared` rather than a second copy of the same maths written against
+   * `request.time` in a rules file. This is the test that keeps it there.
+   */
+  it('STILL let a student read one whose listen-by date has passed', async () => {
+    await assertSucceeds(getDoc(doc(student().firestore(), COLLECTIONS.recordings, CLOSED)));
+  });
+
   it('deny a student ANY list of recordings, however constrained', async () => {
     // The student arm is get-only on purpose: resolving a grant per row would
     // cost two document-access calls each and blow the per-query cap. Students
@@ -296,6 +334,44 @@ describe('recordings: student reads', () => {
         ),
       ),
     );
+  });
+});
+
+/*
+ * DISABLING A STUDENT SHUTS THE DOOR — the other half of "keeps their history".
+ *
+ * `isStudent()` is `isActive() && role() == 'student'`, and every student arm in
+ * the rules is built on it. The staff side of `isActive()` is well covered — the
+ * identity suite and the callable guards both prove a pending or disabled staff
+ * account writes nothing — and the student side was covered nowhere: weakening
+ * `isStudent()` to `isSignedIn() && role() == 'student'` left every rules suite
+ * in this repo green while a disabled student kept reading recordings, and a
+ * student still awaiting nothing in particular could read them before an admin
+ * had ever seen the account.
+ *
+ * The token is the whole of the test, so the fixture is the SAME student with
+ * the SAME grant: only `status` differs, which is exactly the mutation.
+ */
+describe('recordings: a student whose account is not active', () => {
+  const suspended = (status: string) => testEnv.authenticatedContext(STUDENT, { role: 'student', status });
+
+  it('cannot read the recording their active self could', async () => {
+    await assertSucceeds(getDoc(doc(student().firestore(), COLLECTIONS.recordings, PUBLISHED)));
+    await assertFails(getDoc(doc(suspended('disabled').firestore(), COLLECTIONS.recordings, PUBLISHED)));
+    await assertFails(getDoc(doc(suspended('pending').firestore(), COLLECTIONS.recordings, PUBLISHED)));
+  });
+
+  it('cannot read their own assignments, progress or completions either', async () => {
+    const db = suspended('disabled').firestore();
+    await assertFails(
+      getDocs(
+        query(collection(db, COLLECTIONS.assignments), where('studentUid', '==', STUDENT)),
+      ),
+    );
+    await assertFails(
+      getDoc(doc(db, COLLECTIONS.listeningProgress, `${STUDENT}_${PUBLISHED}`)),
+    );
+    await assertFails(getDoc(doc(db, COLLECTIONS.completions, `${STUDENT}_${PUBLISHED}`)));
   });
 });
 
@@ -520,7 +596,13 @@ describe('listeningProgress', () => {
     );
   });
 
-  it('does not let staff touch progress — that is the Phase 5 ledger', async () => {
+  /*
+   * Scoped staff reads of this collection are the ledger's, and they live in
+   * `rules.ledger.test.ts` — including the `get`-versus-`list` distinction.
+   * This asserts the two things that hold whatever the ledger may do: an
+   * UNCONSTRAINED list is refused, and no client writes it at all.
+   */
+  it('does not let staff LIST it unscoped, and let NOBODY write it', async () => {
     await assertFails(getDocs(collection(mine().firestore(), COLLECTIONS.listeningProgress)));
     await assertFails(
       setDoc(doc(admin().firestore(), COLLECTIONS.listeningProgress, mineId()), row(STUDENT)),

@@ -36,6 +36,46 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-09-07 — **Four decisions taken in review, and one field renamed to say
+  what it means.**
+
+  1. **An archived class with listening off closes the audio to STUDENTS, and
+     staff keep access.** The server had always read it that way — `playbackDenial`
+     returns from its staff branch before either of a student's two closures — and
+     the client did not, so a manager opening an archived recording got no
+     transport and the student's own sentence, "ask your teacher if you need access
+     again", shown to the teacher being asked. Staff keeping access is what makes
+     that sentence answerable: somebody has to hear the recording to decide whether
+     to turn listening back on. `canPlayNow` now checks the staff branch first.
+
+  2. **The "attendance still not taken" message goes to a class's managers and to
+     nobody else** — no fallback, no copy to admins. An admin who manages no class
+     therefore has no switch for it; the notifications screen names who does get it
+     instead of offering a control whose only possible effect would be to silence
+     something already silent. The brief and manual said "staff", which was never
+     what the job did.
+
+  3. **A class that met and was not recorded can be marked as such.** The card it
+     otherwise leaves on the staff work queue has no expiry, and the only previous
+     escape was deleting the session — which destroys that day's register with it.
+     The mark is reversible, it is audited through `updateSession`, and its whole
+     job is silence: the queue row goes and the morning reminder stops. The
+     register is untouched, and the marks already in it still count.
+
+  4. **The by-student attendance report lists everyone the submitted registers
+     name, not the current roster.** A student unenrolled mid-term keeps their
+     marks — "an attendance record is what happened on the day and outlives the
+     enrolment" — and those marks go on counting in every session's totals, so
+     listing the active roster alone meant the two cuts of one report stopped
+     adding up. They are shown, and exported, flagged *no longer enrolled*.
+
+  Decision 3 needed a field. `sessions.archived` was written `false` at creation
+  and set true by nothing — no callable offered it, no screen showed it — while
+  the work queue and the reminder job both already read it as "leave this session
+  alone". It is now `sessions.notRecorded`, which says which kind of leaving-alone
+  it means. `scripts/migrate-not-recorded.mjs` renames it on stored documents;
+  both readers test truthiness, so nothing changes behaviour either way.
+
 - 2026-09-06 — **A persistent navigation shell, a real desktop layout, and a
   work queue as the staff landing screen.**
 

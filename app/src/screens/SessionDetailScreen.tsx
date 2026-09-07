@@ -479,29 +479,78 @@ function RecordingSection({
         ) : null}
 
         {!recording ? (
-          <>
-            <Text style={styles.meta}>
-              No recording yet. Upload the audio or import it from Zoom; the session&apos;s title and
-              date are used automatically.
-            </Text>
-            {canPickAudio ? (
+          session.notRecorded ? (
+            /*
+              ALREADY SETTLED. Saying "no recording yet" under a line that says
+              this class was not recorded is the app arguing with itself, so the
+              upload and import controls go with it — putting audio here is
+              un-marking it, which is the button below.
+            */
+            <>
+              <Text style={styles.meta}>
+                This class was not recorded. It has left the work queue, and nobody is being
+                reminded to take its register.
+              </Text>
               <Button
-                testID="recording-upload"
-                label="Upload audio…"
-                busy={uploading}
-                onPress={() => upload()}
+                testID="session-recorded-after-all"
+                label="It was recorded after all"
+                variant="secondary"
+                busy={busy === 'notRecorded'}
+                onPress={() =>
+                  run('notRecorded', () =>
+                    updateSession({ sessionId: session.id, notRecorded: false }),
+                  )
+                }
               />
-            ) : (
-              <Notice tone="info">Uploading is done from the web app on a computer.</Notice>
-            )}
-            <Button
-              testID="recording-import-zoom"
-              label="Import from Zoom"
-              variant="secondary"
-              disabled={uploading}
-              onPress={() => onImportZoom(session)}
-            />
-          </>
+            </>
+          ) : (
+            <>
+              <Text style={styles.meta}>
+                No recording yet. Upload the audio or import it from Zoom; the session&apos;s title
+                and date are used automatically.
+              </Text>
+              {canPickAudio ? (
+                <Button
+                  testID="recording-upload"
+                  label="Upload audio…"
+                  busy={uploading}
+                  onPress={() => upload()}
+                />
+              ) : (
+                <Notice tone="info">Uploading is done from the web app on a computer.</Notice>
+              )}
+              <Button
+                testID="recording-import-zoom"
+                label="Import from Zoom"
+                variant="secondary"
+                disabled={uploading}
+                onPress={() => onImportZoom(session)}
+              />
+              {/*
+                THE WAY OUT OF A CARD THAT OTHERWISE NEVER LEAVES.
+
+                A class that met and was never recorded keeps a "no recording
+                yet" row on the work queue for the life of the course — the row
+                has no expiry, unlike the publish reminder — and goes on
+                producing the morning "attendance still not taken" message. The
+                only previous escape was deleting the session, which destroys
+                that day's register with it. This says the same thing without
+                destroying anything, and it is reversible above.
+              */}
+              <Button
+                testID="session-not-recorded"
+                label="This class was not recorded"
+                variant="secondary"
+                disabled={uploading}
+                busy={busy === 'notRecorded'}
+                onPress={() =>
+                  run('notRecorded', () =>
+                    updateSession({ sessionId: session.id, notRecorded: true }),
+                  )
+                }
+              />
+            </>
+          )
         ) : (
           <RecordingCard
             recording={recording}

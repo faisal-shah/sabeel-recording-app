@@ -105,7 +105,7 @@ and grants access, is course-scoped as everything else is.
 - The Zoom import picker supports date range, meeting title, import status, and duration filters.
 - Already imported Zoom recordings show as imported and link to the existing app recording.
 - Failed imports show a needs-attention status with retry and useful error details.
-- Drafts prefill title, recording date, duration, and source details from Zoom when available.
+- Drafts take their duration and source details from Zoom. Title and date come from the session, which owns them — see the data model — so the Zoom topic and start time are not copied onto the recording.
 
 ### Manual upload
 
@@ -186,9 +186,8 @@ currently enrolled, so no later edit to a session can quietly hand access back.
 **Re-enrolling restores the obligations that are still open, and only those**
 (decision, 2026-09-07). A recording whose Listen by date passed while the student
 was out of the class does not come back: handing one back would create an
-obligation already over — against "nothing is ever born expired" — and announce
-it, since a new grant sends "a recording is ready… listen by <a date last term>"
-over audio the server then refuses. The student is not recorded as having missed
+obligation already over, against "nothing is ever born expired", over audio the
+server then refuses to serve. The student is not recorded as having missed
 a window they were not enrolled for. Staff keep the record either way: the
 recording ledger goes on listing them under **Excused, access closed**.
 
@@ -302,32 +301,30 @@ done, and closing the gap removes the row.
 
 The recording library:
 
-- Defaults to active cohorts/classes and non-archived recordings.
-- Groups by cohort/semester, then class, then most recent recordings.
-- Provides filters for archived and inactive content.
-- Shows status counts and needs-attention states so it does not become a wall of recordings.
+- Is cross-cohort: an admin sees every recording in the institute as one list, a manager sees theirs grouped by class. Cohort/semester is not a level of grouping here — the Classes tab is where the hierarchy lives, and repeating it made a short list twice as tall.
+- Filters by recording status, and shows the count under each status so it does not become a wall of recordings. Everything is shown by default; a filter narrows it.
+- Surfaces needs-attention states, which are the rows that want a person.
 
 Staff can play recordings in the app to verify imports and metadata.
 
 ### Complete list views
 
-Staff need complete sortable/filterable list views for:
+Staff reach everything through complete lists rather than search: Recordings,
+Students, Classes, and the ledger views. Each list is whole — nothing is hidden
+behind a query — and each is ordered so the list itself is the navigation.
 
-- Recordings
-- Students
-- Classes
-- Ledger/reporting views
+Filtering is deliberately narrow. **Recording status** is the one filter the
+product has, on the library, because status is the only attribute of a recording
+that decides whether somebody has to act. Cohort and class are structure, and the
+Classes tab already navigates them; completion state is what a ledger is for and
+belongs on the ledger rather than on a list of recordings; and there is no
+"no due date" to filter for, because every session has one — it is required.
 
-Required filters include:
+Sorting is fixed rather than user-chosen: students by name, sessions and
+recordings by date, newest meeting first. A sort control on a list whose right
+order is obvious is a control that can only put it in the wrong one.
 
-- Cohort
-- Class
-- Recording status
-- Due date/no due date
-- Completion status
-- Archived state
-
-Search is not required in the first release. The product should rely on hierarchy, filters, sorting, and complete list views.
+Search is not required.
 
 ## Admin backend stats
 
@@ -356,7 +353,7 @@ The ledger should help staff find action items without inspecting every student 
 1. **Recording ledger:** split by the session's attendance — the **excused**, shown with completion and missed state; the **present** and the **absent**, neither required nor able to open it, listed so the ledger still accounts for the whole submitted roster. A residual "also listened" catches listening from someone who holds no current grant (excused, listened, then corrected to present).
 2. **Student ledger:** all assigned recordings for a student, filterable by course and status.
 3. **Course-level views:** grouped by cohort/course with incomplete and missed counts.
-4. **Attendance report:** per course, a toggle between a by-session summary (present/absent/excused counts, un-taken sessions flagged) and a by-student summary (attendance tallies + catch-up status: of the sessions each student was excused from, how many recordings are complete/missed). CSV export per cut.
+4. **Attendance report:** per course, a toggle between a by-session summary (present/absent/excused counts, un-taken sessions flagged) and a by-student summary (attendance tallies + catch-up status: of the sessions each student was excused from, how many recordings are complete/missed). CSV export per cut. The by-student cut lists **everyone the submitted registers name**, not only the current roster: a student unenrolled mid-term keeps their marks, those marks keep counting in the by-session totals, and they are shown flagged *no longer enrolled* so the two cuts of one report reconcile.
 
 ### Recording ledger fields
 
@@ -365,7 +362,7 @@ The ledger should help staff find action items without inspecting every student 
 - Listened percent
 - Last listened
 - Completed at
-- Pending sync where relevant
+- Pending sync where relevant (on screen; a sync state is a property of the reader's device at a moment, not a fact about the student, so it is not exported)
 - Override status/reason where relevant
 
 Default staff workflow should make it easy to filter to not complete or missed students.
@@ -378,11 +375,14 @@ Staff can manually override a student's completion status only with a required r
 
 CSV export is required for:
 
-- Class ledger views
 - Recording ledger views
 - Student ledger views
+- Both cuts of the attendance report — the class-level view of who owes what
 
-Exports should reflect the same filters used on screen.
+Exports reflect the same filters used on screen. The recording ledger's export is
+therefore the **accountable** list — the students the session excused — matching
+what the filter shows; the present, absent and "also listened" sections account
+for the roster on screen and are not part of a file about who owes listening.
 
 ## Notifications
 
@@ -390,7 +390,9 @@ Push notifications are first-class scope for students and staff alike. Three mes
 
 1. **Student — a recording is ready for you.** Fires once when a student is excused and the recording is published. Under the excused-only policy this is also "you now have access", so without it a student has no way to know a recording appeared.
 2. **Student — last day to listen.** On the morning of the due date, if not yet complete. There is no day-after reminder: once the deadline passes there is no action left to take, so a message could only say "you missed it".
-3. **Staff — attendance still not taken.** A session whose date has passed with attendance never submitted. Load-bearing under this policy: no attendance means nobody is granted anything, so an un-taken sheet silently locks a whole class out of a published recording.
+3. **Course managers — attendance still not taken.** A session whose date has passed with attendance never submitted, sent to the people who manage that class. Load-bearing under this policy: no attendance means nobody is granted anything, so an un-taken sheet silently locks a whole class out of a published recording. A session marked **not recorded** raises nothing — there is no audio for a missing register to lock anyone out of.
+
+To the class's managers and to nobody else: an admin who manages no class cannot receive it, so their notification settings say where class messages go instead of offering a switch that could do nothing.
 
 Each has its own on/off switch, per person, defaulting on. Notifications are a convenience, not the accountability mechanism.
 

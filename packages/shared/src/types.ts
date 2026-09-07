@@ -183,7 +183,25 @@ export interface SessionDoc {
   /** The explicit-submit marker. Null until attendance is submitted. */
   attendanceSubmittedAt: number | null;
   attendanceSubmittedBy?: string;
-  archived: boolean;
+  /**
+   * This class met but was deliberately not recorded.
+   *
+   * Set by whoever runs the class, and its whole job is silence: the staff work
+   * queue drops the "no recording yet" card and the morning "attendance still
+   * not taken" reminder stops. Without it, a meeting nobody recorded left a card
+   * on Today for the life of the course, and the only escape was deleting the
+   * session — which destroys that day's register with it.
+   *
+   * NOT `archived`, which is what this field used to be called and what nothing
+   * ever wrote. Both readers already treated it as "leave this session alone";
+   * the name simply never said which kind of leaving-alone, so no screen could
+   * offer it and no reader could tell whether a false meant "not archived" or
+   * "nobody has decided".
+   *
+   * The register is unaffected: attendance can still be taken, and the marks
+   * that are there still count. What ends is the chasing.
+   */
+  notRecorded: boolean;
   createdAt: number;
   createdBy: string;
   updatedAt: number;

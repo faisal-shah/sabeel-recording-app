@@ -13,7 +13,7 @@ import { createCohortRecord } from '../../src/cohorts';
 import { createCourseRecord } from '../../src/courses';
 import { createSessionRecord } from '../../src/sessions';
 import { MAX_AUDIO_BYTES } from '../../src/recordings';
-import { applyImportZoomRecording, applyRetryZoomImport } from '../../src/zoomImport';
+import { annotateImported, applyImportZoomRecording, applyRetryZoomImport } from '../../src/zoomImport';
 import type { ZoomAudioRecording, ZoomClient } from '../../src/zoom';
 
 beforeAll(() => {
@@ -183,6 +183,95 @@ describe('applyImportZoomRecording', () => {
     expect(rec.status).toBe('draft');
     expect(rec.audioPath).not.toBeNull();
     expect(await audioExists(retried.recordingId)).toBe(true);
+  });
+});
+
+/*
+ * ONE MEETING, TWO SESSIONS — the guard that keeps an unfinished import from
+ * being adopted by whoever asks next.
+ *
+ * The dedupe is global on the meeting uuid, and the "finish the job" branch
+ * above it exists so a retry of a half-done import completes rather than
+ * reporting success. Together, without `prior.sessionId === input.sessionId`,
+ * importing a meeting into session B finds session A's failed draft, downloads
+ * the audio into A's recording, and hands back A's id with
+ * `alreadyExisted: false` — staff are told their import worked, session B still
+ * has no recording, and a session in another class silently gains audio nobody
+ * chose for it. The test above cannot see it: it retries into the SAME session.
+ */
+describe('a failed import belongs to the session that started it', () => {
+  it('is not adopted by an import into a different session', async () => {
+    await expect(
+      applyImportZoomRecording(
+        ADMIN,
+        { meetingUuid: 'uuid-1', fileId: 'file-1', sessionId },
+        fakeClient(REC, { fail: true }),
+      ),
+    ).rejects.toThrow(/import failed/i);
+
+    const { id: otherSessionId } = await createSessionRecord(ADMIN, {
+      courseId,
+      date: '2026-05-14',
+      title: 'Session Two',
+      dueDate: '2099-01-01',
+      notes: '',
+    });
+    const res = await applyImportZoomRecording(
+      ADMIN,
+      { meetingUuid: 'uuid-1', fileId: 'file-1', sessionId: otherSessionId },
+      fakeClient(REC),
+    );
+
+    // Told the truth — this meeting is already spoken for — and nothing written.
+    expect(res.alreadyExisted).toBe(true);
+    expect(await countRecordings()).toBe(1);
+    const first = await rec(res.recordingId);
+    expect(first.sessionId).toBe(sessionId);
+    // The other session's draft was NOT quietly finished on its behalf.
+    expect(first.audioPath).toBeNull();
+    expect(await audioExists(res.recordingId)).toBe(false);
+  });
+});
+
+/*
+ * WHAT THE PICKER SHOWS, which had no test of any kind.
+ *
+ * `listZoomRecordings` closes over the module-level `zoomClient` and its
+ * credentials live only in Secret Manager, so the callable itself cannot run
+ * here — but everything it does past the fetch is this, and it is the half that
+ * decides what a manager sees: which meetings are already in the institute, and
+ * which class each went into. Getting it wrong offers every imported recording
+ * for import a second time, and the picker's `imported` filter then matches
+ * nothing.
+ */
+describe('annotateImported', () => {
+  const other: ZoomAudioRecording = { ...REC, meetingUuid: 'uuid-2', fileId: 'file-2', topic: 'Not imported' };
+
+  it('marks the one this institute already has, names its class, and leaves the rest alone', async () => {
+    const { recordingId } = await applyImportZoomRecording(
+      ADMIN,
+      { meetingUuid: 'uuid-1', fileId: 'file-1', sessionId },
+      fakeClient(REC),
+    );
+
+    const rows = await annotateImported([REC, other]);
+    expect(rows).toHaveLength(2);
+    // The id, not merely a flag: the row is tappable through to this recording.
+    expect(rows[0]).toMatchObject({
+      meetingUuid: 'uuid-1',
+      alreadyImported: recordingId,
+      importedCourseName: 'K',
+    });
+    expect(rows[1]).toMatchObject({
+      meetingUuid: 'uuid-2',
+      alreadyImported: null,
+      importedCourseName: null,
+    });
+  });
+
+  it('says nothing is imported when nothing is', async () => {
+    const rows = await annotateImported([REC, other]);
+    expect(rows.map((r) => r.alreadyImported)).toEqual([null, null]);
   });
 });
 

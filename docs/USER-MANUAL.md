@@ -251,8 +251,9 @@ with Google** with your Sabeel Google account.
 
 **The first time, you'll wait for approval.** New staff accounts start as
 *pending* — an administrator has to approve you and choose your role before you
-can do anything. Once they do, sign in again and you're in. (If you're the very
-first administrator, that step was done for you during setup.)
+can do anything. The screen updates by itself the moment they do; you do not
+need to sign in again. (If you're the very first administrator, that step was
+done for you during setup.)
 
 ## 2.2 Today — what's waiting
 
@@ -625,10 +626,14 @@ sees every course.
 
 ## 2.12 Notifications *(staff)*
 
-Tap **More**, then **Notifications**. Staff get one message:
+Tap **More**, then **Notifications**. Managers get one message:
 
 - **Attendance still not taken** — a couple of days after a class meeting whose
   attendance you never submitted.
+
+It goes to the people who manage the class, so if you manage none — which is
+usual for an administrator — you have no switches here, and the screen says so.
+A session marked **not recorded** stops sending it.
 
 It's more useful than it sounds. Until attendance is submitted nobody has been
 excused, so a recording you've already published is sitting there that not one

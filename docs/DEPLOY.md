@@ -146,6 +146,24 @@ faithfully re-create the very grants it exists to remove, and report success
 doing so — hence the position in the order. Hosting goes last so no student sees
 the new screens against un-migrated data.
 
+### One-off: the `notRecorded` rename (v0.5.0)
+
+`sessions.archived` became `sessions.notRecorded`, which is the field the new
+"This class was not recorded" control writes. It goes **after functions**, and
+its position is the only thing that matters — hosting can come before or after:
+
+```bash
+node scripts/migrate-not-recorded.mjs --dry-run   # read the counts first
+node scripts/migrate-not-recorded.mjs
+```
+
+Unlike the excused-only migration this changes no behaviour and wakes no
+trigger. Both readers of the field test truthiness, so a session carrying
+neither name already behaves as `notRecorded: false`; the sweep exists so the
+stored documents match the type that says the field is required. It refuses to
+run if it finds `archived: true`, which nothing could ever have written — a
+value there means the assumption behind the rename is wrong.
+
 `storage:rules` errors with "Could not find rules for the following storage
 targets: rules" — the `storage` block in `firebase.json` is a single unnamed
 config, so the target is just `storage`. And a deploy that must delete functions

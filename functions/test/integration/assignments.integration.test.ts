@@ -83,7 +83,7 @@ async function seedSession(
     recordingId: fields.recordingId ?? null,
     attendance: fields.attendance,
     attendanceSubmittedAt: fields.submitted ? 1 : null,
-    archived: false,
+    notRecorded: false,
     createdAt: 1,
     createdBy: ADMIN,
     updatedAt: 1,

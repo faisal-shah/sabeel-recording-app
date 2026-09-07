@@ -627,6 +627,52 @@ check(
     (await admin.getByTestId('tab-today-badge').count()) === 0,
   (await bodyText(admin)).replace(/\n+/g, ' | ').slice(0, 160),
 );
+/*
+ * A CLASS THAT WAS NOT RECORDED LEAVES THE QUEUE — and comes back if it was.
+ *
+ * Right here the session has its register in and no audio, which is the state
+ * that used to be permanent: Today's "no recording yet" row has no expiry, and
+ * the morning "attendance still not taken" message goes on regardless, so a
+ * meeting nobody recorded stayed on the landing screen for the life of the
+ * course. The only escape was deleting the session, which takes that day's
+ * register with it.
+ *
+ * ASSERTED IN BOTH DIRECTIONS, from the queue rather than from the session page:
+ * the row is what a manager sees every morning, and a control that changes a
+ * field without changing the screen has fixed nothing.
+ */
+await goHome(admin);
+const sessionOneId = (await readCollection('sessions')).find(
+  (d) => d.fields.title?.stringValue === 'Session 1',
+)?.name.split('/').pop();
+check('the run knows which session it is asserting about', !!sessionOneId);
+const queueRow = admin.getByTestId(`today-rec-${sessionOneId}`);
+await queueRow.waitFor({ timeout: 20000 });
+check('Today asks for the recording of a class that has met', await queueRow.isVisible());
+
+await openHikam(admin);
+await tap(admin, 'nav-sessions');
+await tap(admin, 'session-open-Session 1');
+await tap(admin, 'session-not-recorded');
+await sawText(admin, 'This class was not recorded', 20000);
+await goHome(admin);
+await queueRow.waitFor({ state: 'detached', timeout: 20000 });
+check(
+  'marking it not recorded takes the row off Today',
+  (await admin.getByTestId(`today-rec-${sessionOneId}`).count()) === 0,
+);
+await shot(admin, '10a-not-recorded');
+
+// Reversible, and the upload below needs it back.
+await openHikam(admin);
+await tap(admin, 'nav-sessions');
+await tap(admin, 'session-open-Session 1');
+await tap(admin, 'session-recorded-after-all');
+await sawText(admin, 'No recording yet', 20000);
+await goHome(admin);
+await queueRow.waitFor({ timeout: 20000 });
+check('and "it was recorded after all" puts it back', await queueRow.isVisible());
+
 // Back to the session — the upload continues from there.
 await openHikam(admin);
 await tap(admin, 'nav-sessions');
@@ -1063,16 +1109,93 @@ check(
 );
 await shot(admin, '16-recording-ledger');
 
-// CSV equals the screen: header + one row per accountable student (Fatima, Bilal).
+/*
+ * THE EXPORT IS THE ACCOUNTABLE LIST, not a photograph of the screen.
+ *
+ * The screen shows more than it exports on purpose: with the filter on All it
+ * also lists the present, the absent and anyone who listened without holding a
+ * grant, so the ledger accounts for the whole submitted roster. The file answers
+ * a narrower question — who was required to listen, and did they — and its name
+ * used to claim it "mirrors the ledger row-for-row", which the same run proved
+ * it does not. Two accountable students here, both excused: Fatima and Bilal.
+ */
 const [download] = await Promise.all([admin.waitForEvent('download'), tap(admin, 'ledger-export')]);
 const csv = readFileSync(await download.path(), 'utf8');
 const csvLines = csv.trim().split('\r\n');
 check(
-  'CSV mirrors the ledger row-for-row (header + 2 accountable students)',
+  'the ledger CSV is the accountable list — header + the 2 excused students',
   csvLines[0].startsWith('Student,Attendance,Status,Listened %') && csvLines.length === 3,
   `${csvLines.length} lines`,
 );
+// And the screen it came from is wider than the file, which is the whole point:
+// the present/absent sections are on screen and deliberately not in the export.
+check(
+  'the ledger on screen accounts for more of the roster than the file does',
+  /Fatima Ahmed/.test(csv) && /Bilal Khan/.test(csv) && !/also listened/i.test(csv),
+);
 check('CSV reflects the override', /Completed \(override\)/.test(csv));
+
+/*
+ * THE STUDENT'S SIDE OF THE OVERRIDE — the half nothing proved.
+ *
+ * Every assertion above is staff-facing: the ledger row, the CSV, the audit
+ * entry. All of them passed for weeks while the student's own screens read
+ * `completions` alone and knew nothing of the mark — so a student a teacher had
+ * already settled still saw the recording outstanding, still sat under Due
+ * soon, and still got the last-day reminder. The staff half of a promise is not
+ * the promise. The promise is the student's: "my teacher settled this, and my
+ * app says so."
+ *
+ * A SECOND SIGNED-IN STUDENT, not Fatima. Bilal is the one who was overridden,
+ * and running this against the account that was not is how the ledger check
+ * above came to be bound to the row rather than to the page.
+ *
+ * Their context is closed at the end: this student is disabled further down,
+ * and a page left listening through that would log denials the run collects.
+ */
+const bilalOob = await (
+  await fetch(`${AUTH}/emulator/v1/projects/${EMULATOR_PROJECT_ID}/oobCodes`)
+).json();
+const bilalReset = (bilalOob.oobCodes ?? []).filter((c) => c.email === 'bilal@example.com').pop();
+const bilalRedeem = await fetch(
+  `${AUTH}/identitytoolkit.googleapis.com/v1/accounts:resetPassword?key=fake-api-key`,
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ oobCode: bilalReset?.oobCode, newPassword: 'BilalPass123!' }),
+  },
+);
+check('the overridden student can set their own password', bilalRedeem.status === 200);
+
+const overridden = await newSession();
+await overridden.getByTestId('signin-email').fill('bilal@example.com');
+await overridden.getByTestId('signin-password').fill('BilalPass123!');
+await tap(overridden, 'signin-student');
+await sawText(overridden, 'Your listening', 25000);
+/*
+ * THE GROUP, not the word — same reasoning as Fatima's completion above. The
+ * claim is that the row sits under Completed, which is what the student reads;
+ * a page-wide regex would match the heading and pass with the row still due.
+ */
+const overriddenDone = overridden.getByTestId('group-done');
+await overriddenDone.waitFor({ timeout: 20000 });
+check(
+  "a teacher's mark moves the recording to Completed on the STUDENT's own home",
+  await overriddenDone.getByTestId('task-Session 1').isVisible(),
+);
+// And the player says who settled it and why — a mark that is not theirs to undo.
+await tap(overridden, 'task-Session 1');
+await sawText(overridden, 'marked by your teacher', 20000);
+const overriddenPlayer = await bodyText(overridden);
+check(
+  'the player attributes the mark to the teacher, gives the reason, and offers no Unmark',
+  /marked by your teacher/.test(overriddenPlayer) &&
+    /Attended the class live/.test(overriddenPlayer) &&
+    (await overridden.getByText('Unmark', { exact: true }).count()) === 0,
+  overriddenPlayer.slice(0, 200),
+);
+await shot(overridden, '16b-override-student');
+await overridden.context().close();
 
 // ------------------------------------------- the same ledger, as a MANAGER --
 //
@@ -1148,9 +1271,17 @@ const [dl2] = await Promise.all([
 ]);
 const studentCsv = readFileSync(await dl2.path(), 'utf8').trim().split('\r\n');
 check(
-  'the by-student attendance CSV has a header + one row per enrolled student',
-  studentCsv[0].startsWith('Student,Present,Absent,Excused') && studentCsv.length === 3,
-  `${studentCsv.length} lines`,
+  'the by-student attendance CSV names each student and whether they are still enrolled',
+  studentCsv[0].startsWith('Student,Enrolled,Present,Absent,Excused') && studentCsv.length === 3,
+  `${studentCsv.length} lines — ${studentCsv[0]}`,
+);
+// Nobody left this course, so nobody is flagged. The reconciliation itself —
+// a departed student keeping their marks in both cuts — is proved at the unit
+// level in `packages/shared/test/ledger.test.ts`, where an unenrolment can be
+// arranged without unpicking the rest of this run.
+check(
+  'and nobody is flagged as departed in a course nobody left',
+  !/no longer enrolled/.test(studentCsv.join('\n')),
 );
 
 // Both cuts of the report drill down, and land on the row that was tapped —
@@ -1638,6 +1769,26 @@ const mgrNotify = await bodyText(mgr);
 check(
   'staff see the attendance reminder and not the student switches',
   /Attendance still not taken/.test(mgrNotify) && !/Last day to listen/.test(mgrNotify),
+);
+
+/*
+ * AND AN ADMIN WHO MANAGES NO CLASS IS OFFERED NOTHING.
+ *
+ * The one staff message is sent to a course's `managerUids`. An admin runs the
+ * institute and is in none of them unless somebody put them there, so the switch
+ * they used to see was a control whose only possible effect was to silence
+ * something already silent — and turning it off would have looked like it had
+ * worked. The screen says who the message goes to instead.
+ */
+await goHome(admin);
+await more(admin, 'more-notifications');
+await admin.getByTestId('notify-none').waitFor({ timeout: 20000 });
+const adminNotify = await bodyText(admin);
+check(
+  'an admin who manages no class is told where class messages go, not offered a dead switch',
+  /not assigned to any class/i.test(adminNotify) &&
+    !/Attendance still not taken/.test(adminNotify) &&
+    (await admin.getByTestId('notify-attendanceMissing').count()) === 0,
 );
 
 // -------------------------------------------------------------------- audit --

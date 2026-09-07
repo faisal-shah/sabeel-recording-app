@@ -4,7 +4,6 @@ import {
   COLLECTIONS,
   audioStoragePath,
   type CourseDoc,
-  type CohortDoc,
   type RecordingDoc,
   type SessionDoc,
   type ZoomImportRow,
@@ -13,7 +12,7 @@ import { auditedCall } from './audited';
 import { reportedCall } from './reported';
 import { requireCourseScope, requireStaff } from './guards';
 import { MAX_AUDIO_BYTES, createRecordingDraft, finalizeRecording } from './recordings';
-import { ZOOM_SECRETS, zoomClient, type ZoomClient } from './zoom';
+import { ZOOM_SECRETS, zoomClient, type ZoomAudioRecording, type ZoomClient } from './zoom';
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -136,50 +135,49 @@ export const listZoomRecordings = reportedCall(async (req) => {
     throw new HttpsError('invalid-argument', 'from and to must be YYYY-MM-DD.');
   }
   const recs = await zoomClient.listAudioRecordings(from, to);
+  return annotateImported(recs);
+}, ZOOM_SECRETS);
 
-  // Annotate already-imported by loading every zoom-sourced recording once.
-  const imported = await getFirestore()
-    .collection(COLLECTIONS.recordings)
-    .where('source', '==', 'zoom')
-    .get();
-  const byUuid = new Map<string, { recordingId: string; courseId: string; cohortId: string }>();
+/**
+ * Mark which of Zoom's recordings this institute already has, and name the class.
+ *
+ * SEPARATE FROM THE CALLABLE so it can be tested: `listZoomRecordings` closes
+ * over the module-level `zoomClient`, which needs credentials that exist only in
+ * Secret Manager, so nothing about the list could be exercised anywhere — and
+ * this is the whole of what it does beyond the fetch. Returning
+ * `alreadyImported: null` for every row is invisible to a type checker and turns
+ * the picker into an invitation to import everything a second time.
+ *
+ * One query for the mapping, then one read per DISTINCT class actually
+ * referenced — not per row: a term of imports from four classes costs four reads
+ * however many recordings Zoom returns.
+ */
+export async function annotateImported(recs: ZoomAudioRecording[]): Promise<ZoomImportRow[]> {
+  const db = getFirestore();
+  const imported = await db.collection(COLLECTIONS.recordings).where('source', '==', 'zoom').get();
+  const byUuid = new Map<string, { recordingId: string; courseId: string }>();
   for (const doc of imported.docs) {
     const data = doc.data() as RecordingDoc;
-    if (data.zoomUuid) {
-      byUuid.set(data.zoomUuid, { recordingId: doc.id, courseId: data.courseId, cohortId: data.cohortId });
-    }
+    if (data.zoomUuid) byUuid.set(data.zoomUuid, { recordingId: doc.id, courseId: data.courseId });
   }
 
-  // Resolve the class + cohort names for the recordings actually referenced, so
-  // an already-imported row can name its class and be tapped through to it.
-  const db = getFirestore();
   const courseNames = new Map<string, string>();
-  const cohortNames = new Map<string, string>();
-  const courseIds = new Set([...byUuid.values()].map((v) => v.courseId));
-  const cohortIds = new Set([...byUuid.values()].map((v) => v.cohortId));
-  await Promise.all([
-    ...[...courseIds].map(async (id) => {
+  await Promise.all(
+    [...new Set([...byUuid.values()].map((v) => v.courseId))].map(async (id) => {
       const s = await db.collection(COLLECTIONS.courses).doc(id).get();
       if (s.exists) courseNames.set(id, (s.data() as CourseDoc).name);
     }),
-    ...[...cohortIds].map(async (id) => {
-      const s = await db.collection(COLLECTIONS.cohorts).doc(id).get();
-      if (s.exists) cohortNames.set(id, (s.data() as CohortDoc).name);
-    }),
-  ]);
+  );
 
-  const rows: ZoomImportRow[] = recs.map((r) => {
+  return recs.map((r) => {
     const imp = byUuid.get(r.meetingUuid);
     return {
       ...r,
       alreadyImported: imp?.recordingId ?? null,
-      importedCourseId: imp?.courseId ?? null,
       importedCourseName: imp ? (courseNames.get(imp.courseId) ?? null) : null,
-      importedCohortName: imp ? (cohortNames.get(imp.cohortId) ?? null) : null,
     };
   });
-  return rows;
-}, ZOOM_SECRETS);
+}
 
 export const importZoomRecording = auditedCall(
   'importZoomRecording',

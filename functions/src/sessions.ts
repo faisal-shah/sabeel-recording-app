@@ -103,7 +103,7 @@ export async function createSessionRecord(callerUid: string, input: CreateSessio
     recordingId: null,
     attendance: {},
     attendanceSubmittedAt: null,
-    archived: false,
+    notRecorded: false,
     createdAt: Date.now(),
     createdBy: callerUid,
     updatedAt: Date.now(),
@@ -129,6 +129,8 @@ export interface UpdateSessionInput {
   title?: string;
   dueDate?: string;
   notes?: string;
+  /** "This class was not recorded" — see the field's note in `@sabeel/shared`. */
+  notRecorded?: boolean;
 }
 
 /**
@@ -159,6 +161,14 @@ export function validateUpdateSession(data: unknown): UpdateSessionInput {
     if (typeof d.notes !== 'string') throw new HttpsError('invalid-argument', 'notes must be text.');
     out.notes = d.notes;
   }
+  if (d.notRecorded !== undefined) {
+    // Not truthiness: a string 'false' arriving from a hand-built call would set
+    // the flag it names the opposite of, and silence a class for the term.
+    if (typeof d.notRecorded !== 'boolean') {
+      throw new HttpsError('invalid-argument', 'notRecorded must be a boolean.');
+    }
+    out.notRecorded = d.notRecorded;
+  }
   if (Object.keys(out).length === 1) throw new HttpsError('invalid-argument', 'Nothing to change.');
   return out;
 }
@@ -178,6 +188,10 @@ export const updateSession = auditedCall('updateSession', async (req, audit) => 
     validateDueDateChange(input.dueDate, session.dueDate, todayInZone(INSTITUTE_TIMEZONE));
   }
   const { sessionId: _id, ...fields } = input;
+  // Named in the audit, unlike a title or a note: this one stops the work queue
+  // and the morning reminder, so "why did we never chase that class?" has an
+  // answer with a person and a time on it.
+  if (input.notRecorded !== undefined) audit.detail = { notRecorded: input.notRecorded };
   // A dueDate edit re-flows to obligations via the onSessionWritten trigger.
   await ref.update({ ...fields, updatedAt: Date.now() });
 

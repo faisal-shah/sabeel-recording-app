@@ -9,10 +9,14 @@ export interface ZoomImportRow {
   durationSec: number;
   fileId: string;
   sizeBytes: number;
-  /** Existing recording id if already imported, else null. */
+  /**
+   * Existing recording id if already imported, else null.
+   *
+   * Both a flag and a destination: the picker filters on it and the row it
+   * renders is tappable through to that recording, which is what the brief
+   * promises an already-imported row does.
+   */
   alreadyImported: string | null;
-  /** When already imported: the class it went into — for display and tap-through. */
-  importedCourseId: string | null;
+  /** When already imported: the class it went into, for the row's sentence. */
   importedCourseName: string | null;
-  importedCohortName: string | null;
 }

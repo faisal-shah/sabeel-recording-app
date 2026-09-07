@@ -907,6 +907,9 @@ function ZoomImport() {
       onImported={() =>
         navigation.navigate('SessionDetail', { sessionId, courseId: sessionDoc.courseId })
       }
+      // A recording the institute already holds. No due date: staff have none of
+      // their own, and this one belongs to somebody else's session anyway.
+      onOpenImported={(recordingId) => navigation.navigate('Player', { recordingId, dueDate: null })}
     />
   );
 }

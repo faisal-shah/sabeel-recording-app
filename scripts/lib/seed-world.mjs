@@ -392,7 +392,7 @@ export async function seedWorld({ db, auth, browser, base }) {
     await db.collection('sessions').doc(id).set({
       courseId, cohortId: COHORT, date, title, dueDate, notes,
       recordingId: recId, attendance: attendance ?? {}, attendanceSubmittedAt: submittedAt,
-      archived: false, createdAt: now - daysAgo * DAY, createdBy: adminUid, updatedAt: now - daysAgo * DAY,
+      notRecorded: false, createdAt: now - daysAgo * DAY, createdBy: adminUid, updatedAt: now - daysAgo * DAY,
     });
     if (recId) {
       await db.collection('recordings').doc(recId).set({
@@ -455,7 +455,7 @@ export async function seedWorld({ db, auth, browser, base }) {
   await db.collection('sessions').doc('sw-s6').set({
     courseId: COURSE, cohortId: COHORT, date: iso(now), title: 'Session 6 — Today (recording pending)',
     dueDate: iso(now + 7 * DAY), notes: '', recordingId: null, attendance: {},
-    attendanceSubmittedAt: null, archived: false, createdAt: now, createdBy: adminUid, updatedAt: now,
+    attendanceSubmittedAt: null, notRecorded: false, createdAt: now, createdBy: adminUid, updatedAt: now,
   });
   /*
    * THE OTHER TWO KINDS OF WORK THE STAFF LANDING SCREEN GROUPS BY.
@@ -478,7 +478,7 @@ export async function seedWorld({ db, auth, browser, base }) {
     title: 'Session 9 — Fear and Hope', dueDate: iso(now + 12 * DAY), notes: '',
     recordingId: null,
     attendance: Object.fromEntries(students.map((s) => [s.uid, 'excused'])),
-    attendanceSubmittedAt: now - 2 * DAY, archived: false,
+    attendanceSubmittedAt: now - 2 * DAY, notRecorded: false,
     createdAt: now - 2 * DAY, createdBy: adminUid, updatedAt: now - 2 * DAY,
   });
   await seedSession('sw-a1', 'sw-a1r', 'Lesson 1 — The Arabic Alphabet',

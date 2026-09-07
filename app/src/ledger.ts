@@ -549,10 +549,6 @@ export interface AuditRow extends AuditEntryDoc {
 }
 
 /**
- * The audit log, newest first. A manager passes their courseId (scoped read); an
- * admin passes null for the unconstrained global view.
- */
-/**
  * What this staff member has done, wherever they did it.
  *
  * A manager's class-scoped view cannot show a course-less entry, and creating a
@@ -581,6 +577,10 @@ export function useMyAudit(uid: string | null): AuditRow[] {
   );
 }
 
+/**
+ * The audit log, newest first. A manager passes their courseId (scoped read); an
+ * admin passes null for the unconstrained global view.
+ */
 export function useAudit(courseId: string | null, enabled = true): AuditRow[] {
   return useLiveQuery<AuditRow[]>(
     () =>

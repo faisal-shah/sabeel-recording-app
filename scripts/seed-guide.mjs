@@ -72,7 +72,7 @@ async function mkSession(courseId, sid, rid, title, { status='published', dueOff
   await db.collection('sessions').doc(sid).set({
     courseId, cohortId, date, title, dueDate, notes,
     recordingId: rid, attendance: attendance??{}, attendanceSubmittedAt: submitted,
-    archived:false, createdAt:now-daysAgo*day, createdBy:'seed', updatedAt:now-daysAgo*day,
+    notRecorded:false, createdAt:now-daysAgo*day, createdBy:'seed', updatedAt:now-daysAgo*day,
   });
   await db.collection('recordings').doc(rid).set({
     sessionId:sid, courseId, cohortId, title, notes, date, status, source:'manual',
@@ -109,7 +109,7 @@ await mkSession(H,'g-s5','g-s5r','Session 5 — Reliance and Trust', {status:'pu
 // which no seeded session used to produce.
 await mkSession(H,'g-s6','g-s6r','Session 6 — (import needs review)', {status:'needsAttention', daysAgo:1, attendance:attend(4), attention:'Audio file looks truncated — re-upload before publishing.'});
 // Session 7: attendance taken TODAY, recording not added yet.
-await db.collection('sessions').doc('g-s7').set({ courseId:H, cohortId, date:iso(now), title:'Session 7 — Today (recording pending)', dueDate:iso(now+7*day), notes:'', recordingId:null, attendance:attend(5), attendanceSubmittedAt:now, archived:false, createdAt:now, createdBy:'seed', updatedAt:now });
+await db.collection('sessions').doc('g-s7').set({ courseId:H, cohortId, date:iso(now), title:'Session 7 — Today (recording pending)', dueDate:iso(now+7*day), notes:'', recordingId:null, attendance:attend(5), attendanceSubmittedAt:now, notRecorded:false, createdAt:now, createdBy:'seed', updatedAt:now });
 // Arabic I: two published sessions.
 // Only the first four students are enrolled in Arabic, so its snapshot covers
 // only them — a mark for someone off the roster would be dropped on submit.
