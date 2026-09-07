@@ -32,7 +32,7 @@ and commit messages, and renaming them would strand every one of those.
 | 6 | Zoom import | **built** — waiting on institute credentials and its first live import |
 | 7 | Notifications | **complete** (2026-08-15: delivered to an Android device end to end; web delivery still a browser check) |
 | 8 | Admin backend stats | not started |
-| 9 | Deploy, manual, release | not started |
+| 9 | Deploy, manual, release | **complete** (2026-09-07: v0.5.0 deployed, device pass on tb_emu, published to both release homes and the download page) |
 
 ## Decision log
 
@@ -1114,6 +1114,100 @@ and commit messages, and renaming them would strand every one of those.
   reports nothing is worse than none.
 
 ## Verification log
+
+- 2026-09-07 — **v0.5.0 shipped to every surface, and the device pass paid for
+  itself twice — once by finding a defect, once by disproving one.**
+
+  **Deployed in order**: indexes → rules → storage → functions → migration →
+  hosting. `check:queries` earned its place before a line was deployed: it failed
+  on the collection-group index `onDeviceRegistered` needs, which
+  `firestore.indexes.json` declared and production did not have. Deploying
+  indexes first fixed it and the re-run is green on all 34 shapes. `check:push`
+  green. The live ruleset was read back from the Rules API and is **byte-identical
+  to `firestore.rules`**, rather than trusted from "Deploy complete".
+
+  **The functions deploy failed twice, and the cause was not the code.** Cloud
+  Build receives only `functions/`, and with no lockfile there it runs
+  `npm install --package-lock-only` to make one — which crashes under the
+  builder's Node 22 npm with `Cannot read properties of null (reading
+  'edgesOut')`. Every previous deploy survived only because unchanged functions
+  restore a cached layer and never reach that step; `onDeviceRegistered` is new,
+  got a cache miss, and could not. Each failed attempt left a FAILED stub with no
+  trigger, which the next deploy reads as an HTTPS function and refuses to
+  convert — so the second failure was a *consequence* of the first, not a new
+  fault. Fixed by committing `functions/package-lock.json`, pinned to the versions
+  the suite actually ran against rather than a fresh resolution (which would have
+  shipped `@sentry/node` 10.73.0 and `firebase-functions` 7.3.2 against a tree
+  tested on 10.67.0 and 7.3.0). All 30 gen-2 functions ACTIVE, `onUserCreate`
+  (gen-1) ACTIVE, and `onDeviceRegistered` carries the Firestore trigger on
+  `notifications/{uid}/devices/{token}`.
+
+  **The migration**: 91 sessions, 91 renamed, **0** carrying `archived: true`, 0
+  left on the old shape. Its one sharp edge — it rewrites `notRecorded: false`
+  over any document still carrying `archived` — is closed by running it before
+  hosting, and the dry run confirmed the window was empty (0 already
+  `notRecorded`).
+
+  **Web, checked live rather than announced**: the deployed bundle inlines
+  `d57cded`, contains `0.5.0`, contains `EXPO_PUBLIC_USE_EMULATORS` zero times,
+  and a `.map` URL returns `text/html` — the content-type, not the status.
+  Source maps uploaded to Sentry (the skip line did not appear). `smoke:prod`
+  green on all seven.
+
+  **The device pass, on the release APK** (`versionName=0.5.0`, `versionCode=25`,
+  sign-in reads `v0.5.0 · d57cded`, **no dev sign-in panel** — which is what
+  proves it is a production build), signed in as the demo student against
+  production:
+
+  - **Background audio really is background.** Playback ran 0:28 → 2:20 with the
+    app sent to HOME, and `AudioControlsService` held a foreground service with
+    `types=0x00000002` (mediaPlayback). It continued 3:18 → 3:58 across a
+    screen-off/on.
+  - **Seek and rate**: `+30` moved 2:20 → 3:18; 1.5× took and playback carried on.
+  - **Push, end to end and for real**: a token was minted on the device, written
+    to Firestore, and **`onDeviceRegistered` fired in production** on that write
+    (a new instance at 17:21:36 UTC, no error) — the first live exercise of a
+    trigger this release added. A send from the Admin SDK then arrived in the
+    shade carrying the app's own icon, under the `sabeel-alerts` channel and in
+    the **alerting** section, not FCM's "Miscellaneous" fallback. Reactivating a
+    grant also produced a real `onAssignmentWritten` notification, unprompted.
+  - **Keyboard**: the focused field stays above the IME on both sign-in fields,
+    and the view scrolls to keep the Sign in button reachable.
+  - **The v0.5.0 shell on a real device**: Listening · Classes · More, and a
+    completed row reading "Marked complete by your teacher" with the reason —
+    one of this release's four decisions, seen rather than reasoned about.
+  - **Orientation is not a gap**: `android:screenOrientation="portrait"` on
+    MainActivity, so "both orientations" is satisfied by design.
+
+  **Found: the media session publishes no title.** `dumpsys media_session` reports
+  `metadata: null`, so the transport notification — and the lock screen, and any
+  car or Bluetooth display — shows controls with no indication of what is
+  playing. `docs/DEPLOY.md` asks this row to confirm "the notification shows the
+  right title", and it does not. **Not a regression**: v0.4.3 reports
+  `metadata: size=2, description=null`, which renders the same nothing, so this
+  release is no worse than what is already shipped. Left open deliberately rather
+  than fixed inside a release.
+
+  **A false alarm, recorded because the method matters.** The first resume test
+  showed the app signed OUT after a kill, with AsyncStorage empty — which looked
+  like a broken `getReactNativePersistence` and a release blocker. It was an
+  artifact of installing over a ten-day-old session on the AVD. A clean install
+  of 0.5.0 writes `firebase:authUser:…` and survives the kill, and so does a real
+  0.4.3 → 0.5.0 in-place upgrade. The lesson is the repo's own: an A/B whose two
+  arms differ in more than the variable proves nothing, and the second test is
+  what turned a blocker into a non-finding.
+
+  **Not reached, and not claimed.** Staff-side device checks need Google sign-in
+  on an `oursabeel.com` account, which this session had no credentials for; the
+  offline outbox and the gesture and long-name rows need an incomplete grant,
+  and the only open one available was already teacher-completed. Zoom import
+  remains unverifiable end to end — still no institute credentials.
+
+  Gate green on this machine before shipping: lint, typecheck, knip, **358 unit**,
+  **383 emulator** (2 skipped via `it.runIf`), **1108/1108 sweep** at five widths.
+  The first run failed typecheck on `@expo/vector-icons` — a dependency the
+  release added and `npm install` had not yet fetched here, not a defect in the
+  diff.
 
 - 2026-08-15 — **v0.4.1: the switches, checked on both surfaces.** Web push was
   confirmed working in Faisal's own browser first, which closed the last open
