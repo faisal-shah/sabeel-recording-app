@@ -43,7 +43,8 @@ beforeEach(async () => {
     courseId,
     date: '2026-05-07',
     title: 'Session One',
-    dueDate: null,
+    // A real date — see the note in `recordings.integration.test.ts`.
+    dueDate: '2099-01-01',
     notes: '',
   }));
 });

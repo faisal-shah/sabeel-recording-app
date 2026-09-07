@@ -64,7 +64,12 @@ async function newSession(): Promise<string> {
     courseId,
     date: '2026-07-06',
     title: 'Session 1',
-    dueDate: null,
+    // A REAL DATE. `null` is a session the app cannot produce — `createSession`
+    // refuses one, because "a blank one would mean permanent access" — and it
+    // only reached the stored document here because the test calls the core
+    // rather than the callable that validates. Typechecking the tests is what
+    // surfaced it.
+    dueDate: '2099-01-01',
     notes: '',
   });
   return id;

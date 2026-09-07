@@ -865,14 +865,28 @@ function visitor(page, tag, homeMarker, counter) {
     // behind it are unreachable while the modal is up, and are no longer what
     // this asks about. A tab root's exit is the bar; a pushed screen's is Back.
     const root = TAB_ROOTS.has(name);
+    /*
+     * ONE ANSWER PER KIND OF SCREEN, and no substitutions.
+     *
+     * A sheet's exit is its own dismiss; a tab root's is the bar; a PUSHED
+     * screen's is the header Back and nothing else. `out.back || out.cancel` let
+     * an inline editor's Cancel stand in for the Back arrow — and `escapes()`
+     * matches any visible Cancel anywhere on the page, so the three screens
+     * toured with an editor OPEN (`session-editing`, `ledger-override`,
+     * `course-remove-confirm`) were satisfied by a control that only closes the
+     * editor. Removing the header from those screens would strand a staff member
+     * on a phone with no way back to the course, and all three would stay green
+     * at all five widths — which is exactly what this check's own docblock says
+     * it exists to prevent.
+     */
     check(
       `${tag} / ${name} has a way out`,
-      out.sheet ? out.cancel : root ? out.nav : out.back || out.cancel,
+      out.sheet ? out.cancel : root ? out.nav : out.back,
       out.sheet
         ? 'a sheet with nothing in it that dismisses the sheet'
         : root
           ? 'a tab root with no navigation bar'
-          : 'no Back in the header and no way to dismiss',
+          : 'no Back in the header — an editor’s Cancel is not a way off the screen',
     );
 
     const fault = columnFault(await contentColumn(page), COLUMN_CAPS);

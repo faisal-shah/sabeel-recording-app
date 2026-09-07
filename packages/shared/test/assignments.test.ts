@@ -197,8 +197,26 @@ describe('canPlayNow', () => {
     expect(canPlayNow(archived, '2020-01-01', null, TODAY)).toBe(false);
   });
 
-  it('a student with no deadline at all is not closed out', () => {
-    expect(canPlayNow(live, null, 'stu-1', TODAY)).toBe(true);
+  /*
+   * THE PROMISE: a student may play what they were granted, and nothing else.
+   *
+   * A student's deadline comes from their assignment, so no deadline means no
+   * assignment — the absence of permission, not the absence of an expiry. This
+   * case used to assert the opposite ("not closed out"), which made a green test
+   * out of the one outcome `CLAUDE.md` rules out by name: "a blank one would
+   * mean permanent access". A test asserting that is worse than no test, because
+   * the next reader stops looking.
+   *
+   * Staff are the other half of the same null, and must keep playing: theirs
+   * means "no deadline applies to me", which is why the two cannot share a
+   * branch.
+   */
+  it('does not let a student play a recording they hold no grant for', () => {
+    expect(canPlayNow(live, null, 'stu-1', TODAY)).toBe(false);
+  });
+
+  it('still lets staff play, whose null means no deadline of their own', () => {
+    expect(canPlayNow(live, null, null, TODAY)).toBe(true);
   });
 });
 

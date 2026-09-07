@@ -73,6 +73,32 @@ function ensureAudioFixture() {
 }
 
 const failures = [];
+/**
+ * Assert the thing the step above waited for is ON SCREEN.
+ *
+ * These lines used to read `check(name, true)`. The run did fail when the step
+ * failed — the `waitFor` throws — but the line printed as a pass whatever
+ * happened, and the summary counted thirteen passes no predicate had produced.
+ * A reader scanning the transcript for what this suite proves was reading
+ * thirteen sentences backed by nothing.
+ */
+const shows = (page, testId) =>
+  page
+    .getByTestId(testId)
+    .filter({ visible: true })
+    .first()
+    .isVisible()
+    .catch(() => false);
+
+/** The same, for a screen identified by its words rather than a test id. */
+const showsText = (page, text) =>
+  page
+    .getByText(text, { exact: false })
+    .filter({ visible: true })
+    .first()
+    .isVisible()
+    .catch(() => false);
+
 function check(name, ok, detail = '') {
   console.log(`${ok ? '  ok  ' : '  FAIL'} ${name}${detail ? ` — ${detail}` : ''}`);
   if (!ok) failures.push(name);
@@ -245,7 +271,10 @@ check('sign-in screen renders', (await bodyText(admin)).includes('Sign in with G
 
 await tap(admin, 'dev-signin-first-admin');
 await sawText(admin, 'Waiting for approval');
-check('first staff sign-in lands PENDING — domain membership grants nothing', true);
+check(
+  'first staff sign-in lands PENDING — domain membership grants nothing',
+  await showsText(admin, 'Waiting for approval'),
+);
 await shot(admin, '02-pending');
 
 const boot = await fetch(`${FN}/bootstrapAdmin`);
@@ -288,7 +317,10 @@ await tap(admin, 'tab-people');
 await tap(admin, 'segment-staff');
 await tap(admin, 'approve-manager@oursabeel.com');
 await mgr.getByTestId('tab-courses').waitFor({ timeout: 30000 });
-check('approving a pending manager un-gates THEIR session live', true);
+check(
+  'approving a pending manager un-gates THEIR session live',
+  await shows(mgr, 'tab-courses'),
+);
 
 // An off-domain account must be deleted outright, not marked rejected.
 const outsider = await newSession();
@@ -388,7 +420,12 @@ for (const name of ['Hikam Foundations', 'Arabic I']) {
   await tap(admin, 'course-create');
   await admin.getByTestId(`course-open-${name}`).waitFor({ timeout: 20000 });
 }
-check('a cohort and two courses are created', true);
+// BOTH of them, and the cohort they are in: "two courses" is the claim.
+check(
+  'a cohort and two courses are created',
+  (await shows(admin, 'course-open-Hikam Foundations')) &&
+    (await shows(admin, 'course-open-Arabic I')),
+);
 await shot(admin, '04-courses');
 
 // ------------------------------------------------------- browser history --
@@ -492,13 +529,16 @@ await admin.getByTestId('student-email').fill('fatima@example.com');
 await tap(admin, 'student-course-Hikam Foundations');
 await tap(admin, 'student-create');
 await sawText(admin, 'Account created');
-check('a student is created and enrolled in one step', true);
+check(
+  'a student is created and enrolled in one step',
+  await showsText(admin, 'Account created'),
+);
 await shot(admin, '07-students');
 
 await openHikam(admin);
 await sawText(admin, 'Fatima Ahmed');
 await admin.waitForTimeout(1200);
-check('the roster shows the enrolled student', true);
+check('the roster shows the enrolled student', await showsText(admin, 'Fatima Ahmed'));
 await shot(admin, '08-roster');
 
 // The student sets a password from the emailed link and signs in. Redeemed
@@ -522,7 +562,7 @@ await student.getByTestId('signin-password').fill('StudentPass123!');
 await tap(student, 'signin-student');
 // The student lands on their task home ("Your listening"), not a staff greeting.
 await sawText(student, 'Your listening', 25000);
-check('the student signs in with their own password', true);
+check('the student signs in with their own password', await showsText(student, 'Your listening'));
 await shot(student, '09-home-student');
 
 // ------------------------------------------------ session, attendance, publish --
@@ -536,7 +576,7 @@ await tap(admin, 'session-create');
 // backdrop swallows every tap, and the failure reads as "the row never
 // appeared" rather than "the sheet never closed".
 await admin.getByTestId('session-create').waitFor({ state: 'detached', timeout: 15000 });
-check('a create sheet closes itself on success', true);
+check('a create sheet closes itself on success', !(await shows(admin, 'session-create')));
 /*
  * THE WORK QUEUE, WITH SOMETHING BLOCKING ACCESS IN IT.
  *
@@ -651,7 +691,10 @@ await student.getByTestId('next-up-Session 1').waitFor({ timeout: 10000 });
 await tap(student, 'next-up-Session 1');
 await student.getByTestId('player-play').waitFor({ timeout: 25000 });
 await student.waitForTimeout(1500);
-check('a student reaches the player for their required recording', true);
+check(
+  'a student reaches the player for their required recording',
+  await shows(student, 'player-play'),
+);
 await shot(student, '12-player');
 
 /** Elapsed time as seconds, read from the player's own readout. */
@@ -715,11 +758,14 @@ await student.waitForTimeout(2000);
 const beforeLeaving = await elapsedSeconds(student);
 await tap(student, 'tab-classes');
 await student.getByTestId('mini-player').waitFor({ timeout: 15000 });
-check('leaving the player leaves the recording loaded, in a docked bar', true);
+check(
+  'leaving the player leaves the recording loaded, in a docked bar',
+  await shows(student, 'mini-player'),
+);
 await student.waitForTimeout(4000);
 await tap(student, 'mini-player-open');
 await student.getByTestId('player-play').waitFor({ timeout: 15000 });
-check('the docked bar reopens the player it belongs to', true);
+check('the docked bar reopens the player it belongs to', await shows(student, 'player-play'));
 const afterReturning = await elapsedSeconds(student);
 check(
   'the audio kept playing while the student was on another screen',
@@ -802,7 +848,10 @@ check(
   (await readCollection('completionEvents')).some((e) => e.fields.action?.stringValue === 'complete'),
 );
 await student.getByTestId('mark-incomplete').waitFor({ timeout: 8000 });
-check('the player reflects completion and offers unmark', true);
+check(
+  'the player reflects completion and offers unmark',
+  await shows(student, 'mark-incomplete'),
+);
 
 // Back to `task-`: once complete it leaves the hero (which only ever promotes
 // something still to do) and joins the grouped list under Completed.
@@ -864,10 +913,24 @@ check(
   'an excused row says a recording was required and that it is done',
   /Recording required/.test(recordText) && /completed/i.test(recordText),
 );
+/*
+ * THE PROMISE: "my record says I was excused from one session, and present at
+ * none." A window regex cannot say that. `1[\s\S]{0,40}EXCUSED` matched the
+ * PRESENT counter twenty characters upstream, so swapping two labels, or
+ * counting every mark as present, left it green while the screen told an
+ * excused student they had attended.
+ *
+ * Each counter is asserted against its own label instead — which is what the
+ * student reads.
+ */
+const tally = async (label) =>
+  (await student.getByTestId(`attendance-tally-${label}`).innerText()).trim();
 check(
-  'the tally counts the mark',
-  /1[\s\S]{0,40}EXCUSED/i.test(recordText),
-  recordText.replace(/\n+/g, ' | ').slice(0, 200),
+  'the tally counts the mark against the right label',
+  (await tally('excused')) === '1' &&
+    (await tally('present')) === '0' &&
+    (await tally('absent')) === '0',
+  `present ${await tally('present')} / absent ${await tally('absent')} / excused ${await tally('excused')}`,
 );
 await shot(student, '14b-attendance-record');
 
@@ -957,12 +1020,31 @@ for (let i = 0; i < 30 && overrides.length === 0; i++) {
   await admin.waitForTimeout(500);
   overrides = await readCollection('completionOverrides');
 }
+/*
+ * AND IT NAMES THE STUDENT IT WAS MADE FOR.
+ *
+ * "I overrode Bilal's completion" is the whole of what this screen promises, and
+ * not one assertion said Bilal: the document checks read `completed` and
+ * `reason`, and every screen check was a regex over the whole page or the whole
+ * CSV. Pass `rows[0].studentUid` instead of `r.studentUid` in the override
+ * editor — the row-versus-list mix-up this screen has had before — and the
+ * override lands on Fatima while all of them stay green, leaving Bilal chased
+ * for a recording a staff member had already excused him from.
+ *
+ * The uid comes from the students directory rather than being restated, so the
+ * check cannot drift from whoever the run actually created.
+ */
+const bilalUid = (await readCollection('students')).find(
+  (d) => d.fields.email?.stringValue === 'bilal@example.com',
+)?.name.split('/').pop();
+check('the run knows which student it overrode', !!bilalUid);
 check(
-  'staff override writes a completionOverrides doc with the reason',
+  'staff override writes a completionOverrides doc, for that student, with the reason',
   overrides.length === 1 &&
+    overrides[0].fields.studentUid.stringValue === bilalUid &&
     overrides[0].fields.completed.booleanValue === true &&
     overrides[0].fields.reason.stringValue === 'Attended the class live',
-  `${overrides.length} override(s)`,
+  `${overrides.length} override(s) for ${overrides[0]?.fields.studentUid?.stringValue}`,
 );
 
 await tap(admin, 'ledger-filter-all');
@@ -970,7 +1052,14 @@ await admin.waitForTimeout(1000);
 ledgerText = await bodyText(admin);
 check(
   'the overridden student now shows Completed (override) on the ledger',
-  /Completed \(override\)/.test(ledgerText),
+  // Bound to the ROW, not to the page: the ledger lists a dozen students, and a
+  // page-wide regex says only that somebody somewhere is overridden.
+  await admin
+    .getByTestId('ledger-row-Bilal Khan')
+    .filter({ hasText: 'Completed (override)' })
+    .isVisible()
+    .catch(() => false),
+  ledgerText.slice(0, 160),
 );
 await shot(admin, '16-recording-ledger');
 
@@ -1202,7 +1291,10 @@ check(
 );
 await tap(admin, 'students-disabled');
 await admin.getByTestId('student-open-bilal@example.com').waitFor({ timeout: 10000 });
-check('…and is found by expanding Disabled', true);
+check(
+  '…and is found by expanding Disabled',
+  await shows(admin, 'student-open-bilal@example.com'),
+);
 await shot(admin, '20b-students-disabled');
 
 // Put them back, so the audit assertions below read a tidy end state.
@@ -1273,7 +1365,10 @@ check(
 await openHikam(admin);
 await tap(admin, 'roster-remove-bilal@example.com');
 await admin.getByTestId('roster-remove-confirm-bilal@example.com').waitFor({ timeout: 10000 });
-check('the roster × asks before removing', true);
+check(
+  'the roster × asks before removing',
+  await shows(admin, 'roster-remove-confirm-bilal@example.com'),
+);
 await admin.getByText('Cancel', { exact: false }).filter({ visible: true }).first().click();
 await admin.waitForTimeout(1500);
 const stillEnrolled = (await readCollection('enrollments')).filter(
@@ -1388,6 +1483,16 @@ await openHikam(admin);
 await tap(admin, 'course-archive');
 await admin.waitForTimeout(2500);
 
+/*
+ * THE CONTROL FOR THE "not playable once missed" CHECK BELOW, taken here while
+ * the card is still open. Same student, same card, same accessible name — so
+ * the zero this run later asserts is a zero the query would have seen as a one.
+ */
+const PLAYABLE = 'Listen to Session 1';
+await goHome(student);
+await student.getByTestId('task-Session 1').waitFor({ timeout: 20000 });
+const playableBefore = await student.getByRole('button', { name: PLAYABLE }).count();
+
 // Push Session 1's due date into the past, OUT OF BAND: no callable will write
 // one, because a deadline may only become past by the passage of time. The real
 // onSessionWritten trigger still fires, so the date flows down to the grants
@@ -1467,11 +1572,25 @@ check(
   /missed/i.test(missedHome) && /Closed 2020-01-01/.test(missedHome),
   missedHome.replace(/\n+/g, ' | ').slice(0, 220),
 );
-// Not a button: the server would refuse anyway, and a card that looks tappable
-// and then errors reads as a fault in the app rather than a deadline missed.
+/*
+ * Not a button: the server would refuse anyway, and a card that looks tappable
+ * and then errors reads as a fault in the app rather than a deadline missed.
+ *
+ * AGAINST A CONTROL TAKEN WHILE THE SAME CARD WAS OPEN (`playableBefore`, above
+ * the deadline change). A count of zero is also what a query looking at nothing
+ * returns, and the name is hand-copied from `StudentHomeScreen` — so renaming
+ * that label as ordinary a11y copy would make this permanently vacuous and
+ * permanently green. Having seen the button on this very card is the only thing
+ * that proves the query can find one.
+ */
+check(
+  'the check above can see a play control at all (it saw this one open)',
+  playableBefore === 1,
+  `${playableBefore} play control(s) while the card was open`,
+);
 check(
   'a missed card is not offered as something to play',
-  (await student.getByRole('button', { name: 'Listen to Session 1' }).count()) === 0,
+  (await student.getByRole('button', { name: PLAYABLE }).count()) === 0,
 );
 await shot(student, '25-missed');
 

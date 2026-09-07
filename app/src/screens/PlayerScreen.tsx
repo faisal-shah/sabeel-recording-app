@@ -112,10 +112,16 @@ export function PlayerScreen({
     return (
       <ScrollView style={styles.canvas} contentContainerStyle={styles.content}>
         <Hero recording={recording} courseName={cls.name} cohortName={cohortName} />
+        {/* THREE REASONS, and each says something different to do about it.
+            "Closed on <date>" needs a date; a student who holds no grant at all
+            has none, and telling them a recording closed on `null` is worse
+            than telling them it was never theirs. */}
         <Notice tone="info">
-          {closed
-            ? `This recording closed on ${dueDate}. Your listening record is kept — ask your teacher if you need it reopened.`
-            : 'This course has been archived and listening has been turned off. Your listening history is kept — ask your teacher if you need access again.'}
+          {!closed
+            ? 'This course has been archived and listening has been turned off. Your listening history is kept — ask your teacher if you need access again.'
+            : dueDate === null
+              ? 'This recording has not been assigned to you. Your teacher marks who needs to listen when they take the register.'
+              : `This recording closed on ${dueDate}. Your listening record is kept — ask your teacher if you need it reopened.`}
         </Notice>
       </ScrollView>
     );

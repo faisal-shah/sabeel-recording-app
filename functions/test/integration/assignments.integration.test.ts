@@ -18,6 +18,8 @@ import { createCohortRecord } from '../../src/cohorts';
 import { createCourseRecord } from '../../src/courses';
 import { applyEnrollmentActive, createEnrollmentRecord } from '../../src/enrollments';
 import { playbackDenial } from '../../src/playback';
+import type { CallableRequest } from 'firebase-functions/v2/https';
+import { applySubmitAttendance } from '../../src/sessions';
 import {
   reconcileSessionAssignments,
   deactivateStudentAssignmentsInCourse,
@@ -287,6 +289,64 @@ describe('reconcileSessionAssignments', () => {
   });
 });
 
+/**
+ * What a register PROMISES: it records what happened that day, and correcting
+ * one person's mark does not erase anybody else's.
+ *
+ * `submitAttendance` rebuilds the stored map from the payload, and the payload
+ * the app sends holds only the students currently enrolled — so a manager
+ * fixing one student's mark deleted the record of every student who had left
+ * the class since, and `reconcileAttendanceRecords` then deleted those students'
+ * own copies as well. A permanent deletion of accountability history, done by a
+ * manager, with no confirmation and nothing in the audit log naming what went.
+ * The product rule is disable, archive, unpublish — don't delete.
+ *
+ * Driven through `applySubmitAttendance`, which is the validation, the
+ * authorization and the merge together — the promise is about what survives a
+ * submission, so a test of the merge alone would prove the wrong half.
+ */
+describe('submitting a register', () => {
+  const submit = (sessionId: string, attendance: Record<string, string>) =>
+    applySubmitAttendance(
+      {
+        auth: { uid: ADMIN, token: { role: 'admin', status: 'active' } },
+        data: { sessionId: ns(sessionId), attendance },
+      } as unknown as CallableRequest,
+      { courseId: null, targets: {} },
+    );
+  const marks = async (sessionId: string) =>
+    (await db().collection(COLLECTIONS.sessions).doc(ns(sessionId)).get()).data()?.attendance;
+
+  it('keeps the mark of a student who has since left the class', async () => {
+    // A LIVE session: excusing anyone new past the listen-by date is refused, so
+    // a fixture with the default (past) due date would fail on that instead.
+    await seedSession('sess', { dueDate: '2099-01-01', attendance: {}, submitted: false });
+    await submit('sess', { s1: 'excused', s2: 'present' });
+    expect(await marks('sess')).toEqual({ s1: 'excused', s2: 'present' });
+
+    await applyEnrollmentActive({ studentUid: 's1', courseId, active: false });
+    // The correction a manager makes weeks later, about somebody else entirely.
+    await submit('sess', { s2: 'excused', s3: 'present' });
+
+    expect(await marks('sess')).toEqual({ s1: 'excused', s2: 'excused', s3: 'present' });
+  });
+
+  it('still refuses to record a mark for someone not in the class', async () => {
+    // The filter's actual job, which the fix must not weaken: a student who was
+    // never enrolled cannot be marked at all.
+    await seedSession('sess', { dueDate: '2099-01-01', attendance: {}, submitted: false });
+    await submit('sess', { s1: 'excused', outsider: 'present' });
+    expect(await marks('sess')).toEqual({ s1: 'excused' });
+  });
+
+  it('lets a correction change a current student’s own mark', async () => {
+    await seedSession('sess', { dueDate: '2099-01-01', attendance: {}, submitted: false });
+    await submit('sess', { s1: 'excused' });
+    await submit('sess', { s1: 'present' });
+    expect(await marks('sess')).toEqual({ s1: 'present' });
+  });
+});
+
 describe('unenrolment', () => {
   it('deactivates a student obligations in the course, keeping history', async () => {
     await seedSession('sess', { attendance: { s1: 'excused', s2: 'excused' }, submitted: true });
@@ -300,21 +360,64 @@ describe('unenrolment', () => {
   });
 
   /*
+   * THE PROMISE THE LEDGER AND THE MANUAL BOTH MAKE, in their own words:
+   * "re-enrolling them or republishing restores it". Asserted through
+   * `playbackDenial`, which is what actually hands the audio over.
+   *
+   * Nothing did this. There is no trigger on enrolments and
+   * `setEnrollmentActive` wrote one field, so a student unenrolled in October
+   * and re-enrolled in November came back to an empty home screen — every
+   * recording refused — unless staff happened to edit each session or republish
+   * each recording afterwards. Two documents and a comment described a behaviour
+   * the code did not have.
+   */
+  it('gives the audio back when the student is re-enrolled', async () => {
+    await seedSession('sess', { attendance: { s1: 'excused' }, submitted: true });
+    await seedRecording('r1', 'sess', 'published');
+    await reconcile('sess');
+    const canPlay = async () =>
+      playbackDenial({
+        claims: { role: 'student', status: 'active' },
+        recording: { status: 'published', audioPath: `recordings/${ns('r1')}/audio.m4a` },
+        cls: { effectiveActive: true, archivedAccess: false, managerUids: [] },
+        uid: 's1',
+        assignment: (await getAssignment('s1', 'r1')) ?? null,
+        today: '2026-07-10',
+      });
+
+    await applyEnrollmentActive({ studentUid: 's1', courseId, active: false });
+    expect(await canPlay()).toBe('not-assigned');
+
+    await applyEnrollmentActive({ studentUid: 's1', courseId, active: true });
+    expect(await canPlay()).toBeNull();
+  });
+
+  it('restores only what the register says, not everything they ever held', async () => {
+    // Excused in one session, present in another: coming back must not turn the
+    // second into an obligation. The grant is re-derived, never restored from a
+    // copy.
+    await seedSession('sess', { attendance: { s1: 'excused' }, submitted: true });
+    await seedRecording('r1', 'sess', 'published');
+    await seedSession('sess2', { attendance: { s1: 'present' }, submitted: true });
+    await seedRecording('r2', 'sess2', 'published');
+    await reconcile('sess');
+    await reconcile('sess2');
+
+    await applyEnrollmentActive({ studentUid: 's1', courseId, active: false });
+    await applyEnrollmentActive({ studentUid: 's1', courseId, active: true });
+
+    expect((await getAssignment('s1', 'r1'))?.active).toBe(true);
+    expect(await getAssignment('s1', 'r2')).toBeUndefined();
+  });
+
+  /*
    * WHAT UNENROLMENT PROMISES: the student can no longer open the recording,
    * and it stays that way while ordinary work goes on in the class.
    *
    * Asserted through `playbackDenial`, which is what actually decides whether
    * audio is handed over, rather than through the `active` flag it reads. The
    * flag is the mechanism; being unable to listen is the promise, and a test
-   * that watches the flag would go on passing if the gate ever stopped
-   * consulting it.
-   *
-   * The bug this covers: the attendance map keeps a student's mark for ever, by
-   * design, so a reconcile that rebuilt its target set from attendance alone
-   * switched an unenrolled student's grant straight back on — and any write to
-   * any session in the course re-runs one. A title fix, a moved due date, a
-   * re-submitted register. Access came back days after staff had removed it,
-   * with nothing on any screen saying so.
+   * watching the flag would go on passing if the gate stopped consulting it.
    */
   it('leaves the student unable to play, through ordinary later edits', async () => {
     await seedSession('sess', { attendance: { s1: 'excused', s2: 'excused' }, submitted: true });
@@ -379,6 +482,39 @@ describe('reconcileAttendanceRecords — the student-visible projection', () => 
     expect(await mirror('s1', 'sess')).toMatchObject({
       date: '2026-07-06',
       title: 'sess',
+      submittedAt: 1,
+    });
+  });
+
+  /*
+   * THE PROMISE THIS COLLECTION EXISTS FOR: a student sees their own mark and
+   * NOTHING about anybody else's. `app/src/attendance.ts` states it — a session
+   * holds the whole roster's marks, Firestore has no field-level security, and
+   * no rule can show one student their own key of that map.
+   *
+   * `toEqual`, NOT `toMatchObject`, and that is the entire point. Every other
+   * document assertion in this repo checks fields it names; none says what must
+   * NOT be there. So a plausible edit — `{ ...session, studentUid, status }`, to
+   * denormalise one more thing for the student screen — puts the whole roster's
+   * `attendance` map into every student's own row, readable by each of them,
+   * and passes every one of those assertions. TypeScript does not catch it
+   * either: excess-property checking does not apply to spread properties.
+   */
+  it('carries the student’s own mark and not one field more', async () => {
+    await seedSession('sess', {
+      attendance: { s1: 'excused', s2: 'present' },
+      submitted: true,
+    });
+    await project('sess');
+
+    expect(await mirror('s1', 'sess')).toEqual({
+      studentUid: 's1',
+      sessionId: ns('sess'),
+      courseId,
+      cohortId,
+      date: '2026-07-06',
+      title: 'sess',
+      status: 'excused',
       submittedAt: 1,
     });
   });

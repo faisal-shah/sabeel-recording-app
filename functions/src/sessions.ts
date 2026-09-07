@@ -1,4 +1,4 @@
-import { HttpsError } from 'firebase-functions/v2/https';
+import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
@@ -9,7 +9,7 @@ import {
   type EnrollmentDoc,
   type SessionDoc,
 } from '@sabeel/shared';
-import { auditedCall } from './audited';
+import { auditedCall, type AuditContext } from './audited';
 import { requireAdmin, requireCourseScope } from './guards';
 import { applyDeleteRecording } from './recordings';
 
@@ -238,7 +238,18 @@ export function addsExcusal(
  * works in every direction except adding a new excusal; to do that, move the
  * session's due date first.
  */
-export const submitAttendance = auditedCall('submitAttendance', async (req, audit) => {
+/**
+ * Record a register: validate it, authorize it, and merge it into the session.
+ *
+ * SEPARATED FROM THE WRAPPER so a test can drive the whole of it, which is the
+ * only way to assert what it promises — that submitting a correction records
+ * the correction and destroys nothing else. Same reasoning as every other core
+ * in this file.
+ */
+export async function applySubmitAttendance(
+  req: CallableRequest,
+  audit: AuditContext,
+): Promise<{ sessionId: string; marked: number }> {
   const d = req.data as { sessionId?: unknown; attendance?: unknown };
   if (typeof d?.sessionId !== 'string' || !d.sessionId) {
     throw new HttpsError('invalid-argument', 'sessionId is required.');
@@ -269,7 +280,24 @@ export const submitAttendance = auditedCall('submitAttendance', async (req, audi
     );
   }
 
-  // Keep only active-enrolled students — the snapshot is the roster at submit time.
+  /*
+   * THE ROSTER FILTERS WHAT IS BEING SUBMITTED. It does not delete what was
+   * recorded before.
+   *
+   * Its job is to stop a mark being written for somebody not in the class. But
+   * rebuilding the whole map from the payload made it do a second thing nobody
+   * asked for: a student unenrolled halfway through term vanished from the
+   * register the next time a manager corrected anybody's mark — and
+   * `reconcileAttendanceRecords` then deleted that student's own copy too. A
+   * permanent deletion of accountability history, performed by a manager, with
+   * no confirmation and nothing in the audit log saying what went. The product
+   * rule is disable, archive, unpublish — don't delete.
+   *
+   * It also emptied the ledger's "Excused, access closed" group, which exists to
+   * show staff exactly those students: excused at the time, no longer enrolled.
+   * They keep the mark and they still get no grant — `stillEnrolled` in the
+   * fan-out is what withholds that, and the two decisions belong apart.
+   */
   const rosterSnap = await db
     .collection(COLLECTIONS.enrollments)
     .where('courseId', '==', session.courseId)
@@ -277,6 +305,9 @@ export const submitAttendance = auditedCall('submitAttendance', async (req, audi
     .get();
   const roster = new Set(rosterSnap.docs.map((e) => (e.data() as EnrollmentDoc).studentUid));
   const attendance: Record<string, AttendanceStatus> = {};
+  for (const [studentUid, status] of Object.entries(session.attendance)) {
+    if (!roster.has(studentUid)) attendance[studentUid] = status;
+  }
   for (const [studentUid, status] of Object.entries(raw)) {
     if (roster.has(studentUid)) attendance[studentUid] = status as AttendanceStatus;
   }
@@ -288,7 +319,11 @@ export const submitAttendance = auditedCall('submitAttendance', async (req, audi
     updatedAt: Date.now(),
   });
   return { sessionId: d.sessionId, marked: Object.keys(attendance).length };
-});
+}
+
+export const submitAttendance = auditedCall('submitAttendance', (req, audit) =>
+  applySubmitAttendance(req, audit),
+);
 
 // --------------------------------------------------------- archive/delete --
 

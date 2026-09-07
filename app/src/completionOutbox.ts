@@ -23,6 +23,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doc, setDoc } from 'firebase/firestore';
 import { COLLECTIONS, completionId, type CompletionDoc } from '@sabeel/shared';
 import { db } from './firebase';
+import { captureError } from './sentry';
 
 const KEY = 'sabeel.completionOutbox.v1';
 
@@ -70,7 +71,16 @@ function fireAndForget(id: string, state: CompletionDoc): void {
        * Everything else — offline, a dropped connection, a server hiccup — keeps
        * the entry, which is the whole point of the outbox.
        */
-      if (e?.code === 'permission-denied') void forget(id);
+      if (e?.code !== 'permission-denied') return;
+      /*
+       * REPORTED, because this is the one path that throws away a student's own
+       * record of having finished a lecture. Silent, it looks to them like the
+       * app forgot: the native SDK's cache is memory-only, so after an app kill
+       * there is no local copy either, and the recording simply reads as
+       * incomplete again with nothing anywhere saying why.
+       */
+      captureError(e, { source: 'completionOutbox', outboxId: id });
+      void forget(id);
     });
 }
 

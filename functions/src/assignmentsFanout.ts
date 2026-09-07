@@ -84,8 +84,9 @@ async function assignToStudents(
  * and then the next write to ANY session in that course (a title fix, a moved
  * due date, a re-submitted register) re-ran this reconcile, which rebuilt the
  * target set from the attendance snapshot alone and switched them straight back
- * on. The attendance map keeps a student's mark for ever, by design; enrolment
- * is the thing that says whether they are still in the class.
+ * on. A mark records what happened on the day and outlives the enrolment;
+ * enrolment is the separate fact of whether they are still in the class, and
+ * only the second one decides who is accountable now.
  *
  * That silently contradicted three places that promise otherwise: the rules
  * gate a recording on an ACTIVE assignment, `getPlaybackUrl` mints on one, and
@@ -102,11 +103,19 @@ async function stillEnrolled(
   studentUids: string[],
 ): Promise<string[]> {
   if (studentUids.length === 0) return [];
-  const refs = studentUids.map((uid) =>
-    db.collection(COLLECTIONS.enrollments).doc(enrollmentId(uid, courseId)),
-  );
-  const rows = await db.getAll(...refs);
-  return studentUids.filter((_uid, i) => (rows[i].data() as EnrollmentDoc | undefined)?.active);
+  // CHUNKED at the same 400 as `assignToStudents`, which is the rule this
+  // module's header states: a pathologically large roster must not throw.
+  const active = new Set<string>();
+  for (const group of chunked(studentUids)) {
+    const refs = group.map((uid) =>
+      db.collection(COLLECTIONS.enrollments).doc(enrollmentId(uid, courseId)),
+    );
+    const rows = await db.getAll(...refs);
+    group.forEach((uid, i) => {
+      if ((rows[i].data() as EnrollmentDoc | undefined)?.active) active.add(uid);
+    });
+  }
+  return studentUids.filter((uid) => active.has(uid));
 }
 
 /** Deactivate active obligations for a recording whose student is NOT in `keep`. */
@@ -168,6 +177,44 @@ export async function reconcileSessionAssignments(
 
   await assignToStudents(db, session, sessionId, recId, target, 'system');
   await deactivateExcept(db, recId, new Set(target));
+}
+
+/**
+ * Reconcile every session in a course — the other half of unenrolment.
+ *
+ * `deactivateStudentAssignmentsInCourse` switches a student's grants off when
+ * they leave. Nothing switched them back on when they returned: there is no
+ * trigger on `enrollments`, and `setEnrollmentActive` wrote one field. So a
+ * student who was unenrolled and re-enrolled a fortnight later came back to an
+ * empty home screen — every recording refused by the rules and by
+ * `getPlaybackUrl` — while the recording ledger told staff, in as many words,
+ * that "re-enrolling them or republishing restores it". Access actually returned
+ * only if somebody independently edited each session or republished each
+ * recording, which is not a thing anybody would think to do.
+ *
+ * Per SESSION rather than per assignment, because the grant is derived, never
+ * restored from a copy: each session is reconciled from its own attendance and
+ * its own recording, which is the same decision `onSessionWritten` makes. A
+ * student excused before they left is granted again; one who was not is not;
+ * and a session whose recording is no longer published grants nobody, exactly as
+ * if it had been reconciled for any other reason.
+ *
+ * Sized for a course, not for the institute: a term is tens of sessions, and
+ * this runs on an admin action nobody performs in a loop.
+ */
+export async function reconcileCourseAssignments(db: Firestore, courseId: string): Promise<void> {
+  const sessions = await db
+    .collection(COLLECTIONS.sessions)
+    .where('courseId', '==', courseId)
+    .get();
+  for (const doc of sessions.docs) {
+    const session = doc.data() as SessionDoc;
+    if (!session.recordingId) continue;
+    const rec = (
+      await db.collection(COLLECTIONS.recordings).doc(session.recordingId).get()
+    ).data() as RecordingDoc | undefined;
+    await reconcileSessionAssignments(db, doc.id, session, rec);
+  }
 }
 
 /**

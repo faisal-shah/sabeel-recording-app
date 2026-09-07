@@ -71,7 +71,10 @@ describe('sender selection', () => {
    */
   it('addresses the shared channel, so the push does not land in "Miscellaneous"', async () => {
     vi.stubEnv('FUNCTIONS_EMULATOR', '');
-    const sendEachForMulticast = vi.fn(async () => ({ responses: [], successCount: 0 }));
+    const sendEachForMulticast = vi.fn(async (_message: unknown) => ({
+      responses: [] as { success: boolean; error?: { code: string } }[],
+      successCount: 0,
+    }));
     vi.doMock('firebase-admin/messaging', () => ({
       getMessaging: () => ({ sendEachForMulticast }),
     }));
@@ -83,6 +86,63 @@ describe('sender selection', () => {
     expect(sendEachForMulticast.mock.calls[0][0]).toMatchObject({
       android: { notification: { channelId: PUSH_CHANNEL_ID } },
     });
+    vi.doUnmock('firebase-admin/messaging');
+  });
+
+  /*
+   * WHOSE PHONE GOES SILENT. FCM answers a multicast with one response PER
+   * TOKEN, in order, and the only thing tying a failure back to a device is
+   * that index — so getting it wrong unregisters a working phone belonging to
+   * somebody else, and their notifications stop for good with nothing to see.
+   *
+   * Nothing drove this loop: the one test that reached the real sender returned
+   * an empty `responses` array, so the mapping never executed, and every other
+   * suite replaces the sender wholesale.
+   */
+  it('reports the token whose own send failed, and only that one', async () => {
+    vi.stubEnv('FUNCTIONS_EMULATOR', '');
+    const sendEachForMulticast = vi.fn(async (_message: unknown) => ({
+      responses: [
+        { success: true },
+        { success: false, error: { code: 'messaging/registration-token-not-registered' } },
+        { success: true },
+      ] as { success: boolean; error?: { code: string } }[],
+      successCount: 2,
+    }));
+    vi.doMock('firebase-admin/messaging', () => ({
+      getMessaging: () => ({ sendEachForMulticast }),
+    }));
+
+    const { send } = await freshMessaging();
+    const out = await send(['keep-a', 'dead-b', 'keep-c'], MESSAGE);
+
+    expect(out.stale).toEqual(['dead-b']);
+    expect(out.sent).toBe(2);
+    // The tokens reached FCM in the order the responses answer for — the
+    // assumption the index mapping rests on.
+    expect(sendEachForMulticast.mock.calls[0][0]).toMatchObject({
+      tokens: ['keep-a', 'dead-b', 'keep-c'],
+    });
+    vi.doUnmock('firebase-admin/messaging');
+  });
+
+  /*
+   * A FAILURE THAT IS NOT THE DEVICE'S FAULT KEEPS THE DEVICE. Deleting on any
+   * error would unregister every working phone during an FCM outage, and the
+   * only symptom would be notifications quietly stopping.
+   */
+  it('does not unregister a device over a transient failure', async () => {
+    vi.stubEnv('FUNCTIONS_EMULATOR', '');
+    const sendEachForMulticast = vi.fn(async () => ({
+      responses: [{ success: false, error: { code: 'messaging/server-unavailable' } }],
+      successCount: 0,
+    }));
+    vi.doMock('firebase-admin/messaging', () => ({
+      getMessaging: () => ({ sendEachForMulticast }),
+    }));
+
+    const { send } = await freshMessaging();
+    expect((await send(['still-good'], MESSAGE)).stale).toEqual([]);
     vi.doUnmock('firebase-admin/messaging');
   });
 

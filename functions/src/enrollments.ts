@@ -9,7 +9,10 @@ import {
   type StudentDoc,
 } from '@sabeel/shared';
 import { requireCourseScope } from './guards';
-import { deactivateStudentAssignmentsInCourse } from './assignmentsFanout';
+import {
+  deactivateStudentAssignmentsInCourse,
+  reconcileCourseAssignments,
+} from './assignmentsFanout';
 
 export interface EnrollmentInput {
   studentUid: string;
@@ -105,13 +108,12 @@ export function validateSetEnrollmentActive(data: unknown): SetEnrollmentActiveI
  * snapshot keeps a student's mark for ever, and the reconcile rebuilt the grants
  * from it alone.
  *
- * RE-ENROLLING restores them, the next time anything reconciles that session —
- * which is what the manual and the recording ledger both promise staff on
- * screen ("re-enrolling them or republishing restores it"). An earlier note here
- * claimed the opposite ("accountability starts fresh from the next session
- * marked"); it was the odd one out, and the reconcile being stateless means the
- * ledger's version is what the code has always done. `TODO.md` asks Faisal to
- * confirm the policy rather than leaving three statements to drift again.
+ * RE-ENROLLING restores them, here and now — `reconcileCourseAssignments` walks
+ * the course's sessions and re-derives each grant from its own attendance and
+ * recording. It did NOT before: nothing reconciles on an enrolment write, so a
+ * returning student came back to an empty screen while the ledger and the manual
+ * both told staff "re-enrolling them or republishing restores it". Two documents
+ * and a comment agreed with each other and not with the code.
  */
 export async function applyEnrollmentActive(input: SetEnrollmentActiveInput) {
   const db = getFirestore();
@@ -124,7 +126,12 @@ export async function applyEnrollmentActive(input: SetEnrollmentActiveInput) {
   if (!input.active) update.unenrolledAt = Date.now();
   await ref.update(update);
 
-  if (!input.active) {
+  if (input.active) {
+    // Re-enrolling RESTORES, which is what the ledger and the manual promise —
+    // and what nothing did. There is no trigger on enrolments, so the reconcile
+    // has to be asked for here.
+    await reconcileCourseAssignments(db, input.courseId);
+  } else {
     await deactivateStudentAssignmentsInCourse(db, input.courseId, input.studentUid);
   }
   return { studentUid: input.studentUid, courseId: input.courseId, active: input.active };

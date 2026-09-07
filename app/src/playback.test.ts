@@ -1038,7 +1038,7 @@ describe('a transport change from outside the app', () => {
 
     players[0].events.onError('network blip');
     wait(10_000);
-    players[0].events.onProgress(20_000); // ignored — nothing is ready
+    players[0].events.onProgress(20_000); // arrives while nothing is ready
     players[0].events.onError(null);
     wait(20_000);
     players[0].events.onProgress(40_000); // counted again
@@ -1046,16 +1046,19 @@ describe('a transport change from outside the app', () => {
     await pb.closePlayback();
     expect(docOf('rec-a')?.positionMs).toBe(40_000);
     /*
-     * AND THE LISTENED TOTAL, which is the number the regression destroyed —
-     * the ledger presents it as evidence, and a latched `ready` froze it at the
-     * moment of the blip while the audio played on.
+     * AND THE LISTENED TOTAL, which is the number the ledger presents as
+     * evidence and the one a latched `ready` froze at the moment of the blip
+     * while the audio played on.
      *
-     * Position is last-write-wins, so it would read correctly even with every
-     * tick discarded; listening only accrues from ticks that were COUNTED. Ten
-     * seconds to the first tick, then thirty across the fault: the 20s tick
-     * contributes nothing because nothing was ready when it arrived, and the
-     * 40s tick's advance is measured from the last position the session
-     * accepted.
+     * WHAT THIS DOES AND DOES NOT PROVE, stated because the first version of
+     * this comment claimed more than the assertion delivers. It fails if `ready`
+     * stays false after the fault clears — the regression — because every later
+     * tick is then discarded and the total stops at zero. It does NOT prove the
+     * tick gate discarded the tick DURING the fault: a discarded tick leaves
+     * `position` alone, so the next one measures the whole advance and the total
+     * comes out the same either way. That is the gate working as designed —
+     * nothing heard is lost by a fault that passes — and the gate itself is
+     * covered by four other cases in this file.
      */
     expect(docOf('rec-a')?.listenedMs).toBe(40_000);
   });

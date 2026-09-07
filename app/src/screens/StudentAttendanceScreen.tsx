@@ -168,7 +168,12 @@ function listeningLine(completed: boolean, dueDate: string, today: string): stri
 function Tally({ label, value }: { label: string; value: number }) {
   return (
     <View style={styles.tallyItem}>
-      <Text style={styles.tallyNum}>{value}</Text>
+      {/* The NUMBER carries the id, so a check can read one counter rather than
+          matching a digit somewhere near a word — which matched the counter next
+          door and would have passed with the labels swapped. */}
+      <Text testID={`attendance-tally-${label.toLowerCase()}`} style={styles.tallyNum}>
+        {value}
+      </Text>
       <Text style={styles.tallyLabel}>{label}</Text>
     </View>
   );

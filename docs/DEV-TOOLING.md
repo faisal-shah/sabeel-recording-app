@@ -12,7 +12,7 @@ emulator — not your diff.
 | Command | What it does |
 |---|---|
 | `npm run lint` | ESLint + `check:text` |
-| `npm run typecheck` | Builds `@sabeel/shared` first, then typechecks every workspace |
+| `npm run typecheck` | Builds `@sabeel/shared` first, then typechecks every workspace — **including the functions tests** (`functions/tsconfig.test.json`) |
 | `npm test` | Vitest unit tests (shared, functions and app), no emulators needed |
 | `npm run test:emulator` | Firestore + Auth + Storage emulators, then the rules suite |
 | `npm run knip` | Dead-code audit — fails on unused files, exports and dependencies |
@@ -34,6 +34,16 @@ this repo once shipped an empty index file and two admin screens that failed the
 moment a real user opened them. Run both before a release, and `check:queries`
 again whenever a `where` + `orderBy` pair changes.
 
+
+**The functions tests are typechecked by a second config, and that is not
+tidiness.** `functions/tsconfig.json` compiles `src` for deployment, so it
+cannot include `test` — which meant nothing ever checked a fixture against the
+document types. Three tests were seeding shapes the app cannot produce: sessions
+with `dueDate: null`, which `createSession` refuses because "a blank one would
+mean permanent access". A test built on data Firestore never holds proves
+something about a system that does not exist, and reads exactly like one that
+proves something real. `tsconfig.test.json` covers both trees and runs in the
+same `npm run typecheck`.
 
 ## Setting up a machine
 

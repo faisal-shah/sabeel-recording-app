@@ -303,7 +303,10 @@ function LedgerRowCard({
   const bucket = ledgerBucket(r.dueDate, r.completed, today);
 
   return (
-    <View style={styles.row}>
+    // Named, so a check about ONE student can be bound to their row. A regex
+    // over the page says only that somebody on it is overridden, which is the
+    // one thing an override check must not settle for.
+    <View testID={`ledger-row-${r.name}`} style={styles.row}>
       <View style={styles.rowHead}>
         <View style={{ flex: 1 }}>
           <Text style={styles.name}>{r.name}</Text>

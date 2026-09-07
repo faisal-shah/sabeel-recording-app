@@ -227,14 +227,27 @@ export function unbreakableDate(date: string): string {
  */
 export function canPlayNow(
   cls: { effectiveActive: boolean; archivedAccess: boolean },
-  /** The listener's own deadline. Null for staff, who have none. */
+  /**
+   * The listener's own deadline.
+   *
+   * Null means two different things depending on who is asking, and they have
+   * OPPOSITE answers: for staff there is no deadline to apply, and for a student
+   * there is no grant — the date comes from their assignment, so its absence IS
+   * the absence of the assignment. Written as one `&&` chain this read "no date,
+   * so nothing has expired" and returned true for both, which is the fail-open
+   * the invariant rules out in as many words: a blank deadline would mean
+   * permanent access, so nothing may treat one as permission. The server refuses
+   * to mint a URL either way; what this fixes is the client drawing a live
+   * transport over a recording the person holds nothing for.
+   */
   dueDate: string | null,
   /** Null when staff are listening — see `NowPlaying.studentUid`. */
   studentUid: string | null,
   today: string,
 ): boolean {
   if (!canPlayFromCourse(cls)) return false;
-  return !(studentUid !== null && dueDate !== null && isOverdue(dueDate, today));
+  if (studentUid === null) return true; // staff: no deadline of their own
+  return dueDate !== null && !isOverdue(dueDate, today);
 }
 
 /**

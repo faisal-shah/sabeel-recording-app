@@ -120,12 +120,31 @@ describe('firestore composite indexes cover the app’s queries', () => {
       const order = q.orderBys[0];
       if (filters.every((f) => f === order.field)) continue; // orderBy on the filtered field
 
-      const covered = declared.some(
-        (idx) =>
-          idx.collectionGroup === q.collection &&
-          filters.every((f) => idx.fields.some((x) => x.fieldPath === f)) &&
-          idx.fields.some((x) => x.fieldPath === order.field && x.order === order.dir),
-      );
+      /*
+       * FIELD ORDER IS THE WHOLE OF WHAT FIRESTORE MATCHES ON, and set
+       * membership cannot see it. An index declaring `createdAt DESC, courseId
+       * ASC` contains both fields and the right direction, so the old
+       * membership test passed — while the query `where courseId == …
+       * orderBy createdAt desc` throws `failed-precondition` in production.
+       * That is the exact incident this file's header recounts, passing the
+       * check written to prevent it.
+       *
+       * Firestore's rule: every equality filter first, in any order among
+       * themselves, then the `orderBy` field with a matching direction, and
+       * nothing before them. So the equality fields must be a prefix, and the
+       * ordered field must come immediately after.
+       */
+      const covered = declared.some((idx) => {
+        if (idx.collectionGroup !== q.collection) return false;
+        const prefix = idx.fields.slice(0, filters.length);
+        const equalitiesFirst =
+          prefix.length === filters.length &&
+          filters.every((f) => prefix.some((x) => x.fieldPath === f));
+        const next = idx.fields[filters.length];
+        return (
+          equalitiesFirst && !!next && next.fieldPath === order.field && next.order === order.dir
+        );
+      });
       if (!covered) {
         missing.push(
           `${q.label}: ${q.collection}(${filters.join(', ')}) orderBy ${order.field} ${order.dir}`,
