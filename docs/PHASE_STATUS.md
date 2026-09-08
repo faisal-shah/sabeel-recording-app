@@ -1172,6 +1172,30 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-09-07 (v0.5.2) — **The account gate and the public pages, shipped.**
+
+  Everything from the store-prep work is now in people's hands: web deployed and
+  verified (`ff79d22`, `0.5.2`, no emulator flag, `smoke:prod` green on all ten
+  checks including the three pages fetched anonymously), tag `v0.5.2`, four APKs
+  on both release homes, download page and published manual both reading 0.5.2.
+  Release APK confirmed on the AVD as `versionName=0.5.2`, `versionCode=27`,
+  labelled `v0.5.2 · ff79d22`, no dev sign-in panel.
+
+  Gate green: lint, typecheck, knip, **368 unit**, **390 emulator** (2 skipped),
+  **1108/1108** sweep.
+
+  **Two self-inflicted delays worth not repeating.** The AVD was killed
+  mid-release because it was running alongside both the Gradle build and the full
+  gate — `earlyoom` on this box prefers `qemu-system-x86`, which this repo's own
+  notes say. Then a `pkill -f qemu-system-x86` to clean up matched the killing
+  shell's own command line and took the session with it — the exact trap
+  `free-emulator-ports.sh` documents for `pkill -f firebase`. Kill by executable
+  name (`ps -eo pid,comm`), and do not run the AVD next to a build.
+
+  Still outstanding and unchanged: the refusal round trip on a real device with a
+  personal Google account, and `privacy@oursabeel.com` needing to exist before
+  the policy's promise means anything. Both are in `TODO.md`.
+
 - 2026-09-07 (store prep) — **The account gate and the three public pages, live —
   and the lockfile fix paid for itself.**
 
