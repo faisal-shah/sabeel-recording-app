@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { errorText } from './errors';
+import { audioErrorText, errorText } from './errors';
 
 /**
  * What a person reads when something fails.
@@ -36,6 +36,27 @@ describe('errorText', () => {
       code: 'auth/user-not-found',
     });
     expect(errorText(e)).toBe(GENERIC);
+  });
+
+  it('turns away the Storage SDK too, object path and all', () => {
+    const e = Object.assign(
+      new Error(
+        "Firebase Storage: User does not have permission to access 'recordings/abc/audio.m4a'. (storage/unauthorized)",
+      ),
+      { code: 'storage/unauthorized' },
+    );
+    expect(errorText(e)).toBe(GENERIC);
+  });
+
+  it('gives a listener a sentence for an audio failure, and logs the code', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    for (const raw of ['audio error 2', 'Source error', 'Response code: 400']) {
+      const text = audioErrorText(raw);
+      expect(text).not.toContain(raw);
+      expect(text).toMatch(/could not be loaded/);
+    }
+    expect(warn).toHaveBeenCalledWith('audio failed', 'audio error 2');
+    warn.mockRestore();
   });
 
   it.each([undefined, null, {}, 'a string throw', new Error('')])(

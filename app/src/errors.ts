@@ -23,7 +23,25 @@
 export function errorText(e: unknown): string {
   const err = e as { code?: string; message?: string } | null;
   const raw = (err?.message ?? '').trim();
-  if (raw && /\s/.test(raw) && !/^Firebase:/.test(raw)) return raw;
+  // `Firebase:` and `Firebase Storage:` alike — the Storage SDK assembles
+  // "Firebase Storage: User does not have permission to access
+  // 'recordings/<id>/audio.m4a'. (storage/unauthorized)", which a manager whose
+  // upload was refused was reading off the screen, object path and all.
+  if (raw && /\s/.test(raw) && !/^Firebase(\s\w+)?:/.test(raw)) return raw;
   console.warn('request failed', err?.code || raw || 'unknown');
   return 'Something went wrong. Try again in a moment.';
+}
+
+/**
+ * What a listener reads when the AUDIO itself fails.
+ *
+ * The transport's own words are a code — `audio error 2` from the web
+ * element, "Source error" or "Response code: 400" from expo-audio — and they
+ * were shown verbatim in the player's error band, while the mint failure two
+ * lines away went through `errorText`. One sentence for a person, the raw
+ * value logged for Sentry, like every other failure.
+ */
+export function audioErrorText(raw: string): string {
+  console.warn('audio failed', raw || 'unknown');
+  return 'The audio could not be loaded. Check your connection and try again.';
 }

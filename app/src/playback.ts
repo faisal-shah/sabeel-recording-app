@@ -9,7 +9,7 @@ import {
   progressId,
   type ListeningProgressDoc,
 } from '@sabeel/shared';
-import { errorText } from './errors';
+import { audioErrorText, errorText } from './errors';
 import { db, functions } from './firebase';
 import { createPlayer } from './player';
 import type { Player } from './playerTypes';
@@ -52,9 +52,27 @@ export function forgetPlaybackUrls(): void {
   cacheEpoch += 1;
 }
 
-async function playbackUrl(recordingId: string): Promise<string> {
+/**
+ * When the duration is unknown, assume a lecture this long before trusting a
+ * cached URL — the longest class the institute records, with room.
+ */
+const UNKNOWN_DURATION_MS = 3 * 60 * 60 * 1000;
+
+/**
+ * A cached URL is reused only if it will outlive THIS listen.
+ *
+ * The refresh window alone assumed a fresh mint per session: a two-hour
+ * lecture opened at 20:00 (URL good until 08:00), closed after twenty minutes
+ * and reopened at 06:40 found 80 minutes left — more than the hour the window
+ * asks for — and played on into an expiry at 08:00 with twenty minutes to go.
+ * The next range request got `ExpiredToken`, the transport went dead and the
+ * error band came up, on the one listen it was meant to spare. So the cache
+ * answers only when what is left covers the whole recording plus the window.
+ */
+async function playbackUrl(recordingId: string, durationMs: number): Promise<string> {
   const hit = cache.get(recordingId);
-  if (hit && hit.expiresAt - Date.now() > SIGNED_URL_REFRESH_MS) return hit.url;
+  const need = (durationMs > 0 ? durationMs : UNKNOWN_DURATION_MS) + SIGNED_URL_REFRESH_MS;
+  if (hit && hit.expiresAt - Date.now() > need) return hit.url;
   const epoch = cacheEpoch;
   const fresh = await mintUrl(recordingId);
   if (epoch === cacheEpoch) cache.set(recordingId, fresh);
@@ -391,7 +409,7 @@ export function openPlayback(now: NowPlaying): void {
        * left in the failed state stays retryable: leaving the screen and coming
        * back builds a new player rather than taking the early return.
        */
-      set({ error: message, ready: message === null && loadedOk });
+      set({ error: message === null ? null : audioErrorText(message), ready: message === null && loadedOk });
     },
     onPlayingChanged: (playing) => {
       // The lock screen, the notification controls, a phone call taking audio
@@ -408,7 +426,7 @@ export function openPlayback(now: NowPlaying): void {
   void (async () => {
     try {
       const [url, saved] = await Promise.all([
-        playbackUrl(now.recordingId),
+        playbackUrl(now.recordingId, now.durationMs),
         now.studentUid
           ? getDoc(
               doc(db, COLLECTIONS.listeningProgress, progressId(now.studentUid, now.recordingId)),

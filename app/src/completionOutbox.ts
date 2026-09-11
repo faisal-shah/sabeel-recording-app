@@ -20,7 +20,7 @@
 // carries `completedAt` — is preserved, and replaying events would duplicate
 // them (they have generated ids).
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, runTransaction, setDoc } from 'firebase/firestore';
 import { COLLECTIONS, completionId, type CompletionDoc } from '@sabeel/shared';
 import { db } from './firebase';
 import { captureError } from './sentry';
@@ -40,12 +40,55 @@ async function writeAll(map: Record<string, CompletionDoc>): Promise<void> {
   await AsyncStorage.setItem(KEY, JSON.stringify(map));
 }
 
-async function forget(id: string): Promise<void> {
-  const map = await readAll();
-  if (id in map) {
+/**
+ * ONE MUTATION AT A TIME. Every change to the store is read-modify-write over
+ * a single key, and two in flight together — a mark on one recording while
+ * another's acknowledgement comes back — each wrote its own picture of the map
+ * and the second landing erased the first's entry. Chained, the way
+ * `playback.ts` serialises its progress writes.
+ */
+let mutations: Promise<void> = Promise.resolve();
+function mutate(fn: (map: Record<string, CompletionDoc>) => boolean): Promise<void> {
+  const next = mutations.then(async () => {
+    const map = await readAll();
+    if (fn(map)) await writeAll(map);
+  });
+  mutations = next.catch(() => undefined);
+  return next;
+}
+
+/**
+ * Forget an entry — but only the one that was acknowledged. Mark then un-mark
+ * offline and the outbox holds the un-mark while both writes queue; the mark's
+ * acknowledgement arriving first must not take the un-mark with it, or a kill
+ * in that window loses the student's last word. `updatedAt` names which.
+ */
+function forget(id: string, updatedAt: number): Promise<void> {
+  return mutate((map) => {
+    if (map[id]?.updatedAt !== updatedAt) return false;
     delete map[id];
-    await writeAll(map);
-  }
+    return true;
+  });
+}
+
+/**
+ * A replay must not overwrite what another device wrote since.
+ *
+ * The outbox is the path that survives a kill, so it can replay hours or days
+ * later — by which time the student may have un-marked (or re-marked) the same
+ * recording on the web. A plain `setDoc` then put the older state back over the
+ * newer one, and the ledger's `completedAt` went backwards. Read first, inside
+ * a transaction, and yield to anything newer. A transaction needs a
+ * connection; offline it rejects with a retryable code and the entry stays for
+ * the next launch, which is what the outbox is for.
+ */
+async function replay(id: string, state: CompletionDoc): Promise<void> {
+  const ref = doc(db, COLLECTIONS.completions, id);
+  await runTransaction(db, async (tx) => {
+    const current = (await tx.get(ref)).data() as CompletionDoc | undefined;
+    if (current && current.updatedAt > state.updatedAt) return;
+    tx.set(ref, state);
+  });
 }
 
 /**
@@ -54,9 +97,9 @@ async function forget(id: string): Promise<void> {
  * forget the outbox entry; offline it never resolves and the entry survives an
  * app kill.
  */
-function fireAndForget(id: string, state: CompletionDoc): void {
-  void setDoc(doc(db, COLLECTIONS.completions, id), state)
-    .then(() => forget(id))
+function fireAndForget(id: string, state: CompletionDoc, write: () => Promise<void>): void {
+  void write()
+    .then(() => forget(id, state.updatedAt))
     .catch((e: { code?: string }) => {
       /*
        * A REFUSAL IS FINAL; ANYTHING ELSE IS WORTH RETRYING.
@@ -80,17 +123,20 @@ function fireAndForget(id: string, state: CompletionDoc): void {
        * incomplete again with nothing anywhere saying why.
        */
       captureError(e, { source: 'completionOutbox', outboxId: id });
-      void forget(id);
+      void forget(id, state.updatedAt);
     });
 }
 
 /** Persist a completion state durably (native path). */
 export async function persistCompletionState(state: CompletionDoc): Promise<void> {
   const id = completionId(state.studentUid, state.recordingId);
-  const map = await readAll();
-  map[id] = state;
-  await writeAll(map);
-  fireAndForget(id, state);
+  await mutate((map) => {
+    map[id] = state;
+    return true;
+  });
+  // The live path stays a plain `setDoc`: offline it queues in the SDK and
+  // resolves on reconnect, which a transaction cannot do.
+  fireAndForget(id, state, () => setDoc(doc(db, COLLECTIONS.completions, id), state));
 }
 
 /**
@@ -102,6 +148,6 @@ export async function persistCompletionState(state: CompletionDoc): Promise<void
 export async function drainCompletionOutbox(studentUid: string): Promise<void> {
   const map = await readAll();
   for (const [id, state] of Object.entries(map)) {
-    if (state.studentUid === studentUid) fireAndForget(id, state);
+    if (state.studentUid === studentUid) fireAndForget(id, state, () => replay(id, state));
   }
 }

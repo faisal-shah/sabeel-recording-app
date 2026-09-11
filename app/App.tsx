@@ -305,10 +305,16 @@ export default function App() {
                   ) : null}
                   {/* Titled for what the screen IS — one cohort: its settings and the
                       courses inside it. The route keeps its name until the id-param
-                      conversion renames routes wholesale. */}
-                  <Stack.Screen name="Courses" options={screenOptions('Courses', 'Cohort')}>
-                    {() => <Courses />}
-                  </Stack.Screen>
+                      conversion renames routes wholesale. Admin-only for the same
+                      reason as Cohorts above: nothing navigates a manager here, but
+                      `/cohorts/<id>` is a URL, and its course list is a query the
+                      rules refuse a manager — so it rendered rename, archive and
+                      "Add a course" under a live-data error band. */}
+                  {isAdmin ? (
+                    <Stack.Screen name="Courses" options={screenOptions('Courses', 'Cohort')}>
+                      {() => <Courses />}
+                    </Stack.Screen>
+                  ) : null}
                   <Stack.Screen name="CourseDetail" options={screenOptions('CourseDetail', 'Course')}>
                     {() => <CourseDetail isAdmin={isAdmin} />}
                   </Stack.Screen>
@@ -372,7 +378,20 @@ export default function App() {
               )}
               {/* Both: staff open the player from the library and from a session. */}
               <Stack.Screen name="Player" options={screenOptions('Player', 'Listen')}>
-                {() => <Play studentUid={isStudent ? user.uid : null} />}
+                {/* KEYED BY RECORDING. Navigating to the player while it is already
+                    on the stack re-renders the same `Play` with new params, and
+                    for one committed frame its live-doc state is still the
+                    previous recording's — resolved-and-gone if that one had been
+                    unpublished — while `recordingId` is already the new one, so
+                    the "stop the audio when the recording goes away" effect
+                    stopped what had just been chosen. A new key is a new instance
+                    with fresh, unresolved state. */}
+                {({ route }) => (
+                  <Play
+                    key={(route.params as { recordingId?: string } | undefined)?.recordingId ?? ''}
+                    studentUid={isStudent ? user.uid : null}
+                  />
+                )}
               </Stack.Screen>
             </Stack.Navigator>
           </Navigator>

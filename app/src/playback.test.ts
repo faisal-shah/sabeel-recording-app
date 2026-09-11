@@ -871,6 +871,23 @@ describe('signed URLs', () => {
     expect(callable).toHaveBeenCalledTimes(2);
   });
 
+  it('re-mints when the cached URL would expire before the recording ends', async () => {
+    // Ninety minutes left on the URL, more than the refresh window — but the
+    // recording is an hour long, and an hour plus the window is more than
+    // ninety minutes. The old check let this play into an ExpiredToken.
+    const pb = await load();
+    callable.mockResolvedValue({
+      data: { url: 'https://signed/ninety-minutes.m4a', expiresAt: nowMs + 90 * 60_000 },
+    });
+    pb.openPlayback(recording('rec-a')); // durationMs: 3_600_000
+    await flush();
+    await pb.closePlayback();
+
+    pb.openPlayback(recording('rec-a'));
+    await flush();
+    expect(callable).toHaveBeenCalledTimes(2);
+  });
+
   it('reuses a cached URL rather than minting per open', async () => {
     const pb = await load();
     pb.openPlayback(recording('rec-a'));
