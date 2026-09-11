@@ -334,6 +334,15 @@ Two consequences to expect rather than treat as bugs:
          it works — which also proves the Google account chooser was cleared, and
          that a person who picked the wrong account can still switch.
 
+### 5c. KVM access can lapse without a reboot — one-time fix
+
+`/dev/kvm` access on this machine comes from a login-session ACL, and on
+2026-09-10 the device node was recreated without it: the ACL named only `sddm`,
+the `kvm` group was empty, and the AVD refused hardware mode until a reboot
+re-applied it. Make it not depend on the session:
+
+- [ ] `sudo gpasswd -a $USER kvm` — then log out and in once.
+
 ### 6. The three static pages the stores need — BUILT (2026-09-07)
 
 Done and tested; **one thing left, and it is yours.**

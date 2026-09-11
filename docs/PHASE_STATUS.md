@@ -1233,6 +1233,78 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-09-11 — **v0.6.0: the native `Select`'s first time on a device, and a
+  fixture that was hiding a check.**
+
+  Gate re-run on this machine before anything else and matching the author's
+  numbers exactly: lint, typecheck, knip, **388 unit**, **397 emulator** (2
+  skipped), **1168/1168** sweep.
+
+  **Debug build against the seeded world**, as admin and as the manager:
+
+  - **Library filters.** Both dropdowns open the sheet with the current row
+    tinted; picking a cohort narrows the course sheet (Spring 2026 offers only
+    Seerah Survey) and the list (0 of 8); **Clear filters** appears, and at
+    phone width the row wraps it onto its own line cleanly rather than
+    squeezing the dropdowns; clearing restores all eight and the button goes.
+    The manager's course dropdown holds only their one course, and after the
+    rename below it already read "Autumn 2026 Term" — the label follows the
+    document live.
+  - **Student history.** As admin, all seven rows in order — created, enrolled,
+    removed, re-enrolled, disabled, re-enabled, re-enrolled elsewhere — each
+    with who and when. As the manager, four rows under "Enrolment changes in
+    the courses you manage": the disable/re-enable pair and the other course's
+    re-enrolment correctly absent. The long course name in the last row **wraps
+    at word boundaries** — the Yoga check, and this time it passed.
+  - **Cohort rename.** With the keyboard up, the field and the Rename button
+    both stay visible above the IME; Rename is disabled until the name differs
+    and lights up on the first changed character; the page title followed the
+    write live and Rename greyed out again once the name matched.
+  - **Disabled staff.** The closed section opens, Re-enable is on the card, and
+    pressing it moved the person back into Staff (2 → 3) with the section gone.
+
+  **Found: the fixture, not the app.** The first press of Re-enable failed
+  `auth/user-not-found`. The seed wrote `staffUsers/sw-disabled` straight to
+  Firestore with no Auth user behind it — a shape production cannot produce,
+  since every staff document there was written by the trigger for a real
+  sign-in — and `setStaffAccess` writes the Auth record first. The app did the
+  right thing: "Something went wrong. Try again in a moment." at the top of the
+  screen. But the pass had pressed the button and learned nothing. Fixed by
+  giving the fixture a password-less Auth user (the shape `onUserCreate`
+  ignores), and the check above is against that. The web e2e already exercised
+  Re-enable against a real account, so nothing was uncovered on the web; the
+  device pass simply could not see it until now.
+
+  **Release APK against production.** `versionName=0.6.0`, `versionCode=28`,
+  labelled `v0.6.0 · ac2ead3`, **no dev sign-in panel**. Push delivered end to
+  end to the demo student on this build — app icon, `sabeel-alerts` channel,
+  alerting section.
+
+  **Not re-exercised, and why.** Playback minting a signed URL needs a student
+  with an open grant, and production has none — every due date has passed,
+  the demo students' included. The handoff assumed the demo student was that
+  account; it is not, and reopening one is a production write standing in for
+  a test. Verified on v0.5.0, and nothing in this release touches
+  `getPlaybackUrl` or the player. The library on production data needs a staff
+  sign-in, which is Google, which this session holds no account for; the same
+  screens were exercised on the debug build.
+
+  **Deployed in order**, and the order was load-bearing: indexes first, then a
+  five-minute wait for the two `auditLog` composites to build — and a further
+  minute after `gcloud` said READY before the query planner would use them, so
+  `check:queries` failed once with "currently building" and passed on the
+  retry. Then rules, storage, functions (`renameCohort`, a new function and
+  therefore a cold build, deployed first time on the committed lockfile), and
+  hosting: bundle inlines `ac2ead3`, `0.6.0`, no emulator flag, `.map` returns
+  `text/html`, `smoke:prod` green. Tag `v0.6.0`, four APKs on both release
+  homes, download page and published manual both reading 0.6.0.
+
+  **The machine lost KVM between passes.** `/dev/kvm`'s ACL had only the
+  display manager on it — the device node had been recreated without the
+  session's entry — so the AVD refused to start in hardware mode. A reboot
+  re-applied the ACL. `sudo gpasswd -a $USER kvm` makes access not depend on
+  the session; recorded in TODO.
+
 - 2026-09-07 (v0.5.2) — **The account gate and the public pages, shipped.**
 
   Everything from the store-prep work is now in people's hands: web deployed and
