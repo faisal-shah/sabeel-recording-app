@@ -137,7 +137,9 @@ describe('createRecordingDraft', () => {
       createRecordingDraft(ADMIN, { sessionId }),
       createRecordingDraft(ADMIN, { sessionId }),
     ]);
-    const won = outcomes.filter((o): o is PromiseFulfilledResult<{ id: string }> => o.status === 'fulfilled');
+    const won = outcomes.filter(
+      (o): o is PromiseFulfilledResult<{ id: string; audioPath: string }> => o.status === 'fulfilled',
+    );
     expect(won).toHaveLength(1);
     expect(String((outcomes.find((o) => o.status === 'rejected') as PromiseRejectedResult).reason)).toMatch(/already/i);
     const drafts = await getFirestore()
