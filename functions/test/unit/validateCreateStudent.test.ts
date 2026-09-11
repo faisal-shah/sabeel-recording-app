@@ -31,6 +31,18 @@ describe('validateCreateStudent', () => {
     expect(validateCreateStudent({ ...base, courseId: null }).courseId).toBeUndefined();
   });
 
+  it('refuses an address on the staff domain — that is a Google identity, not a student', () => {
+    // Created as a student first, a colleague's first Google sign-in is folded
+    // into that account: no onUserCreate, no staffUsers row, no approval queue.
+    for (const email of ['ali@oursabeel.com', 'Ali@OurSabeel.com', ' ali@oursabeel.com ']) {
+      expect(() => validateCreateStudent({ ...base, email })).toThrow(/staff account/);
+    }
+    // A look-alike is still a student address.
+    expect(validateCreateStudent({ ...base, email: 'ali@oursabeel.com.example.com' }).email).toBe(
+      'ali@oursabeel.com.example.com',
+    );
+  });
+
   it('still rejects a courseId that is present but not a usable id', () => {
     for (const bad of ['', '   ', 42, {}, []]) {
       expect(() => validateCreateStudent({ ...base, courseId: bad })).toThrow();

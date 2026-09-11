@@ -3,9 +3,11 @@ import { auditedCall } from './audited';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import {
+  ALLOWED_EMAIL_DOMAIN,
   COLLECTIONS,
   NEW_STUDENT_ACCESS,
   enrollmentId,
+  isAllowedStaffEmail,
   type CourseDoc,
   type EnrollmentDoc,
   type StudentDoc,
@@ -29,6 +31,21 @@ export function validateCreateStudent(data: unknown): CreateStudentInput {
   // malformed address on creation. Duplicating its rules here would only add a
   // second, subtly different definition of "valid email".
   if (!email.includes('@')) throw new HttpsError('invalid-argument', 'A valid email is required.');
+  /*
+   * NEVER A STAFF ADDRESS. Staff are Google identities on the institute's
+   * domain; a student is an email-and-password account created here with no
+   * credential and an unverified address. Make one for a colleague's address
+   * and Firebase's one-account-per-email rule folds their first Google sign-in
+   * INTO it: no new user, so `onUserCreate` never runs, no staffUsers document,
+   * never in the approval queue, and `setStaffAccess` finds nobody — an
+   * onboarding lockout only the console can undo.
+   */
+  if (isAllowedStaffEmail(email, true)) {
+    throw new HttpsError(
+      'invalid-argument',
+      `A ${ALLOWED_EMAIL_DOMAIN} address is a staff account. Staff sign in with Google.`,
+    );
+  }
 
   const out: CreateStudentInput = { displayName, email };
   // `null` counts as absent, not as a bad value.
@@ -70,6 +87,17 @@ export async function createStudentAccount(callerUid: string, input: CreateStude
   const auth = getAuth();
   const db = getFirestore();
 
+  // The course FIRST, before anything exists. Looked up after the account was
+  // created, a stale course id left an Auth user with student claims and no
+  // student document — unreachable by the app, and blocking that address
+  // ("already has an account") until somebody found it in the console. A
+  // manager's scope check already reads the course before this runs; an
+  // admin's does not, so this is where the order is guaranteed.
+  const cls = input.courseId
+    ? await db.collection(COLLECTIONS.courses).doc(input.courseId).get()
+    : null;
+  if (input.courseId && !cls?.exists) throw new HttpsError('not-found', 'No such course.');
+
   let user;
   try {
     user = await auth.createUser({
@@ -90,42 +118,48 @@ export async function createStudentAccount(callerUid: string, input: CreateStude
     throw e;
   }
 
-  // Claims before the document, for the same reason as the auth trigger: rules
-  // trust the token, so a half-completed create leaves an account that can do
-  // nothing rather than one that looks authorised but is not.
-  await auth.setCustomUserClaims(user.uid, { ...NEW_STUDENT_ACCESS });
+  try {
+    // Claims before the document, for the same reason as the auth trigger: rules
+    // trust the token, so a half-completed create leaves an account that can do
+    // nothing rather than one that looks authorised but is not.
+    await auth.setCustomUserClaims(user.uid, { ...NEW_STUDENT_ACCESS });
 
-  const doc: StudentDoc = {
-    displayName: input.displayName,
-    email: input.email,
-    role: 'student',
-    status: 'active',
-    createdAt: Date.now(),
-    createdBy: callerUid,
-  };
-
-  // Student record and enrolment in one batch, so a course picked at creation
-  // time cannot end up half-applied — an account with no course is recoverable,
-  // an enrolment pointing at a student record that was never written is not.
-  const batch = db.batch();
-  batch.set(db.collection(COLLECTIONS.students).doc(user.uid), doc);
-  if (input.courseId) {
-    const cls = await db.collection(COLLECTIONS.courses).doc(input.courseId).get();
-    if (!cls.exists) throw new HttpsError('not-found', 'No such course.');
-    const enrollment: EnrollmentDoc = {
-      studentUid: user.uid,
-      courseId: input.courseId,
-      cohortId: (cls.data() as CourseDoc).cohortId,
-      active: true,
-      enrolledAt: Date.now(),
-      enrolledBy: callerUid,
+    const doc: StudentDoc = {
+      displayName: input.displayName,
+      email: input.email,
+      role: 'student',
+      status: 'active',
+      createdAt: Date.now(),
+      createdBy: callerUid,
     };
-    batch.set(
-      db.collection(COLLECTIONS.enrollments).doc(enrollmentId(user.uid, input.courseId)),
-      enrollment,
-    );
+
+    // Student record and enrolment in one batch, so a course picked at creation
+    // time cannot end up half-applied — an account with no course is recoverable,
+    // an enrolment pointing at a student record that was never written is not.
+    const batch = db.batch();
+    batch.set(db.collection(COLLECTIONS.students).doc(user.uid), doc);
+    if (input.courseId && cls) {
+      const enrollment: EnrollmentDoc = {
+        studentUid: user.uid,
+        courseId: input.courseId,
+        cohortId: (cls.data() as CourseDoc).cohortId,
+        active: true,
+        enrolledAt: Date.now(),
+        enrolledBy: callerUid,
+      };
+      batch.set(
+        db.collection(COLLECTIONS.enrollments).doc(enrollmentId(user.uid, input.courseId)),
+        enrollment,
+      );
+    }
+    await batch.commit();
+  } catch (e) {
+    // An account with no student document is one the app cannot reach and the
+    // address cannot be reused. Take it back out, so a retry starts clean; the
+    // trigger ignores Admin-SDK users, so nothing races this.
+    await auth.deleteUser(user.uid).catch(() => undefined);
+    throw e;
   }
-  await batch.commit();
 
   // No obligations at creation time: accountability is attendance-driven and
   // starts from enrollment onward — a student enrolled now is marked at the next
