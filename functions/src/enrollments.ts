@@ -56,22 +56,32 @@ export async function createEnrollmentRecord(callerUid: string, input: Enrollmen
 
   const id = enrollmentId(input.studentUid, input.courseId);
   const ref = db.collection(COLLECTIONS.enrollments).doc(id);
-  const existing = await ref.get();
 
-  if (existing.exists && (existing.data() as EnrollmentDoc).active) {
-    throw new HttpsError('already-exists', 'That student is already in this course.');
-  }
-
-  const doc: EnrollmentDoc = {
-    studentUid: input.studentUid,
-    courseId: input.courseId,
-    cohortId: (courseSnap.data() as CourseDoc).cohortId,
-    active: true,
-    // Preserve the original enrolment date across a re-enrolment.
-    enrolledAt: existing.exists ? (existing.data() as EnrollmentDoc).enrolledAt : Date.now(),
-    enrolledBy: callerUid,
-  };
-  await ref.set(doc);
+  /*
+   * ONE ENROLMENT, ONE RECORD — held by a transaction, not by the read above
+   * the write. Two taps on an "Add a student" row 24 ms apart both read "not
+   * enrolled" before either wrote, both succeeded, and both were audited: the
+   * student's history then said "Enrolled in Tafseer" twice, which is exactly
+   * the kind of sentence that page must never print. Inside the transaction the
+   * second call sees the first's write and is refused as already enrolled.
+   */
+  const { doc, reenrolled } = await db.runTransaction(async (tx) => {
+    const existing = await tx.get(ref);
+    if (existing.exists && (existing.data() as EnrollmentDoc).active) {
+      throw new HttpsError('already-exists', 'That student is already in this course.');
+    }
+    const next: EnrollmentDoc = {
+      studentUid: input.studentUid,
+      courseId: input.courseId,
+      cohortId: (courseSnap.data() as CourseDoc).cohortId,
+      active: true,
+      // Preserve the original enrolment date across a re-enrolment.
+      enrolledAt: existing.exists ? (existing.data() as EnrollmentDoc).enrolledAt : Date.now(),
+      enrolledBy: callerUid,
+    };
+    tx.set(ref, next);
+    return { doc: next, reenrolled: existing.exists };
+  });
   /*
    * A RE-ENROLMENT RESTORES; A FIRST ENROLMENT HAS NOTHING TO RESTORE.
    *
@@ -83,8 +93,8 @@ export async function createEnrollmentRecord(callerUid: string, input: Enrollmen
    * Skipped for a genuinely new student, where the reconcile would be pure cost:
    * they are in no attendance snapshot, so it can only ever grant them nothing.
    */
-  if (existing.exists) await reconcileCourseAssignments(db, input.courseId);
-  return { id, ...doc, reenrolled: existing.exists };
+  if (reenrolled) await reconcileCourseAssignments(db, input.courseId);
+  return { id, ...doc, reenrolled };
 }
 
 export const createEnrollment = auditedCall('createEnrollment', async (req, audit) => {

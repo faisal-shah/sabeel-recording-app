@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   Button,
@@ -84,6 +84,42 @@ export function CourseDetailScreen({
     () => students.filter((s) => s.status === 'active' && !enrolled.includes(s.uid)),
     [students, enrolled],
   );
+  /*
+   * A TAPPED ROW STAYS LOCKED UNTIL THE ROSTER HOLDS THE STUDENT — the same
+   * shape as a manager row below, for the same reason. `busy` clears when the
+   * callable answers, but the row is listed until the roster snapshot lands on
+   * its own channel, and a second tap in that window is a second enrolment: in
+   * production two landed 24 ms apart, both succeeded, both were audited, and
+   * the student's history said "Enrolled" twice. The server now refuses the
+   * second (`createEnrollmentRecord`), which turns that tap into an error band
+   * on a student who was in fact just added; this keeps the tap from being
+   * sent at all.
+   */
+  const [adding, setAdding] = useState<ReadonlySet<string>>(() => new Set());
+  // The lock itself lives in a ref, read synchronously by the press: a second
+  // click in the same frame sees the first before any render has caught up.
+  const lock = useRef(new Set<string>());
+  const publish = () => setAdding(new Set(lock.current));
+  useEffect(() => {
+    let changed = false;
+    for (const uid of enrolled) changed = lock.current.delete(uid) || changed;
+    if (changed) publish();
+  }, [enrolled]);
+  const enrol = (uid: string) => {
+    if (lock.current.has(uid)) return;
+    lock.current.add(uid);
+    publish();
+    void run(`add-${uid}`, async () => {
+      try {
+        await createEnrollment({ studentUid: uid, courseId: cls.id });
+      } catch (e) {
+        // Released on failure only: on success the roster releases it.
+        lock.current.delete(uid);
+        publish();
+        throw e;
+      }
+    });
+  };
 
   const run = async (key: string, fn: () => Promise<void>) => {
     setBusy(key);
@@ -435,28 +471,33 @@ export function CourseDetailScreen({
               : 'Every active student is already in this course.'}
           </Empty>
         ) : (
-          notEnrolled.map((s) => (
-            <Pressable
-              key={s.uid}
-              testID={`enrol-${s.email}`}
-              accessibilityRole="button"
-              accessibilityLabel={`Enrol ${s.displayName}`}
-              onPress={() =>
-                void run(`add-${s.uid}`, () =>
-                  createEnrollment({ studentUid: s.uid, courseId: cls.id }),
-                )
-              }
-              style={styles.pickRow}
-            >
-              <View style={styles.plus}>
-                <Text style={styles.plusText}>+</Text>
-              </View>
-              <View style={styles.pickText}>
-                <Text style={styles.name}>{s.displayName}</Text>
-                <Text style={styles.hint}>{s.email}</Text>
-              </View>
-            </Pressable>
-          ))
+          notEnrolled.map((s) => {
+            const inFlight = adding.has(s.uid);
+            return (
+              <Pressable
+                key={s.uid}
+                testID={`enrol-${s.email}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Enrol ${s.displayName}`}
+                accessibilityState={{ busy: inFlight, disabled: inFlight }}
+                disabled={inFlight}
+                onPress={() => enrol(s.uid)}
+                style={[styles.pickRow, inFlight ? styles.pickRowBusy : null]}
+              >
+                <View style={styles.plus}>
+                  {inFlight ? (
+                    <ActivityIndicator size="small" color={t.text.secondary} />
+                  ) : (
+                    <Text style={styles.plusText}>+</Text>
+                  )}
+                </View>
+                <View style={styles.pickText}>
+                  <Text style={styles.name}>{s.displayName}</Text>
+                  <Text style={styles.hint}>{inFlight ? 'Adding…' : s.email}</Text>
+                </View>
+              </Pressable>
+            );
+          })
         )}
       </Card>
     </Screen>
@@ -470,6 +511,7 @@ const styles = StyleSheet.create({
   ledgerLine: { fontSize: 15, color: t.text.secondary, marginBottom: spacing(3) },
   ledgerNum: { fontSize: 18, fontWeight: '700', color: t.text.primary },
   missedNum: { color: t.feedback.danger },
+  pickRowBusy: { opacity: 0.6 },
   pickRow: {
     flexDirection: 'row',
     alignItems: 'center',

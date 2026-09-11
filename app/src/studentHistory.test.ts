@@ -90,6 +90,29 @@ describe('describeStudentEvent', () => {
 });
 
 describe('studentHistory', () => {
+  it('shows a double-tapped enrolment once, and a genuine repeat twice', () => {
+    // The production pair: two createEnrollment rows 24 ms apart, one tap.
+    const tap = (id: string, at: number, action = 'createEnrollment', actorUid = 'staff-a') =>
+      row({ id, at, action, actorUid, courseId: 'crs' });
+    const twice = studentHistory([tap('a', 1_000), tap('b', 1_024)], () => 'Tafseer');
+    expect(twice.map((r) => r.what)).toEqual(['Enrolled in Tafseer']);
+
+    // Removed and enrolled again the next day, by someone else: two events.
+    const later = studentHistory(
+      [
+        tap('a', 1_000),
+        tap('r', 2_000, 'setEnrollmentActive'),
+        tap('c', 90_000_000, 'createEnrollment', 'staff-b'),
+      ],
+      () => 'Tafseer',
+    );
+    expect(later.map((r) => r.what)).toEqual([
+      'Enrolled in Tafseer',
+      'Enrolment changed in Tafseer',
+      'Enrolled in Tafseer',
+    ]);
+  });
+
   it('reads oldest first, whatever order the query returned', () => {
     const rows = studentHistory(
       [

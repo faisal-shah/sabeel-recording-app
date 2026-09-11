@@ -4,6 +4,7 @@ import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/aut
 import { FIRST_ADMIN_LOCAL_PART } from '@sabeel/shared';
 import { auth } from '../firebase';
 import { signInWithGoogle } from '../auth/google';
+import { signInMessage } from '../auth/signInMessage';
 import { devSignIn, devSignInAvailable } from '../auth/devSignIn';
 import { Button, Field, Notice, Screen } from '../components/ui';
 import { BUILD_LABEL } from '../buildInfo';
@@ -32,7 +33,7 @@ export function SignInScreen() {
     try {
       await fn();
     } catch (e) {
-      setError(messageFor(e));
+      setError(signInMessage(e));
     } finally {
       setBusy(null);
     }
@@ -163,34 +164,6 @@ function DevRow({ busy }: { busy: boolean }) {
       />
     </View>
   );
-}
-
-function messageFor(e: unknown): string {
-  const code = (e as { code?: string }).code ?? '';
-  switch (code) {
-    case 'auth/invalid-credential':
-    case 'auth/wrong-password':
-    case 'auth/user-not-found':
-      // One message for all three: distinguishing them tells an attacker which
-      // addresses are registered.
-      return 'That email and password do not match an account.';
-    case 'auth/no-account':
-      /*
-       * NAMES NO WEBSITE, ON PURPOSE. The honest instruction — "sign in on the
-       * website first" — is the exact sentence Play's second trigger forbids, and
-       * saying it would oblige this app to ship an account-deletion flow. See
-       * `auth/google.ts`.
-       */
-      return "This account isn't set up for the app yet. Contact your administrator.";
-    case 'auth/user-disabled':
-      return 'That account has been disabled. Ask your teacher.';
-    case 'auth/too-many-requests':
-      return 'Too many attempts. Wait a few minutes and try again.';
-    case 'auth/network-request-failed':
-      return 'Could not reach the server. Check your connection.';
-    default:
-      return (e as Error).message || 'Something went wrong. Try again.';
-  }
 }
 
 const styles = StyleSheet.create({

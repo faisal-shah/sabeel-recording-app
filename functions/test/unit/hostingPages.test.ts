@@ -69,7 +69,13 @@ describe('the static pages the stores need', () => {
     const getApp = readFileSync(resolve(ROOT, 'app', 'public', 'get-app.html'), 'utf8');
     expect(getApp).toContain('sign in on this website once');
 
-    for (const file of ['src/screens/SignInScreen.tsx', 'src/components/MoreSheet.tsx']) {
+    // The refusal's own words live in `auth/signInMessage.ts`; the screen and
+    // the More sheet are where a helpful link would be added.
+    for (const file of [
+      'src/auth/signInMessage.ts',
+      'src/screens/SignInScreen.tsx',
+      'src/components/MoreSheet.tsx',
+    ]) {
       const src = readFileSync(resolve(ROOT, 'app', file), 'utf8');
       expect(src, `${file} names /get-app`).not.toMatch(/get-app/);
       expect(src, `${file} tells someone to sign up on the website`).not.toMatch(

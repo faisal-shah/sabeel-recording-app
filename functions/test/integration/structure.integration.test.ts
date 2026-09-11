@@ -252,6 +252,29 @@ describe('enrollments', () => {
     await expect(createEnrollmentRecord(ADMIN, { studentUid, courseId })).rejects.toThrow(/already/i);
   });
 
+  it('lets exactly ONE of two simultaneous enrolments through', async () => {
+    /*
+     * THE DOUBLE TAP. Two taps on an "Add a student" row 24 ms apart reached
+     * production as two calls that both read "not enrolled" before either
+     * wrote, and both were audited — so the student's history said "Enrolled"
+     * twice. The promise is one enrolment, one record: the wrapper audits every
+     * call that RESOLVES, so what is asserted is that only one does. A version
+     * that checks and then writes outside a transaction passes the sequential
+     * test above and fails this one.
+     */
+    const { courseId, studentUid } = await setup();
+    const outcomes = await Promise.allSettled([
+      createEnrollmentRecord(ADMIN, { studentUid, courseId }),
+      createEnrollmentRecord(ADMIN, { studentUid, courseId }),
+    ]);
+    expect(outcomes.filter((o) => o.status === 'fulfilled')).toHaveLength(1);
+    const refused = outcomes.find((o) => o.status === 'rejected') as PromiseRejectedResult;
+    expect(String(refused.reason)).toMatch(/already/i);
+    // And neither call reported a return — nothing existed to come back to.
+    const won = outcomes.find((o) => o.status === 'fulfilled') as PromiseFulfilledResult<{ reenrolled: boolean }>;
+    expect(won.value.reenrolled).toBe(false);
+  });
+
   it('refuses to enrol a disabled student', async () => {
     const { courseId, studentUid } = await setup();
     await getFirestore()

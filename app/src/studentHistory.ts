@@ -67,6 +67,17 @@ export function describeStudentEvent(
 }
 
 /**
+ * A second row saying the same thing as the one before it, by the same person,
+ * this soon after, is the same tap twice — not a second event.
+ *
+ * Two "Enrolled in Tafseer" rows 24 ms apart reached production from one
+ * double-tapped row before the server refused the second call. The log keeps
+ * both, and the audit screen shows both, because both calls ran; the student's
+ * page is about what happened to the student, and one thing did.
+ */
+const SAME_TAP_MS = 60_000;
+
+/**
  * The rows for the page, OLDEST FIRST — a history starts at the beginning.
  *
  * The query behind this is newest-first with a cap, like every read of the
@@ -78,10 +89,21 @@ export function studentHistory(
   entries: readonly (AuditEntryDoc & { id: string })[],
   courseLabel: (courseId: string) => string,
 ): StudentEvent[] {
-  const out: StudentEvent[] = [];
+  const rows: StudentEvent[] = [];
   for (const e of entries) {
     const what = describeStudentEvent(e, courseLabel);
-    if (what) out.push({ id: e.id, at: e.at, actorUid: e.actorUid, what });
+    if (what) rows.push({ id: e.id, at: e.at, actorUid: e.actorUid, what });
   }
-  return out.sort((a, b) => a.at - b.at);
+  rows.sort((a, b) => a.at - b.at);
+  const out: StudentEvent[] = [];
+  for (const r of rows) {
+    const prev = out[out.length - 1];
+    const sameTap =
+      prev !== undefined &&
+      prev.what === r.what &&
+      prev.actorUid === r.actorUid &&
+      r.at - prev.at <= SAME_TAP_MS;
+    if (!sameTap) out.push(r);
+  }
+  return out;
 }
