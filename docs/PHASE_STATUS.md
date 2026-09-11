@@ -1360,6 +1360,41 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-09-11 — **v0.6.2: the review round shipped.**
+
+  Gate on e6429ab: lint, typecheck, knip, **415 unit** (115 shared, 125
+  functions, 175 app), **415 emulator** (+17: two simultaneous drafts, two
+  simultaneous removals, a closed session's later edit, a Missed grant across
+  a reconcile and a reopen, a retry refused on a published recording, an
+  orphan account not left behind, a send released on failure, a new deadline
+  reminded again, an archived course kept quiet, shaped student rows, an
+  unenrolled student refused a class, the missing positive halves), **141/141**
+  `test:e2e` — which caught one regression on the way: the staff card's lock
+  was set on the callable's response and the snapshot had already landed, so
+  the lock never lifted; it is set from the tap now — and **1168/1168** sweep.
+  Browser, against the seeded world: a student enrolled after a session was
+  submitted shows unmarked, is left out of a correction to somebody else, gets
+  no projection, and is sent once marked.
+
+  **Device, debug build against the seeded world — the outbox, for real.**
+  Play, then aeroplane mode (`svc wifi disable; svc data disable`), Mark
+  complete ("✓ Completed · Pending sync"), `am force-stop`, network back,
+  relaunch: the server holds `completed: true` — the replay path. And with a
+  NEWER un-mark written server-side while the phone was dead: after relaunch
+  the server still holds `completed: false` — the replay yielded. One dev-build
+  trap on the way: the LogBox "Open debugger" toast swallows a tap landing
+  under it; close it first. **Release APK** on `tb_emu`: `versionName 0.6.2`,
+  `versionCode 30`, `v0.6.2 · e6429ab`, no dev panel.
+
+  Shipped: `firestore.rules` (the shape checks and the active-enrolment
+  read), every function (with `--force`, which the retry policy on
+  `onAssignmentWritten` requires and which deleted nothing — every deployed
+  function is in source), hosting with e6429ab inlined and no emulator flag,
+  `smoke:prod` green on all eleven including the new Auth-host probe,
+  `check:queries` green. Tag v0.6.2 → e6429ab, four APKs on the source
+  release and on `recording-latest`, download page and published manual on
+  0.6.2, public arm64 APK 43,186,201 bytes.
+
 - 2026-09-11 — **v0.6.1: the review's fixes, through the gate and a device.**
 
   Gate on 13b6af4: lint, typecheck, knip, **393 unit** (+4 sign-in copy, +1
