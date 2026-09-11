@@ -68,6 +68,18 @@ export async function createRecordingDraft(
     if (session.recordingId) {
       throw new HttpsError('failed-precondition', 'This session already has a recording.');
     }
+    // "This class was not recorded" and a recording cannot both be true: the
+    // flag takes the session off the work queue and out of the morning
+    // "attendance still not taken" message, so a draft under it would sit
+    // where neither reader looks. The session page says as much — putting
+    // audio here is un-marking it — and `updateSession` refuses the flag on a
+    // session with a recording, so the two never disagree in a stored document.
+    if (session.notRecorded) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This session is marked as not recorded. Un-mark it first.',
+      );
+    }
     const doc: RecordingDoc = {
       sessionId: input.sessionId,
       courseId: session.courseId,

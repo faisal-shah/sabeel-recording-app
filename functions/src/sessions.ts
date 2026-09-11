@@ -199,6 +199,12 @@ export const updateSession = auditedCall('updateSession', async (req, audit) => 
     // has closed, so this is the recovery valve as well as a validator.
     validateDueDateChange(input.dueDate, session.dueDate, todayInZone(INSTITUTE_TIMEZONE));
   }
+  // The other half of `createRecordingDraft`'s refusal: a session with a
+  // recording was recorded, and marking it otherwise would hide that recording
+  // from the work queue and the morning sweep.
+  if (input.notRecorded && session.recordingId) {
+    throw new HttpsError('failed-precondition', 'This session has a recording.');
+  }
   const { sessionId: _id, ...fields } = input;
   // Named in the audit, unlike a title or a note: this one stops the work queue
   // and the morning reminder, so "why did we never chase that class?" has an
@@ -330,6 +336,14 @@ export async function applySubmitAttendance(
    * show staff exactly those students: excused at the time, no longer enrolled.
    * They keep the mark and they still get no grant — `stillEnrolled` in the
    * fan-out is what withholds that, and the two decisions belong apart.
+   *
+   * So the payload OVERLAYS the stored map: every mark already there stands
+   * unless the submission names that student, and it may name only the roster.
+   * A submission that omits a current student says nothing about them — the
+   * app's own payloads never do, but one built from a register opened before a
+   * student was re-enrolled does, and the mark it omitted is history too.
+   * Nothing in the app unmarks anyone, so there is no mark a submission may
+   * remove.
    */
   const rosterSnap = await db
     .collection(COLLECTIONS.enrollments)
@@ -337,10 +351,7 @@ export async function applySubmitAttendance(
     .where('active', '==', true)
     .get();
   const roster = new Set(rosterSnap.docs.map((e) => (e.data() as EnrollmentDoc).studentUid));
-  const attendance: Record<string, AttendanceStatus> = {};
-  for (const [studentUid, status] of Object.entries(session.attendance)) {
-    if (!roster.has(studentUid)) attendance[studentUid] = status;
-  }
+  const attendance: Record<string, AttendanceStatus> = { ...session.attendance };
   for (const [studentUid, status] of Object.entries(raw)) {
     if (roster.has(studentUid)) attendance[studentUid] = status as AttendanceStatus;
   }

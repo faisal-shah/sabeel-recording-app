@@ -10,9 +10,11 @@ import {
   type RecordingDoc,
   type SessionDoc,
 } from '@sabeel/shared';
+import type { CallableRequest } from 'firebase-functions/v2/https';
 import { createCohortRecord } from '../../src/cohorts';
 import { createCourseRecord } from '../../src/courses';
-import { createSessionRecord } from '../../src/sessions';
+import { createSessionRecord, updateSession } from '../../src/sessions';
+import { idTokenFor } from './emulatorToken';
 import { readFileSync } from 'node:fs';
 import {
   MAX_AUDIO_BYTES,
@@ -121,6 +123,38 @@ describe('createRecordingDraft', () => {
     const sessionId = await newSession();
     await createRecordingDraft(ADMIN, { sessionId });
     await expect(createRecordingDraft(ADMIN, { sessionId })).rejects.toThrow(/already/i);
+  });
+
+  /*
+   * "THIS CLASS WAS NOT RECORDED" AND A RECORDING CANNOT BOTH BE TRUE. The flag
+   * takes the session off the work queue and out of the morning "attendance
+   * still not taken" message; a recording attached underneath it — from a Zoom
+   * picker opened before somebody else set the flag — sat in a session those
+   * two readers had stopped looking at: a draft nobody was reminded to publish,
+   * a register nobody was chased for. The session page's own words: putting
+   * audio here is un-marking it, and that is the button it shows. Both
+   * directions are refused at the boundary, so the flag and the link never
+   * disagree in a stored document.
+   */
+  it('refuses a session marked as not recorded', async () => {
+    const sessionId = await newSession();
+    await getFirestore().collection(COLLECTIONS.sessions).doc(sessionId).update({ notRecorded: true });
+    await expect(createRecordingDraft(ADMIN, { sessionId })).rejects.toThrow(/not recorded/i);
+    expect((await session(sessionId)).recordingId).toBeNull();
+  });
+
+  it('will not let a session that has a recording be marked as not recorded', async () => {
+    const { sessionId } = await newDraft();
+    const req = {
+      auth: { uid: ADMIN, token: { role: 'admin', status: 'active' }, rawToken: await idTokenFor(ADMIN) },
+      data: { sessionId, notRecorded: true },
+    } as unknown as CallableRequest;
+    await expect(updateSession.run(req)).rejects.toThrow(/has a recording/i);
+    expect((await session(sessionId)).notRecorded).toBe(false);
+    // …and the same call on the session's other fields still goes through, so
+    // the refusal is the flag's and not the fixture's.
+    await updateSession.run({ ...req, data: { sessionId, title: 'Renamed' } } as CallableRequest);
+    expect((await session(sessionId)).title).toBe('Renamed');
   });
 
   it('lets exactly ONE of two simultaneous drafts through, and links the session to it', async () => {

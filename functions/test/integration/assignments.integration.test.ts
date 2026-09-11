@@ -366,6 +366,24 @@ describe('submitting a register', () => {
     await submit('sess', { s1: 'present' });
     expect(await marks('sess')).toEqual({ s1: 'present' });
   });
+
+  /*
+   * A SUBMISSION THAT DOES NOT MENTION SOMEBODY SAYS NOTHING ABOUT THEM. The
+   * app sends every roster member who has a mark, so its own payloads are
+   * complete — but a register opened before a student was re-enrolled (their
+   * old mark still stored) lists them nowhere, and the correction it sends
+   * omits them. Rebuilding the roster's marks from the payload alone deleted
+   * that mark, and `reconcileAttendanceRecords` then deleted the student's own
+   * copy: the same permanent deletion the case above closes, through the other
+   * door. Nothing in the app unmarks a student, so there is no mark a
+   * submission may legitimately remove.
+   */
+  it('keeps the mark of a current student the submission does not mention', async () => {
+    await seedSession('sess', { dueDate: '2099-01-01', attendance: {}, submitted: false });
+    await submit('sess', { s1: 'excused', s2: 'present' });
+    await submit('sess', { s2: 'excused' });
+    expect(await marks('sess')).toEqual({ s1: 'excused', s2: 'excused' });
+  });
 });
 
 describe('unenrolment', () => {
