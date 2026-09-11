@@ -13,7 +13,7 @@ import {
 import { googleSignOut } from './auth/google';
 import { auth, db } from './firebase';
 import { setLiveDataSession } from './liveQuery';
-import { nextPollDelay } from './pollDelay';
+import { createPollChain } from './pollChain';
 import { registerThisDevice, unregisterThisDevice } from './notifications';
 
 export type Profile =
@@ -114,9 +114,6 @@ export function useSession(): Session {
 
   useEffect(() => {
     let unsubDoc: (() => void) | null = null;
-    let pollTimer: ReturnType<typeof setTimeout> | null = null;
-    /** When the current stretch of polling began, for the back-off. */
-    let pollingSince = 0;
     let cancelled = false;
     /*
      * WHICH SIGN-IN THE WORK IN FLIGHT BELONGS TO.
@@ -137,39 +134,16 @@ export function useSession(): Session {
      * to sign out and try again.
      *
      * Same counter as `playback.ts` uses for the same reason: work started for
-     * one owner must not land on the next.
+     * one owner must not land on the next. The poll chain holds it: each
+     * sign-in claims a generation, `publish` checks it, and a tick from an
+     * earlier sign-in is never allowed to re-arm (`pollChain.ts`).
      */
-    let generation = 0;
-
-    const stopPoll = () => {
-      if (pollTimer) {
-        clearTimeout(pollTimer);
-        pollTimer = null;
-      }
-      pollingSince = 0;
-    };
-    /**
-     * One timer at a time, re-armed after each tick for as long as polling is
-     * on — by the tick itself, not only by `publish`, so a tick that failed
-     * (a dropped connection on the gate screen) does not end the polling.
-     */
-    const armPoll = (poll: () => Promise<void>) => {
-      if (pollTimer) return;
-      if (!pollingSince) pollingSince = Date.now();
-      pollTimer = setTimeout(async () => {
-        pollTimer = null;
-        await poll();
-        // `stopPoll` (a new sign-in, or the account becoming usable) zeroes
-        // `pollingSince`, which is what ends a stretch of polling.
-        if (pollingSince) armPoll(poll);
-      }, nextPollDelay(Date.now() - pollingSince));
-    };
+    const chain = createPollChain();
 
     const unsubAuth = onAuthStateChanged(auth, (user) => {
-      const gen = (generation += 1);
+      const gen = chain.claim();
       unsubDoc?.();
       unsubDoc = null;
-      stopPoll();
       // FIRST, before anything awaits. Firestore reacts to the same credential
       // change by re-issuing every live listen, and the refusals come back while
       // the screens holding them are still mounted; this is what marks those
@@ -206,7 +180,7 @@ export function useSession(): Session {
 
       const publish = (profile: Profile | null, claims: TokenClaims) => {
         // The observer has moved on — signed out, or a different account.
-        if (cancelled || gen !== generation) return;
+        if (cancelled || !chain.owns(gen)) return;
         const ready = isReady(claims, profile);
         // A gated account — pending, disabled, or not yet provisioned — is
         // denied by every rule, so denials while it is in that state say
@@ -244,10 +218,10 @@ export function useSession(): Session {
            * carries the approval itself the moment it lands, so the poll is
            * only ever a backstop for the claims.
            */
-          armPoll(poll);
+          chain.arm(gen, poll);
           return;
         }
-        stopPoll();
+        chain.stop();
 
         // Claim this device's push token once the account is usable. SILENT —
         // it never prompts, and only writes a token for a device already
@@ -321,7 +295,7 @@ export function useSession(): Session {
       cancelled = true;
       unsubAuth();
       unsubDoc?.();
-      stopPoll();
+      chain.stop();
     };
   }, []);
 
