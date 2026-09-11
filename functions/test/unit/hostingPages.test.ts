@@ -21,6 +21,47 @@ import { PRIVACY_URL } from '@sabeel/shared';
  */
 
 const ROOT = resolve(import.meta.dirname, '..', '..', '..');
+
+/**
+ * The string literals in a source file, and the source with comments and
+ * those literals blanked out — one pass, character by character, because a
+ * regex cannot tell a quote inside a comment from a quote around a string,
+ * and the files that explain the store rule quote the phrases it forbids.
+ */
+function tokenize(src: string): { strings: string[]; code: string } {
+  const strings: string[] = [];
+  let code = '';
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    const next = src[i + 1];
+    if (c === '/' && next === '/') {
+      while (i < src.length && src[i] !== '\n') i += 1;
+    } else if (c === '/' && next === '*') {
+      const end = src.indexOf('*/', i + 2);
+      i = end === -1 ? src.length : end + 2;
+    } else if (c === "'" || c === '"' || c === '`') {
+      let j = i + 1;
+      let text = '';
+      while (j < src.length && src[j] !== c) {
+        if (src[j] === '\\') {
+          text += src[j + 1] ?? '';
+          j += 2;
+        } else {
+          text += src[j];
+          j += 1;
+        }
+      }
+      strings.push(text);
+      code += `${c}${c}`;
+      i = j + 1;
+    } else {
+      code += c;
+      i += 1;
+    }
+  }
+  return { strings, code };
+}
 const hosting = JSON.parse(readFileSync(resolve(ROOT, 'firebase.json'), 'utf8')).hosting as {
   rewrites: { source: string; destination: string }[];
 };
@@ -82,13 +123,11 @@ describe('the static pages the stores need', () => {
         return /\.tsx?$/.test(entry) && !/\.test\./.test(entry) ? [p] : [];
       });
     const spoken = (src: string): string[] => {
-      const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-      return [
-        ...[...code.matchAll(/'((?:[^'\\\n]|\\.)*)'/g)].map((m) => m[1]),
-        ...[...code.matchAll(/"((?:[^"\\\n]|\\.)*)"/g)].map((m) => m[1]),
-        ...[...code.matchAll(/`((?:[^`\\]|\\.)*)`/g)].map((m) => m[1]),
-        ...[...code.matchAll(/>([^<>{}]+)</g)].map((m) => m[1]),
-      ];
+      const { strings, code } = tokenize(src);
+      // JSX text: a run between a tag or expression boundary on either side.
+      // `{' '}` and `{name}` are boundaries too — a sentence broken around a
+      // link is still a sentence a person reads.
+      return [...strings, ...[...code.matchAll(/[>}]([^<>{}]+)[<{]/g)].map((m) => m[1])];
     };
     const files = shipped(resolve(ROOT, 'app', 'src'));
     expect(files.length).toBeGreaterThan(50);
@@ -100,9 +139,18 @@ describe('the static pages the stores need', () => {
         );
       }
     }
-    // A guard on the scanner: the refusal's own words are a string it must read.
+    // A guard on the scanner: the refusal's own words are a string it must read,
+    // a sentence broken around a link is one it must read, and a comment quoting
+    // the forbidden phrase is one it must not.
     expect(spoken(readFileSync(resolve(ROOT, 'app', 'src/auth/signInMessage.ts'), 'utf8')).join(' ')).toMatch(
       /administrator/i,
     );
+    expect(spoken(`<Text>Need one? Sign up on the website at{' '}<Text>here</Text></Text>`)).toContain(
+      'Need one? Sign up on the website at',
+    );
+    expect(spoken(`<Text>{name}, sign up on the website to continue.</Text>`)).toContain(
+      ', sign up on the website to continue.',
+    );
+    expect(spoken(`return x; // never say "sign up"\n/* or 'create an account' */`)).toEqual([]);
   });
 });

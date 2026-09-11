@@ -150,8 +150,7 @@ describe('firestore composite indexes cover the app’s queries', () => {
   it('declares a composite index for every filter + order-on-another-field query', () => {
     const missing: string[] = [];
     for (const q of queries) {
-      // `__name__` equality is a document lookup, not a filter needing an index.
-      const filters = q.whereFields.filter((f) => f !== '__name__');
+      const filters = q.whereFields;
       /*
        * THE ORDER THE INDEX HAS TO CONTINUE IN, after the equalities. Every
        * `orderBy`, in sequence — a second one is as much a part of the shape
@@ -165,7 +164,10 @@ describe('firestore composite indexes cover the app’s queries', () => {
         q.orderBys.length > 0
           ? q.orderBys
           : q.rangeFields.map((field) => ({ field, dir: 'ASCENDING' }));
-      if (filters.length === 0 || sequence.length === 0) continue;
+      // No filter and one order is a single-field index's job; no filter and
+      // two orders on different fields is not — that needs a composite too.
+      if (sequence.length === 0) continue;
+      if (filters.length === 0 && sequence.length === 1) continue;
       // An order on the filtered field alone is a single-field index's job.
       if (sequence.length === 1 && filters.every((f) => f === sequence[0].field)) continue;
 

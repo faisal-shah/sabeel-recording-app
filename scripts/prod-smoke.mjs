@@ -122,8 +122,19 @@ const version = JSON.parse(readFileSync(`${ROOT}app/app.json`, 'utf8')).expo.ver
 const commit =
   process.env.SMOKE_EXPECT_COMMIT ??
   execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT }).toString().trim();
-const label = (await page.getByTestId('build-label').innerText().catch(() => '')).trim();
-check(label === `v${version} · ${commit}`, `build label reads v${version} · ${commit} (saw "${label}")`);
+const expectedLabel = `v${version} · ${commit}`;
+// Retried on the same bounded schedule as the static pages: the edge serves
+// the previous index.html for a few seconds after a deploy, and this runs
+// right after one. A wrong build does not become right by waiting.
+let label = '';
+for (let attempt = 0; attempt < 5 && label !== expectedLabel; attempt += 1) {
+  if (attempt > 0) {
+    await new Promise((r) => setTimeout(r, 5000));
+    await page.goto(BASE, { waitUntil: 'networkidle' });
+  }
+  label = (await page.getByTestId('build-label').innerText().catch(() => '')).trim();
+}
+check(label === expectedLabel, `build label reads ${expectedLabel} (saw "${label}")`);
 
 /*
  * The check this script exists for. A production bundle built with the emulator

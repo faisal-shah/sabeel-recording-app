@@ -230,21 +230,29 @@ describe('the table covers every call site', () => {
     const scoped = new Set(SCOPED.map((row) => row.name));
     const dir = resolve(import.meta.dirname, '../../src');
     const seen: string[] = [];
-    for (const file of readdirSync(dir).filter((f) => f.endsWith('.ts'))) {
+    let sites = 0;
+    for (const file of readdirSync(dir).filter((f) => f.endsWith('.ts') && f !== 'audited.ts')) {
       const src = readFileSync(resolve(dir, file), 'utf8');
-      for (const m of src.matchAll(/auditedCall\('([A-Za-z]+)'/g)) {
+      sites += (src.match(/\bauditedCall\(/g) ?? []).length;
+      // `\s*` because two call sites break the line after the paren.
+      for (const m of src.matchAll(/auditedCall\(\s*'([A-Za-z]+)'/g)) {
         const name = m[1];
         seen.push(name);
         if (scoped.has(name)) continue;
         expect(ADMIN_ONLY, `${name} is neither in the scope table nor admin-only`).toContain(name);
-        // The handler's own body, up to the `});` that closes the callable.
-        const body = src.slice(m.index).split(/\n\}\);/)[0];
+        // The handler's own body: everything up to the next top-level
+        // declaration, since a handler written over several lines closes with
+        // `);` and a `});`-bounded slice ran on into the next function's guard.
+        const body = src.slice(m.index).split(/\nexport (?:const|function|async function) /)[0];
         expect(body, `${name} is listed admin-only but never calls requireAdmin`).toMatch(
           /requireAdmin\(/,
         );
       }
     }
-    expect(seen.length).toBeGreaterThan(15);
+    // Every call site was read: a name the regex could not see is a callable
+    // this test never placed.
+    expect(seen.length).toBe(sites);
+    expect(sites).toBeGreaterThan(15);
     for (const name of ADMIN_ONLY) expect(seen, `${name} is no longer an audited callable`).toContain(name);
   });
 });

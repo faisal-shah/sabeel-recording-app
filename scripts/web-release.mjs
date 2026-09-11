@@ -41,6 +41,14 @@ if (process.env.EXPO_PUBLIC_USE_EMULATORS) {
     '[web-release] EXPO_PUBLIC_USE_EMULATORS is set: this bundle would point at the emulators. Unset it and run again.',
   );
 }
+// Expo also reads the dotenv files in app/, and a flag left in one of those
+// bakes in just the same.
+for (const name of ['.env', '.env.local', '.env.production', '.env.production.local']) {
+  const file = join(ROOT, 'app', name);
+  if (existsSync(file) && /^\s*EXPO_PUBLIC_USE_EMULATORS\s*=\s*\S/m.test(readFileSync(file, 'utf8'))) {
+    throw new Error(`[web-release] app/${name} sets EXPO_PUBLIC_USE_EMULATORS: this bundle would point at the emulators.`);
+  }
+}
 
 // 1. Export with source maps.
 run('npm', ['run', 'web:export:maps', '-w', '@sabeel/app']);
@@ -96,14 +104,5 @@ const walk = (dir) => {
 };
 if (existsSync(DIST)) walk(DIST);
 console.log(`[web-release] stripped ${stripped} source map(s) from the deploy bundle.`);
-// And prove it: a map that survived here is served to the public by Hosting.
-const leftover = [];
-const find = (dir) => {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const p = join(dir, entry.name);
-    if (entry.isDirectory()) find(p);
-    else if (entry.name.endsWith('.map')) leftover.push(p);
-  }
-};
-find(DIST);
-if (leftover.length > 0) throw new Error(`[web-release] source maps still in the deploy dir: ${leftover.join(', ')}`);
+// That they are not served is proved from the outside, by `npm run smoke:prod`
+// — a re-walk of the same tree with the same predicate could not fail.

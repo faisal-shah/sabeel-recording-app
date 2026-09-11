@@ -166,8 +166,8 @@ function grant(studentUid: string, recordingId: string, dueDate = '2026-08-20'):
  * reads the wall clock, and every due date in this file is behind it, so it
  * refuses on "past its date" before it can claim anything; the calls below
  * inject `TODAY` and see the grant open. If a fixture date is ever moved past
- * the real today, the emulator's own trigger wins the marker first and every
- * send here comes back false.
+ * the real today, the emulator's own trigger races the test for the marker
+ * and the sends here flake.
  */
 async function seedGrant(studentUid: string, recordingId: string, dueDate?: string, active = true) {
   const doc = { ...grant(studentUid, recordingId, dueDate), active };
