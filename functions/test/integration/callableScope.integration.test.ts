@@ -204,4 +204,47 @@ describe('the table covers every call site', () => {
     expect(sites).toBeGreaterThan(10);
     expect(SCOPED).toHaveLength(sites);
   });
+
+  /*
+   * THE OTHER DIRECTION. Counting `requireCourseScope` call sites holds the
+   * table to the guards that exist; it says nothing about a callable that
+   * never calls the guard at all — the one omission this whole file is for.
+   * So every audited callable in `functions/src` is either in the table or in
+   * the list of institute-level actions below, and each of those has to call
+   * `requireAdmin` inside its own handler. A new `auditedCall` lands in
+   * neither until somebody says which it is.
+   */
+  it('every audited callable is either course-scoped or admin-only', async () => {
+    const { readdirSync, readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const ADMIN_ONLY = [
+      'createCohort',
+      'createCourse',
+      'renameCohort',
+      'setCohortArchived',
+      'setCourseManagers',
+      'setStaffAccess',
+      'setStudentAccess',
+      'updateCourse',
+    ];
+    const scoped = new Set(SCOPED.map((row) => row.name));
+    const dir = resolve(import.meta.dirname, '../../src');
+    const seen: string[] = [];
+    for (const file of readdirSync(dir).filter((f) => f.endsWith('.ts'))) {
+      const src = readFileSync(resolve(dir, file), 'utf8');
+      for (const m of src.matchAll(/auditedCall\('([A-Za-z]+)'/g)) {
+        const name = m[1];
+        seen.push(name);
+        if (scoped.has(name)) continue;
+        expect(ADMIN_ONLY, `${name} is neither in the scope table nor admin-only`).toContain(name);
+        // The handler's own body, up to the `});` that closes the callable.
+        const body = src.slice(m.index).split(/\n\}\);/)[0];
+        expect(body, `${name} is listed admin-only but never calls requireAdmin`).toMatch(
+          /requireAdmin\(/,
+        );
+      }
+    }
+    expect(seen.length).toBeGreaterThan(15);
+    for (const name of ADMIN_ONLY) expect(seen, `${name} is no longer an audited callable`).toContain(name);
+  });
 });

@@ -28,9 +28,28 @@ const INDEX_FILE = new URL('../../../firestore.indexes.json', import.meta.url).p
 
 interface QueryShape {
   label: string;
+  /** Which `useLiveQuery` call this came from — one call can build several. */
+  site: number;
   collection: string;
+  /** Fields under an equality-shaped filter: `==`, `in`, `array-contains`… */
   whereFields: string[];
+  /** Fields under a range filter: `<`, `<=`, `>`, `>=`, `!=`, `not-in`. */
+  rangeFields: string[];
   orderBys: { field: string; dir: string }[];
+}
+
+const RANGE_OPS = new Set(['<', '<=', '>', '>=', '!=', 'not-in']);
+
+/** The filters in a query body, split by whether they are equality or range. */
+function classify(body: string): { whereFields: string[]; rangeFields: string[] } {
+  const wheres = [...body.matchAll(/where\(\s*'([^']+)'\s*,\s*'([^']+)'/g)].map((w) => ({
+    field: w[1],
+    op: w[2],
+  }));
+  return {
+    whereFields: wheres.filter((w) => !RANGE_OPS.has(w.op)).map((w) => w.field),
+    rangeFields: wheres.filter((w) => RANGE_OPS.has(w.op)).map((w) => w.field),
+  };
 }
 
 function sourceFiles(dir: string): string[] {
@@ -52,6 +71,7 @@ function sourceFiles(dir: string): string[] {
  */
 function parseQueries(): QueryShape[] {
   const out: QueryShape[] = [];
+  let site = 0;
   for (const file of sourceFiles(APP_SRC)) {
     const src = readFileSync(file, 'utf8');
     // Split ON the call, so each chunk ends where the next call begins. A
@@ -69,15 +89,28 @@ function parseQueries(): QueryShape[] {
       const body = chunk.slice(0, chunk.indexOf('label:'));
       const coll = /COLLECTIONS\.(\w+)/.exec(body)?.[1];
       if (!coll) continue;
-      out.push({
-        label,
-        collection: coll,
-        whereFields: [...body.matchAll(/where\(\s*'([^']+)'/g)].map((w) => w[1]),
-        orderBys: [...body.matchAll(/orderBy\(\s*'([^']+)'(?:\s*,\s*'(\w+)')?/g)].map((o) => ({
-          field: o[1],
-          dir: (o[2] ?? 'asc').toUpperCase() === 'DESC' ? 'DESCENDING' : 'ASCENDING',
-        })),
-      });
+      site += 1;
+      /*
+       * ONE SHAPE PER `query(`, not per call. A hook that chooses between two
+       * queries — the audit view's "everything" for an admin and "this class"
+       * for a manager — writes both in one `make`, and reading the whole body
+       * as one shape fused their `orderBy`s into a sequence no query sends.
+       * Each `query(` is its own shape; a body with none has no filter to
+       * need an index, and still counts as a site.
+       */
+      const variants = body.split(/\bquery\(/).slice(1);
+      for (const variant of variants.length > 0 ? variants : [body]) {
+        out.push({
+          label,
+          site,
+          collection: coll,
+          ...classify(variant),
+          orderBys: [...variant.matchAll(/orderBy\(\s*'([^']+)'(?:\s*,\s*'(\w+)')?/g)].map((o) => ({
+            field: o[1],
+            dir: (o[2] ?? 'asc').toUpperCase() === 'DESC' ? 'DESCENDING' : 'ASCENDING',
+          })),
+        });
+      }
     }
   }
   return out;
@@ -107,18 +140,34 @@ describe('firestore composite indexes cover the app’s queries', () => {
       .filter((f) => !f.endsWith('liveQuery.ts'))
       .reduce((n, f) => n + (readFileSync(f, 'utf8').match(/useLiveQuery\s*[<(]/g)?.length ?? 0), 0);
 
-    expect(queries.length).toBe(callSites - DYNAMIC_LABEL_WRAPPERS);
+    expect(new Set(queries.map((q) => q.site)).size).toBe(callSites - DYNAMIC_LABEL_WRAPPERS);
     expect(queries.map((q) => q.label)).toContain('courseRecordings');
+    // And the one hook that builds two queries yields two shapes, so a merge
+    // of its branches back into one would be noticed.
+    expect(queries.filter((q) => q.label === 'audit')).toHaveLength(2);
   });
 
-  it('declares a composite index for every filter + orderBy-on-another-field query', () => {
+  it('declares a composite index for every filter + order-on-another-field query', () => {
     const missing: string[] = [];
     for (const q of queries) {
       // `__name__` equality is a document lookup, not a filter needing an index.
       const filters = q.whereFields.filter((f) => f !== '__name__');
-      if (filters.length === 0 || q.orderBys.length === 0) continue;
-      const order = q.orderBys[0];
-      if (filters.every((f) => f === order.field)) continue; // orderBy on the filtered field
+      /*
+       * THE ORDER THE INDEX HAS TO CONTINUE IN, after the equalities. Every
+       * `orderBy`, in sequence — a second one is as much a part of the shape
+       * as the first, and a check that read only `orderBys[0]` passed an
+       * index that stopped there. A RANGE filter with no `orderBy` orders by
+       * its own field ascending, implicitly, and needs the same index an
+       * explicit one would: `where a == … where date <= …` is served by no
+       * merge of single-field indexes.
+       */
+      const sequence =
+        q.orderBys.length > 0
+          ? q.orderBys
+          : q.rangeFields.map((field) => ({ field, dir: 'ASCENDING' }));
+      if (filters.length === 0 || sequence.length === 0) continue;
+      // An order on the filtered field alone is a single-field index's job.
+      if (sequence.length === 1 && filters.every((f) => f === sequence[0].field)) continue;
 
       /*
        * FIELD ORDER IS THE WHOLE OF WHAT FIRESTORE MATCHES ON, and set
@@ -130,9 +179,9 @@ describe('firestore composite indexes cover the app’s queries', () => {
        * check written to prevent it.
        *
        * Firestore's rule: every equality filter first, in any order among
-       * themselves, then the `orderBy` field with a matching direction, and
-       * nothing before them. So the equality fields must be a prefix, and the
-       * ordered field must come immediately after.
+       * themselves, then the ordered fields in sequence with matching
+       * directions, and nothing before them. So the equality fields must be a
+       * prefix, and the sequence must follow immediately.
        */
       const covered = declared.some((idx) => {
         if (idx.collectionGroup !== q.collection) return false;
@@ -140,18 +189,29 @@ describe('firestore composite indexes cover the app’s queries', () => {
         const equalitiesFirst =
           prefix.length === filters.length &&
           filters.every((f) => prefix.some((x) => x.fieldPath === f));
-        const next = idx.fields[filters.length];
+        const rest = idx.fields.slice(filters.length, filters.length + sequence.length);
         return (
-          equalitiesFirst && !!next && next.fieldPath === order.field && next.order === order.dir
+          equalitiesFirst &&
+          rest.length === sequence.length &&
+          sequence.every((o, i) => rest[i].fieldPath === o.field && rest[i].order === o.dir)
         );
       });
       if (!covered) {
-        missing.push(
-          `${q.label}: ${q.collection}(${filters.join(', ')}) orderBy ${order.field} ${order.dir}`,
-        );
+        const order = sequence.map((o) => `${o.field} ${o.dir}`).join(', ');
+        missing.push(`${q.label}: ${q.collection}(${filters.join(', ')}) orderBy ${order}`);
       }
     }
     expect(missing, `no composite index declared for:\n  ${missing.join('\n  ')}`).toEqual([]);
+  });
+
+  it('reads the operator of every filter, so a range is not mistaken for an equality', () => {
+    // A guard on the parser: the sweep's own shape is in `functions/`, which
+    // this parser does not read, so nothing in the app exercises the range
+    // branch today. Parse a literal instead and hold the classifier to it.
+    const shape = classify(
+      "where('attendanceSubmittedAt', '==', null), where('date', '<=', cutoff)",
+    );
+    expect(shape).toEqual({ whereFields: ['attendanceSubmittedAt'], rangeFields: ['date'] });
   });
 
   // Deliberately NOT asserting the converse (that every declared index is used).

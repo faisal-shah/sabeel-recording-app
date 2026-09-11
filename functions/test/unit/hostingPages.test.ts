@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { PRIVACY_URL } from '@sabeel/shared';
 
 /**
@@ -69,18 +69,40 @@ describe('the static pages the stores need', () => {
     const getApp = readFileSync(resolve(ROOT, 'app', 'public', 'get-app.html'), 'utf8');
     expect(getApp).toContain('sign in on this website once');
 
-    // The refusal's own words live in `auth/signInMessage.ts`; the screen and
-    // the More sheet are where a helpful link would be added.
-    for (const file of [
-      'src/auth/signInMessage.ts',
-      'src/screens/SignInScreen.tsx',
-      'src/components/MoreSheet.tsx',
-    ]) {
-      const src = readFileSync(resolve(ROOT, 'app', file), 'utf8');
-      expect(src, `${file} names /get-app`).not.toMatch(/get-app/);
-      expect(src, `${file} tells someone to sign up on the website`).not.toMatch(
-        /sign up|create an account|on the website/i,
-      );
+    /*
+     * EVERY FILE THAT SHIPS, not the three where a link seemed likeliest. The
+     * words a person reads are string literals and JSX text; comments are
+     * stripped first, because the files that explain this rule quote the very
+     * phrases it forbids. Test files are not shipped and are skipped.
+     */
+    const shipped = (dir: string): string[] =>
+      readdirSync(dir).flatMap((entry) => {
+        const p = join(dir, entry);
+        if (statSync(p).isDirectory()) return shipped(p);
+        return /\.tsx?$/.test(entry) && !/\.test\./.test(entry) ? [p] : [];
+      });
+    const spoken = (src: string): string[] => {
+      const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      return [
+        ...[...code.matchAll(/'((?:[^'\\\n]|\\.)*)'/g)].map((m) => m[1]),
+        ...[...code.matchAll(/"((?:[^"\\\n]|\\.)*)"/g)].map((m) => m[1]),
+        ...[...code.matchAll(/`((?:[^`\\]|\\.)*)`/g)].map((m) => m[1]),
+        ...[...code.matchAll(/>([^<>{}]+)</g)].map((m) => m[1]),
+      ];
+    };
+    const files = shipped(resolve(ROOT, 'app', 'src'));
+    expect(files.length).toBeGreaterThan(50);
+    for (const file of files) {
+      for (const text of spoken(readFileSync(file, 'utf8'))) {
+        expect(text, `${file} names /get-app`).not.toMatch(/get-app/);
+        expect(text, `${file} tells someone to sign up on the website`).not.toMatch(
+          /sign up|create an account|on the website/i,
+        );
+      }
     }
+    // A guard on the scanner: the refusal's own words are a string it must read.
+    expect(spoken(readFileSync(resolve(ROOT, 'app', 'src/auth/signInMessage.ts'), 'utf8')).join(' ')).toMatch(
+      /administrator/i,
+    );
   });
 });
