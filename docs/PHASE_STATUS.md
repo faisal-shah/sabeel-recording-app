@@ -1360,6 +1360,34 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-09-11 — **v0.6.3: three decisions taken.**
+
+  Faisal's three answers to the review's open questions, each built the same
+  way as the round before it: a test red first, the fix, the lateral read.
+  (1) Every callable re-checks the account behind its token — `verifyIdToken`
+  with `checkRevoked` in both wrappers, refresh tokens revoked on disable —
+  proved against real Auth-emulator tokens: live passes, disabled refused,
+  revoked refused, re-minted passes. The scope table and the playback suite
+  now mint a real token per hand-built request, so the check runs there too
+  rather than being skipped; the first cut created those users with no email,
+  which `onUserCreate` deletes, and the deletion sometimes landed between the
+  mint and the check — created with an email, the shape the trigger leaves
+  alone, and two full runs green. (2) An archived course's recordings sit in a
+  quiet Archived group on the student home, not the hero, not counted as
+  still to listen to — driven in a browser: archive the course, the hero moves
+  to the other class, the completed row stays under Completed. (3) A student's
+  progress, completion and completion-event writes need an ACTIVE grant, on
+  create and on update — rules tests red on the old rules.
+
+  Gate on 25a8153: lint, typecheck, knip, 415 unit, **420 emulator** (twice),
+  **141/141** e2e — the whole callable path under the new check, with real
+  tokens — and **1168/1168** sweep. Release APK: `v0.6.3 · 25a8153`,
+  `versionCode 31`, no dev panel. Deployed rules, every function (`--force`
+  for the retry policy; nothing deleted), hosting with 25a8153 inlined;
+  `smoke:prod` and `check:queries` green; no function errors in the fifteen
+  minutes after. Tag v0.6.3, APKs on both releases, download page and manual
+  on 0.6.3, public arm64 APK 43,186,365 bytes.
+
 - 2026-09-11 — **v0.6.2: the review round shipped.**
 
   Gate on e6429ab: lint, typecheck, knip, **415 unit** (115 shared, 125
