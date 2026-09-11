@@ -11,6 +11,7 @@ import {
 } from '@sabeel/shared';
 import { auditedCall } from './audited';
 import { reportedCall } from './reported';
+import { reportError } from './sentry';
 import { requireCourseScope, requireStaff } from './guards';
 import { MAX_AUDIO_BYTES, createRecordingDraft, finalizeRecording } from './recordings';
 import { ZOOM_SECRETS, zoomClient, type ZoomAudioRecording, type ZoomClient } from './zoom';
@@ -43,6 +44,11 @@ async function downloadIntoRecording(
   } catch (e) {
     const reason = `Zoom import failed: ${(e as Error).message}`.slice(0, 300);
     await ref.update({ status: 'needsAttention', attentionReason: reason, updatedAt: Date.now() });
+    // Reported here, because what is thrown next is an HttpsError and the
+    // wrappers deliberately do not send those to Sentry — so a download that
+    // died left a recording in needs-attention and no trace of why anywhere
+    // but the recording itself.
+    await reportError(e, { source: 'zoomImport', recordingId });
     throw new HttpsError('internal', reason);
   }
 }

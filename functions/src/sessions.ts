@@ -207,7 +207,11 @@ export const updateSession = auditedCall('updateSession', async (req, audit) => 
   // recording, so the log should carry the date the class was given.
   audit.detail = { notRecorded: input.notRecorded, dueDate: input.dueDate, date: input.date };
   // A dueDate edit re-flows to obligations via the onSessionWritten trigger.
-  await ref.update({ ...fields, updatedAt: Date.now() });
+  // ONE BATCH with the recording's copy below: written one after the other, a
+  // failure between them left the student-facing title, notes or date stale
+  // on the recording with nothing to repair it.
+  const batch = db.batch();
+  batch.update(ref, { ...fields, updatedAt: Date.now() });
 
   // Keep the recording's student-facing display copy in sync with the session.
   if (session.recordingId) {
@@ -216,12 +220,13 @@ export const updateSession = auditedCall('updateSession', async (req, audit) => 
     if (fields.notes !== undefined) denorm.notes = fields.notes;
     if (fields.date !== undefined) denorm.date = fields.date;
     if (Object.keys(denorm).length > 0) {
-      await db
-        .collection(COLLECTIONS.recordings)
-        .doc(session.recordingId)
-        .update({ ...denorm, updatedAt: Date.now() });
+      batch.update(db.collection(COLLECTIONS.recordings).doc(session.recordingId), {
+        ...denorm,
+        updatedAt: Date.now(),
+      });
     }
   }
+  await batch.commit();
   return { sessionId: input.sessionId };
 });
 
