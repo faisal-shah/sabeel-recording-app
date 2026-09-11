@@ -66,6 +66,17 @@ const bucket = admin.storage().bucket();
 const { FieldValue, FieldPath } = admin.firestore;
 
 const isDemoId = (v) => String(v ?? '').startsWith('demo-');
+/** Any id, key or value starting with `demo-`, however deep. */
+const mentionsDemo = (v) =>
+  typeof v === 'string' ? isDemoId(v)
+  : v && typeof v === 'object' && !(v instanceof Date)
+    ? Object.entries(v).some(([k, x]) => isDemoId(k) || mentionsDemo(x))
+    : false;
+const chunk = (items, size) => {
+  const out = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+};
 
 const FLAGGED = ['cohorts','courses','sessions','recordings','students','enrollments',
   'completions','listeningProgress','completionOverrides','completionEvents','auditLog','staffUsers'];
@@ -127,6 +138,12 @@ for (const ref of await db.collection('notifications').listDocuments()) {
   const [devices, sent] = await Promise.all([ref.collection('devices').get(), ref.collection('sent').get()]);
   notificationTrees.push({ ref, devices: devices.size, sent: sent.size });
 }
+// Markers about demo things under REAL people's trees: a real manager of a
+// demo course was reminded about its untaken register, and the marker
+// `sent/attendanceMissing_demo-…` sits under their own uid.
+const strayMarkers = (await db.collectionGroup('sent').get()).docs.filter(
+  (d) => !isDemoId(d.ref.parent.parent?.id) && (isDemoId(d.id) || mentionsDemo(d.data())),
+);
 
 const removedRecordingIds = new Set(
   plan.filter((p) => p.label.startsWith('recordings')).flatMap((p) => p.docs.map((d) => d.id)),
@@ -152,6 +169,7 @@ console.log(`   ${String(notificationTrees.length).padStart(5)}  notification tr
   (notificationTrees.length
     ? `  (${notificationTrees.map((t) => `${t.ref.id}: ${t.devices} devices, ${t.sent} sent`).join('; ')})`
     : ''));
+console.log(`   ${String(strayMarkers.length).padStart(5)}  sent markers about demo things under real accounts`);
 console.log(`   ${String(orphanFiles.length + seedTmp.length).padStart(5)}  storage objects`);
 console.log(`   ${String(demoUsers.length).padStart(5)}  auth accounts`);
 console.log(`\n   total: ${totalDocs} documents`);
@@ -201,6 +219,12 @@ for (const f of courseFixes) {
 console.log(`   edited ${sessionFixes.length} sessions and ${courseFixes.length} courses`);
 for (const t of notificationTrees) await db.recursiveDelete(t.ref);
 console.log(`   removed ${notificationTrees.length} notification trees`);
+for (const group of chunk(strayMarkers, 400)) {
+  const batch = db.batch();
+  for (const d of group) batch.delete(d.ref);
+  await batch.commit();
+}
+console.log(`   removed ${strayMarkers.length} stray sent markers`);
 for (const group of [orphanFiles, seedTmp]) {
   for (let i = 0; i < group.length; i += 20) {
     await Promise.all(group.slice(i, i + 20).map((f) => f.delete().catch(() => {})));
@@ -217,11 +241,6 @@ console.log(`   removed ${demoUsers.length} auth accounts`);
 // collection, every document, ids, keys and values alike — not the lists above,
 // which are the mechanism. A collection this script never heard of shows up
 // here too, which is the point of asking the database rather than the code.
-const mentionsDemo = (v) =>
-  typeof v === 'string' ? isDemoId(v)
-  : v && typeof v === 'object' && !(v instanceof Date)
-    ? Object.entries(v).some(([k, x]) => isDemoId(k) || mentionsDemo(x))
-    : false;
 const residue = [];
 for (const coll of await db.listCollections()) {
   for (const d of (await coll.get()).docs) {
@@ -231,7 +250,21 @@ for (const coll of await db.listCollections()) {
 for (const ref of await db.collection('notifications').listDocuments()) {
   if (isDemoId(ref.id)) residue.push(ref.path);
 }
-const usersLeft = (await auth.listUsers(1000)).users.filter((u) => isDemoId(u.uid)).length;
+// The subcollections too: a REAL manager of a demo course was sent
+// `attendanceMissing_demo-…`, which lives under their own notifications tree
+// and no root scan sees. Every `sent` and `devices` row in the project.
+for (const group of ['sent', 'devices']) {
+  for (const d of (await db.collectionGroup(group).get()).docs) {
+    if (isDemoId(d.id) || mentionsDemo(d.data())) residue.push(d.ref.path);
+  }
+}
+let usersLeft = 0;
+let verifyPage;
+do {
+  const r = await auth.listUsers(1000, verifyPage);
+  usersLeft += r.users.filter((u) => isDemoId(u.uid)).length;
+  verifyPage = r.pageToken;
+} while (verifyPage);
 if (residue.length || usersLeft) {
   console.log(`\nSTILL REFERENCING DEMO DATA — ${residue.length} documents, ${usersLeft} auth accounts:`);
   for (const p of residue.slice(0, 40)) console.log(`   ${p}`);

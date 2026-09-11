@@ -105,8 +105,21 @@ const body = await page.locator('body').innerText();
 const rendered = /sign in/i.test(body);
 check(rendered, `sign-in screen rendered${rendered ? '' : ` (body: ${body.slice(0, 120)})`}`);
 
-// The check this script exists for. A production bundle built with the emulator
-// flag still set looks completely normal until someone tries to sign in.
+/*
+ * The check this script exists for. A production bundle built with the emulator
+ * flag still set looks completely normal until someone tries to sign in — and
+ * an idle sign-in screen makes NO Auth request at all (`connectAuthEmulator`
+ * only sets config), so "no emulator host contacted" was true of every bundle.
+ * Provoke one request the way a person would, with no side effect: a password
+ * link for an address that exists nowhere sends nothing (enumeration
+ * protection), but the SDK still has to talk to SOMEBODY, and which host that
+ * is decides the question.
+ */
+await page.getByTestId('signin-email').fill('smoke-probe@invalid.example');
+await page.getByRole('button', { name: /password link/i }).click();
+await page.waitForTimeout(4000);
+const authHosts = [...hosts].filter((h) => /identitytoolkit\.googleapis\.com|securetoken\.googleapis\.com/.test(h));
+check(authHosts.length > 0, `Auth request went to Google (${authHosts.join(', ') || 'no Auth request seen'})`);
 const localHosts = [...hosts].filter((h) => /127\.0\.0\.1|localhost|10\.0\.2\.2/.test(h));
 check(
   localHosts.length === 0,
@@ -114,8 +127,9 @@ check(
 );
 
 // Grepping the bundle for this proves nothing — strings survive minification.
-// It has to be shown not to RENDER.
-const devRows = await page.getByTestId('dev-signin').count();
+// It has to be shown not to RENDER. The rows are `dev-signin-<who>`; an exact
+// `dev-signin` matched nothing in any bundle, so this passed on all of them.
+const devRows = await page.getByTestId(/^dev-signin/).count();
 check(devRows === 0, 'dev sign-in row absent');
 
 const googleButtons = await page.getByRole('button', { name: /google/i }).count();

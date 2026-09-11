@@ -25,6 +25,7 @@
  *    consistent with the real engine rather than a parallel invention of it.
  */
 import { createRequire } from 'node:module';
+import { randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -172,7 +173,11 @@ if (res.failureCount) console.log('    ', res.errors.slice(0, 3));
 
 // One student gets a password so the student experience can be viewed. Setting a
 // password AFTER creation does not re-fire onCreate, so this is safe.
-const DEMO_STUDENT_PW = 'DemoStudent2026!';
+//
+// MINTED PER RUN, never committed: this is a working credential on a live
+// project, and demo students have been excused in real sessions, so a password
+// in the repository was a way into real recordings for anyone reading it.
+const DEMO_STUDENT_PW = `Demo-${randomBytes(9).toString('base64url')}`;
 await auth.updateUser(students[0].uid, { password: DEMO_STUDENT_PW, emailVerified: true });
 
 await commitAll([
@@ -316,10 +321,20 @@ await bucket.file(MASTER).delete().catch(() => {});
 // ===================================================== 5. let triggers run ==
 console.log('5/6  waiting for onRecordingWritten / onSessionWritten fan-out…');
 let assignments = [];
+const isDemoId = (v) => String(v ?? '').startsWith('demo-');
 for (let i = 0; i < 40; i++) {
   await new Promise((r) => setTimeout(r, 5000));
   const snap = await db.collection('assignments').where('active', '==', true).get();
-  assignments = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  /*
+   * DEMO GRANTS ONLY. This query sees every active grant in the project, and
+   * step 6 writes completions, progress and overrides for a random share of
+   * whatever it is handed — with `set`, which replaces the document. Unfiltered,
+   * it wrote fabricated listening records over real students' own, flagged as
+   * demo, which the wipe then deleted. Both ends of every row must be seeded.
+   */
+  assignments = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((a) => isDemoId(a.studentUid) && isDemoId(a.recordingId));
   process.stdout.write(`\r     ${assignments.length} assignments so far…`);
   if (i > 3 && assignments.length && assignments.length === (globalThis.__last ?? -1)) break;
   globalThis.__last = assignments.length;
