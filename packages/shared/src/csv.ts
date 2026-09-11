@@ -14,3 +14,22 @@ export function csvField(value: string): string {
 export function toCsv(rows: string[][]): string {
   return rows.map((row) => row.map(csvField).join(',')).join('\r\n');
 }
+
+/**
+ * A file name built from things people typed — a course name, a recording's
+ * title, a student's name — made safe for every file system the export lands
+ * on. On the phone the CSV is written under the cache directory BY NAME, so a
+ * course called "Fiqh/Usul" asked for a subdirectory that does not exist and
+ * the share sheet never opened; a colon does the same on iOS and Windows.
+ * Whitespace is collapsed so the name reads as one line in a file picker.
+ * Applied inside the export seam, so every caller gets it.
+ */
+export function csvFilename(name: string): string {
+  const stem = name
+    .replace(/\.csv$/i, '')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return `${stem || 'export'}.csv`;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toCsv, csvField } from '../src';
+import { toCsv, csvField, csvFilename } from '../src';
 
 describe('csvField', () => {
   it('leaves a plain value alone', () => {
@@ -36,5 +36,20 @@ describe('toCsv', () => {
 
   it('serialises an empty sheet to an empty string', () => {
     expect(toCsv([])).toBe('');
+  });
+});
+
+describe('csvFilename', () => {
+  it('keeps ordinary punctuation and the extension', () => {
+    expect(csvFilename('Hikam Foundations - Session 3 — Patience progress.csv')).toBe(
+      'Hikam Foundations - Session 3 — Patience progress.csv',
+    );
+  });
+  it('replaces what a file system refuses — a slash asked the phone for a subdirectory', () => {
+    expect(csvFilename('Fiqh/Usul - attendance by session.csv')).toBe('Fiqh-Usul - attendance by session.csv');
+    expect(csvFilename('Class: A - x?y*z.csv')).toBe('Class- A - x-y-z.csv');
+  });
+  it('has a name even when handed nothing usable', () => {
+    expect(csvFilename('   .csv')).toBe('export.csv');
   });
 });
