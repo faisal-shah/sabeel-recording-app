@@ -92,7 +92,7 @@ npx firebase emulators:start --project demo-sabeel-recordings \
 
 ( cd app && EXPO_PUBLIC_USE_EMULATORS=1 npx expo start --web --port 8081 --clear ) &
 npm run seed:emulators        # prints the student's credentials and the fixture ids
-kill %2                       # release 8081
+kill %2                       # release 8081 (job 2: the AVD is job 1, the dev server job 2)
 
 ( cd app && EXPO_PUBLIC_USE_EMULATORS=1 npx expo run:android )   # its own Metro
 ```
@@ -127,14 +127,20 @@ A release bumps one version and ships it to both surfaces. In order:
 
 2. **Web:** `firebase deploy --only hosting`. The predeploy
    (`scripts/web-release.mjs`) exports the production bundle with the commit
-   injected, uploads source maps to Sentry, and strips the `.map` files. Make
-   sure `EXPO_PUBLIC_USE_EMULATORS` is **not** set in the shell, or you ship an
-   emulator bundle. Verify against the LIVE site (not "Deploy complete"):
-   - the commit is inlined in the deployed JS bundle;
-   - `EXPO_PUBLIC_USE_EMULATORS` does not appear in the bundle — the emulator path
-     is compiled out, so the dev sign-in panel cannot render;
-   - a `.map` URL returns `text/html` (the SPA rewrite for a stripped file), not a
-     served map — check the CONTENT-TYPE, not the status.
+   injected, uploads source maps to Sentry, and strips the `.map` files. It
+   refuses to run with `EXPO_PUBLIC_USE_EMULATORS` set in the shell (that
+   ships an emulator bundle), refuses a bundle that does not carry HEAD's
+   commit, and refuses to finish with a `.map` still in the deploy dir. Then
+   verify against the LIVE site (not "Deploy complete") with
+   `npm run smoke:prod`, which asserts on the deployed page:
+   - the sign-in label reads `v<version> · <commit>` for THIS checkout's
+     `app.json` and HEAD (`SMOKE_EXPECT_COMMIT=<sha>` when checking a deploy
+     made from elsewhere);
+   - a provoked Auth request goes to Google and no emulator host is contacted
+     — the emulator path is compiled out, so the dev sign-in rows cannot render;
+   - the bundle's `.map` URL answers `text/html` (the SPA rewrite for a stripped
+     file), not a served map — the CONTENT-TYPE, since the status is 200 either
+     way.
 
 3. **Android:** from `app/android`,
    `EXPO_PUBLIC_COMMIT=$(git rev-parse --short HEAD) ./gradlew assembleRelease`
@@ -238,7 +244,7 @@ Always: **indexes → rules → functions → hosting.**
 firebase deploy --only firestore:indexes
 firebase deploy --only firestore:rules
 firebase deploy --only storage          # NOT storage:rules — the config has no named target
-firebase deploy --only functions        # add --force when functions were renamed/removed (prunes the stale ones)
+firebase deploy --only functions --force  # --force is now always needed: see below
 firebase deploy --only hosting
 ```
 
@@ -295,8 +301,12 @@ value there means the assumption behind the rename is wrong.
 
 `storage:rules` errors with "Could not find rules for the following storage
 targets: rules" — the `storage` block in `firebase.json` is a single unnamed
-config, so the target is just `storage`. And a deploy that must delete functions
-(e.g. after a rename) aborts in non-interactive mode unless you pass `--force`.
+config, so the target is just `storage`. And functions ALWAYS need `--force`
+now: `onAssignmentWritten` declares `retry: true`, and the CLI refuses to deploy
+a function with a failure policy without it ("Pass the --force option to deploy
+functions with a failure policy"). The same flag lets a deploy delete functions
+after a rename, so read the plan it prints before confirming nothing is pruned
+that should not be.
 
 Indexes before rules and functions, because a query that needs a missing index
 fails as a *listener error* — visible only as an empty screen and a console
@@ -361,11 +371,12 @@ Note a `.map` URL on the live site returns **200 with `text/html`** — that is 
 SPA `** → /index.html` rewrite catching a missing file, not a served map. Verify
 the *content-type*, not the status, to confirm maps are not leaked.
 
-**Native source maps are deferred to the first release build (Phase 9).** They
-need the `@sentry/react-native` Gradle plugin active — which means a `prebuild`
-(this is the bare workflow) — and only upload on `assembleRelease`, and there is
-no release APK yet. The token is already in place for when that happens; Sentry
-reporting itself works on native today, just with minified release stack traces.
+**Native source maps are not uploaded.** Release APKs ship (`assembleRelease`,
+signed with the debug key until a release keystore exists — see `TODO.md`), but
+the `@sentry/react-native` Gradle plugin is not active, and activating it means
+a `prebuild` in this bare workflow. The token is already in place for when that
+happens; Sentry reporting itself works on native today, with minified release
+stack traces.
 
 ## After deploying
 

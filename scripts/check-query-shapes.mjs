@@ -60,6 +60,10 @@ const shapes = [
     'recordings — staff library for a class',
     () => db.collection('recordings').where('courseId', '==', ID).orderBy('createdAt', 'desc'),
   ],
+  [
+    "sessions — a class's sessions, newest first",
+    () => db.collection('sessions').where('courseId', '==', ID).orderBy('date', 'desc'),
+  ],
   ['enrollments — a class roster', () => db.collection('enrollments').where('courseId', '==', ID)],
   [
     "enrollments — a student's courses",
@@ -164,6 +168,11 @@ const shapes = [
   [
     'auditLog — global, newest first (admin audit view)',
     () => db.collection('auditLog').orderBy('at', 'desc').limit(AUDIT_PAGE),
+  ],
+  [
+    "auditLog — one person's own actions (More → my history)",
+    () =>
+      db.collection('auditLog').where('actorUid', '==', ID).orderBy('at', 'desc').limit(AUDIT_PAGE),
   ],
   // A student's history, on their page. The admin reads it by the student
   // alone; a manager's read is pinned to the courses they run, because the

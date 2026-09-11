@@ -12,10 +12,13 @@
  * needs a real Google account, so anything past that is a human step. This is a
  * DEPLOY check, not a security suite; rules are covered by the emulator tests.
  */
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 
 const BASE = process.env.SMOKE_BASE ?? 'https://sabeel-class-recordings.web.app';
 const PROJECT_ID = 'sabeel-class-recordings';
+const ROOT = new URL('..', import.meta.url).pathname;
 
 const fails = [];
 function check(condition, message) {
@@ -106,6 +109,23 @@ const rendered = /sign in/i.test(body);
 check(rendered, `sign-in screen rendered${rendered ? '' : ` (body: ${body.slice(0, 120)})`}`);
 
 /*
+ * THE BUILD THAT IS LIVE IS THE BUILD THIS CHECKOUT SAYS IT IS. The label on
+ * the sign-in screen is `v<version> · <commit>`; the version comes from
+ * `app/app.json` and the commit from `git rev-parse` at export. A deploy from
+ * a stale checkout, a bump that was never committed, or an export that ran
+ * before the bump all show up here as a label that does not match HEAD —
+ * which is otherwise only noticed when a bug report names the wrong build.
+ * Override with SMOKE_EXPECT_COMMIT when checking a deploy made from
+ * elsewhere.
+ */
+const version = JSON.parse(readFileSync(`${ROOT}app/app.json`, 'utf8')).expo.version;
+const commit =
+  process.env.SMOKE_EXPECT_COMMIT ??
+  execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT }).toString().trim();
+const label = (await page.getByTestId('build-label').innerText().catch(() => '')).trim();
+check(label === `v${version} · ${commit}`, `build label reads v${version} · ${commit} (saw "${label}")`);
+
+/*
  * The check this script exists for. A production bundle built with the emulator
  * flag still set looks completely normal until someone tries to sign in — and
  * an idle sign-in screen makes NO Auth request at all (`connectAuthEmulator`
@@ -139,6 +159,25 @@ check(
   errors.length === 0,
   `no console errors${errors.length ? `: ${errors.slice(0, 3).join(' | ')}` : ''}`,
 );
+
+/*
+ * SOURCE MAPS ARE NOT SERVED. `web-release.mjs` strips them after the Sentry
+ * upload; Hosting then answers a `.map` URL with the SPA rewrite — `text/html`
+ * — rather than the map. The status is 200 either way, so it is the content
+ * type that says which. The bundle's own script URL names the file to ask for.
+ */
+const bundleSrc = await page
+  .locator('script[src*="/_expo/static/js/web/"]')
+  .first()
+  .getAttribute('src')
+  .catch(() => null);
+if (bundleSrc) {
+  const mapRes = await fetch(new URL(`${bundleSrc}.map`, BASE), { cache: 'no-store' });
+  const type = mapRes.headers.get('content-type') ?? '';
+  check(/text\/html/.test(type), `the bundle's .map is not served (content-type ${type || 'none'})`);
+} else {
+  check(false, 'found the bundle script tag, to ask for its .map');
+}
 
 await page.screenshot({ path: 'e2e-shots/prod-01-signin.png', fullPage: true });
 await browser.close();

@@ -29,8 +29,41 @@ function run(cmd, args, opts = {}) {
   execFileSync(cmd, args, { stdio: 'inherit', cwd: ROOT, ...opts });
 }
 
+/*
+ * THE SHELL THAT RUNS THE DEV LOOP IS THE SHELL THAT DEPLOYS. Metro inlines
+ * every `EXPO_PUBLIC_*` variable it finds at export time, so a terminal still
+ * carrying `EXPO_PUBLIC_USE_EMULATORS=1` from an e2e run would ship a bundle
+ * that points the live site at 127.0.0.1 — and nothing in the deploy would
+ * say so. `smoke:prod` catches it after the fact; this refuses before.
+ */
+if (process.env.EXPO_PUBLIC_USE_EMULATORS) {
+  throw new Error(
+    '[web-release] EXPO_PUBLIC_USE_EMULATORS is set: this bundle would point at the emulators. Unset it and run again.',
+  );
+}
+
 // 1. Export with source maps.
 run('npm', ['run', 'web:export:maps', '-w', '@sabeel/app']);
+
+/*
+ * The build label on the More sheet is `v<version> · <commit>`, from
+ * `EXPO_PUBLIC_COMMIT` — which `web:export:maps` sets from `git rev-parse`.
+ * A checkout where that answers nothing exports a label of `v0.6.4 · ` and
+ * deploys it. Look for the commit in the shipped JS rather than trusting the
+ * environment, since the bundle is what ships.
+ */
+const commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT }).toString().trim();
+if (!/^[0-9a-f]{7,}$/.test(commit)) throw new Error(`[web-release] no commit to label the build with (got "${commit}")`);
+const jsFiles = (dir) =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? jsFiles(join(dir, e.name)) : e.name.endsWith('.js') ? [join(dir, e.name)] : [],
+  );
+if (!jsFiles(DIST).some((f) => readFileSync(f, 'utf8').includes(commit))) {
+  throw new Error(`[web-release] the exported bundle does not carry commit ${commit} — the build label would be wrong.`);
+}
+if (execFileSync('git', ['status', '--porcelain'], { cwd: ROOT }).toString().trim()) {
+  console.warn(`[web-release] WARNING: the working tree is not clean; the bundle is labelled ${commit} but may not match it.`);
+}
 
 // Does the token file carry an auth token? (Presence check only — the value is
 // never read here; sentry-cli reads it itself.)
@@ -63,3 +96,14 @@ const walk = (dir) => {
 };
 if (existsSync(DIST)) walk(DIST);
 console.log(`[web-release] stripped ${stripped} source map(s) from the deploy bundle.`);
+// And prove it: a map that survived here is served to the public by Hosting.
+const leftover = [];
+const find = (dir) => {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, entry.name);
+    if (entry.isDirectory()) find(p);
+    else if (entry.name.endsWith('.map')) leftover.push(p);
+  }
+};
+find(DIST);
+if (leftover.length > 0) throw new Error(`[web-release] source maps still in the deploy dir: ${leftover.join(', ')}`);
