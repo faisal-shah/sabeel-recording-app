@@ -78,9 +78,30 @@ export async function notifyOnce(
     throw e;
   }
 
-  const { stale } = await send(tokens, message);
+  /*
+   * THE MARKER IS RELEASED IF NOTHING WAS DELIVERED. Claimed before the send so
+   * two invocations cannot both win, it was also kept when the send then
+   * failed: FCM unreachable, or every token refused for a transient reason —
+   * and the one delivery this notification ever gets had been spent on
+   * nobody. Only "every token is dead" keeps the claim, since there is nowhere
+   * to deliver and pruning is the whole outcome. A send that throws is
+   * rethrown after the release, so the trigger's retry — and tomorrow's sweep
+   * — find the claim open again.
+   */
+  let outcome;
+  try {
+    outcome = await send(tokens, message);
+  } catch (e) {
+    await marker.delete().catch(() => undefined);
+    throw e;
+  }
+  const { stale, sent } = outcome;
   for (const token of stale) {
     await person.collection('devices').doc(token).delete();
   }
-  return true;
+  if (sent === 0 && stale.length < tokens.length) {
+    await marker.delete().catch(() => undefined);
+    throw new Error(`push delivered to none of ${tokens.length} device(s) for ${kind} ${targetId}`);
+  }
+  return sent > 0;
 }

@@ -124,14 +124,22 @@ export const onDeviceRegistered = onDocumentWritten(
 );
 
 export const onAssignmentWritten = onDocumentWritten(
-  { document: `${COLLECTIONS.assignments}/{assignmentId}`, secrets: [SENTRY_DSN] },
+  /*
+   * RETRIED, because the one delivery a "recording ready" ever gets is claimed
+   * inside. `notifyOnce` releases its claim and throws when FCM could not be
+   * reached or delivered to nobody; without `retry` that throw was the end of
+   * it — v2 triggers do not retry by default — and the message was lost for
+   * good. The retry finds the claim open and tries again; a delivery that
+   * succeeded is never repeated, because the marker then stands.
+   */
+  { document: `${COLLECTIONS.assignments}/{assignmentId}`, secrets: [SENTRY_DSN], retry: true },
   async (event) => {
     try {
       const before = event.data?.before.data() as AssignmentDoc | undefined;
       const after = event.data?.after.data() as AssignmentDoc | undefined;
       if (!after?.active) return;
       if (before?.active) return;
-      await notifyRecordingReady(getFirestore(), after);
+      await notifyRecordingReady(getFirestore(), after, todayInZone(INSTITUTE_TIMEZONE));
     } catch (e) {
       await reportError(e, { source: 'onAssignmentWritten' });
       throw e;

@@ -81,12 +81,14 @@ const fcmSender: Sender = async (tokens, message) => {
  * it fails as a plain assertion mismatch three tests later with nothing in the
  * log to explain it.
  *
- * Reporting zero stale tokens is the honest answer here: nothing was sent, so
- * nothing learned anything about any token.
+ * Reports no stale tokens, so no device can be deleted — and reports every
+ * token as delivered, so the "sent once" marker stands the way it does after a
+ * real delivery. Reporting zero would read as "delivered to nobody", which
+ * `notifyOnce` now treats as a failure to retry.
  */
 const emulatorSender: Sender = async (tokens) => {
   console.log(`[emulator] send suppressed for ${tokens.length} token(s)`);
-  return { stale: [], sent: 0 };
+  return { stale: [], sent: tokens.length };
 };
 
 /**

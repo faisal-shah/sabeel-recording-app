@@ -34,9 +34,10 @@ describe('sender selection', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const { send } = await freshMessaging();
 
-    // No FCM call at all: resolves, reports nothing sent, and — the part that
-    // matters — reports no stale tokens, so no device can be deleted.
-    await expect(send(['tok-a', 'tok-b'], MESSAGE)).resolves.toEqual({ stale: [], sent: 0 });
+    // No FCM call at all: resolves, reports every token delivered so the
+    // once-marker stands, and — the part that matters — reports no stale
+    // tokens, so no device can be deleted.
+    await expect(send(['tok-a', 'tok-b'], MESSAGE)).resolves.toEqual({ stale: [], sent: 2 });
     expect(log).toHaveBeenCalled();
   });
 
@@ -155,6 +156,6 @@ describe('sender selection', () => {
     await expect(send(['tok-a'], MESSAGE)).resolves.toEqual({ stale: ['tok-a'], sent: 0 });
 
     resetSender();
-    await expect(send(['tok-a'], MESSAGE)).resolves.toEqual({ stale: [], sent: 0 });
+    await expect(send(['tok-a'], MESSAGE)).resolves.toEqual({ stale: [], sent: 1 });
   });
 });

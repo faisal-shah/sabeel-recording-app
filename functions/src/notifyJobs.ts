@@ -2,7 +2,9 @@ import { type Firestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
   attendanceMissingMessage,
+  canPlayFromCourse,
   effectiveCompletion,
+  isOverdue,
   lastDayMessage,
   recordingReadyMessage,
   type AssignmentDoc,
@@ -22,18 +24,24 @@ import { notifyOnce } from './notify';
  * the only part no test can reach; deciding WHO gets WHAT is all here.
  */
 
-/** Cache course names across a batch — a morning sweep touches the same few. */
-function courseNames(db: Firestore) {
-  const cache = new Map<string, string>();
-  return async (courseId: string): Promise<string> => {
+/**
+ * Cache courses across a batch — a morning sweep touches the same few. Each
+ * answers with its name and whether its recordings can still be played, which
+ * is the one thing about a course a message to a student has to respect.
+ */
+function courseLookup(db: Firestore) {
+  const cache = new Map<string, { name: string; playable: boolean }>();
+  return async (courseId: string) => {
     const hit = cache.get(courseId);
     if (hit !== undefined) return hit;
     const doc = (await db.collection(COLLECTIONS.courses).doc(courseId).get()).data() as
       | CourseDoc
       | undefined;
-    const name = doc?.name ?? 'Your class';
-    cache.set(courseId, name);
-    return name;
+    // A course that is gone plays nothing; a name is still needed for the copy
+    // of messages that do go out.
+    const entry = { name: doc?.name ?? 'Your class', playable: !!doc && canPlayFromCourse(doc) };
+    cache.set(courseId, entry);
+    return entry;
   };
 }
 
@@ -48,19 +56,29 @@ function courseNames(db: Firestore) {
 export async function notifyRecordingReady(
   db: Firestore,
   assignment: AssignmentDoc,
+  today: string,
 ): Promise<boolean> {
+  // NOTHING IS ANNOUNCED PAST ITS DATE. The reconcile never revives a grant on
+  // a closed session, so an active edge here on a past due date is a grant that
+  // should not exist; saying "yours to listen to until <a date long gone>" over
+  // audio `getPlaybackUrl` refuses would only compound it.
+  if (isOverdue(assignment.dueDate, today)) return false;
   const rec = (
     await db.collection(COLLECTIONS.recordings).doc(assignment.recordingId).get()
   ).data() as RecordingDoc | undefined;
   if (!rec || rec.status !== 'published') return false;
 
-  const courseName = await courseNames(db)(assignment.courseId);
+  // AND ONLY WHERE IT CAN BE PLAYED. An archived course with listening off
+  // refuses the audio (`getPlaybackUrl`: class-listening-off), so "ready to
+  // listen" over it would be a message about a door that is locked.
+  const course = await courseLookup(db)(assignment.courseId);
+  if (!course.playable) return false;
   return notifyOnce(
     db,
     assignment.studentUid,
     'recordingReady',
     assignment.recordingId,
-    recordingReadyMessage(courseName, rec.title, assignment.dueDate),
+    recordingReadyMessage(course.name, rec.title, assignment.dueDate),
   );
 }
 
@@ -97,10 +115,15 @@ export async function notifyLastDay(db: Firestore, today: string): Promise<numbe
     .where('dueDate', '==', today)
     .get();
 
-  const nameOf = courseNames(db);
+  const courseOf = courseLookup(db);
   let sent = 0;
   for (const doc of due.docs) {
     const a = doc.data() as AssignmentDoc;
+    // The brief's "when a course is archived, active reminders stop": with
+    // listening off the audio is refused, so a last-day reminder would only
+    // send somebody to a door that is locked.
+    const course = await courseOf(a.courseId);
+    if (!course.playable) continue;
     /*
      * THE EFFECTIVE COMPLETION, which is the student's own mark UNLESS staff
      * have overridden it. Reading `completions` alone meant a student a staff
@@ -125,9 +148,16 @@ export async function notifyLastDay(db: Firestore, today: string): Promise<numbe
     ).data() as RecordingDoc | undefined;
     if (!rec || rec.status !== 'published') continue;
 
-    const message = lastDayMessage(await nameOf(a.courseId), rec.title, a.dueDate);
+    const message = lastDayMessage(course.name, rec.title, a.dueDate);
+    /*
+     * ONCE PER DEADLINE, not once per recording. Staff reopen a closed session
+     * by moving its listen-by date forward — the documented way back in — and
+     * a marker keyed on the recording alone had already been spent on the
+     * first date, so the second last day passed in silence. The date in the
+     * key makes a new deadline a new reminder.
+     */
     const ok = await attempt(`lastDay ${a.studentUid} ${a.recordingId}`, () =>
-      notifyOnce(db, a.studentUid, 'lastDay', a.recordingId, message),
+      notifyOnce(db, a.studentUid, 'lastDay', `${a.recordingId}_${a.dueDate}`, message),
     );
     if (ok) sent++;
   }
@@ -160,7 +190,6 @@ export async function notifyAttendanceMissing(
     .where('date', '<=', cutoff)
     .get();
 
-  const nameOf = courseNames(db);
   let sent = 0;
   for (const doc of stale.docs) {
     const s = doc.data() as SessionDoc;
@@ -173,7 +202,7 @@ export async function notifyAttendanceMissing(
     // An archived or finished course is not a reminder anyone wants.
     if (!course || !course.effectiveActive) continue;
 
-    const message = attendanceMissingMessage(await nameOf(s.courseId), s.title, s.date);
+    const message = attendanceMissingMessage(course.name, s.title, s.date);
     for (const uid of course.managerUids) {
       const ok = await attempt(`attendanceMissing ${uid} ${doc.id}`, () =>
         notifyOnce(db, uid, 'attendanceMissing', doc.id, message),
