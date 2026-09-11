@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 import {
   INSTITUTE_TIMEZONE,
   canPlayFromCourse,
+  grantOutcome,
   isOverdue,
   todayInZone,
   unbreakableDate,
@@ -159,6 +160,7 @@ export function StudentAttendanceScreen({
                         completions.get(a.recordingId)?.completed ?? false,
                         a.dueDate,
                         today,
+                        canPlayFromCourse(cls),
                       )}
                     </Text>
                   ) : null}
@@ -184,18 +186,27 @@ function listeningLine(
   completed: boolean,
   dueDate: string,
   today: string,
+  playable: boolean,
 ): string {
   // Non-breaking spaces around the date AND non-breaking hyphens inside it: it
   // is the whole point of the line, and it is the one token a wrap split — see
   // `unbreakableDate`.
   const when = unbreakableDate(dueDate);
-  if (completed) return "Recording required · completed";
-  // "Missed", the word the student's own home uses for the same session. "not
-  // listened" was a second name for one state, and outside the vocabulary the
-  // brief declares.
-  if (isOverdue(dueDate, today))
-    return `Recording required · missed, closed\u00A0${when}`;
-  return `Recording required · listen\u00A0by\u00A0${when}`;
+  switch (grantOutcome({ completed, dueDate }, today, playable)) {
+    case 'complete':
+      return 'Recording required · completed';
+    // "Missed", the word the student's own home uses for the same session.
+    // "not listened" was a second name for one state, and outside the
+    // vocabulary the brief declares.
+    case 'missed':
+      return `Recording required · missed, closed\u00A0${when}`;
+    // The home files it under Archived and the count above owes nothing for
+    // it; "listen by" here promised something the class no longer offers.
+    case 'closed':
+      return 'Recording required · course archived';
+    case 'open':
+      return `Recording required · listen\u00A0by\u00A0${when}`;
+  }
 }
 
 function Tally({ label, value }: { label: string; value: number }) {

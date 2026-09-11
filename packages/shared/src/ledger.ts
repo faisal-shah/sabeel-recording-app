@@ -4,10 +4,10 @@
  * No Firestore here: the staff ledger reads assignments + completions +
  * overrides + progress live in the app and computes everything with these
  * functions, so the counts can be unit-tested at the day boundary without an
- * emulator. Same discipline as `assignments.ts`, whose `dueBucket`/`isOverdue`
- * this reuses rather than re-deriving.
+ * emulator. Same discipline as `assignments.ts`, whose `isOverdue` this reuses
+ * rather than re-deriving.
  */
-import { dueBucket, isOverdue, type DueBucket } from './assignments';
+import { isOverdue } from './assignments';
 import { attendanceGroups, type AttendanceStatus } from './types';
 
 /**
@@ -82,11 +82,6 @@ export function rollup(
     incomplete: items.length - complete,
     missed,
   };
-}
-
-/** The ledger row's status bucket, reusing the student-home classification. */
-export function ledgerBucket(dueDate: string, completed: boolean, today: string): DueBucket {
-  return dueBucket({ dueDate, completed }, today);
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   attendanceGroups,
   attendanceReport,
   effectiveCompletion,
+  isVisibleToStudents,
   listenedShare,
   rollup,
   type AssignmentDoc,
@@ -152,7 +153,8 @@ export interface RecordingLedger {
   /** A listener was refused, so the roster will never arrive. Not `loading`. */
   failed: boolean;
   /** Excused, so granted the recording and required to listen — the only people
-   *  who can open it at all. */
+   *  who can open it at all. On a recording that is no longer published these
+   *  are the grants as they stood when it closed: the term's record. */
   accountable: RequiredRow[];
   /** Present at the session: nothing required, and no access either. */
   attendees: LedgerRow[];
@@ -160,9 +162,8 @@ export interface RecordingLedger {
    *  ledger still accounts for the whole submitted roster. */
   absentees: LedgerRow[];
   /** Excused at the session but holding no active grant — unenrolled from the
-   *  class, or the recording was unpublished. Both deactivate every assignment
-   *  while the attendance marks stay, so without this group they would appear in
-   *  no section at all. */
+   *  class, or corrected out of the roster. Deactivating keeps the attendance
+   *  marks, so without this group they would appear in no section at all. */
   lapsed: LedgerRow[];
   /** Listened without holding a current grant — e.g. excused, listened, then
    *  corrected to present. Evidence, not accountability. */
@@ -201,13 +202,22 @@ export function useRecordingLedger(
    * length of every cold load on the one screen staff consult to decide who to
    * chase.
    */
+  /*
+   * EVERY GRANT THE RECORDING EVER MADE, active or not. While the recording is
+   * published the active ones are the accountable roster and the rest are
+   * lapsed; once it is archived or unpublished the fan-out has switched them
+   * ALL off, and a read of active grants alone rendered the term's record as
+   * `Required 0 / Missed 0` over a sentence about every grant having lapsed —
+   * on the one screen that exists to say who listened and who missed, at the
+   * one moment (the term's end) it is consulted for that. The rows are still
+   * course-pinned, which is what the staff rules require.
+   */
   const assignments = useLiveQuery<Map<string, AssignmentDoc> | null>(
     () =>
       query(
         collection(db, COLLECTIONS.assignments),
         where('courseId', '==', cid),
         where('recordingId', '==', rid),
-        where('active', '==', true),
       ),
     [cid, rid],
     {
@@ -295,7 +305,16 @@ export function useRecordingLedger(
      */
     const unknown = assignments === null;
     const loading = unknown && !failed;
-    const granted = assignments ?? new Map<string, AssignmentDoc>();
+    /*
+     * WHICH GRANTS COUNT. Published: the active ones — a grant switched off
+     * while the recording is live was withdrawn (unenrolled, corrected out),
+     * and its holder belongs under "access closed". Not published: every one,
+     * because the recording's closing is what switched them off, and the
+     * record of who had finished and who had missed by then is the point.
+     */
+    const closed = !isVisibleToStudents(recording.status);
+    const granted = new Map<string, AssignmentDoc>();
+    for (const [uid, a] of assignments ?? []) if (closed || a.active) granted.set(uid, a);
     const status = session.attendance;
     // Re-stating dueDate after the spread is what narrows the row to a
     // RequiredRow: the grant it came from always carries one.
@@ -309,10 +328,11 @@ export function useRecordingLedger(
     const byName = (x: LedgerRow, y: LedgerRow) => x.name.localeCompare(y.name);
     const attendees = present.map((uid) => row(uid, null, 'present')).sort(byName);
     const absentees = absent.map((uid) => row(uid, null, 'absent')).sort(byName);
-    // Excused, but the grant that came with it is no longer active. `accountable`
-    // reads only ACTIVE assignments, so unenrolling a student or unpublishing the
-    // recording drops them out of it while the session still says they were
-    // excused — and they belong to neither present nor absent.
+    // Excused, but the grant that came with it is no longer active — or was
+    // never made. `accountable` holds the grants that count (above), so
+    // unenrolling a student or correcting them out drops them out of it while
+    // the session still says they were excused — and they belong to neither
+    // present nor absent.
     // EMPTY WHILE THE GRANTS ARE UNKNOWN. Both this group and `otherListeners`
     // are defined by ABSENCE from `granted`, so without them they are
     // "everyone" — and each carries a notice stating a cause ("unenrolled, or
@@ -347,7 +367,18 @@ export function useRecordingLedger(
         today,
       ),
     };
-  }, [assignments, failed, completions, overrides, progress, nameByUid, recording.durationSec, session.attendance, today]);
+  }, [
+    assignments,
+    failed,
+    completions,
+    overrides,
+    progress,
+    nameByUid,
+    recording.durationSec,
+    recording.status,
+    session.attendance,
+    today,
+  ]);
 }
 
 // ------------------------------------------------------------ class-level ---

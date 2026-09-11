@@ -1292,6 +1292,20 @@ async function tourStudent(page, tag) {
     await tap(byId(page, 'tab-classes'));
     await tap(byId(page, 'myclass-Hikam Foundations'));
   }, `attendance-${missed.title}`);
+  // The record of a class archived with listening off: the one row whose
+  // listening line can say "course archived". Not a `visit` — the page has no
+  // control of its own to measure, and the sweep refuses a screen where its
+  // geometric checks would be inert. A wording check, on the way past.
+  await tap(byId(page, 'tab-classes'));
+  await tap(byId(page, 'myclass-Seerah Survey'));
+  // The row arrives with the marks and its listening line with the grants, a
+  // second listener — so wait for the words, not the row.
+  const archivedRow = byId(page, `attendance-${archived.title}`);
+  const closedLine = await archivedRow
+    .filter({ hasText: 'course archived' })
+    .waitFor({ timeout: 20000 })
+    .then(() => true, () => false);
+  check(`${tag} an archived class's record says the recording is closed, not still to listen to`, closedLine);
   // An open recording: the transport, the scrubber and the speed chips, which
   // are the only fixed-width row in the app.
   // The home screen promotes the most urgent OPEN recording to a hero card and

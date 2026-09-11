@@ -1340,10 +1340,13 @@ check(
 
 // Both cuts of the report drill down, and land on the row that was tapped —
 // a report you cannot click through from is a dead end.
+// NOT the first card. The list is sorted by name, so a drill-down that always
+// opened the first student would pass a check that reads the first card's
+// name; the last one is the one a wrong index cannot produce by accident.
 const stuCard = admin
   .locator('[data-testid^="attendance-student-"]')
   .filter({ visible: true })
-  .first();
+  .last();
 const stuName = (await stuCard.innerText()).split('\n')[0].trim();
 await stuCard.click();
 // WAIT FOR SOMETHING ONLY THE DESTINATION HAS. The report page already
@@ -1500,9 +1503,9 @@ await tap(admin, 'student-access');
 await admin.waitForTimeout(2500);
 await goHome(admin);
 await tap(admin, 'tab-people');
-// The list has arrived when another student is on it; a count of zero on a
-// list that has not loaded yet proves nothing.
-await admin.getByTestId('student-open-fatima@example.com').waitFor({ timeout: 10000 });
+// The Disabled section appears only once somebody is in it — that is the
+// change landing; a count of zero on a list that has not loaded proves nothing.
+await admin.getByTestId('students-disabled').waitFor({ timeout: 10000 });
 check(
   'a disabled student leaves the main list',
   (await admin.getByTestId('student-open-bilal@example.com').count()) === 0,
@@ -1811,6 +1814,45 @@ check(
   (await student.getByRole('button', { name: PLAYABLE }).count()) === 0,
 );
 await shot(student, '25-missed');
+
+// ------------------------------------------ the record survives the archive --
+console.log('\nThe archive keeps the record');
+/*
+ * Archiving the recording is how a term ends, and it switches every grant
+ * off. The ledger read active grants alone, so the term's record — who
+ * listened, who missed — rendered as `Required 0 / Missed 0` over a sentence
+ * about every grant having lapsed, from the moment it was filed. Fatima
+ * missed this one (above) and Bilal was overridden complete; both facts have
+ * to survive.
+ */
+await openHikam(admin);
+await tap(admin, 'nav-sessions');
+await tap(admin, 'session-open-Session 1');
+await tap(admin, 'recording-archived');
+// Archived shows Publish as its only move, which is what says the write landed.
+await admin.getByTestId('recording-published').waitFor({ timeout: 20000 });
+check(
+  'an archived recording still offers its listening progress',
+  await shows(admin, 'recording-ledger'),
+);
+await tap(admin, 'recording-ledger');
+await admin.getByTestId('ledger-filter-all').waitFor({ timeout: 10000 });
+await tap(admin, 'ledger-filter-all');
+await admin.getByTestId('ledger-row-Fatima Ahmed').waitFor({ timeout: 10000 });
+check(
+  'the archived ledger still lists the accountable roster, as it stood when it closed',
+  (await shows(admin, 'ledger-row-Fatima Ahmed')) && (await shows(admin, 'ledger-row-Bilal Khan')),
+);
+check(
+  'a miss stays a miss after the archive, and an override stays an override',
+  (await admin.getByTestId('ledger-row-Fatima Ahmed').filter({ hasText: 'Missed' }).count()) === 1 &&
+    (await admin.getByTestId('ledger-row-Bilal Khan').filter({ hasText: 'Completed (override)' }).count()) === 1,
+);
+check(
+  'the archived ledger does not claim every grant has lapsed',
+  !/every grant from this session has lapsed/.test(await bodyText(admin)),
+);
+await shot(admin, '25b-archived-ledger');
 
 // ------------------------------------------------------------ notifications --
 console.log('\nNotifications');

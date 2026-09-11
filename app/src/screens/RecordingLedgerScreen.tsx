@@ -5,6 +5,7 @@ import {
   canPlayFromCourse,
   grantOutcome,
   isOverdue,
+  isVisibleToStudents,
   todayInZone,
   type GrantOutcome,
 } from '@sabeel/shared';
@@ -42,9 +43,10 @@ export function RecordingLedgerScreen({
   cls: CourseRow;
 }) {
   const today = todayInZone(INSTITUTE_TIMEZONE);
-  // An archived class with listening off closes every open grant on it — the
-  // rows say so rather than "Not complete", which reads as still doable.
-  const playable = canPlayFromCourse(cls);
+  // A recording that is no longer published, or an archived class with
+  // listening off, closes every open grant — the rows say which rather than
+  // "Not complete", which reads as still doable.
+  const closedBy = closedReason(recording, cls);
   // Reached from the cross-cohort library, where the course name alone is ambiguous.
   const cohortName = useCohortName()(cls.cohortId);
   const { loading, failed, accountable, attendees, absentees, lapsed, otherListeners, rollup } = useRecordingLedger(
@@ -83,7 +85,7 @@ export function RecordingLedgerScreen({
     const body = rows.map((r) => [
       r.name,
       r.attendance ?? '',
-      statusLabel(r, today, playable),
+      statusLabel(r, today, closedBy),
       r.listenedPct === null ? '' : `${Math.round(r.listenedPct * 100)}`,
       fmtDate(r.lastListened),
       fmtDate(r.completedAt),
@@ -177,7 +179,7 @@ export function RecordingLedgerScreen({
               row={r}
               recordingId={recording.id}
               today={today}
-              playable={playable}
+              closedBy={closedBy}
               busy={busy}
               onRun={run}
             />
@@ -225,10 +227,10 @@ export function RecordingLedgerScreen({
         <>
           <SectionTitle>Excused, access closed ({lapsed.length})</SectionTitle>
           <Notice tone="info">
-            Excused at the session, but their grant is no longer active — they were unenrolled from
-            the class, or this recording was unpublished or archived. Nothing is required of them,
-            and they can&apos;t open it. Re-enrolling them, or publishing the recording again,
-            restores it — for anything still inside its listen-by date.
+            Excused at the session, but they hold no active grant — they were unenrolled from the
+            class, or corrected out of the register since. Nothing is required of them, and they
+            can&apos;t open it. Re-enrolling them restores it — for anything still inside its
+            listen-by date.
           </Notice>
           <Grid min={300}>
             {lapsed.map((r) => (
@@ -289,14 +291,14 @@ function LedgerRowCard({
   row: r,
   recordingId,
   today,
-  playable,
+  closedBy,
   busy,
   onRun,
 }: {
   row: RequiredRow;
   recordingId: string;
   today: string;
-  playable: boolean;
+  closedBy: ClosedBy;
   busy: string | null;
   onRun: (key: string, fn: () => Promise<unknown>) => void;
 }) {
@@ -321,7 +323,7 @@ function LedgerRowCard({
     setReason('');
     setOpen(false);
   };
-  const outcome = grantOutcome(r, today, playable);
+  const outcome = grantOutcome(r, today, closedBy === null);
 
   return (
     // Named, so a check about ONE student can be bound to their row. A regex
@@ -340,7 +342,7 @@ function LedgerRowCard({
             <Text style={styles.override}>Override: {r.overrideReason}</Text>
           ) : null}
         </View>
-        <Text style={[styles.status, statusStyle(outcome)]}>{statusLabel(r, today, playable)}</Text>
+        <Text style={[styles.status, statusStyle(outcome)]}>{statusLabel(r, today, closedBy)}</Text>
       </View>
 
       {/* NOT pushed to the foot. Grid row-mates are equal height, so pinning the
@@ -438,14 +440,28 @@ function listenedText(pct: number | null): string {
   return pct === null ? 'Listened' : `${Math.round(pct * 100)}% listened`;
 }
 
-function statusLabel(r: RequiredRow, today: string, playable: boolean): string {
-  switch (grantOutcome(r, today, playable)) {
+/**
+ * What, if anything, has closed this recording's open grants: the recording
+ * itself leaving the published state, or its class being archived with
+ * listening off. Null while a student could still open it.
+ */
+type ClosedBy = 'recording archived' | 'recording unpublished' | 'course archived' | null;
+
+function closedReason(recording: RecordingRow, cls: CourseRow): ClosedBy {
+  if (recording.status === 'archived') return 'recording archived';
+  if (!isVisibleToStudents(recording.status)) return 'recording unpublished';
+  if (!canPlayFromCourse(cls)) return 'course archived';
+  return null;
+}
+
+function statusLabel(r: RequiredRow, today: string, closedBy: ClosedBy): string {
+  switch (grantOutcome(r, today, closedBy === null)) {
     case 'complete':
       return r.source === 'override' ? 'Completed (override)' : 'Completed';
     case 'missed':
       return 'Missed';
     case 'closed':
-      return 'Closed (course archived)';
+      return `Closed (${closedBy})`;
     case 'open':
       return 'Not complete';
   }

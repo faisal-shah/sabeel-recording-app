@@ -6,7 +6,6 @@ import {
   effectiveCompletion,
   grantOutcome,
   rollup,
-  ledgerBucket,
   type AttendanceStatus,
 } from '../src';
 
@@ -220,13 +219,5 @@ describe('grantOutcome', () => {
 
   it('is complete before anything else is asked', () => {
     expect(grantOutcome({ completed: true, dueDate: '2000-01-01' }, TODAY, false)).toBe('complete');
-  });
-});
-
-describe('ledgerBucket', () => {
-  it('reuses the home classification', () => {
-    expect(ledgerBucket('2026-07-24', false, '2026-07-25')).toBe('missed');
-    expect(ledgerBucket('2026-07-24', true, '2026-07-25')).toBe('done');
-    expect(ledgerBucket('2026-08-30', false, '2026-07-25')).toBe('upcoming');
   });
 });

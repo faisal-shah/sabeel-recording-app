@@ -480,10 +480,12 @@ recorded is kept.
 <figure class="wd"><img src="manual/img/18-recording-ledger-desktop.png" alt="Recording ledger on a computer"><figcaption>On a computer</figcaption></figure>
 </div>
 
-Open a published recording's **Listening progress** (from its session) to see
-exactly where things stand. Up top, four counts: **required** (the students you
-excused, the only ones who can open it), **completed**, **not complete**, and
-**missed**.
+Open a recording's **Listening progress** (from its session, or from the
+library) to see exactly where things stand. Up top, four counts: **required**
+(the students you excused, the only ones who can open it), **completed**, **not
+complete**, and **missed**. An archived or unpublished recording keeps its
+ledger: the counts and rows are the record as it stood when it closed, and a
+grant that was still open then reads *Closed (recording archived)*.
 
 The screen has five parts:
 

@@ -788,7 +788,7 @@ function RecordingCard({
           </Notice>
         ) : null}
 
-        {hasLedger(r.status) ? (
+        {hasLedger(r) ? (
           <View style={styles.ledgerRow}>
             <Button
               testID="recording-ledger"

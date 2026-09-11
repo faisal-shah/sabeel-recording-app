@@ -336,7 +336,7 @@ function RecordingLine({
           RENDERED WHEN THERE IS NOTHING IN IT, because the same `marginTop:
           'auto'` made an empty row reserve 76px of blank card under a recording
           with no audio, half the height of the card beside it. */}
-      {r.audioPath || hasLedger(r.status) ? (
+      {r.audioPath || hasLedger(r) ? (
         <View style={styles.actions}>
           <Row>
             {/* PRIMARY, and the only one on the card. Two identical sage bars
@@ -346,7 +346,7 @@ function RecordingLine({
             {r.audioPath ? (
               <Button testID={`library-listen-${r.title}`} label="Listen" onPress={onPlay} />
             ) : null}
-            {hasLedger(r.status) ? (
+            {hasLedger(r) ? (
               <Button
                 testID={`library-progress-${r.title}`}
                 label="Listening progress"

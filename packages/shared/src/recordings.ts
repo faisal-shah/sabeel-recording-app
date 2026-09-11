@@ -174,15 +174,21 @@ export function isVisibleToStudents(status: RecordingStatus): boolean {
 
 /**
  * A recording whose listening ledger is worth opening: published now, or
- * published once and since archived or unpublished. Archiving is how a term
- * ENDS — and the term's record of who listened and who missed is the ledger,
- * which offered its button on a published recording alone, so the history was
- * unreachable from the moment it mattered most. The ledger already says what a
- * closed grant means ("Excused, access closed"); this is what lets staff get
- * to it. A draft has no ledger: nobody was ever granted it.
+ * published once — since archived, unpublished, or walked all the way back to
+ * a draft to replace its file, which `publishedAt` remembers (set once, never
+ * cleared) and status alone does not. Archiving is how a term ENDS — and the
+ * term's record of who listened and who missed is the ledger, which offered
+ * its button on a published recording alone, so the history was unreachable
+ * from the moment it mattered most. A draft that was never published has no
+ * ledger: nobody was ever granted it.
  */
-export function hasLedger(status: RecordingStatus): boolean {
-  return status === 'published' || status === 'archived' || status === 'unpublished';
+export function hasLedger(recording: { status: RecordingStatus; publishedAt?: number }): boolean {
+  return (
+    recording.status === 'published' ||
+    recording.status === 'archived' ||
+    recording.status === 'unpublished' ||
+    !!recording.publishedAt
+  );
 }
 
 /** Storage object path for a recording's audio. One definition, used by the
