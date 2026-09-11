@@ -1233,6 +1233,34 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-09-11 — **The demo dataset is out of production, and the wipe had to grow
+  to do it.**
+
+  A dry run of `wipe-demo-prod.mjs` against the live project, checked against an
+  independent scan of every collection, showed the script reaching 973 of the
+  2,011 documents the seed and its use had produced. What it missed: 16
+  enrolments and 1,022 attendance projections it never swept by reference; the
+  `notifications/demo-stu-01` tree (2 devices, 1 sent) from the push checks,
+  which Firestore does not cascade; and five REAL documents naming demo
+  accounts — four "Quran Immersion" sessions with six demo students on each
+  register, and the course itself with the two demo staff as managers. Staff had
+  demoed with real classes open. Fixed at 79123b8, then run with `--yes`:
+  **2,011 documents, 73 storage objects, 52 auth accounts** gone, the five real
+  documents edited (each register down to its three real marks, projections
+  reconciled to three by the trigger, `attendanceSubmittedAt` kept, three real
+  managers left on the course), and the script's own post-delete rescan of
+  every collection found no id, key or value starting with `demo-`. Independent
+  recount: students 67 → 17, staff 17 → 15, auth users 84 → 32, enrolments
+  165 → 39, assignments 196 → 4, sessions 93 → 13, recordings 78 → 5; no
+  function errors from the trigger cascade.
+
+  **Two accounts left in place, on Faisal's decision**: "Test One"
+  (`teyokoj335@prodbits.com`, created 25 Aug from his own staff account, no
+  class, no history) and "Test Student" (`test.student@oursabeel.com`, created
+  12 Aug by an admin, enrolled in Quran Immersion, never signed in). Neither
+  came from the seed or from an agent session, so neither was the wipe's to
+  take.
+
 - 2026-09-11 — **v0.6.0: the native `Select`'s first time on a device, and a
   fixture that was hiding a check.**
 
