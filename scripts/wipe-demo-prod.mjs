@@ -18,10 +18,15 @@
  * plenty of demo-related documents are written by the app and by the triggers,
  * so they never carry it —
  *
- *   - assignments        — created by the publish/attendance fan-out
+ *   - assignments / attendanceRecords — created by the publish/attendance fan-out
  *   - listeningProgress / completions / completionEvents — written by anyone who
  *     opens a demo recording and presses play, including while demoing it
  *   - auditLog           — `getPlaybackUrl` and every staff callable audits itself
+ *   - enrollments        — a demo student enrolled by hand, in a demo course or
+ *     a real one, is an app-written row with no flag
+ *   - notifications/{uid} and its devices/sent subtrees — written the moment a
+ *     demo account turns notifications on, and Firestore never cascades a
+ *     subcollection delete, so removing the parent alone leaves them behind
  *   - sessions / recordings — anything YOU add inside a demo course while
  *     exploring. These are listed by name in the plan, because they are the one
  *     category this removes that you created rather than the seed. They go with
@@ -29,8 +34,20 @@
  *     that no longer exists) and strand their audio in the bucket, billable.
  *
  * So the sweep is by REFERENCE as well as by flag: anything pointing at a
- * `demo-rec-`, `demo-stu-`, `demo-crs-` or `demo-ses-` id. Those prefixes exist
- * only on seeded data, so this cannot reach anything unrelated to the demo.
+ * `demo-` id in any of the fields the app joins on. That prefix exists only on
+ * seeded data, so this cannot reach anything unrelated to the demo.
+ *
+ * WHERE THE DEMO LEAKED INTO REAL DATA
+ *
+ * Staff demoed with real classes open, so demo accounts got INTO real records:
+ * demo students enrolled in real courses and marked on real registers, and demo
+ * staff added as managers of a real course. Deleting the accounts and leaving
+ * those references would put ghost rows on a real class's ledger — the ledger
+ * deliberately keeps marks for departed students, so a uid with no student
+ * behind it would sit there as "departed" for good. This script therefore also
+ * edits real documents, in exactly two ways, both listed by name in the plan:
+ * it removes demo uids from a real session's `attendance` map, and from a real
+ * course's `managerUids`. Real students' marks are untouched.
  */
 import { createRequire } from 'node:module';
 const require = createRequire(new URL('../functions/package.json', import.meta.url));
@@ -46,20 +63,22 @@ admin.initializeApp({ projectId: PROJECT, storageBucket: BUCKET });
 const db = admin.firestore();
 const auth = admin.auth();
 const bucket = admin.storage().bucket();
+const { FieldValue, FieldPath } = admin.firestore;
+
+const isDemoId = (v) => String(v ?? '').startsWith('demo-');
 
 const FLAGGED = ['cohorts','courses','sessions','recordings','students','enrollments',
   'completions','listeningProgress','completionOverrides','completionEvents','auditLog','staffUsers'];
-const BY_REFERENCE = ['sessions','recordings','assignments','completions','completionEvents',
-  'listeningProgress','completionOverrides','auditLog'];
+const BY_REFERENCE = ['sessions','recordings','enrollments','attendanceRecords','assignments',
+  'completions','completionEvents','listeningProgress','completionOverrides','auditLog'];
 
+/** The fields the app joins on. A document pointing at demo data through any of
+ *  them is orphaned the moment that data goes. */
 const isDemoRef = (d) => {
   const v = d.data();
   return (
-    String(v.recordingId ?? '').startsWith('demo-rec-') ||
-    String(v.studentUid ?? '').startsWith('demo-stu-') ||
-    String(v.courseId ?? '').startsWith('demo-crs-') ||
-    String(v.sessionId ?? '').startsWith('demo-ses-') ||
-    Object.values(v.targets ?? {}).some((t) => String(t).startsWith('demo-'))
+    ['recordingId', 'studentUid', 'courseId', 'sessionId', 'cohortId'].some((f) => isDemoId(v[f])) ||
+    Object.values(v.targets ?? {}).some(isDemoId)
   );
 };
 
@@ -85,6 +104,30 @@ for (const coll of BY_REFERENCE) {
   if (docs.length) plan.push({ label: `${coll} (app/trigger-written)`, docs });
 }
 
+// Real documents that name a demo account. Edited, not deleted.
+const sessionFixes = [];   // { ref, title, keys }
+for (const d of (await db.collection('sessions').get()).docs) {
+  if (seen.has(d.ref.path)) continue;
+  const keys = Object.keys(d.data().attendance ?? {}).filter(isDemoId);
+  if (keys.length) sessionFixes.push({ ref: d.ref, title: `${d.data().date} ${d.data().title ?? ''}`, keys });
+}
+const courseFixes = [];    // { ref, name, uids }
+for (const d of (await db.collection('courses').get()).docs) {
+  if (seen.has(d.ref.path)) continue;
+  const uids = (d.data().managerUids ?? []).filter(isDemoId);
+  if (uids.length) courseFixes.push({ ref: d.ref, name: d.data().name, uids });
+}
+
+// `listDocuments` rather than `get`: a parent whose own document was never
+// written still shows up here when it has subcollections, and a device
+// registration creates exactly that shape.
+const notificationTrees = [];
+for (const ref of await db.collection('notifications').listDocuments()) {
+  if (!isDemoId(ref.id)) continue;
+  const [devices, sent] = await Promise.all([ref.collection('devices').get(), ref.collection('sent').get()]);
+  notificationTrees.push({ ref, devices: devices.size, sent: sent.size });
+}
+
 const removedRecordingIds = new Set(
   plan.filter((p) => p.label.startsWith('recordings')).flatMap((p) => p.docs.map((d) => d.id)),
 );
@@ -96,7 +139,7 @@ const demoUsers = [];
 let page;
 do {
   const r = await auth.listUsers(1000, page);
-  demoUsers.push(...r.users.filter((u) => u.uid.startsWith('demo-')));
+  demoUsers.push(...r.users.filter((u) => isDemoId(u.uid)));
   page = r.pageToken;
 } while (page);
 
@@ -105,6 +148,10 @@ const totalDocs = plan.reduce((n, p) => n + p.docs.length, 0);
 console.log(EXECUTE ? 'DELETING demo data from PRODUCTION' : 'DRY RUN — nothing will be deleted');
 console.log('');
 for (const p of plan) console.log(`   ${String(p.docs.length).padStart(5)}  ${p.label}`);
+console.log(`   ${String(notificationTrees.length).padStart(5)}  notification trees` +
+  (notificationTrees.length
+    ? `  (${notificationTrees.map((t) => `${t.ref.id}: ${t.devices} devices, ${t.sent} sent`).join('; ')})`
+    : ''));
 console.log(`   ${String(orphanFiles.length + seedTmp.length).padStart(5)}  storage objects`);
 console.log(`   ${String(demoUsers.length).padStart(5)}  auth accounts`);
 console.log(`\n   total: ${totalDocs} documents`);
@@ -112,6 +159,11 @@ console.log(`\n   total: ${totalDocs} documents`);
 if (yoursInDemo.length) {
   console.log('\n   NOT seed data — you created these inside a demo course, so they go with it:');
   for (const y of yoursInDemo) console.log(`      ${y}`);
+}
+if (sessionFixes.length || courseFixes.length) {
+  console.log('\n   REAL documents edited, not deleted — demo accounts removed from them:');
+  for (const f of sessionFixes) console.log(`      sessions/${f.ref.id} “${f.title}”: ${f.keys.length} demo marks off the register`);
+  for (const f of courseFixes) console.log(`      courses/${f.ref.id} “${f.name}”: managers ${f.uids.join(', ')}`);
 }
 
 // -------------------------------------------------------------- what stays --
@@ -138,6 +190,17 @@ for (const p of plan) {
   }
   console.log(`   removed ${p.docs.length} ${p.label}`);
 }
+for (const f of sessionFixes) {
+  // FieldPath, not a dotted string: a uid with a hyphen is not a bare
+  // identifier, and the dotted form is rejected for it.
+  await f.ref.update(...f.keys.flatMap((k) => [new FieldPath('attendance', k), FieldValue.delete()]));
+}
+for (const f of courseFixes) {
+  await f.ref.update({ managerUids: FieldValue.arrayRemove(...f.uids) });
+}
+console.log(`   edited ${sessionFixes.length} sessions and ${courseFixes.length} courses`);
+for (const t of notificationTrees) await db.recursiveDelete(t.ref);
+console.log(`   removed ${notificationTrees.length} notification trees`);
 for (const group of [orphanFiles, seedTmp]) {
   for (let i = 0; i < group.length; i += 20) {
     await Promise.all(group.slice(i, i + 20).map((f) => f.delete().catch(() => {})));
@@ -148,5 +211,32 @@ for (let i = 0; i < demoUsers.length; i += 900) {
   await auth.deleteUsers(demoUsers.slice(i, i + 900).map((u) => u.uid));
 }
 console.log(`   removed ${demoUsers.length} auth accounts`);
-console.log('\nDone.');
+
+// ------------------------------------------------------------------ verify --
+// The promise is "nothing demo remains", so that is what gets asserted: every
+// collection, every document, ids, keys and values alike — not the lists above,
+// which are the mechanism. A collection this script never heard of shows up
+// here too, which is the point of asking the database rather than the code.
+const mentionsDemo = (v) =>
+  typeof v === 'string' ? isDemoId(v)
+  : v && typeof v === 'object' && !(v instanceof Date)
+    ? Object.entries(v).some(([k, x]) => isDemoId(k) || mentionsDemo(x))
+    : false;
+const residue = [];
+for (const coll of await db.listCollections()) {
+  for (const d of (await coll.get()).docs) {
+    if (isDemoId(d.id) || mentionsDemo(d.data())) residue.push(d.ref.path);
+  }
+}
+for (const ref of await db.collection('notifications').listDocuments()) {
+  if (isDemoId(ref.id)) residue.push(ref.path);
+}
+const usersLeft = (await auth.listUsers(1000)).users.filter((u) => isDemoId(u.uid)).length;
+if (residue.length || usersLeft) {
+  console.log(`\nSTILL REFERENCING DEMO DATA — ${residue.length} documents, ${usersLeft} auth accounts:`);
+  for (const p of residue.slice(0, 40)) console.log(`   ${p}`);
+  process.exit(1);
+}
+console.log('\nVerified: no document in any collection, and no auth account, refers to demo data.');
+console.log('Done.');
 process.exit(0);
