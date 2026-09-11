@@ -18,11 +18,13 @@ import {
   renameCohort,
   setCohortArchived,
   useCohortState,
-  useCoursesInCohort,
+  useCoursesInCohortState,
   type CohortRow,
   type CourseRow,
 } from '../structure';
 import { getTheme, spacing } from '../theme';
+
+const NO_COURSES: CourseRow[] = [];
 import { errorText } from '../errors';
 
 const t = getTheme();
@@ -89,7 +91,8 @@ export function CoursesScreen({
 }) {
   const cohortState = useCohortState(cohortId);
   const cohort = cohortState.value;
-  const courses = useCoursesInCohort(cohortId);
+  const coursesState = useCoursesInCohortState(cohortId);
+  const courses = coursesState ?? NO_COURSES;
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const archived = cohort?.archived ?? false;
@@ -173,8 +176,10 @@ export function CoursesScreen({
         />
       </Card>
 
-      <SectionTitle>Courses ({courses.length})</SectionTitle>
-      {courses.length === 0 ? (
+      <SectionTitle>Courses{coursesState === null ? '' : ` (${courses.length})`}</SectionTitle>
+      {coursesState === null ? (
+        <Empty>Checking…</Empty>
+      ) : courses.length === 0 ? (
         <Empty>No courses in this cohort yet.</Empty>
       ) : (
         <Grid min={320}>

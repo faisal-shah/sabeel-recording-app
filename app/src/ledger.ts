@@ -22,8 +22,8 @@ import {
 import { db, functions } from './firebase';
 import { useListenerFailed, useLiveQuery } from './liveQuery';
 import { useStudents } from './students';
-import { useCourseSessions } from './sessions';
-import { useRoster } from './structure';
+import { useCourseSessionsState } from './sessions';
+import { useRosterState, type EnrollmentRow } from './structure';
 import type { RecordingRow } from './recordings';
 import type { SessionRow } from './sessions';
 
@@ -359,6 +359,9 @@ export interface CourseAssignmentItem {
 }
 
 export interface CourseLedger {
+  /** Whether the grants have arrived. Until they have, `rollup` is three zeros
+   *  — the exact wrong answer the course page used to state as fact. */
+  resolved: boolean;
   /** rollup across every active assignment in the class. */
   rollup: LedgerRollup;
   /** per-recording { complete, total } for the recordings list. */
@@ -372,7 +375,7 @@ export interface CourseLedger {
  * completion, rolled up whole-class and per-recording. `courseId ==` reads.
  */
 export function useCourseLedger(courseId: string | null, today: string): CourseLedger {
-  const assignments = useLiveQuery<AssignmentDoc[]>(
+  const granted = useLiveQuery<AssignmentDoc[] | null>(
     () =>
       courseId
         ? query(
@@ -385,9 +388,10 @@ export function useCourseLedger(courseId: string | null, today: string): CourseL
     {
       label: 'courseLedgerAssignments',
       map: (snap) => snap.docs.map((d) => d.data() as AssignmentDoc),
-      empty: [],
+      empty: null,
     },
   );
+  const assignments = granted ?? NO_ASSIGNMENTS;
   const completions = useScopedMap<CompletionDoc, boolean>(
     'courseLedgerCompletions',
     COLLECTIONS.completions,
@@ -419,9 +423,11 @@ export function useCourseLedger(courseId: string | null, today: string): CourseL
       if (it.completed) cur.complete++;
       byRecording.set(it.recordingId, cur);
     }
-    return { rollup: rollup(items, today), byRecording, items };
-  }, [assignments, completions, overrides, today]);
+    return { resolved: granted !== null, rollup: rollup(items, today), byRecording, items };
+  }, [granted, assignments, completions, overrides, today]);
 }
+
+const NO_ASSIGNMENTS: AssignmentDoc[] = [];
 
 // --------------------------------------------------------- attendance report --
 
@@ -430,14 +436,22 @@ export function useCourseLedger(courseId: string | null, today: string): CourseL
  * assignments, aggregated by the pure `attendanceReport`. Composes existing
  * live reads (no new listener shapes), so the security rules already cover it.
  */
-export function useCourseAttendance(courseId: string | null, today: string): AttendanceReport {
-  const sessions = useCourseSessions(courseId);
-  const roster = useRoster(courseId);
-  const { items } = useCourseLedger(courseId, today);
+export function useCourseAttendance(
+  courseId: string | null,
+  today: string,
+): AttendanceReport & { resolved: boolean } {
+  // The `State` variants: "0 of 0 sessions taken" and "Nobody is enrolled"
+  // are answers, and the report gave them for the length of every cold load.
+  const sessionsState = useCourseSessionsState(courseId);
+  const rosterState = useRosterState(courseId);
+  const sessions = sessionsState ?? NO_SESSIONS;
+  const roster = rosterState ?? NO_ROSTER;
+  const { items, resolved: grantsResolved } = useCourseLedger(courseId, today);
+  const resolved = sessionsState !== null && rosterState !== null && grantsResolved;
 
   return useMemo(
-    () =>
-      attendanceReport({
+    () => ({
+      ...attendanceReport({
         sessions: sessions.map((s) => ({
           id: s.id,
           title: s.title,
@@ -449,9 +463,14 @@ export function useCourseAttendance(courseId: string | null, today: string): Att
         assignments: items.map((i) => ({ studentUid: i.studentUid, completed: i.completed, dueDate: i.dueDate })),
         today,
       }),
-    [sessions, roster, items, today],
+      resolved,
+    }),
+    [sessions, roster, items, today, resolved],
   );
 }
+
+const NO_SESSIONS: SessionRow[] = [];
+const NO_ROSTER: EnrollmentRow[] = [];
 
 // -------------------------------------------------------------- student ledger --
 
@@ -468,8 +487,10 @@ export interface StudentLedgerItem {
  * courseId == X` — two equalities, class-scoped, so the staff rules accept them.
  * The screen supplies recording titles from `useCourseRecordings`.
  */
-export function useStudentLedger(studentUid: string | null, courseId: string): StudentLedgerItem[] {
-  const assignments = useLiveQuery<AssignmentDoc[]>(
+export function useStudentLedger(studentUid: string | null, courseId: string): StudentLedgerItem[] | null {
+  // `null` until the grants have arrived: "No required recordings here" is a
+  // claim about the student, and the page said it on every cold load.
+  const assignments = useLiveQuery<AssignmentDoc[] | null>(
     () =>
       studentUid
         ? query(
@@ -482,7 +503,7 @@ export function useStudentLedger(studentUid: string | null, courseId: string): S
     {
       label: 'studentLedgerAssignments',
       map: (snap) => snap.docs.map((d) => d.data() as AssignmentDoc).filter((a) => a.active),
-      empty: [],
+      empty: null,
     },
   );
   const completions = useStudentCourseMap<CompletionDoc, boolean>(
@@ -502,17 +523,19 @@ export function useStudentLedger(studentUid: string | null, courseId: string): S
 
   return useMemo(
     () =>
-      assignments.map((a) => {
-        const c = completions.get(a.recordingId);
-        const eff = effectiveCompletion(c === undefined ? undefined : { completed: c }, overrides.get(a.recordingId));
-        return {
-          recordingId: a.recordingId,
-          dueDate: a.dueDate,
-          completed: eff.completed,
-          source: eff.source,
-          overrideReason: eff.reason,
-        };
-      }),
+      assignments === null
+        ? null
+        : assignments.map((a) => {
+            const c = completions.get(a.recordingId);
+            const eff = effectiveCompletion(c === undefined ? undefined : { completed: c }, overrides.get(a.recordingId));
+            return {
+              recordingId: a.recordingId,
+              dueDate: a.dueDate,
+              completed: eff.completed,
+              source: eff.source,
+              overrideReason: eff.reason,
+            };
+          }),
     [assignments, completions, overrides],
   );
 }
@@ -581,9 +604,12 @@ export function useMyAudit(uid: string | null): AuditRow[] {
 /**
  * The audit log, newest first. A manager passes their courseId (scoped read); an
  * admin passes null for the unconstrained global view.
+ *
+ *  `null` until the listener answers, so an empty sentence is never printed for
+ *  a question not yet answered.
  */
-export function useAudit(courseId: string | null, enabled = true): AuditRow[] {
-  return useLiveQuery<AuditRow[]>(
+export function useAuditState(courseId: string | null, enabled = true): AuditRow[] | null {
+  return useLiveQuery<AuditRow[] | null>(
     () =>
       !enabled
         ? null
@@ -599,7 +625,7 @@ export function useAudit(courseId: string | null, enabled = true): AuditRow[] {
     {
       label: 'audit',
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as AuditEntryDoc) })),
-      empty: [],
+      empty: null,
     },
   );
 }

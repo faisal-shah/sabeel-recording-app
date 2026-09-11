@@ -14,7 +14,7 @@ import {
   statusWord,
 } from '../components/ui';
 import { Select } from '../components/Select';
-import { useAllRecordings, useCourseRecordings, type RecordingRow } from '../recordings';
+import { useAllRecordingsState, useCourseRecordingsState, type RecordingRow } from '../recordings';
 import { useListenerFailed } from '../liveQuery';
 import {
   useAllCoursesState,
@@ -37,6 +37,7 @@ import { getTheme, spacing } from '../theme';
 const t = getTheme();
 // One empty list, not a fresh `[]` per render: the lists below feed memos.
 const NO_COURSES: CourseRow[] = [];
+const NO_RECORDINGS: RecordingRow[] = [];
 type StatusFilter = 'all' | RecordingStatus;
 /**
  * The filter, and the words a person reads on it.
@@ -195,7 +196,10 @@ function AdminLibrary({
   onPlay: (r: RecordingRow, c: CourseRow) => void;
   onOpenProgress: (r: RecordingRow, c: CourseRow) => void;
 }) {
-  const all = useAllRecordings(true);
+  // `null` until the recordings listener answers — so "No recordings match"
+  // waits for both halves, the courses and the recordings.
+  const allState = useAllRecordingsState(true);
+  const all = allState ?? NO_RECORDINGS;
   const coursesFailed = useListenerFailed(['allCourses']);
   const courseById = useMemo(() => new Map((courses ?? []).map((c) => [c.id, c])), [courses]);
   // The cohort and course scope first, then the status within it — so the
@@ -219,7 +223,7 @@ function AdminLibrary({
           whose course was deleted — otherwise fires for EVERY row on a cold
           load, printing a raw Firestore id where the course name goes and
           carrying it into the ledger this list opens. */}
-      {courses === null ? (
+      {courses === null || allState === null ? (
         <Empty>{coursesFailed ? 'The library could not be read.' : 'Loading the library…'}</Empty>
       ) : filtered.length === 0 ? (
         <Empty>No recordings match these filters.</Empty>
@@ -257,13 +261,16 @@ function CourseSection({
   onPlay: (r: RecordingRow, c: CourseRow) => void;
   onOpenProgress: (r: RecordingRow, c: CourseRow) => void;
 }) {
-  const recordings = useCourseRecordings(cls.id);
+  const recordingsState = useCourseRecordingsState(cls.id);
+  const recordings = recordingsState ?? NO_RECORDINGS;
   const filtered = status === 'all' ? recordings : recordings.filter((r) => r.status === status);
   return (
     <>
       <SectionTitle>{cohortName ? `${cls.name} · ${cohortName}` : cls.name}</SectionTitle>
-      <Counts recordings={recordings} />
-      {filtered.length === 0 ? (
+      {recordingsState === null ? null : <Counts recordings={recordings} />}
+      {recordingsState === null ? (
+        <Empty>Loading…</Empty>
+      ) : filtered.length === 0 ? (
         <Empty>No recordings match these filters.</Empty>
       ) : (
         <Grid min={330}>

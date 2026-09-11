@@ -12,8 +12,12 @@ export interface StaffRow extends StaffUserDoc {
  * Staff awaiting approval. Ordered oldest-first: the person who has been waiting
  * longest is the one to deal with next.
  */
-export function usePendingStaff(enabled: boolean): StaffRow[] {
-  return useLiveQuery<StaffRow[]>(
+const NO_STAFF: StaffRow[] = [];
+
+/** The `State` variant: `null` until the listener answers, so an empty sentence is
+ *  never printed for a question not yet answered. */
+export function usePendingStaffState(enabled: boolean): StaffRow[] | null {
+  return useLiveQuery<StaffRow[] | null>(
     () =>
       enabled
         ? query(
@@ -26,14 +30,20 @@ export function usePendingStaff(enabled: boolean): StaffRow[] {
     {
       label: 'pendingStaff',
       map: (snap) => snap.docs.map((d) => ({ uid: d.id, ...(d.data() as StaffUserDoc) })),
-      empty: [],
+      empty: null,
     },
   );
 }
 
 /** Everyone who is not pending — the running list of who has access. */
 export function useDecidedStaff(enabled: boolean): StaffRow[] {
-  return useLiveQuery<StaffRow[]>(
+  return useDecidedStaffState(enabled) ?? NO_STAFF;
+}
+
+/** The `State` variant: `null` until the listener answers, so an empty sentence is
+ *  never printed for a question not yet answered. */
+export function useDecidedStaffState(enabled: boolean): StaffRow[] | null {
+  return useLiveQuery<StaffRow[] | null>(
     () =>
       enabled
         ? query(
@@ -46,7 +56,7 @@ export function useDecidedStaff(enabled: boolean): StaffRow[] {
     {
       label: 'decidedStaff',
       map: (snap) => snap.docs.map((d) => ({ uid: d.id, ...(d.data() as StaffUserDoc) })),
-      empty: [],
+      empty: null,
     },
   );
 }

@@ -31,9 +31,11 @@ export const submitAttendance = call<
 
 export const deleteSession = call<{ sessionId: string }, { sessionId: string }>('deleteSession');
 
-/** A course's sessions, newest meeting first. Staff-only (rules). */
-export function useCourseSessions(courseId: string | null): SessionRow[] {
-  return useLiveQuery<SessionRow[]>(
+/** A course's sessions, newest meeting first. Staff-only (rules).
+ *  `null` until the listener answers, so an empty sentence is never printed for
+ *  a question not yet answered. */
+export function useCourseSessionsState(courseId: string | null): SessionRow[] | null {
+  return useLiveQuery<SessionRow[] | null>(
     () =>
       courseId
         ? query(
@@ -46,7 +48,7 @@ export function useCourseSessions(courseId: string | null): SessionRow[] {
     {
       label: 'courseSessions',
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as SessionDoc) })),
-      empty: [],
+      empty: null,
     },
   );
 }

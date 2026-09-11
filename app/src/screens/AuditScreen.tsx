@@ -4,7 +4,9 @@ import { AUDIT_PAGE, INSTITUTE_TIMEZONE, stampInZone } from '@sabeel/shared';
 import { useDecidedStaff } from '../staff';
 import { useStudents } from '../students';
 import { Empty, Grid, Notice, Screen } from '../components/ui';
-import { useAudit, useMyAudit, type AuditRow } from '../ledger';
+import { useAuditState, useMyAudit, type AuditRow } from '../ledger';
+
+const NO_ENTRIES: AuditRow[] = [];
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -35,7 +37,8 @@ export function AuditScreen({
   // NOT SUBSCRIBED when the view is not this reader's: the wide query is one the
   // rules refuse a manager, and a refusal paints the live-data banner over the
   // explanation below.
-  const entries = useAudit(courseId, allowed);
+  const entriesState = useAuditState(courseId, allowed);
+  const entries = entriesState ?? NO_ENTRIES;
   /*
    * NAMES, NOT UIDS — on the one screen whose whole job is "who did what".
    *
@@ -89,7 +92,9 @@ export function AuditScreen({
         </Notice>
       ) : null}
       <View testID={entries.length === 0 ? 'audit-empty' : 'audit-list'}>
-        {entries.length === 0 ? (
+        {entriesState === null && allowed ? (
+          <Empty>Checking…</Empty>
+        ) : entries.length === 0 ? (
           <Empty>No audit entries yet.</Empty>
         ) : (
           <Grid min={330}>

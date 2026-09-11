@@ -14,7 +14,9 @@ import {
   StatusChip,
   useAddAction,
 } from '../components/ui';
-import { createStudent, useStudents } from '../students';
+import { createStudent, useStudentsState, type StudentRow } from '../students';
+
+const NO_STUDENTS: StudentRow[] = [];
 import { useAllCourses, useCohorts, useMyCourses } from '../structure';
 import { CAN_CREATE_ACCOUNTS } from '../accountCreation';
 import { getTheme, spacing } from '../theme';
@@ -45,7 +47,8 @@ export function StudentsScreen({
   header?: ReactNode;
   onOpenStudent: (studentUid: string) => void;
 }) {
-  const students = useStudents(true);
+  const studentsState = useStudentsState(true);
+  const students = studentsState ?? NO_STUDENTS;
   const active = students.filter((s) => s.status !== 'disabled');
   const disabled = students.filter((s) => s.status === 'disabled');
   /*
@@ -82,8 +85,10 @@ export function StudentsScreen({
       {/* The list is for finding someone; everything you can DO to them lives on
           their page. Per-row actions made every row three controls wide and
           still answered nothing about the student. */}
-      <SectionTitle>Students ({active.length})</SectionTitle>
-      {active.length === 0 ? (
+      <SectionTitle>Students{studentsState === null ? '' : ` (${active.length})`}</SectionTitle>
+      {studentsState === null ? (
+        <Empty>Checking…</Empty>
+      ) : active.length === 0 ? (
         <Empty>No students yet.</Empty>
       ) : (
         <Grid min={330}>

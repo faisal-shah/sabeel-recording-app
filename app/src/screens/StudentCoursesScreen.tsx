@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Empty, Grid, Screen } from '../components/ui';
-import { useMyAttendance } from '../attendance';
+import { useMyAttendanceState, type AttendanceRecordRow } from '../attendance';
+
+const NO_MARKS: AttendanceRecordRow[] = [];
 import { useCourse, useStudentEnrollmentsState } from '../structure';
 import { getTheme, spacing } from '../theme';
 
@@ -69,7 +71,8 @@ function CourseCard({
   // The card answers the question the screen is for, so most visits need no tap
   // at all: how many meetings am I marked in, and how many did I miss. Read from
   // the student's OWN projected records — a student cannot read a session.
-  const marks = useMyAttendance(uid, courseId);
+  const marksState = useMyAttendanceState(uid, courseId);
+  const marks = marksState ?? NO_MARKS;
   if (!cls) return null;
   const present = marks.filter((m) => m.status === 'present').length;
   const excused = marks.filter((m) => m.status === 'excused').length;
@@ -84,7 +87,7 @@ function CourseCard({
     >
       <View style={{ flex: 1 }}>
         <Text style={styles.name}>{cls.name}</Text>
-        {marks.length === 0 ? (
+        {marksState === null ? null : marks.length === 0 ? (
           <Text style={styles.sub}>No attendance taken yet</Text>
         ) : (
           <Text style={styles.sub}>

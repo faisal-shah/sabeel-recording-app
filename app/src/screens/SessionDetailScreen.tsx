@@ -42,7 +42,7 @@ import {
   type RecordingRow,
 } from '../recordings';
 import { retryZoomImport } from '../zoom';
-import { sortByName, useRoster } from '../structure';
+import { sortByName, useRosterState, type EnrollmentRow } from '../structure';
 import { useStudents } from '../students';
 import { canPickAudio, pickAudioFile } from '../filePicker';
 import { useWide } from '../useWidth';
@@ -51,6 +51,7 @@ import { errorText } from '../errors';
 import { attendancePayload, registerMark } from '../attendanceRegister';
 
 const t = getTheme();
+const NO_ROSTER: EnrollmentRow[] = [];
 const STATUSES: AttendanceStatus[] = ['present', 'absent', 'excused'];
 const STATUS_LABEL: Record<AttendanceStatus, string> = {
   present: 'Present',
@@ -240,7 +241,10 @@ function SessionHeader({ session, isAdmin }: { session: SessionRow; isAdmin: boo
 
 function AttendanceSection({ session }: { session: SessionRow }) {
   const wide = useWide();
-  const roster = useRoster(session.courseId);
+  // `null` until the roster listener answers: "Enrol students first" is a
+  // claim about the class, and the register said it on every cold load.
+  const rosterState = useRosterState(session.courseId);
+  const roster = rosterState ?? NO_ROSTER;
   const students = useStudents(true);
   const nameByUid = useMemo(() => {
     const m = new Map<string, string>();
@@ -307,13 +311,15 @@ function AttendanceSection({ session }: { session: SessionRow }) {
         {/* With nobody on the roster there is nothing to mark, so telling someone
             to mark it is just noise — say the one thing they can act on. */}
         <Text style={styles.meta}>
-          {activeUids.length === 0
-            ? 'Enrol students in this course first — attendance is taken from its roster.'
-            : session.attendanceSubmittedAt
+          {rosterState === null
+            ? 'Checking the roster…'
+            : activeUids.length === 0
+              ? 'Enrol students in this course first — attendance is taken from its roster.'
+              : session.attendanceSubmittedAt
               ? 'Submitted. Excused students are assigned the recording and can open it until the listen-by date; present and absent students are not.'
               : 'Everyone starts as Present — mark who was away, and excuse whoever should listen to the recording. Only excusing grants access, and nothing is granted until you submit.'}
         </Text>
-        {activeUids.length === 0 ? (
+        {rosterState === null ? null : activeUids.length === 0 ? (
           <Empty>No students enrolled in this course yet.</Empty>
         ) : (
           <>

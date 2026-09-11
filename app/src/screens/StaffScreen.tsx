@@ -13,7 +13,9 @@ import {
   SectionTitle,
   StatusChip,
 } from '../components/ui';
-import { setStaffAccess, useDecidedStaff, usePendingStaff, type StaffRow } from '../staff';
+import { setStaffAccess, useDecidedStaffState, usePendingStaffState, type StaffRow } from '../staff';
+
+const NO_STAFF: StaffRow[] = [];
 import { getTheme, spacing } from '../theme';
 import { errorText } from '../errors';
 
@@ -27,8 +29,12 @@ const t = getTheme();
  * boundary.
  */
 export function StaffScreen({ selfUid, header }: { selfUid: string; header?: ReactNode }) {
-  const pending = usePendingStaff(true);
-  const decided = useDecidedStaff(true);
+  // The `State` variants: "Nobody is waiting" and "No staff accounts yet" are
+  // answers, and an admin read both for the length of every cold load.
+  const pendingState = usePendingStaffState(true);
+  const decidedState = useDecidedStaffState(true);
+  const pending = pendingState ?? NO_STAFF;
+  const decided = decidedState ?? NO_STAFF;
   // Split the way the student list is split: a disabled account is history,
   // not a colleague, and interleaved with the live ones it read as one.
   const active = decided.filter((s) => s.status !== 'disabled');
@@ -96,8 +102,10 @@ export function StaffScreen({ selfUid, header }: { selfUid: string; header?: Rea
       {header}
       {error ? <Notice tone="error">{error}</Notice> : null}
 
-      <SectionTitle>Waiting for approval ({pending.length})</SectionTitle>
-      {pending.length === 0 ? (
+      <SectionTitle>Waiting for approval{pendingState === null ? '' : ` (${pending.length})`}</SectionTitle>
+      {pendingState === null ? (
+        <Empty>Checking…</Empty>
+      ) : pending.length === 0 ? (
         <Empty>Nobody is waiting.</Empty>
       ) : (
         <Grid min={330}>
@@ -123,8 +131,10 @@ export function StaffScreen({ selfUid, header }: { selfUid: string; header?: Rea
         </Grid>
       )}
 
-      <SectionTitle>Staff ({active.length})</SectionTitle>
-      {active.length === 0 ? (
+      <SectionTitle>Staff{decidedState === null ? '' : ` (${active.length})`}</SectionTitle>
+      {decidedState === null ? (
+        <Empty>Checking…</Empty>
+      ) : active.length === 0 ? (
         <Empty>No staff accounts yet.</Empty>
       ) : (
         <Grid min={330}>

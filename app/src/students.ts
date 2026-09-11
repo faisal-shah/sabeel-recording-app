@@ -34,7 +34,15 @@ export function useStudentState(uid: string | null) {
 }
 
 export function useStudents(enabled: boolean): StudentRow[] {
-  return useLiveQuery<StudentRow[]>(
+  return useStudentsState(enabled) ?? NO_STUDENTS;
+}
+
+const NO_STUDENTS: StudentRow[] = [];
+
+/** The `State` variant: `null` until the listener answers, so an empty sentence is
+ *  never printed for a question not yet answered. */
+export function useStudentsState(enabled: boolean): StudentRow[] | null {
+  return useLiveQuery<StudentRow[] | null>(
     () =>
       enabled
         ? query(collection(db, COLLECTIONS.students), orderBy('displayName', 'asc'))
@@ -43,7 +51,7 @@ export function useStudents(enabled: boolean): StudentRow[] {
     {
       label: 'students',
       map: (snap) => snap.docs.map((d) => ({ uid: d.id, ...(d.data() as StudentDoc) })),
-      empty: [],
+      empty: null,
     },
   );
 }

@@ -18,9 +18,12 @@ export interface AttendanceRecordRow extends AttendanceRecordDoc {
  *
  * Ordering is done in the caller rather than with `orderBy`, which would turn
  * this into a composite-index query for a list that is one term long.
+ *
+ *  `null` until the listener answers, so an empty sentence is never printed for
+ *  a question not yet answered.
  */
-export function useMyAttendance(uid: string | null, courseId: string | null): AttendanceRecordRow[] {
-  return useLiveQuery<AttendanceRecordRow[]>(
+export function useMyAttendanceState(uid: string | null, courseId: string | null): AttendanceRecordRow[] | null {
+  return useLiveQuery<AttendanceRecordRow[] | null>(
     () =>
       uid && courseId
         ? query(
@@ -33,7 +36,7 @@ export function useMyAttendance(uid: string | null, courseId: string | null): At
     {
       label: 'myAttendance',
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as AttendanceRecordDoc) })),
-      empty: [],
+      empty: null,
     },
   );
 }

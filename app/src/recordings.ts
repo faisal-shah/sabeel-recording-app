@@ -22,7 +22,15 @@ export interface RecordingRow extends RecordingDoc {
  * single-class query lets that resolve one cached path.
  */
 export function useCourseRecordings(courseId: string | null): RecordingRow[] {
-  return useLiveQuery<RecordingRow[]>(
+  return useCourseRecordingsState(courseId) ?? NO_RECORDINGS;
+}
+
+const NO_RECORDINGS: RecordingRow[] = [];
+
+/** The `State` variant: `null` until the listener answers, so an empty sentence is
+ *  never printed for a question not yet answered. */
+export function useCourseRecordingsState(courseId: string | null): RecordingRow[] | null {
+  return useLiveQuery<RecordingRow[] | null>(
     () =>
       courseId
         ? query(
@@ -35,7 +43,7 @@ export function useCourseRecordings(courseId: string | null): RecordingRow[] {
     {
       label: 'courseRecordings',
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as RecordingDoc) })),
-      empty: [],
+      empty: null,
       // The library mounts one of these per course a manager teaches, so the
       // label alone cannot say which course a denial came from. Carry the id.
       context: { scope: courseId ?? 'none' },
@@ -47,15 +55,18 @@ export function useCourseRecordings(courseId: string | null): RecordingRow[] {
  * Every recording, newest first — ADMIN ONLY (the rules' admin arm lists
  * recordings without a per-row read; a manager must go class by class). The
  * library's admin view.
+ *
+ *  `null` until the listener answers, so an empty sentence is never printed for
+ *  a question not yet answered.
  */
-export function useAllRecordings(enabled: boolean): RecordingRow[] {
-  return useLiveQuery<RecordingRow[]>(
+export function useAllRecordingsState(enabled: boolean): RecordingRow[] | null {
+  return useLiveQuery<RecordingRow[] | null>(
     () => (enabled ? query(collection(db, COLLECTIONS.recordings), orderBy('createdAt', 'desc')) : null),
     [enabled],
     {
       label: 'allRecordings',
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as RecordingDoc) })),
-      empty: [],
+      empty: null,
     },
   );
 }

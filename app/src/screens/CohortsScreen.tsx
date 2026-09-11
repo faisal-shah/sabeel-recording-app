@@ -12,7 +12,9 @@ import {
   SectionTitle,
   useAddAction,
 } from '../components/ui';
-import { createCohort, useAllCourses, useCohorts, type CohortRow } from '../structure';
+import { createCohort, useAllCourses, useCohortsState, type CohortRow } from '../structure';
+
+const NO_COHORTS: CohortRow[] = [];
 import { courseLabel } from './CoursesScreen';
 import { errorText } from '../errors';
 
@@ -25,7 +27,8 @@ import { errorText } from '../errors';
  * three or four terms it was most of the screen.
  */
 export function CohortsScreen({ onOpen }: { onOpen: (cohort: CohortRow) => void }) {
-  const cohorts = useCohorts(true);
+  const cohortsState = useCohortsState(true);
+  const cohorts = cohortsState ?? NO_COHORTS;
   // Courses across all cohorts, counted per cohort so each card shows its size
   // without a tap. Admin-only screen, so the all-courses list is readable.
   const courses = useAllCourses(true);
@@ -51,8 +54,10 @@ export function CohortsScreen({ onOpen }: { onOpen: (cohort: CohortRow) => void 
         </AddAction>
       }
     >
-      <SectionTitle>Cohorts ({active.length})</SectionTitle>
-      {active.length === 0 ? (
+      <SectionTitle>Cohorts{cohortsState === null ? '' : ` (${active.length})`}</SectionTitle>
+      {cohortsState === null ? (
+        <Empty>Checking…</Empty>
+      ) : active.length === 0 ? (
         <Empty>No cohorts yet.</Empty>
       ) : (
         <Grid min={320}>

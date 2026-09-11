@@ -83,7 +83,11 @@ export function CourseAttendanceScreen({
   return (
     <Screen
       parent={{ label: cls.name, testID: 'up-to-course-from-attendance', onPress: onOpenCourse }}
-      subtitle={`${report.sessionsWithAttendance} of ${report.totalSessions} sessions taken`}
+      subtitle={
+        report.resolved
+          ? `${report.sessionsWithAttendance} of ${report.totalSessions} sessions taken`
+          : 'Attendance'
+      }
       width="list"
     >
 
@@ -114,7 +118,9 @@ export function CourseAttendanceScreen({
         />
       </View>
 
-      {tab === 'sessions' ? (
+      {!report.resolved ? (
+        <Empty>Checking the register…</Empty>
+      ) : tab === 'sessions' ? (
         report.sessions.length === 0 ? (
           <Empty>No sessions in this course yet.</Empty>
         ) : (

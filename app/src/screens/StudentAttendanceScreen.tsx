@@ -16,7 +16,9 @@ import {
   Screen,
   SectionTitle,
 } from "../components/ui";
-import { useMyAttendance } from "../attendance";
+import { useMyAttendanceState, type AttendanceRecordRow } from "../attendance";
+
+const NO_MARKS: AttendanceRecordRow[] = [];
 import { useMyAssignments, useMyCompletions } from "../completion";
 import type { CourseRow } from "../structure";
 import { getTheme, spacing } from "../theme";
@@ -50,7 +52,10 @@ export function StudentAttendanceScreen({
   cls: CourseRow;
 }) {
   const today = todayInZone(INSTITUTE_TIMEZONE);
-  const marks = useMyAttendance(uid, cls.id);
+  // `null` until the listener answers: the tally and "no attendance taken"
+  // are the student's record, not a placeholder for one.
+  const marksState = useMyAttendanceState(uid, cls.id);
+  const marks = marksState ?? NO_MARKS;
   // Memoised rather than a bare `?? []`: a fresh literal every render would
   // make every `useMemo` below recompute every render.
   const granted = useMyAssignments(uid);
@@ -120,16 +125,20 @@ export function StudentAttendanceScreen({
         </Notice>
       ) : null}
 
-      <Card>
-        <View style={styles.tally}>
-          <Tally label="Present" value={tally.present} />
-          <Tally label="Absent" value={tally.absent} />
-          <Tally label="Excused" value={tally.excused} />
-        </View>
-      </Card>
+      {marksState === null ? (
+        <Empty>Checking your attendance…</Empty>
+      ) : (
+        <Card>
+          <View style={styles.tally}>
+            <Tally label="Present" value={tally.present} />
+            <Tally label="Absent" value={tally.absent} />
+            <Tally label="Excused" value={tally.excused} />
+          </View>
+        </Card>
+      )}
 
-      <SectionTitle>Sessions ({rows.length})</SectionTitle>
-      {rows.length === 0 ? (
+      <SectionTitle>Sessions{marksState === null ? "" : ` (${rows.length})`}</SectionTitle>
+      {marksState === null ? null : rows.length === 0 ? (
         <Empty>No attendance has been taken for this class yet.</Empty>
       ) : (
         <Grid min={330}>

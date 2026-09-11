@@ -19,19 +19,19 @@ import { useStudentAudit, useStudentAuditIn } from '../ledger';
 import { studentHistory } from '../studentHistory';
 import { errorText } from '../errors';
 import {
-  useAllCourses,
   useAllCoursesState,
   useCohortName,
   useEnrollmentIn,
-  useMyCourses,
   useMyCoursesState,
-  useStudentEnrollments,
+  useStudentEnrollmentsState,
   type CourseRow,
+  type EnrollmentRow,
 } from '../structure';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
 const NO_COURSES: CourseRow[] = [];
+const NO_ENROLLMENTS: EnrollmentRow[] = [];
 
 /**
  * One student, everything about them in one place: their access, and the courses
@@ -281,8 +281,14 @@ function AdminCourses({
   who: string;
   onOpenCourse: (cls: CourseRow) => void;
 }) {
-  const enrollments = useStudentEnrollments(studentUid);
-  const courses = useAllCourses(true);
+  // Both `State` variants: a row needs its enrolment AND its course, and
+  // "Not enrolled in any course yet" is a claim about the student that the
+  // page made for the length of every cold load.
+  const enrollmentsState = useStudentEnrollmentsState(studentUid);
+  const coursesState = useAllCoursesState(true);
+  const enrollments = enrollmentsState ?? NO_ENROLLMENTS;
+  const courses = coursesState ?? NO_COURSES;
+  const checking = enrollmentsState === null || coursesState === null;
   const cohortNameOf = useCohortName();
   const byId = useMemo(() => new Map(courses.map((c) => [c.id, c])), [courses]);
   const rows = useMemo(
@@ -295,12 +301,14 @@ function AdminCourses({
 
   return (
     <>
-      <SectionTitle>Courses ({rows.length})</SectionTitle>
+      <SectionTitle>Courses{checking ? '' : ` (${rows.length})`}</SectionTitle>
       {/* IN A GRID, like every other collection. Mapped straight into the screen
           these were the only list rows in the app that never flowed into
           columns — two 1114px bars each holding a course name and a status
           lamp, on a `list`-width page whose whole point is the columns. */}
-      {rows.length === 0 ? (
+      {checking ? (
+        <Empty>Checking their courses…</Empty>
+      ) : rows.length === 0 ? (
         <Empty>Not enrolled in any course yet.</Empty>
       ) : (
         <Grid min={330}>
@@ -336,7 +344,8 @@ function ManagerCourses({
   who: string;
   onOpenCourse: (cls: CourseRow) => void;
 }) {
-  const courses = useMyCourses(uid);
+  const coursesState = useMyCoursesState(uid);
+  const courses = coursesState ?? NO_COURSES;
   const cohortNameOf = useCohortName();
   // Only the rows know whether they matched — each owns its own enrollment
   // listener, because one read per managed course is the only shape a manager
@@ -352,7 +361,9 @@ function ManagerCourses({
   return (
     <>
       <SectionTitle>Courses you manage</SectionTitle>
-      {courses.length === 0 ? (
+      {coursesState === null ? (
+        <Empty>Checking your courses…</Empty>
+      ) : courses.length === 0 ? (
         <Empty>You are not assigned to any courses.</Empty>
       ) : (
         <>

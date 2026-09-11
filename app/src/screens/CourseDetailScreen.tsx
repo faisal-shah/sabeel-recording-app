@@ -16,20 +16,23 @@ import {
 import { INSTITUTE_TIMEZONE, todayInZone } from '@sabeel/shared';
 import { useCourseLedger } from '../ledger';
 import { useDecidedStaff } from '../staff';
-import { useStudents } from '../students';
+import { useStudentsState, type StudentRow } from '../students';
 import {
   createEnrollment,
   setCourseManagers,
   setEnrollmentActive,
   sortByName,
   updateCourse,
-  useRoster,
+  useRosterState,
   type CourseRow,
+  type EnrollmentRow,
 } from '../structure';
 import { getTheme, spacing } from '../theme';
 import { errorText } from '../errors';
 
 const t = getTheme();
+const NO_ROSTER: EnrollmentRow[] = [];
+const NO_STUDENTS: StudentRow[] = [];
 
 /**
  * One course: its settings (admin), its managers (admin), and its roster
@@ -54,8 +57,12 @@ export function CourseDetailScreen({
   onOpenStudent: (studentUid: string) => void;
   onOpenAudit: () => void;
 }) {
-  const roster = useRoster(cls.id);
-  const students = useStudents(true);
+  // The `State` variants: `null` until each listener answers, so the roster's
+  // and the picker's empty sentences are answers, not placeholders.
+  const rosterState = useRosterState(cls.id);
+  const roster = rosterState ?? NO_ROSTER;
+  const studentsState = useStudentsState(true);
+  const students = studentsState ?? NO_STUDENTS;
   const staff = useDecidedStaff(isAdmin);
   // Only non-admin active staff can be *assigned* a course — an admin already has
   // every course, so offering to "make them a manager" is a no-op that reads as
@@ -243,18 +250,24 @@ export function CourseDetailScreen({
         {/* Three stats on one line, each an unbreakable run. Ordinary spaces let
             a 320px wrap split "37" from "not complete" and then run the tail of
             one stat into the head of the next. */}
-        <Text style={styles.ledgerLine}>
-          <Text style={styles.ledgerNum}>{ledger.rollup.total}</Text>
-          {'\u00A0required\u00A0listening'}
-          {'   '}
-          <Text style={styles.ledgerNum}>{ledger.rollup.incomplete}</Text>
-          {'\u00A0not\u00A0complete'}
-          {'   '}
-          <Text style={[styles.ledgerNum, ledger.rollup.missed > 0 ? styles.missedNum : null]}>
-            {ledger.rollup.missed}
+        {ledger.resolved ? (
+          <Text style={styles.ledgerLine}>
+            <Text style={styles.ledgerNum}>{ledger.rollup.total}</Text>
+            {'\u00A0required\u00A0listening'}
+            {'   '}
+            <Text style={styles.ledgerNum}>{ledger.rollup.incomplete}</Text>
+            {'\u00A0not\u00A0complete'}
+            {'   '}
+            <Text style={[styles.ledgerNum, ledger.rollup.missed > 0 ? styles.missedNum : null]}>
+              {ledger.rollup.missed}
+            </Text>
+            {'\u00A0missed'}
           </Text>
-          {'\u00A0missed'}
-        </Text>
+        ) : (
+          // Not three zeros: until the grants arrive those are the exact wrong
+          // answer, stated as fact — see `useRecordingLedger`.
+          <Text style={styles.ledgerLine}>Counting the listening…</Text>
+        )}
         <Button testID="nav-audit" label="Audit history" variant="secondary" onPress={onOpenAudit} />
       </Card>
 
@@ -377,8 +390,10 @@ export function CourseDetailScreen({
         </>
       ) : null}
 
-      <SectionTitle>Roster ({enrolled.length})</SectionTitle>
-      {enrolled.length === 0 ? (
+      <SectionTitle>Roster{rosterState === null ? '' : ` (${enrolled.length})`}</SectionTitle>
+      {rosterState === null ? (
+        <Empty>Checking the roster…</Empty>
+      ) : enrolled.length === 0 ? (
         <Empty>Nobody is enrolled in this course yet.</Empty>
       ) : (
         <Grid min={320}>
@@ -464,7 +479,9 @@ export function CourseDetailScreen({
 
       <SectionTitle>Add a student</SectionTitle>
       <Card>
-        {notEnrolled.length === 0 ? (
+        {rosterState === null || studentsState === null ? (
+          <Empty>Checking who can be added…</Empty>
+        ) : notEnrolled.length === 0 ? (
           <Empty>
             {students.filter((s) => s.status === 'active').length === 0
               ? // The People screen has an Add button on the web only; on the

@@ -58,7 +58,15 @@ export function useCohortState(cohortId: string | null) {
 }
 
 export function useCohorts(enabled: boolean): CohortRow[] {
-  return useLiveQuery<CohortRow[]>(
+  return useCohortsState(enabled) ?? NO_COHORTS;
+}
+
+const NO_COHORTS: CohortRow[] = [];
+
+/** The `State` variant: `null` until the listener answers, so an empty sentence is
+ *  never printed for a question not yet answered. */
+export function useCohortsState(enabled: boolean): CohortRow[] | null {
+  return useLiveQuery<CohortRow[] | null>(
     () =>
       enabled
         ? query(collection(db, COLLECTIONS.cohorts), orderBy('createdAt', 'desc'))
@@ -67,14 +75,16 @@ export function useCohorts(enabled: boolean): CohortRow[] {
     {
       label: 'cohorts',
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CohortDoc) })),
-      empty: [],
+      empty: null,
     },
   );
 }
 
-/** Every class in a cohort. Admin-only: the rule has no scoped arm for this shape. */
-export function useCoursesInCohort(cohortId: string | null): CourseRow[] {
-  return useLiveQuery<CourseRow[]>(
+/** Every class in a cohort. Admin-only: the rule has no scoped arm for this shape.
+ *  `null` until the listener answers, so an empty sentence is never printed for
+ *  a question not yet answered. */
+export function useCoursesInCohortState(cohortId: string | null): CourseRow[] | null {
+  return useLiveQuery<CourseRow[] | null>(
     () =>
       cohortId
         ? query(
@@ -87,7 +97,7 @@ export function useCoursesInCohort(cohortId: string | null): CourseRow[] {
     {
       label: 'coursesInCohort',
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as CourseDoc) })),
-      empty: [],
+      empty: null,
     },
   );
 }
@@ -215,9 +225,12 @@ export function sortByName<T>(rows: T[], nameOf: (row: T) => string): T[] {
  * Constrained to one courseId, which is also what makes the rule affordable:
  * its staff arm resolves a class lookup per row, and only a single-class query
  * lets that resolve one cached path.
+ *
+ *  `null` until the listener answers, so an empty sentence is never printed for
+ *  a question not yet answered.
  */
-export function useRoster(courseId: string | null): EnrollmentRow[] {
-  return useLiveQuery<EnrollmentRow[]>(
+export function useRosterState(courseId: string | null): EnrollmentRow[] | null {
+  return useLiveQuery<EnrollmentRow[] | null>(
     () =>
       courseId
         ? query(collection(db, COLLECTIONS.enrollments), where('courseId', '==', courseId))
@@ -226,7 +239,7 @@ export function useRoster(courseId: string | null): EnrollmentRow[] {
     {
       label: 'roster',
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as EnrollmentDoc) })),
-      empty: [],
+      empty: null,
     },
   );
 }
@@ -243,11 +256,6 @@ export function useRoster(courseId: string | null): EnrollmentRow[] {
  * document-access cap even when they run them all. A manager who needs this
  * inverts the loop — see useEnrollmentIn and StudentDetailScreen.
  */
-export function useStudentEnrollments(uid: string | null): EnrollmentRow[] {
-  return useStudentEnrollmentsState(uid) ?? NO_ENROLLMENTS;
-}
-
-const NO_ENROLLMENTS: EnrollmentRow[] = [];
 
 /**
  * The `State` variant: `null` until the first snapshot. "You are not enrolled

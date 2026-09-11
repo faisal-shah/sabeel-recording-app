@@ -14,7 +14,9 @@ import {
   useAddAction,
 } from '../components/ui';
 import { DateField } from '../components/DateField';
-import { createSession, useCourseSessions, type SessionRow } from '../sessions';
+import { createSession, useCourseSessionsState, type SessionRow } from '../sessions';
+
+const NO_SESSIONS: SessionRow[] = [];
 import { getTheme, spacing } from '../theme';
 import { errorText } from '../errors';
 
@@ -133,7 +135,8 @@ export function SessionsScreen({
   onOpenCourse: () => void;
   onOpenSession: (session: SessionRow) => void;
 }) {
-  const sessions = useCourseSessions(courseId);
+  const sessionsState = useCourseSessionsState(courseId);
+  const sessions = sessionsState ?? NO_SESSIONS;
 
   return (
     <Screen
@@ -148,9 +151,11 @@ export function SessionsScreen({
         </AddAction>
       }
     >
-      <SectionTitle>Sessions ({sessions.length})</SectionTitle>
+      <SectionTitle>Sessions{sessionsState === null ? '' : ` (${sessions.length})`}</SectionTitle>
       {sessions.length === 0 ? (
-        <Empty>No sessions yet. Add one for each class meeting.</Empty>
+        <Empty>
+          {sessionsState === null ? 'Checking the sessions…' : 'No sessions yet. Add one for each class meeting.'}
+        </Empty>
       ) : (
         <Grid min={330}>
           {sessions.map((s) => (
