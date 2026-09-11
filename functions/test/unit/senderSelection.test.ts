@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { PUSH_CHANNEL_ID } from '@sabeel/shared';
+import { PUSH_CHANNEL_ID, WEB_APP_URL } from '@sabeel/shared';
 
 /**
  * Which sender the module picks, in both directions.
@@ -86,6 +86,32 @@ describe('sender selection', () => {
     expect(sendEachForMulticast).toHaveBeenCalledTimes(1);
     expect(sendEachForMulticast.mock.calls[0][0]).toMatchObject({
       android: { notification: { channelId: PUSH_CHANNEL_ID } },
+    });
+    vi.doUnmock('firebase-admin/messaging');
+  });
+
+  /*
+   * THE OTHER PLATFORM'S HALF. A web push with no `link` is a banner that
+   * closes when tapped and opens nothing: the SDK's click handler in the
+   * service worker focuses or opens `fcmOptions.link`, and with none it
+   * returns. Every message this app sends says "a recording is ready" or
+   * "last day to listen"; the tap has to land in the app.
+   */
+  it('gives a browser somewhere to go when the banner is tapped', async () => {
+    vi.stubEnv('FUNCTIONS_EMULATOR', '');
+    const sendEachForMulticast = vi.fn(async (_message: unknown) => ({
+      responses: [] as { success: boolean; error?: { code: string } }[],
+      successCount: 0,
+    }));
+    vi.doMock('firebase-admin/messaging', () => ({
+      getMessaging: () => ({ sendEachForMulticast }),
+    }));
+
+    const { send } = await freshMessaging();
+    await send(['tok-a'], MESSAGE);
+
+    expect(sendEachForMulticast.mock.calls[0][0]).toMatchObject({
+      webpush: { fcmOptions: { link: WEB_APP_URL } },
     });
     vi.doUnmock('firebase-admin/messaging');
   });

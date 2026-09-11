@@ -1,5 +1,5 @@
 import { getMessaging } from 'firebase-admin/messaging';
-import { PUSH_CHANNEL_ID, type PushMessage } from '@sabeel/shared';
+import { PUSH_CHANNEL_ID, WEB_APP_URL, type PushMessage } from '@sabeel/shared';
 
 /**
  * The one place FCM is actually called.
@@ -59,6 +59,11 @@ const fcmSender: Sender = async (tokens, message) => {
     // channel before it hands over a token, so it exists by the time anything
     // can be addressed to it.
     android: { notification: { channelId: PUSH_CHANNEL_ID } },
+    // Where a tapped banner lands in a browser. The service worker's click
+    // handler focuses or opens `fcmOptions.link`; with none set it closes the
+    // banner and does nothing, which for "a recording is ready" is a
+    // notification with no way to act on it.
+    webpush: { fcmOptions: { link: WEB_APP_URL } },
   });
   const stale: string[] = [];
   res.responses.forEach((r, i) => {

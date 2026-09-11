@@ -91,13 +91,16 @@ export const SIGNED_URL_REFRESH_MS = 60 * 60 * 1000;
  * by `firebase.json` ahead of the `**` catch-all. Keep this in step with that
  * rewrite: they are two halves of one address.
  *
- * If a custom domain is ever attached to this Hosting site, change it here and
- * nowhere else, and check the rewrite still answers an anonymous `curl`.
+ * If a custom domain is ever attached to this Hosting site, change
+ * `WEB_APP_URL` and nowhere else, and check the rewrite still answers an
+ * anonymous `curl`. `WEB_APP_URL` is also where a tapped web push lands
+ * (`functions/src/messaging.ts`).
  *
  * Absolute, not a relative path: it is opened from the native apps as well as
  * the browser, where there is no origin to be relative to.
  */
-export const PRIVACY_URL = 'https://sabeel-class-recordings.web.app/privacy';
+export const WEB_APP_URL = 'https://sabeel-class-recordings.web.app/';
+export const PRIVACY_URL = `${WEB_APP_URL}privacy`;
 
 /**
  * How many courses the staff work queue may span in one query, per role.
