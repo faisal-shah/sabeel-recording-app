@@ -116,11 +116,16 @@ export async function applyRetryZoomImport(
     throw new HttpsError('failed-precondition', 'That recording is not a Zoom import.');
   }
   // ONLY AN IMPORT THAT NEVER FINISHED. A retry writes over the audio object
-  // and drops the status to `draft`, which on a recording that already has
-  // its audio is an unpublish nobody asked for: the fan-out switches every
-  // grant off, and the audit row reads "Retried a Zoom import". The button
-  // appears only on a failed import; the callable has to be the judge too.
-  if (!isEmptyDraft(rec)) {
+  // and drops the status to `draft`, which on a recording that has its audio
+  // and is out in the world is an unpublish nobody asked for: the fan-out
+  // switches every grant off, and the audit row reads "Retried a Zoom
+  // import". The button appears only on a failed import; the callable has to
+  // be the judge too. Needs-attention itself is always retryable, audio or
+  // not: `downloadIntoRecording` finalizes (which records `audioPath`) BEFORE
+  // it settles the status, so a failure on that last write leaves the audio
+  // in place under needs-attention — and a recording reaches needs-attention
+  // only from a draft, so nothing granted is at stake.
+  if (rec.status !== 'needsAttention' && !isEmptyDraft(rec)) {
     throw new HttpsError('failed-precondition', 'That recording already has its audio.');
   }
   const { rec: fresh, downloadUrl } = await client.freshAudioFile(rec.zoomUuid, rec.zoomFileId);

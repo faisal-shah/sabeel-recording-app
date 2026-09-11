@@ -320,6 +320,32 @@ describe('applyRetryZoomImport', () => {
     expect(after.size).toBe(before.size);
   });
 
+  it('retries an import whose audio landed but whose status never settled', async () => {
+    /*
+     * `downloadIntoRecording` streams, finalizes (which records `audioPath`),
+     * then writes `draft`. A transient failure on that last write leaves the
+     * recording in needs-attention WITH its audio — and the guard above, read
+     * as "any audio means finished", refused the one button the screen offers
+     * for a needs-attention import. Nothing published is at stake: a recording
+     * reaches needs-attention only from a draft, so no grant is on.
+     */
+    await applyImportZoomRecording(ADMIN, { meetingUuid: 'uuid-1', fileId: 'file-1', sessionId }, fakeClient(REC));
+    const imported = (
+      await getFirestore().collection(COLLECTIONS.recordings).where('zoomUuid', '==', 'uuid-1').get()
+    ).docs[0];
+    expect((imported.data() as RecordingDoc).audioPath).toBe(audioStoragePath(imported.id));
+    await imported.ref.update({
+      status: 'needsAttention',
+      attentionReason: 'Zoom import failed: 14 UNAVAILABLE',
+    });
+
+    await applyRetryZoomImport(imported.id, fakeClient(REC));
+    const d = await rec(imported.id);
+    expect(d.status).toBe('draft');
+    expect(d.attentionReason).toBeUndefined();
+    expect(await audioExists(imported.id)).toBe(true);
+  });
+
   it('refuses to retry a non-Zoom recording', async () => {
     const ref = await getFirestore().collection(COLLECTIONS.recordings).add({
       courseId,
