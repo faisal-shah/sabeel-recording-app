@@ -287,7 +287,8 @@ await resetEmulators();
 const browser = await chromium.launch();
 const world = await seedWorld({ db, auth, browser, base: BASE });
 const {
-  STUDENT, DISABLED_STUDENT, STUDENT_PASSWORD, missed, dueSoon, blocking, HISTORY_ROW, HISTORY_ROW_MANAGED,
+  STUDENT, DISABLED_STUDENT, STUDENT_PASSWORD, missed, dueSoon, blocking, archived,
+  HISTORY_ROW, HISTORY_ROW_MANAGED,
 } = world;
 
 // ---- assertions ------------------------------------------------------------
@@ -959,7 +960,7 @@ const READ_ONLY_SCREENS = new Set([
   'notifications-none',
 ]);
 
-const STAFF_SCREENS = 31;
+const STAFF_SCREENS = 32;
 
 async function tourStaff(page, tag) {
   const counter = { seen: 0 };
@@ -1110,6 +1111,21 @@ async function tourStaff(page, tag) {
     await openCourse();
     await tap(byId(page, `student-ledger-${STUDENT.email}`));
   }, 'student-export');
+  // The ledger of a recording on a course ARCHIVED WITH LISTENING OFF: the one
+  // row state — "Closed (course archived)" — that no live course can show, on
+  // a recording that is still published and inside its date. Reached through
+  // the archived cohort's collapsed section, which is the only way there.
+  await visit('recording-ledger-archived', async () => {
+    await tap(byId(page, 'tab-courses'));
+    await tap(byId(page, 'cohorts-archived'));
+    await tap(byId(page, 'cohort-open-Spring 2026'));
+    await tap(byId(page, 'course-open-Seerah Survey'));
+    await tap(byId(page, 'nav-sessions'));
+    await tap(byId(page, `session-open-${archived.title}`));
+    await tap(byId(page, 'recording-ledger'));
+  }, `ledger-row-${STUDENT.name}`);
+  check(`${tag} an open grant on an archived class reads as closed, not as still to do`,
+    /Closed \(course archived\)/.test(await byId(page, `ledger-row-${STUDENT.name}`).innerText().catch(() => '')));
   /*
    * MEASURED IN ITS ERROR STATE, AND SAID SO.
    *
@@ -1262,9 +1278,15 @@ async function tourStudent(page, tag) {
   const counter = { seen: 0 };
   const visit = visitor(page, tag, 'tab-listening', counter);
 
-  // The task list, with all four buckets on it — Missed, Due soon, Upcoming,
-  // Completed. Those group headings ARE the layout.
+  // The task list, with all five buckets on it — Missed, Archived, Due soon,
+  // Upcoming, Completed. Those group headings ARE the layout, and the anchor
+  // alone says only that the hero arrived: a group whose seed stopped producing
+  // it would leave the screen a fifth untested with every geometric check green.
   await visit('home', async () => {}, `next-up-${dueSoon.title}`);
+  for (const group of ['missed', 'archived', 'dueSoon', 'upcoming', 'done']) {
+    check(`${tag} home lists the ${group} group`,
+      await byId(page, `group-${group}`).isVisible().catch(() => false));
+  }
   await visit('my-classes', () => tap(byId(page, 'tab-classes')), 'myclass-Hikam Foundations');
   await visit('class-record', async () => {
     await tap(byId(page, 'tab-classes'));

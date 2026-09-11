@@ -44,7 +44,7 @@ await browser.close();
 console.log('\n--- seeded ---');
 console.log('student      ', world.STUDENT, '/', world.STUDENT_PASSWORD);
 console.log('disabled     ', world.DISABLED_STUDENT);
-for (const k of ['missed', 'dueSoon', 'blocking']) {
+for (const k of ['missed', 'dueSoon', 'blocking', 'archived']) {
   if (world[k]) console.log(`${k.padEnd(13)}`, JSON.stringify(world[k]).slice(0, 160));
 }
 const courses = await db.collection('courses').get();

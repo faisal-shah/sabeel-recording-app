@@ -386,7 +386,7 @@ export async function seedWorld({ db, auth, browser, base }) {
    * `absent` are here because the ledger has a section for each.
    */
   async function seedSession(id, recId, title, opts) {
-    const { courseId = COURSE, daysAgo, dueOffset, status = 'published', notes = '',
+    const { courseId = COURSE, cohortId = COHORT, daysAgo, dueOffset, status = 'published', notes = '',
       roster = students, present = 0, absent = [], attention = null } = opts;
     const date = iso(now - daysAgo * DAY);
     // Never null: the due date is the day access closes, so a session cannot be
@@ -420,13 +420,13 @@ export async function seedWorld({ db, auth, browser, base }) {
     }
 
     await db.collection('sessions').doc(id).set({
-      courseId, cohortId: COHORT, date, title, dueDate, notes,
+      courseId, cohortId, date, title, dueDate, notes,
       recordingId: recId, attendance: attendance ?? {}, attendanceSubmittedAt: submittedAt,
       notRecorded: false, createdAt: now - daysAgo * DAY, createdBy: adminUid, updatedAt: now - daysAgo * DAY,
     });
     if (recId) {
       await db.collection('recordings').doc(recId).set({
-        sessionId: id, courseId, cohortId: COHORT, title, notes, date, status, source: 'manual',
+        sessionId: id, courseId, cohortId, title, notes, date, status, source: 'manual',
         audioPath: hasAudio ? audioPath : null,
         durationSec: hasAudio ? AUDIO_SECONDS : null,
         sizeBytes: hasAudio ? AUDIO.length : null,
@@ -443,12 +443,12 @@ export async function seedWorld({ db, auth, browser, base }) {
         // the same value, and seeding it directly means the tour does not race
         // a background function on its first screen.
         await db.collection('attendanceRecords').doc(`${uid}_${id}`).set({
-          studentUid: uid, sessionId: id, courseId, cohortId: COHORT,
+          studentUid: uid, sessionId: id, courseId, cohortId,
           date, title, status: mark, submittedAt,
         });
         if (mark === 'excused' && status === 'published') {
           await db.collection('assignments').doc(`${uid}_${recId}`).set({
-            studentUid: uid, recordingId: recId, sessionId: id, courseId, cohortId: COHORT,
+            studentUid: uid, recordingId: recId, sessionId: id, courseId, cohortId,
             dueDate, active: true, assignedAt: submittedAt, assignedBy: 'system',
           });
         }
@@ -513,6 +513,20 @@ export async function seedWorld({ db, auth, browser, base }) {
   });
   await seedSession('sw-a1', 'sw-a1r', 'Lesson 1 — The Arabic Alphabet',
     { courseId: LONG_COURSE, daysAgo: 9, dueOffset: 5, roster: students.slice(0, 4), present: 2 });
+  /**
+   * An OPEN grant on a course archived with listening off — the fifth group on
+   * the student home ("Archived"), and the ledger row that reads "Closed
+   * (course archived)". The date is still ahead: what closes this one is the
+   * class, not the calendar, which is the case nothing else in the world
+   * produces. `sw-past-course` sits in the archived cohort with
+   * `archivedAccess: false`, so `canPlayFromCourse` is false.
+   */
+  await db.collection('enrollments').doc(`${STUDENT.uid}_sw-past-course`).set({
+    studentUid: STUDENT.uid, courseId: 'sw-past-course', cohortId: 'sw-past',
+    active: true, enrolledAt: now - 200 * DAY, enrolledBy: adminUid,
+  });
+  const archived = await seedSession('sw-p1', 'sw-p1r', 'Week 12 — The Farewell Pilgrimage',
+    { courseId: 'sw-past-course', cohortId: 'sw-past', daysAgo: 12, dueOffset: 10, roster: [STUDENT] });
 
   /** The demo student completed one and part-listened two more, so both the
    *  ledger and their own home have every row type on them. */
@@ -584,7 +598,8 @@ export async function seedWorld({ db, auth, browser, base }) {
   // returned and four were read; the rest were a standing invitation to reach
   // past the fixture's own vocabulary into its internals.
   return {
-    STUDENT, DISABLED_STUDENT, STUDENT_PASSWORD, missed, dueSoon, blocking, HISTORY_ROW, HISTORY_ROW_MANAGED,
+    STUDENT, DISABLED_STUDENT, STUDENT_PASSWORD, missed, dueSoon, blocking, archived,
+    HISTORY_ROW, HISTORY_ROW_MANAGED,
   };
 }
 
