@@ -1,4 +1,4 @@
-import { createAudioPlayer, setAudioModeAsync, requestNotificationPermissionsAsync } from 'expo-audio';
+import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import type { NowPlayingMeta, Player, PlayerEvents } from './playerTypes';
 import { captureError } from './sentry';
 
@@ -8,14 +8,22 @@ type NativePlayer = ReturnType<typeof createAudioPlayer>;
  * Native side of the player seam (web sibling: player.web.ts), on expo-audio.
  * `expo-av` is end-of-life and is not used.
  *
- * Background playback needs three things, and the Phase 3a spike proved that
- * missing any of them fails quietly:
+ * Background playback needs two things, and the Phase 3a spike proved that
+ * missing either fails quietly:
  *
  *  1. `shouldPlayInBackground` in the audio mode;
  *  2. the FOREGROUND_SERVICE permissions and the media service in the manifest —
  *     which come from the config plugin and therefore need `expo prebuild`, since
- *     plugins do not run on their own in the bare workflow;
- *  3. POST_NOTIFICATIONS, or the media controls never appear.
+ *     plugins do not run on their own in the bare workflow.
+ *
+ * NOT the notification permission. The media controls are a MediaStyle
+ * notification bound to the media session, and Android exempts those from
+ * POST_NOTIFICATIONS: with the permission denied — "don't ask again" — the
+ * controls still appear, verified on the API 35 AVD on 2026-09-11. Asking for
+ * it here put the system's "Allow notifications?" dialog in front of a person
+ * who had just pressed Play, on every new session until the OS stopped asking,
+ * and had nothing to do with the push opt-in that owns that question
+ * (`pushNudge.ts`, the Notifications screen).
  *
  * Because of (1)+(2) there is a foreground service keeping audio alive, and that
  * is exactly why there must be **at most ONE player alive at a time**. Two
@@ -108,7 +116,6 @@ export function createPlayer(events: PlayerEvents): Player {
         playsInSilentMode: true,
         interruptionMode: 'doNotMix',
       });
-      await requestNotificationPermissionsAsync();
       /*
        * THE METADATA HAS TO BE PASSED HERE TOO, not only in `load`.
        *
