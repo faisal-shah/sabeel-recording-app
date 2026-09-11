@@ -65,7 +65,14 @@ export async function createRecordingDraft(
     const sessionSnap = await tx.get(sessionRef);
     if (!sessionSnap.exists) throw new HttpsError('not-found', 'No such session.');
     const session = sessionSnap.data() as SessionDoc;
-    if (session.recordingId) {
+    // A pointer to a recording that no longer exists is no recording: a
+    // delete that cleared the document but not the pointer wedged the session
+    // behind this refusal. Read inside the transaction, so a recording being
+    // created for this session at the same moment is still seen.
+    if (
+      session.recordingId &&
+      (await tx.get(db.collection(COLLECTIONS.recordings).doc(session.recordingId))).exists
+    ) {
       throw new HttpsError('failed-precondition', 'This session already has a recording.');
     }
     // "This class was not recorded" and a recording cannot both be true: the
@@ -435,14 +442,20 @@ export async function applyDeleteRecording(recordingId: string) {
     .file(rec.audioPath ?? audioStoragePath(recordingId))
     .delete({ ignoreNotFound: true });
 
-  // 3. The recording itself, and clear the session's pointer so a new recording
-  //    can be added. The session may itself be mid-delete — a harmless no-op then.
-  await ref.delete();
-  await db
-    .collection(COLLECTIONS.sessions)
-    .doc(rec.sessionId)
-    .update({ recordingId: null, updatedAt: Date.now() })
-    .catch(() => undefined);
+  // 3. The recording itself, and the session's pointer, IN ONE TRANSACTION:
+  //    written one after the other, a failure between them left a session
+  //    pointing at a document that was gone — refused a new draft as "already
+  //    has a recording", and undeletable, since its cascade began with "No
+  //    such recording". The session may itself be mid-delete, or point at a
+  //    later recording by now; only a pointer to THIS one is cleared.
+  const sessionRef = db.collection(COLLECTIONS.sessions).doc(rec.sessionId);
+  await db.runTransaction(async (tx) => {
+    const sessionSnap = await tx.get(sessionRef);
+    tx.delete(ref);
+    if (sessionSnap.exists && (sessionSnap.data() as SessionDoc).recordingId === recordingId) {
+      tx.update(sessionRef, { recordingId: null, updatedAt: Date.now() });
+    }
+  });
   return { recordingId, courseId: rec.courseId };
 }
 

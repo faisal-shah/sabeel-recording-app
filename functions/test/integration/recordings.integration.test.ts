@@ -13,7 +13,7 @@ import {
 import type { CallableRequest } from 'firebase-functions/v2/https';
 import { createCohortRecord } from '../../src/cohorts';
 import { createCourseRecord } from '../../src/courses';
-import { createSessionRecord, updateSession } from '../../src/sessions';
+import { createSessionRecord, deleteSession, updateSession } from '../../src/sessions';
 import { idTokenFor } from './emulatorToken';
 import { readFileSync } from 'node:fs';
 import {
@@ -141,6 +141,24 @@ describe('createRecordingDraft', () => {
     await getFirestore().collection(COLLECTIONS.sessions).doc(sessionId).update({ notRecorded: true });
     await expect(createRecordingDraft(ADMIN, { sessionId })).rejects.toThrow(/not recorded/i);
     expect((await session(sessionId)).recordingId).toBeNull();
+  });
+
+  /*
+   * A POINTER TO NOTHING IS NOT A RECORDING. `applyDeleteRecording` deletes
+   * the document and then clears the session's pointer; a crash between the
+   * two — and any recording document deleted by hand — left a session whose
+   * `recordingId` names a document that is gone. That session was wedged: a
+   * new draft was refused as "already has a recording", and Delete session
+   * failed on the cascade's "No such recording". Both paths now read the
+   * pointed-at recording inside their own transaction and treat a missing one
+   * as no recording at all; the delete clears the pointer in one transaction
+   * with the document, so the state is not left behind again.
+   */
+  it('takes a new draft when the session points at a recording that no longer exists', async () => {
+    const sessionId = await newSession();
+    await getFirestore().collection(COLLECTIONS.sessions).doc(sessionId).update({ recordingId: 'gone' });
+    const { id } = await createRecordingDraft(ADMIN, { sessionId });
+    expect((await session(sessionId)).recordingId).toBe(id);
   });
 
   it('will not let a session that has a recording be marked as not recorded', async () => {
@@ -299,6 +317,27 @@ describe('applyDeleteRecording', () => {
   const audioExists = async (id: string) =>
     (await getStorage().bucket().file(audioStoragePath(id)).exists())[0];
 
+  it('deletes a session whose recording is already gone, rather than failing on the cascade', async () => {
+    const sessionId = await newSession();
+    await getFirestore().collection(COLLECTIONS.sessions).doc(sessionId).update({ recordingId: 'gone' });
+    const req = {
+      auth: { uid: ADMIN, token: { role: 'admin', status: 'active' }, rawToken: await idTokenFor(ADMIN) },
+      data: { sessionId },
+    } as unknown as CallableRequest;
+    await deleteSession.run(req);
+    expect((await getFirestore().collection(COLLECTIONS.sessions).doc(sessionId).get()).exists).toBe(false);
+  });
+
+  /*
+   * NOT TESTED HERE, and said so: `deleteSession` also drops the students'
+   * own copies of their marks (`reconcileAttendanceRecords`) before it
+   * returns, because `onSessionWritten` — which drops them too — has no retry.
+   * Under the emulator that trigger lands before a read issued after the
+   * callable answers, so a test of "gone by the time it returns" passed with
+   * the callable's cascade deleted (tried, 2026-09-11). The trigger's own
+   * behaviour is covered in assignments.integration ("drops every row when the
+   * session is deleted"); the callable's copy of it is belt and braces.
+   */
   it('cascades: audio, doc, every dependent record, AND clears the session pointer', async () => {
     const sessionId = await newSession();
     const { id } = await createRecordingDraft(ADMIN, { sessionId });

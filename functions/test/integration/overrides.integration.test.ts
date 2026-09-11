@@ -51,6 +51,21 @@ describe('completion override', () => {
     expect(eff).toEqual({ completed: true, source: 'override', reason: 'attended live' });
   });
 
+  it('an identical override a second time changes nothing, and says so', async () => {
+    // The wrapper audits "Overrode completion" only when one was: the same
+    // mark with the same reason sent again — a stale screen, a second tap —
+    // used to rewrite the row and land in the student's history twice.
+    const first = await applyOverride('mgr1', { studentUid: S, recordingId: R, completed: true, reason: 'attended live' }, CLASS);
+    expect(first.changed).toBe(true);
+    const at = (await readOverride())?.at;
+    const again = await applyOverride('mgr2', { studentUid: S, recordingId: R, completed: true, reason: 'attended live' }, CLASS);
+    expect(again.changed).toBe(false);
+    // …and the record keeps who actually made it, and when.
+    expect(await readOverride()).toMatchObject({ overriddenBy: 'mgr1', at });
+    // A different reason, or the other mark, is a new override.
+    expect((await applyOverride('mgr2', { studentUid: S, recordingId: R, completed: false, reason: 'not after all' }, CLASS)).changed).toBe(true);
+  });
+
   it('clearing the override lets effective status fall back to the student', async () => {
     await applyOverride('mgr1', { studentUid: S, recordingId: R, completed: false, reason: 'no' }, CLASS);
     expect(await readOverride()).toBeDefined();

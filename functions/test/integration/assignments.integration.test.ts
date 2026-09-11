@@ -7,6 +7,7 @@ import {
   EMULATOR_PROJECT_ID,
   assignmentId,
   attendanceRecordId,
+  enrollmentId,
   type AssignmentDoc,
   type AttendanceRecordDoc,
   type AttendanceStatus,
@@ -439,6 +440,30 @@ describe('unenrolment', () => {
 
     await createEnrollmentRecord(ADMIN, { studentUid: 's1', courseId });
     expect(await canPlay()).toBeNull();
+  });
+
+  /*
+   * A REMOVAL THAT HALF-LANDED IS FINISHED BY PRESSING AGAIN. The flag commits
+   * in a transaction and the grants are switched off after it; a failure in
+   * between — an instance drained mid-call — left the roster reading
+   * "removed" while every grant stayed active, and the retry the error
+   * message asks for found nothing to change and switched nothing off. There
+   * is no trigger on enrolments to converge it later. The intermediate state
+   * is planted directly: the flag written, the grants untouched.
+   */
+  it('finishes a removal whose grants were never switched off, on the next press', async () => {
+    await seedSession('sess', { dueDate: '2099-01-01', attendance: { s1: 'excused' }, submitted: true });
+    await seedRecording('r1', 'sess', 'published');
+    await reconcile('sess');
+    expect((await getAssignment('s1', 'r1'))?.active).toBe(true);
+    await db()
+      .collection(COLLECTIONS.enrollments)
+      .doc(enrollmentId('s1', courseId))
+      .update({ active: false, unenrolledAt: Date.now() });
+
+    const again = await applyEnrollmentActive({ studentUid: 's1', courseId, active: false });
+    expect(again.changed).toBe(false); // nothing to change on the roster…
+    expect((await getAssignment('s1', 'r1'))?.active).toBe(false); // …and the grant is off anyway
   });
 
   /*

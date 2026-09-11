@@ -146,17 +146,32 @@ export async function applyEnrollmentActive(input: SetEnrollmentActiveInput) {
   const ref = db
     .collection(COLLECTIONS.enrollments)
     .doc(enrollmentId(input.studentUid, input.courseId));
+  // The same refusal `createEnrollmentRecord` makes: a disabled account is
+  // not put back into a class, and neither are its grants.
+  if (input.active) {
+    const student = (
+      await db.collection(COLLECTIONS.students).doc(input.studentUid).get()
+    ).data() as StudentDoc | undefined;
+    if (student?.status === 'disabled') {
+      throw new HttpsError('failed-precondition', 'That student account is disabled.');
+    }
+  }
 
   /*
    * READ AND WRITE IN ONE TRANSACTION, like `createEnrollmentRecord`: two
    * removals sent 24 ms apart both read "still enrolled", both wrote, both ran
    * the deactivation, and both were audited — the student's history then said
    * "Removed from Hikam" twice for one removal. Inside the transaction the
-   * second sees the first's write and reports that nothing changed.
+   * second sees the first's write and reports that nothing changed, which is
+   * what keeps the second out of the audit log.
    *
-   * Nothing to do is worth saying rather than repeating: the reconcile below
-   * is O(sessions × roster), and a callable that re-runs it on every press is
-   * a button that costs more the more it is pressed.
+   * THE GRANTS ARE SWITCHED EITHER WAY. The flag commits here and the grants
+   * are dealt with after; a failure in between left the roster reading
+   * "removed" while every grant stayed active — and a retry that stopped at
+   * "nothing changed" switched nothing off, for good, since no trigger
+   * reconciles an enrolment. Running the idempotent half on a no-op costs one
+   * query on the press nobody makes twice; not running it costs a student
+   * audio they were removed from.
    */
   const changed = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -167,9 +182,6 @@ export async function applyEnrollmentActive(input: SetEnrollmentActiveInput) {
     tx.update(ref, update);
     return true;
   });
-  if (!changed) {
-    return { studentUid: input.studentUid, courseId: input.courseId, active: input.active, changed };
-  }
 
   if (input.active) {
     // Re-enrolling RESTORES, which is what the ledger and the manual promise —

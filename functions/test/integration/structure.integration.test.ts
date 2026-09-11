@@ -300,6 +300,25 @@ describe('enrollments', () => {
     await expect(createEnrollmentRecord(ADMIN, { studentUid, courseId })).rejects.toThrow(/disabled/i);
   });
 
+  it('refuses to put a disabled student back through the other door too', async () => {
+    // "Add a student" is the app's re-enrol path and refuses above; the
+    // `active: true` form of `setEnrollmentActive` is the same promise made to
+    // a hand-built call, and it re-enrolled and restored the grants of an
+    // account the institute had switched off.
+    const { courseId, studentUid } = await setup();
+    await createEnrollmentRecord(ADMIN, { studentUid, courseId });
+    await applyEnrollmentActive({ studentUid, courseId, active: false });
+    await getFirestore()
+      .collection(COLLECTIONS.students)
+      .doc(studentUid)
+      .update({ status: 'disabled' });
+    await expect(applyEnrollmentActive({ studentUid, courseId, active: true })).rejects.toThrow(/disabled/i);
+    const row = (
+      await getFirestore().collection(COLLECTIONS.enrollments).doc(`${studentUid}_${courseId}`).get()
+    ).data() as { active: boolean };
+    expect(row.active).toBe(false);
+  });
+
   it('rejects an unknown class or student', async () => {
     const { courseId, studentUid } = await setup();
     await expect(createEnrollmentRecord(ADMIN, { studentUid, courseId: 'nope' })).rejects.toThrow();

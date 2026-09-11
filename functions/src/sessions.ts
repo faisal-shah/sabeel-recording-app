@@ -12,6 +12,7 @@ import {
 import { auditedCall, type AuditContext } from './audited';
 import { requireAdmin, requireCourseScope } from './guards';
 import { applyDeleteRecording } from './recordings';
+import { reconcileAttendanceRecords } from './attendanceMirror';
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -191,20 +192,11 @@ export const updateSession = auditedCall('updateSession', async (req, audit) => 
   const ref = db.collection(COLLECTIONS.sessions).doc(input.sessionId);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'No such session.');
-  const session = snap.data() as SessionDoc;
-  await requireCourseScope(req, session.courseId);
-  audit.courseId = session.courseId;
-  if (input.dueDate !== undefined) {
-    // Moving the deadline FORWARD is the documented way to reopen a session that
-    // has closed, so this is the recovery valve as well as a validator.
-    validateDueDateChange(input.dueDate, session.dueDate, todayInZone(INSTITUTE_TIMEZONE));
-  }
-  // The other half of `createRecordingDraft`'s refusal: a session with a
-  // recording was recorded, and marking it otherwise would hide that recording
-  // from the work queue and the morning sweep.
-  if (input.notRecorded && session.recordingId) {
-    throw new HttpsError('failed-precondition', 'This session has a recording.');
-  }
+  // The course never changes, so the scope check reads once, outside the
+  // transaction; everything the write depends on is re-read inside it.
+  const courseId = (snap.data() as SessionDoc).courseId;
+  await requireCourseScope(req, courseId);
+  audit.courseId = courseId;
   const { sessionId: _id, ...fields } = input;
   // Named in the audit, unlike a title or a note: this one stops the work queue
   // and the morning reminder, so "why did we never chase that class?" has an
@@ -212,27 +204,47 @@ export const updateSession = auditedCall('updateSession', async (req, audit) => 
   // The due date too: moving it is the documented way to reopen a closed
   // recording, so the log should carry the date the class was given.
   audit.detail = { notRecorded: input.notRecorded, dueDate: input.dueDate, date: input.date };
-  // A dueDate edit re-flows to obligations via the onSessionWritten trigger.
-  // ONE BATCH with the recording's copy below: written one after the other, a
-  // failure between them left the student-facing title, notes or date stale
-  // on the recording with nothing to repair it.
-  const batch = db.batch();
-  batch.update(ref, { ...fields, updatedAt: Date.now() });
-
-  // Keep the recording's student-facing display copy in sync with the session.
-  if (session.recordingId) {
-    const denorm: Record<string, unknown> = {};
-    if (fields.title !== undefined) denorm.title = fields.title;
-    if (fields.notes !== undefined) denorm.notes = fields.notes;
-    if (fields.date !== undefined) denorm.date = fields.date;
-    if (Object.keys(denorm).length > 0) {
-      batch.update(db.collection(COLLECTIONS.recordings).doc(session.recordingId), {
-        ...denorm,
-        updatedAt: Date.now(),
-      });
+  /*
+   * ONE TRANSACTION, holding the session as read. The checks below are about
+   * the STORED session — its due date, whether it has a recording — and a
+   * read-then-write let `createRecordingDraft` link a recording between the
+   * two, so "this class was not recorded" landed on a session that had just
+   * acquired one: the very document the two refusals exist to make impossible.
+   * The recording's student-facing copy is written in the same transaction,
+   * for the reason it was in one batch before: written one after the other, a
+   * failure between them left the title, notes or date stale on the recording
+   * with nothing to repair it.
+   */
+  await db.runTransaction(async (tx) => {
+    const fresh = await tx.get(ref);
+    if (!fresh.exists) throw new HttpsError('not-found', 'No such session.');
+    const session = fresh.data() as SessionDoc;
+    if (input.dueDate !== undefined) {
+      // Moving the deadline FORWARD is the documented way to reopen a session
+      // that has closed, so this is the recovery valve as well as a validator.
+      validateDueDateChange(input.dueDate, session.dueDate, todayInZone(INSTITUTE_TIMEZONE));
     }
-  }
-  await batch.commit();
+    // The other half of `createRecordingDraft`'s refusal: a session with a
+    // recording was recorded, and marking it otherwise would hide that
+    // recording from the work queue and the morning sweep.
+    if (input.notRecorded && session.recordingId) {
+      throw new HttpsError('failed-precondition', 'This session has a recording.');
+    }
+    // A dueDate edit re-flows to obligations via the onSessionWritten trigger.
+    tx.update(ref, { ...fields, updatedAt: Date.now() });
+    if (session.recordingId) {
+      const denorm: Record<string, unknown> = {};
+      if (fields.title !== undefined) denorm.title = fields.title;
+      if (fields.notes !== undefined) denorm.notes = fields.notes;
+      if (fields.date !== undefined) denorm.date = fields.date;
+      if (Object.keys(denorm).length > 0) {
+        tx.update(db.collection(COLLECTIONS.recordings).doc(session.recordingId), {
+          ...denorm,
+          updatedAt: Date.now(),
+        });
+      }
+    }
+  });
   return { sessionId: input.sessionId };
 });
 
@@ -339,9 +351,10 @@ export async function applySubmitAttendance(
    *
    * So the payload OVERLAYS the stored map: every mark already there stands
    * unless the submission names that student, and it may name only the roster.
-   * A submission that omits a current student says nothing about them — the
-   * app's own payloads never do, but one built from a register opened before a
-   * student was re-enrolled does, and the mark it omitted is history too.
+   * A submission that omits a current student says nothing about them. The
+   * app omits a newcomer with no mark yet on a submitted register (a mark
+   * nobody chose is not a mark), and a register opened before a student was
+   * re-enrolled omits a stored one; either way the omission is not a removal.
    * Nothing in the app unmarks anyone, so there is no mark a submission may
    * remove.
    */
@@ -415,10 +428,22 @@ export const deleteSession = auditedCall('deleteSession', async (req, audit) => 
   requireAdmin(req);
   audit.courseId = session.courseId;
 
-  if (session.recordingId) {
-    // applyDeleteRecording refuses a published recording and cascades the rest.
+  // applyDeleteRecording refuses a published recording and cascades the rest.
+  // A pointer to a recording that is already gone is nothing to cascade —
+  // the state a delete interrupted between its two writes used to leave, and
+  // the one thing that made a session undeletable.
+  if (
+    session.recordingId &&
+    (await db.collection(COLLECTIONS.recordings).doc(session.recordingId).get()).exists
+  ) {
     await applyDeleteRecording(session.recordingId);
   }
   await ref.delete();
+  // The students' own copies of their marks go with the session, HERE and not
+  // only in `onSessionWritten`: that trigger has no retry, so one failed
+  // invocation left rows a student still saw listed under a session that no
+  // longer existed, with nothing to reconcile them ever again. The trigger
+  // still runs and finds nothing to do.
+  await reconcileAttendanceRecords(db, d.sessionId, undefined);
   return { sessionId: d.sessionId };
 });

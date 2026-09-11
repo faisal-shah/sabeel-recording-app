@@ -57,22 +57,34 @@ async function requireEnrolled(studentUid: string, courseId: string): Promise<vo
 /**
  * Write the override doc. SEPARATE from the student's completion, so the student
  * can never clobber it and the ledger reads override ?? student.
+ *
+ * Says whether anything changed: the same mark with the same reason sent again
+ * — a stale screen, a second tap — rewrote the row with a new author and time
+ * and was audited as a second override, so the student's history said it twice.
+ * The record keeps who actually made the call, and when.
  */
 export async function applyOverride(callerUid: string, input: OverrideInput, courseId: string) {
-  const doc: CompletionOverrideDoc = {
-    studentUid: input.studentUid,
-    recordingId: input.recordingId,
-    courseId,
-    completed: input.completed,
-    reason: input.reason,
-    overriddenBy: callerUid,
-    at: Date.now(),
-  };
-  await getFirestore()
+  const ref = getFirestore()
     .collection(COLLECTIONS.completionOverrides)
-    .doc(overrideId(input.studentUid, input.recordingId))
-    .set(doc);
-  return { studentUid: input.studentUid, recordingId: input.recordingId, completed: input.completed };
+    .doc(overrideId(input.studentUid, input.recordingId));
+  const changed = await getFirestore().runTransaction(async (tx) => {
+    const existing = (await tx.get(ref)).data() as CompletionOverrideDoc | undefined;
+    if (existing && existing.completed === input.completed && existing.reason === input.reason) {
+      return false;
+    }
+    const doc: CompletionOverrideDoc = {
+      studentUid: input.studentUid,
+      recordingId: input.recordingId,
+      courseId,
+      completed: input.completed,
+      reason: input.reason,
+      overriddenBy: callerUid,
+      at: Date.now(),
+    };
+    tx.set(ref, doc);
+    return true;
+  });
+  return { studentUid: input.studentUid, recordingId: input.recordingId, completed: input.completed, changed };
 }
 
 /**
@@ -105,7 +117,10 @@ export const overrideCompletion = auditedCall('overrideCompletion', async (req, 
   await requireEnrolled(input.studentUid, courseId);
   audit.courseId = courseId;
   audit.detail = { completed: input.completed, reason: input.reason };
-  return applyOverride(uid, input, courseId);
+  const result = await applyOverride(uid, input, courseId);
+  // The same override a second time is not a second override.
+  audit.noop = !result.changed;
+  return result;
 });
 
 export const clearCompletionOverride = auditedCall('clearCompletionOverride', async (req, audit) => {
