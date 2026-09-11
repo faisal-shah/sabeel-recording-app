@@ -7,6 +7,7 @@ import {
   type CompletionEventDoc,
   type CompletionOverrideDoc,
   type ListeningProgressDoc,
+  assignmentId,
   progressId,
 } from '@sabeel/shared';
 import { db } from './firebase';
@@ -158,6 +159,52 @@ export function useMyListening(
       empty: null,
     },
   );
+}
+
+/**
+ * This student's own grant for one recording, LIVE — the deadline the player
+ * and the docked bar hold the audio to.
+ *
+ * The date used to ride in the route params, captured when the recording was
+ * opened. Staff move a Listen-by date forward to reopen a session — the
+ * documented way back in — and a student with the player open, or a restored
+ * tab, was then told at midnight that the recording had closed on the OLD date
+ * and had the audio stopped under an open grant. Read from the assignment, the
+ * date follows the move. `resolved` distinguishes "not yet read" from "no
+ * grant", which have opposite answers in `canPlayNow`.
+ */
+export function useMyAssignmentState(
+  uid: string | null,
+  recordingId: string | null,
+  scope?: string,
+): { value: AssignmentRow | null; resolved: boolean } {
+  return useLiveDocState<AssignmentRow | null>(
+    () =>
+      uid && recordingId ? doc(db, COLLECTIONS.assignments, assignmentId(uid, recordingId)) : null,
+    [uid, recordingId],
+    {
+      label: 'myAssignment',
+      context: scope ? { scope } : undefined,
+      map: (snap) => (snap.exists() ? { id: snap.id, ...(snap.data() as AssignmentDoc) } : null),
+      empty: null,
+    },
+  );
+}
+
+/**
+ * The deadline a student's grant currently carries, for the transport: null
+ * when there is no ACTIVE grant, and the caller's fallback while the read is
+ * still in flight. Staff pass through whatever they were given — they have no
+ * deadline of their own.
+ */
+export function liveDueDate(
+  studentUid: string | null,
+  grant: { value: AssignmentRow | null; resolved: boolean },
+  fallback: string | null,
+): string | null {
+  if (!studentUid) return fallback;
+  if (!grant.resolved) return fallback;
+  return grant.value?.active ? grant.value.dueDate : null;
 }
 
 /**

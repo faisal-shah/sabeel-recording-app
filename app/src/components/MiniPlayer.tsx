@@ -9,6 +9,7 @@ import {
   usePlayback,
 } from '../playback';
 import { INSTITUTE_TIMEZONE, canPlayNow, todayInZone } from '@sabeel/shared';
+import { liveDueDate, useMyAssignmentState } from '../completion';
 import { useRecordingState } from '../recordings';
 import { useCourseState } from '../structure';
 import { PlayPauseGlyph, Skip } from './Transport';
@@ -75,6 +76,11 @@ export function MiniPlayer({
    */
   const loaded = useRecordingState(now?.recordingId ?? null, 'miniPlayer');
   const course = useCourseState(now?.courseId ?? null, 'miniPlayer');
+  // The student's deadline, live: `now.dueDate` was captured when the recording
+  // was opened, and a Listen-by date moved forward since is the documented way
+  // a closed session reopens — the bar must not close it at midnight on a date
+  // that no longer applies.
+  const grant = useMyAssignmentState(now?.studentUid ?? null, now?.recordingId ?? null, 'miniPlayer');
   /*
    * THREE WAYS ACCESS ENDS, and the audio has to stop for all of them:
    *   - the recording is deleted or unpublished (its document goes);
@@ -93,7 +99,7 @@ export function MiniPlayer({
     ((loaded.resolved && !loaded.value) ||
       (course.resolved &&
         !!course.value &&
-        !canPlayNow(course.value, now.dueDate, now.studentUid, today)));
+        !canPlayNow(course.value, liveDueDate(now.studentUid, grant, now.dueDate), now.studentUid, today)));
   useEffect(() => {
     if (revoked) void closePlayback();
   }, [revoked]);

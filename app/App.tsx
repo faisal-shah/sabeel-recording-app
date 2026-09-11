@@ -16,6 +16,7 @@ import {
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { Role } from '@sabeel/shared';
 import { useSession } from './src/session';
+import { liveDueDate, useMyAssignmentState } from './src/completion';
 import { SignInScreen } from './src/screens/SignInScreen';
 import { DisabledScreen, PendingScreen, ProvisioningScreen } from './src/screens/GateScreens';
 import { StaffScreen } from './src/screens/StaffScreen';
@@ -837,12 +838,17 @@ function MyClassRecord({ uid }: { uid: string }) {
 }
 
 function Play({ studentUid }: { studentUid: string | null }) {
-  const { recordingId, dueDate } = useRoute<RouteProp<RootStackParamList, 'Player'>>().params;
+  const { recordingId, dueDate: routeDueDate } =
+    useRoute<RouteProp<RootStackParamList, 'Player'>>().params;
   // Chained: the recording names its own course, so the course resolves only
   // once the recording has. Both are live, so an unpublish or an archive lands
   // on screen rather than waiting for the listener to be torn down.
   const recording = useRecordingState(recordingId);
   const cls = useCourseState(recording.value?.courseId ?? null);
+  // A student's deadline comes from their live grant, not from the date the
+  // link was made with — see `useMyAssignmentState`. Staff keep the session's.
+  const grant = useMyAssignmentState(studentUid, recordingId);
+  const dueDate = liveDueDate(studentUid, grant, routeDueDate ?? null);
   const gone = recording.resolved && !recording.value;
   /*
    * STOP THE AUDIO WHEN THE RECORDING GOES AWAY.
@@ -867,7 +873,7 @@ function Play({ studentUid }: { studentUid: string | null }) {
       recording={recording.value}
       cls={cls.value}
       studentUid={studentUid}
-      dueDate={dueDate ?? null}
+      dueDate={dueDate}
     />
   );
 }
