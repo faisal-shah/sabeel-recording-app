@@ -478,20 +478,13 @@ as a fault; four crash-in-the-middle states repair themselves. Left for you:
       uninstall/reinstall for every current install, since Android refuses an
       update signed with a different key. Say when, and whether now: it
       forces the reinstall on every staff phone.
-- [ ] **The term's record at course level.** The recording ledger now keeps
-      its rows after the recording is archived. The COURSE counts card
-      ("N required listening / not complete / missed"), the attendance
-      report's catch-up columns and the student's per-course counts still
-      read ACTIVE grants only — so once the term's recordings are archived,
-      all three read zero for the term, while each recording's own ledger
-      still says who missed what. Three ways out: (a) leave it — archive
-      recordings only when the record is no longer wanted at course level;
-      (b) count a grant an archived recording closed as part of the record
-      (needs the fan-out to say WHY a grant went inactive — archived vs
-      unenrolled — one field, a small server change); (c) archive the
-      COURSE at term end and leave its recordings published, which keeps
-      every count and only turns listening off. (c) is what the manual's
-      course-archive path already does; (b) is the durable fix.
+- ✅ **An archived recording leaves the course totals — decided 2026-09-11.**
+      Closing a term is archiving the COURSE, which keeps every count. Archiving
+      or unpublishing one recording withdraws it from the course card, the
+      attendance report and the per-student counts, as if it had never been
+      required; its own ledger page keeps the rows. The manual says so in as
+      many words (§2.6, §3.4), and no longer describes recording-archive as
+      an end-of-term step.
 - [ ] **Headphones unplugged keeps playing.** Android's convention is to pause
       when the output route disappears (`ACTION_AUDIO_BECOMING_NOISY`).
       expo-audio does not handle it; it needs a small native receiver, i.e. a

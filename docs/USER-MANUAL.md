@@ -1,6 +1,6 @@
 # Sabeel Class Recordings — User Manual
 
-*For app version 0.6.3 · September 2026*
+*For app version 0.6.4 · September 2026*
 
 Welcome! This guide explains everything the Sabeel Class Recordings app can do —
 from listening to your first class to taking attendance and tracking who has
@@ -437,14 +437,23 @@ Each recording moves through a few states:
   needs review). Publish is blocked until it has audio.
 - **Unpublished** — pulled back from students after being live. It goes back to
   Draft to be fixed, then out again.
-- **Archived** — filed away at the end of a term. Like unpublishing, it closes
-  the recording to everyone who was excused, so **Today** raises it if you
-  archive one whose Listen by date has not passed yet. One tap puts it back —
-  while that date is still ahead. Once it has passed, Publish is greyed out and
-  the card says why: publishing then would give nobody access, so move the
-  session's **Listen by** date forward first, which reopens it for everyone
-  excused. Archiving at the end of a term, after the dates have gone, is
-  therefore filing rather than something to undo.
+- **Archived** — closed for good, one recording at a time. Like unpublishing,
+  it closes the recording to everyone who was excused, so **Today** raises it
+  if you archive one whose Listen by date has not passed yet. One tap puts it
+  back — while that date is still ahead. Once it has passed, Publish is greyed
+  out and the card says why: publishing then would give nobody access, so move
+  the session's **Listen by** date forward first, which reopens it for everyone
+  excused.
+
+**Archiving or unpublishing a recording takes it out of the course totals.**
+Everything that happened on it — who completed it, who missed it — leaves the
+course page's counts, the attendance report's catch-up columns and each
+student's per-course counts, as if it had never been required. The
+recording's own **Listening progress** page still keeps its rows (Section 2.8),
+but nothing sums it into the term. So this is not how a term ends: **to close a
+term, archive the course** (Section 2.3), which keeps every count and only
+decides whether students may still listen. Reach for archiving a recording
+only when that recording itself should be withdrawn.
 
 ## 2.5 How a recording becomes required listening
 
@@ -483,9 +492,11 @@ recorded is kept.
 Open a recording's **Listening progress** (from its session, or from the
 library) to see exactly where things stand. Up top, four counts: **required**
 (the students you excused, the only ones who can open it), **completed**, **not
-complete**, and **missed**. An archived or unpublished recording keeps its
-ledger: the counts and rows are the record as it stood when it closed, and a
-grant that was still open then reads *Closed (recording archived)*.
+complete**, and **missed**. An archived or unpublished recording keeps this
+page: the counts and rows are the record as it stood when it closed, and a
+grant that was still open then reads *Closed (recording archived)*. It is the
+only place that record survives — the course totals no longer include it
+(Section 2.6).
 
 The screen has five parts:
 
@@ -747,10 +758,13 @@ The app is built around **reversible** actions:
 - **Disable** a student or staff member to switch off access while keeping their
   history. It ends their session and stops reminders reaching their phone.
 - **Unpublish** a recording to pull it from students without losing it, or
-  **archive** it once a term is over. Both close it to the students who were
-  excused; archiving is the one you reach for when nothing is wrong.
-- **Archive** a course when a term ends — its history stays intact, and you
-  decide whether students may still listen to it.
+  **archive** it when it should stay closed. Both close it to the students who
+  were excused and take it out of the course totals — its own listening
+  progress page keeps the record; archiving is the one you reach for when
+  nothing is wrong with the recording itself.
+- **Archive** a course when a term ends — every count stays, and you decide
+  whether students may still listen to it. This, not archiving its recordings,
+  is how a term is closed.
 
 Permanent deletion exists, but it's deliberately admin-only, asks for strong
 confirmation, and is audited. Reach for disable, unpublish, or archive first.
