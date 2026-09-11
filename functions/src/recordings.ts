@@ -52,33 +52,43 @@ export async function createRecordingDraft(
 ) {
   const db = getFirestore();
   const sessionRef = db.collection(COLLECTIONS.sessions).doc(input.sessionId);
-  const sessionSnap = await sessionRef.get();
-  if (!sessionSnap.exists) throw new HttpsError('not-found', 'No such session.');
-  const session = sessionSnap.data() as SessionDoc;
-  if (session.recordingId) {
-    throw new HttpsError('failed-precondition', 'This session already has a recording.');
-  }
-
-  const doc: RecordingDoc = {
-    sessionId: input.sessionId,
-    courseId: session.courseId,
-    cohortId: session.cohortId,
-    title: session.title,
-    notes: session.notes,
-    date: session.date,
-    status: 'draft',
-    source: origin.source ?? 'manual',
-    audioPath: null,
-    durationSec: null,
-    sizeBytes: null,
-    createdAt: Date.now(),
-    createdBy: callerUid,
-    updatedAt: Date.now(),
-    ...(origin.zoomUuid ? { zoomUuid: origin.zoomUuid } : {}),
-    ...(origin.zoomFileId ? { zoomFileId: origin.zoomFileId } : {}),
-  };
-  const ref = await db.collection(COLLECTIONS.recordings).add(doc);
-  await sessionRef.update({ recordingId: ref.id, updatedAt: Date.now() });
+  /*
+   * ONE SESSION, ONE RECORDING — held by a transaction, not by the read above
+   * the write. Two calls in the same window (a double tap on Upload, a Zoom
+   * import racing a manual one) both read "no recording yet", both created a
+   * draft, and the session pointed at whichever link landed last: the other
+   * draft sat orphaned in the library, publishable, never cascaded by a
+   * session delete, and its fan-out reconciled the session's OTHER recording.
+   */
+  const ref = db.collection(COLLECTIONS.recordings).doc();
+  await db.runTransaction(async (tx) => {
+    const sessionSnap = await tx.get(sessionRef);
+    if (!sessionSnap.exists) throw new HttpsError('not-found', 'No such session.');
+    const session = sessionSnap.data() as SessionDoc;
+    if (session.recordingId) {
+      throw new HttpsError('failed-precondition', 'This session already has a recording.');
+    }
+    const doc: RecordingDoc = {
+      sessionId: input.sessionId,
+      courseId: session.courseId,
+      cohortId: session.cohortId,
+      title: session.title,
+      notes: session.notes,
+      date: session.date,
+      status: 'draft',
+      source: origin.source ?? 'manual',
+      audioPath: null,
+      durationSec: null,
+      sizeBytes: null,
+      createdAt: Date.now(),
+      createdBy: callerUid,
+      updatedAt: Date.now(),
+      ...(origin.zoomUuid ? { zoomUuid: origin.zoomUuid } : {}),
+      ...(origin.zoomFileId ? { zoomFileId: origin.zoomFileId } : {}),
+    };
+    tx.set(ref, doc);
+    tx.update(sessionRef, { recordingId: ref.id, updatedAt: Date.now() });
+  });
   return { id: ref.id, audioPath: audioStoragePath(ref.id) };
 }
 

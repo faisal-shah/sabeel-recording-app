@@ -122,6 +122,31 @@ describe('createRecordingDraft', () => {
     await createRecordingDraft(ADMIN, { sessionId });
     await expect(createRecordingDraft(ADMIN, { sessionId })).rejects.toThrow(/already/i);
   });
+
+  it('lets exactly ONE of two simultaneous drafts through, and links the session to it', async () => {
+    /*
+     * A double tap on Upload, or a Zoom import racing a manual upload: both
+     * read "no recording yet" before either wrote, so the session ended up
+     * pointing at one draft while a second sat orphaned — listed in the
+     * library, publishable from there, never cascaded by a session delete,
+     * its audio billed for good, and its fan-out written against the OTHER
+     * recording's grants. One session, one recording, held by a transaction.
+     */
+    const sessionId = await newSession();
+    const outcomes = await Promise.allSettled([
+      createRecordingDraft(ADMIN, { sessionId }),
+      createRecordingDraft(ADMIN, { sessionId }),
+    ]);
+    const won = outcomes.filter((o): o is PromiseFulfilledResult<{ id: string }> => o.status === 'fulfilled');
+    expect(won).toHaveLength(1);
+    expect(String((outcomes.find((o) => o.status === 'rejected') as PromiseRejectedResult).reason)).toMatch(/already/i);
+    const drafts = await getFirestore()
+      .collection(COLLECTIONS.recordings)
+      .where('sessionId', '==', sessionId)
+      .get();
+    expect(drafts.size).toBe(1);
+    expect((await session(sessionId)).recordingId).toBe(won[0].value.id);
+  });
 });
 
 describe('finalizeRecording', () => {

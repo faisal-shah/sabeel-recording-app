@@ -146,19 +146,30 @@ export async function applyEnrollmentActive(input: SetEnrollmentActiveInput) {
   const ref = db
     .collection(COLLECTIONS.enrollments)
     .doc(enrollmentId(input.studentUid, input.courseId));
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError('not-found', 'No such enrolment.');
 
-  // Nothing to do, and worth returning early rather than repeating: the
-  // reconcile below is O(sessions × roster), and a callable that re-runs it on
-  // every press is a button that costs more the more it is pressed.
-  if ((snap.data() as EnrollmentDoc).active === input.active) {
-    return { studentUid: input.studentUid, courseId: input.courseId, active: input.active };
+  /*
+   * READ AND WRITE IN ONE TRANSACTION, like `createEnrollmentRecord`: two
+   * removals sent 24 ms apart both read "still enrolled", both wrote, both ran
+   * the deactivation, and both were audited — the student's history then said
+   * "Removed from Hikam" twice for one removal. Inside the transaction the
+   * second sees the first's write and reports that nothing changed.
+   *
+   * Nothing to do is worth saying rather than repeating: the reconcile below
+   * is O(sessions × roster), and a callable that re-runs it on every press is
+   * a button that costs more the more it is pressed.
+   */
+  const changed = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'No such enrolment.');
+    if ((snap.data() as EnrollmentDoc).active === input.active) return false;
+    const update: Record<string, unknown> = { active: input.active };
+    if (!input.active) update.unenrolledAt = Date.now();
+    tx.update(ref, update);
+    return true;
+  });
+  if (!changed) {
+    return { studentUid: input.studentUid, courseId: input.courseId, active: input.active, changed };
   }
-
-  const update: Record<string, unknown> = { active: input.active };
-  if (!input.active) update.unenrolledAt = Date.now();
-  await ref.update(update);
 
   if (input.active) {
     // Re-enrolling RESTORES, which is what the ledger and the manual promise —
@@ -168,7 +179,7 @@ export async function applyEnrollmentActive(input: SetEnrollmentActiveInput) {
   } else {
     await deactivateStudentAssignmentsInCourse(db, input.courseId, input.studentUid);
   }
-  return { studentUid: input.studentUid, courseId: input.courseId, active: input.active };
+  return { studentUid: input.studentUid, courseId: input.courseId, active: input.active, changed };
 }
 
 export const setEnrollmentActive = auditedCall('setEnrollmentActive', async (req, audit) => {
@@ -180,5 +191,8 @@ export const setEnrollmentActive = auditedCall('setEnrollmentActive', async (req
   // student's history, which reads these rows, could not tell a student who
   // was removed from one who came back.
   audit.detail = { active: input.active };
-  return applyEnrollmentActive(input);
+  const result = await applyEnrollmentActive(input);
+  // A removal of somebody already removed is not a second removal.
+  audit.noop = !result.changed;
+  return result;
 });

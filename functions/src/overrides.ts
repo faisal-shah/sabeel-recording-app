@@ -75,13 +75,23 @@ export async function applyOverride(callerUid: string, input: OverrideInput, cou
   return { studentUid: input.studentUid, recordingId: input.recordingId, completed: input.completed };
 }
 
-/** Remove an override — effective status falls back to the student's own. */
+/**
+ * Remove an override — effective status falls back to the student's own.
+ *
+ * Says whether there was one to remove: a `delete()` of a missing document
+ * succeeds, so a stale screen (or a second tap) audited "Removed override" for
+ * an override that was already gone.
+ */
 export async function clearOverride(studentUid: string, recordingId: string) {
-  await getFirestore()
+  const ref = getFirestore()
     .collection(COLLECTIONS.completionOverrides)
-    .doc(overrideId(studentUid, recordingId))
-    .delete();
-  return { studentUid, recordingId };
+    .doc(overrideId(studentUid, recordingId));
+  const changed = await getFirestore().runTransaction(async (tx) => {
+    if (!(await tx.get(ref)).exists) return false;
+    tx.delete(ref);
+    return true;
+  });
+  return { studentUid, recordingId, changed };
 }
 
 /**
@@ -112,5 +122,7 @@ export const clearCompletionOverride = auditedCall('clearCompletionOverride', as
   await requireCourseScope(req, courseId);
   audit.courseId = courseId;
   audit.detail = { reason };
-  return clearOverride(d.studentUid, d.recordingId);
+  const result = await clearOverride(d.studentUid, d.recordingId);
+  audit.noop = !result.changed;
+  return result;
 });

@@ -20,6 +20,13 @@ export interface AuditContext {
   courseId: string | null;
   targets: Record<string, string>;
   detail?: Record<string, unknown>;
+  /**
+   * The call changed nothing — a removal of a student already removed, an
+   * override already gone — so no row is written. The log is a record of what
+   * happened, and a second "Removed from Hikam" for one removal is not a thing
+   * that happened; the student's page reads these rows as their history.
+   */
+  noop?: boolean;
 }
 
 /*
@@ -96,6 +103,7 @@ export function auditedCall<T>(
       throw e;
     }
 
+    if (audit.noop) return result;
     try {
       const token = (req.auth?.token ?? {}) as { role?: Role };
       const detail = audit.detail ? pruneDetail(audit.detail) : undefined;

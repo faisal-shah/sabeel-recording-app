@@ -275,6 +275,22 @@ describe('enrollments', () => {
     expect(won.value.reenrolled).toBe(false);
   });
 
+  it('reports which of two simultaneous removals did the removing', async () => {
+    // Both taps resolve — the client keeps the row tappable until the roster
+    // snapshot lands — but only the one that changed the document is a removal;
+    // the wrapper writes no audit row for the other, so the student's history
+    // says "Removed" once.
+    const { courseId, studentUid } = await setup();
+    await createEnrollmentRecord(ADMIN, { studentUid, courseId });
+    const [a, b] = await Promise.all([
+      applyEnrollmentActive({ studentUid, courseId, active: false }),
+      applyEnrollmentActive({ studentUid, courseId, active: false }),
+    ]);
+    expect([a.changed, b.changed].sort()).toEqual([false, true]);
+    // And a plain repeat, after the fact, changes nothing either.
+    expect((await applyEnrollmentActive({ studentUid, courseId, active: false })).changed).toBe(false);
+  });
+
   it('refuses to enrol a disabled student', async () => {
     const { courseId, studentUid } = await setup();
     await getFirestore()
@@ -316,10 +332,22 @@ describe('createStudent with a class', () => {
     expect(enr.data()).toMatchObject({ courseId, cohortId, active: true });
   });
 
-  it('rejects an unknown class', async () => {
+  it('rejects an unknown class, and leaves NO account behind', async () => {
     await expect(
       createStudentAccount(ADMIN, { displayName: 'X', email: 'x@example.com', courseId: 'nope' }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/No such course/);
+    /*
+     * THE PROMISE IS "NOTHING WRITTEN". The account was created before the
+     * course was looked up, so an admin naming a stale course id got an Auth
+     * user with student claims, no student document, no enrolment, no audit
+     * row — and every retry then said "That email already has an account."
+     * A manager never reached this: their scope check reads the course first.
+     */
+    await expect(getAuth().getUserByEmail('x@example.com')).rejects.toMatchObject({
+      code: 'auth/user-not-found',
+    });
+    const snap = await getFirestore().collection(COLLECTIONS.students).where('email', '==', 'x@example.com').get();
+    expect(snap.empty).toBe(true);
   });
 });
 

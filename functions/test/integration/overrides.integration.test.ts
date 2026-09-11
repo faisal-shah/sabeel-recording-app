@@ -55,8 +55,11 @@ describe('completion override', () => {
     await applyOverride('mgr1', { studentUid: S, recordingId: R, completed: false, reason: 'no' }, CLASS);
     expect(await readOverride()).toBeDefined();
 
-    await clearOverride(S, R);
+    expect((await clearOverride(S, R)).changed).toBe(true);
     expect(await readOverride()).toBeUndefined();
     expect(effectiveCompletion({ completed: true }, null)).toEqual({ completed: true, source: 'student' });
+    // Clearing what is already gone removes nothing, and says so — the wrapper
+    // audits "Removed override" only when one was.
+    expect((await clearOverride(S, R)).changed).toBe(false);
   });
 });
