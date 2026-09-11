@@ -251,6 +251,12 @@ describe('recordings: staff reads', () => {
     );
   });
 
+  it('do NOT let a manager list the whole library — that shape is the admin\'s alone', async () => {
+    // `useAllRecordings` is gated by role on the client; this is what keeps a
+    // read-free manager arm from being added to the rule unnoticed.
+    await assertFails(getDocs(collection(mine().firestore(), COLLECTIONS.recordings)));
+  });
+
   it('do NOT let a manager read another class\'s recordings', async () => {
     await assertFails(getDoc(doc(mine().firestore(), COLLECTIONS.recordings, THEIR_REC)));
     await assertFails(
@@ -488,6 +494,21 @@ describe('listeningProgress', () => {
     await assertFails(
       setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, theirsId()), row(OUTSIDER)),
     );
+  });
+
+  it('refuses a row whose numbers are not numbers, or that carries an extra key', async () => {
+    // `updatedAt: 'x'` reached the ledger's date formatter, which throws on an
+    // invalid date; with no error boundary the class's ledger went blank for
+    // every staff member who opened it. The positive sibling above is what
+    // proves the honest row still passes.
+    const ref = doc(student().firestore(), COLLECTIONS.listeningProgress, mineId());
+    await assertFails(setDoc(ref, { ...row(STUDENT), updatedAt: 'x' }));
+    await assertFails(setDoc(ref, { ...row(STUDENT), listenedMs: 'lots' }));
+    await assertFails(setDoc(ref, { ...row(STUDENT), positionMs: 1.5 }));
+    await assertFails(setDoc(ref, { ...row(STUDENT), priority: 1 }));
+    // And on update, once the honest row exists.
+    await assertSucceeds(setDoc(ref, row(STUDENT)));
+    await assertFails(setDoc(ref, { ...row(STUDENT), updatedAt: 'x' }));
   });
 
   /*

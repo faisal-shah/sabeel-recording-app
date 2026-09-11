@@ -173,6 +173,18 @@ describe('courses', () => {
     await assertFails(getDoc(doc(studentA(), COLLECTIONS.courses, CLASS_THEIRS)));
   });
 
+  it('stop reading it once the student has been removed from the class', async () => {
+    // Unenrolment keeps the enrolment row for the history, so "the row exists"
+    // was true of a student removed from the class months ago.
+    await testEnv.withSecurityRulesDisabled(async (c) => {
+      await updateDoc(doc(c.firestore(), COLLECTIONS.enrollments, enrollmentId(STU_A, CLASS_MINE)), {
+        active: false,
+        unenrolledAt: 2,
+      });
+    });
+    await assertFails(getDoc(doc(studentA(), COLLECTIONS.courses, CLASS_MINE)));
+  });
+
   it('never let a student LIST courses', async () => {
     await assertFails(getDocs(collection(studentA(), COLLECTIONS.courses)));
   });

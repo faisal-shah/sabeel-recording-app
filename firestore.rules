@@ -120,12 +120,17 @@ service cloud.firestore {
       allow get, list: if isAdmin()
         || (isStaff() && request.auth.uid in resource.data.managerUids);
 
-      // A student reads a class only through their own enrollment. The exists()
+      // A student reads a class only through their own ACTIVE enrollment. The
       // path is built from the PATH SEGMENT courseId plus their own uid, never
       // from document data, so it costs one call on a get. Students never LIST
       // courses — they list their enrollments and then get each class.
+      //
+      // Active, not merely present: unenrolment keeps the row (history
+      // survives), so `exists()` alone let a student removed from a class go
+      // on reading it for good. One `get` on the same path the `exists()`
+      // used, so the budget is unchanged.
       allow get: if isStudent()
-        && exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + courseId));
+        && get(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + courseId)).data.active == true;
 
       allow write: if false;
     }
@@ -269,6 +274,21 @@ service cloud.firestore {
           && progressId == request.resource.data.studentUid + '_'
               + request.resource.data.recordingId;
       }
+      /*
+       * SHAPED, like every other client-written document. "Inflating this gains
+       * nothing" is true of the VALUES; it says nothing about the types. A row
+       * whose `updatedAt` was a string reached every staff screen that formats
+       * it — `Intl.DateTimeFormat` throws on an invalid date, there is no error
+       * boundary, and the recording ledger for that class went blank for every
+       * manager and admin who opened it. Integers only, and only these keys.
+       */
+      function progressShape() {
+        return request.resource.data.keys().hasOnly(
+              ['studentUid', 'recordingId', 'courseId', 'positionMs', 'listenedMs', 'updatedAt'])
+          && request.resource.data.positionMs is int
+          && request.resource.data.listenedMs is int
+          && request.resource.data.updatedAt is int;
+      }
 
       // `resource` is NULL when the document does not exist, and dereferencing
       // it then is a rules evaluation error — not a denial. That is what a
@@ -303,13 +323,13 @@ service cloud.firestore {
        * seconds for the length of a lecture, and an update that may not move
        * `courseId` is free — so the class is fixed once, when the row is born.
        */
-      allow create: if mine()
+      allow create: if mine() && progressShape()
         && request.resource.data.courseId == grantedCourse(request.resource.data.recordingId);
       // Three things matter: `mine()` stops a student writing someone else's uid
       // into the row, the studentUid check stops them overwriting a row that is
       // already someone else's, and the courseId check stops them moving a row
       // out of the class its grant belongs to.
-      allow update: if mine()
+      allow update: if mine() && progressShape()
         && resource.data.studentUid == request.auth.uid
         && request.resource.data.courseId == resource.data.courseId;
       allow delete: if false;
@@ -350,6 +370,15 @@ service cloud.firestore {
           && completionId == request.resource.data.studentUid + '_'
               + request.resource.data.recordingId;
       }
+      // Shaped, for the reason `progressShape` gives: `completedAt` is
+      // formatted on the ledger and in its export.
+      function completionShape() {
+        return request.resource.data.keys().hasOnly(
+              ['studentUid', 'recordingId', 'courseId', 'completed', 'completedAt', 'updatedAt'])
+          && request.resource.data.completed is bool
+          && (request.resource.data.completedAt == null || request.resource.data.completedAt is int)
+          && request.resource.data.updatedAt is int;
+      }
       // Bound to the caller's own id, like `listeningProgress` above: an
       // unbound null arm would answer about any `${uid}_${recordingId}`.
       allow get: if (isStudent()
@@ -366,9 +395,9 @@ service cloud.firestore {
       // a wrong `courseId` shows a student complete on their own home and not
       // complete to the manager chasing them. `get` on create only; an update
       // may not move it.
-      allow create: if mineC()
+      allow create: if mineC() && completionShape()
         && request.resource.data.courseId == grantedCourse(request.resource.data.recordingId);
-      allow update: if mineC()
+      allow update: if mineC() && completionShape()
         && resource.data.studentUid == request.auth.uid
         && request.resource.data.courseId == resource.data.courseId;
       allow delete: if false;

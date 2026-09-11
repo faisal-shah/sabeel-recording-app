@@ -226,6 +226,28 @@ describe('completions: self-only client writes', () => {
     );
   });
 
+  it('a student lists their own completions — the shapes the home and the player send', async () => {
+    // `useMyCompletions` asks by studentUid alone; `useCompletion` adds the
+    // recording. Nothing here asserted either was served, so the student arm
+    // of `allow list` could have been deleted with every test still green.
+    await assertSucceeds(
+      getDocs(query(collection(student().firestore(), COLLECTIONS.completions), where('studentUid', '==', STUDENT))),
+    );
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(student().firestore(), COLLECTIONS.completions),
+          where('studentUid', '==', STUDENT),
+          where('recordingId', '==', REC),
+        ),
+      ),
+    );
+    await assertFails(getDocs(collection(student().firestore(), COLLECTIONS.completions)));
+    await assertFails(
+      getDocs(query(collection(student().firestore(), COLLECTIONS.completions), where('studentUid', '==', OUTSIDER))),
+    );
+  });
+
   /*
    * A CREATE, NOT AN UPDATE — and the distinction is the whole test.
    *
@@ -246,6 +268,26 @@ describe('completions: self-only client writes', () => {
         updatedAt: 2,
       }),
     );
+  });
+
+  it('a student cannot write a completion of the wrong shape', async () => {
+    // Same reason as the progress row: `completedAt` is formatted on the ledger
+    // and in the CSV export, and a string there throws in render.
+    const honest = {
+      studentUid: STUDENT,
+      recordingId: REC2,
+      courseId: CLASS_MINE,
+      completed: true,
+      completedAt: 2,
+      updatedAt: 2,
+    };
+    const ref = doc(student().firestore(), COLLECTIONS.completions, completionId(STUDENT, REC2));
+    await assertFails(setDoc(ref, { ...honest, completed: 'yes' }));
+    await assertFails(setDoc(ref, { ...honest, completedAt: 'x' }));
+    await assertFails(setDoc(ref, { ...honest, updatedAt: 'now' }));
+    await assertFails(setDoc(ref, { ...honest, note: 'extra' }));
+    await assertSucceeds(setDoc(ref, honest));
+    await assertFails(setDoc(ref, { ...honest, completedAt: 'x' }));
   });
 
   it('a student updates the completion they already have', async () => {

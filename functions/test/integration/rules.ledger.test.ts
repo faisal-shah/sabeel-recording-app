@@ -238,6 +238,22 @@ describe('completionOverrides', () => {
     );
   });
 
+  it('a student lists their own overrides — the shape the home sends — and nobody else\'s', async () => {
+    // `useMyOverrides` asks by studentUid; the only student case above is a
+    // `get`, so the list arm was asserted nowhere.
+    await assertSucceeds(
+      getDocs(
+        query(collection(student().firestore(), COLLECTIONS.completionOverrides), where('studentUid', '==', STUDENT)),
+      ),
+    );
+    await assertFails(
+      getDocs(
+        query(collection(student().firestore(), COLLECTIONS.completionOverrides), where('studentUid', '==', OUTSIDER)),
+      ),
+    );
+    await assertFails(getDocs(collection(student().firestore(), COLLECTIONS.completionOverrides)));
+  });
+
   it('no client may write an override (server-only)', async () => {
     for (const c of [mgrMine(), admin(), student()]) {
       await assertFails(

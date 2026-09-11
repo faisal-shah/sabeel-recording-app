@@ -132,6 +132,13 @@ describe('sessions rules', () => {
     await assertFails(getDoc(doc(mine().firestore(), COLLECTIONS.sessions, SESS_THEIRS)));
   });
 
+  it('lets a manager GET one of their own sessions — what the session page reads', async () => {
+    // Every manager positive above is a list; `useSessionState` on the session
+    // page, the ledger and the Zoom import is a `get`, and splitting the rule's
+    // `get, list` would have left this suite green with that page refused.
+    await assertSucceeds(getDoc(doc(mine().firestore(), COLLECTIONS.sessions, SESS_MINE)));
+  });
+
   /**
    * THE QUERY THE STAFF WORK QUEUE SENDS, at the widest scope it will ever send
    * it at.
