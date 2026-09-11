@@ -244,8 +244,9 @@ export function CourseDetailScreen({
         </Notice>
       ) : null}
 
-      {/* Course-level accountability at a glance. Zeroes out when archived (no
-          active assignments), while the recordings' history stays. */}
+      {/* Course-level accountability at a glance. Archiving the course changes
+          none of it: the grants stay active and the counts stand as the term's
+          record — it is archiving a RECORDING that closes grants. */}
       <Card>
         {/* Three stats on one line, each an unbreakable run. Ordinary spaces let
             a 320px wrap split "37" from "not complete" and then run the tail of

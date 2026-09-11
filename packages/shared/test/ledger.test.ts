@@ -4,6 +4,7 @@ import {
   attendanceGroups,
   attendanceReport,
   effectiveCompletion,
+  grantOutcome,
   rollup,
   ledgerBucket,
   type AttendanceStatus,
@@ -188,6 +189,37 @@ describe('rollup', () => {
 
   it('empties to zeros', () => {
     expect(rollup([], TODAY)).toEqual({ total: 0, complete: 0, incomplete: 0, missed: 0 });
+  });
+});
+
+/*
+ * WHAT A STAFF LEDGER ROW SAYS about a grant nobody has finished. "Not
+ * complete" and "Listen by <date>" both promise the student can still do it;
+ * on a course archived with listening off, nobody can. The student's own
+ * screens already say so ("no longer required and cannot be played"), and a
+ * ledger that went on saying "Listen by" beside them was the two populations
+ * reading two different facts off one grant.
+ */
+describe('grantOutcome', () => {
+  const TODAY = '2026-07-25';
+  it('is open while the date is ahead and the class can be played', () => {
+    expect(grantOutcome({ completed: false, dueDate: '2026-07-30' }, TODAY, true)).toBe('open');
+  });
+
+  it('is closed by an archived class with listening off, however far ahead the date', () => {
+    expect(grantOutcome({ completed: false, dueDate: '2099-01-01' }, TODAY, false)).toBe('closed');
+  });
+
+  it('is missed once the date has gone, whether or not the class can still be played', () => {
+    // The date passed: that is the Missed the manual defines, and archiving
+    // afterwards is filing. Nothing here can tell a miss that predates the
+    // archive from one the archive caused, so the row keeps the fact it has.
+    expect(grantOutcome({ completed: false, dueDate: '2026-07-24' }, TODAY, true)).toBe('missed');
+    expect(grantOutcome({ completed: false, dueDate: '2026-07-24' }, TODAY, false)).toBe('missed');
+  });
+
+  it('is complete before anything else is asked', () => {
+    expect(grantOutcome({ completed: true, dueDate: '2000-01-01' }, TODAY, false)).toBe('complete');
   });
 });
 

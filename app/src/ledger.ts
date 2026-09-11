@@ -8,7 +8,7 @@ import {
   attendanceGroups,
   attendanceReport,
   effectiveCompletion,
-  listenedFraction,
+  listenedShare,
   rollup,
   type AssignmentDoc,
   type AttendanceReport,
@@ -127,7 +127,8 @@ export interface LedgerRow {
   completed: boolean;
   source: 'override' | 'student' | 'none';
   overrideReason?: string;
-  listenedPct: number;
+  /** Null when they have listened but the recording's length is unknown. */
+  listenedPct: number | null;
   lastListened: number | null;
   completedAt: number | null;
   pending: boolean;
@@ -268,7 +269,7 @@ export function useRecordingLedger(
         completed: eff.completed,
         source: eff.source,
         overrideReason: eff.reason,
-        listenedPct: p ? listenedFraction(p.listenedMs, recording.durationSec) : 0,
+        listenedPct: p ? listenedShare(p.listenedMs, recording.durationSec) : 0,
         lastListened: p?.updatedAt ?? null,
         completedAt: c?.completedAt ?? null,
         pending: c?.pending ?? false,

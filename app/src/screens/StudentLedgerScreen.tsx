@@ -1,6 +1,13 @@
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { INSTITUTE_TIMEZONE, isOverdue, todayInZone, unbreakableDate } from '@sabeel/shared';
+import {
+  INSTITUTE_TIMEZONE,
+  canPlayFromCourse,
+  grantOutcome,
+  isOverdue,
+  todayInZone,
+  unbreakableDate,
+} from '@sabeel/shared';
 import { Button, Chips, Empty, Grid, Screen } from '../components/ui';
 import { LEDGER_FILTERS, useStudentLedger, type LedgerFilter, type StudentLedgerItem } from '../ledger';
 import { useCourseRecordings } from '../recordings';
@@ -24,6 +31,9 @@ export function StudentLedgerScreen({
   onOpenStudent: () => void;
 }) {
   const today = todayInZone(INSTITUTE_TIMEZONE);
+  // An archived class with listening off closes every open grant on it — the
+  // rows say so rather than "Listen by", which reads as still doable.
+  const playable = canPlayFromCourse(cls);
   const items = useStudentLedger(studentUid, cls.id);
   const recordings = useCourseRecordings(cls.id);
   const titleById = useMemo(() => new Map(recordings.map((r) => [r.id, r.title])), [recordings]);
@@ -38,7 +48,7 @@ export function StudentLedgerScreen({
 
   const exportRows = () => {
     const header = ['Recording', 'Status', 'Due', 'Override reason'];
-    const body = rows.map((r) => [r.title, statusLabel(r, today), r.dueDate, r.overrideReason ?? '']);
+    const body = rows.map((r) => [r.title, statusLabel(r, today, playable), r.dueDate, r.overrideReason ?? '']);
     void exportCsv(`${cls.name} - ${studentName} ledger.csv`, [header, ...body]);
   };
 
@@ -82,7 +92,9 @@ export function StudentLedgerScreen({
                   own line, so a four-row list showed the same fact in two
                   places. */}
               <View style={styles.rowMeta}>
-                <Text style={[styles.status, styleFor(r, today)]}>{statusLabel(r, today)}</Text>
+                <Text style={[styles.status, styleFor(r, today, playable)]}>
+                  {statusLabel(r, today, playable)}
+                </Text>
               </View>
             </View>
           ))}
@@ -92,17 +104,25 @@ export function StudentLedgerScreen({
   );
 }
 
-function statusLabel(r: StudentLedgerItem, today: string): string {
-  if (r.completed) return r.source === 'override' ? 'Completed (override)' : 'Completed';
-  if (isOverdue(r.dueDate, today)) return 'Missed';
-  // "Listen by", the same words the student sees on their own screens — not a
-  // staff-only synonym for the same date.
-  return `Listen by ${unbreakableDate(r.dueDate)}`;
+function statusLabel(r: StudentLedgerItem, today: string, playable: boolean): string {
+  switch (grantOutcome(r, today, playable)) {
+    case 'complete':
+      return r.source === 'override' ? 'Completed (override)' : 'Completed';
+    case 'missed':
+      return 'Missed';
+    case 'closed':
+      return 'Closed (course archived)';
+    case 'open':
+      // "Listen by", the same words the student sees on their own screens — not
+      // a staff-only synonym for the same date.
+      return `Listen by ${unbreakableDate(r.dueDate)}`;
+  }
 }
-function styleFor(r: StudentLedgerItem, today: string) {
-  if (r.completed) return styles.ok;
-  if (isOverdue(r.dueDate, today)) return styles.bad;
-  return styles.warn;
+function styleFor(r: StudentLedgerItem, today: string, playable: boolean) {
+  const outcome = grantOutcome(r, today, playable);
+  if (outcome === 'complete') return styles.ok;
+  if (outcome === 'open') return styles.warn;
+  return styles.bad;
 }
 
 const styles = StyleSheet.create({

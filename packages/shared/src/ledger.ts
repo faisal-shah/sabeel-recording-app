@@ -89,6 +89,32 @@ export function ledgerBucket(dueDate: string, completed: boolean, today: string)
   return dueBucket({ dueDate, completed }, today);
 }
 
+/**
+ * Where one required listening stands, for a staff ledger row.
+ *
+ * In the order the answers outrank each other: done is done; a date that has
+ * gone is Missed, the word the manual defines by the date, whether or not the
+ * class can still be played — nothing stored can tell a miss that predates an
+ * archive from one the archive caused, so the row keeps the fact it has; and
+ * a grant still inside its date on a course archived with listening OFF is
+ * CLOSED, not open: `getPlaybackUrl` refuses the audio, the student's own
+ * screens file it under Archived as "no longer required", and a ledger that
+ * went on saying "Not complete" or "Listen by <date>" promised something
+ * nobody could do. `playable` is `canPlayFromCourse` of the grant's class.
+ */
+export type GrantOutcome = 'complete' | 'missed' | 'closed' | 'open';
+
+export function grantOutcome(
+  item: { completed: boolean; dueDate: string },
+  today: string,
+  playable: boolean,
+): GrantOutcome {
+  if (item.completed) return 'complete';
+  if (isOverdue(item.dueDate, today)) return 'missed';
+  if (!playable) return 'closed';
+  return 'open';
+}
+
 // ------------------------------------------------------- attendance report ---
 // A course's attendance rolled up two ways — per session and per student — plus
 // each student's catch-up progress on the recordings they were accountable for.

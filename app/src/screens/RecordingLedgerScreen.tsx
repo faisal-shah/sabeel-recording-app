@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import {
   INSTITUTE_TIMEZONE,
+  canPlayFromCourse,
+  grantOutcome,
   isOverdue,
-  ledgerBucket,
   todayInZone,
-  type DueBucket,
+  type GrantOutcome,
 } from '@sabeel/shared';
 import { Button, Chips, Empty, Field, Grid, Notice, Row, Screen, SectionTitle } from '../components/ui';
 import {
@@ -41,6 +42,9 @@ export function RecordingLedgerScreen({
   cls: CourseRow;
 }) {
   const today = todayInZone(INSTITUTE_TIMEZONE);
+  // An archived class with listening off closes every open grant on it — the
+  // rows say so rather than "Not complete", which reads as still doable.
+  const playable = canPlayFromCourse(cls);
   // Reached from the cross-cohort library, where the course name alone is ambiguous.
   const cohortName = useCohortName()(cls.cohortId);
   const { loading, failed, accountable, attendees, absentees, lapsed, otherListeners, rollup } = useRecordingLedger(
@@ -79,8 +83,8 @@ export function RecordingLedgerScreen({
     const body = rows.map((r) => [
       r.name,
       r.attendance ?? '',
-      statusLabel(r, today),
-      `${Math.round(r.listenedPct * 100)}`,
+      statusLabel(r, today, playable),
+      r.listenedPct === null ? '' : `${Math.round(r.listenedPct * 100)}`,
       fmtDate(r.lastListened),
       fmtDate(r.completedAt),
       r.dueDate ?? '',
@@ -173,6 +177,7 @@ export function RecordingLedgerScreen({
               row={r}
               recordingId={recording.id}
               today={today}
+              playable={playable}
               busy={busy}
               onRun={run}
             />
@@ -261,7 +266,7 @@ export function RecordingLedgerScreen({
  * someone who did not is simply not in this story.
  */
 function ListenerRow({ row: r }: { row: LedgerRow }) {
-  const listened = r.listenedPct > 0 || !!r.lastListened;
+  const listened = r.listenedPct !== 0 || !!r.lastListened;
   return (
     <View style={styles.row}>
       <View style={styles.rowHead}>
@@ -269,7 +274,7 @@ function ListenerRow({ row: r }: { row: LedgerRow }) {
           <Text style={styles.name}>{r.name}</Text>
           {listened ? (
             <Text style={styles.sub}>
-              {Math.round(r.listenedPct * 100)}% listened
+              {listenedText(r.listenedPct)}
               {r.lastListened ? ` · last ${fmtDate(r.lastListened)}` : ''}
             </Text>
           ) : null}
@@ -284,12 +289,14 @@ function LedgerRowCard({
   row: r,
   recordingId,
   today,
+  playable,
   busy,
   onRun,
 }: {
   row: RequiredRow;
   recordingId: string;
   today: string;
+  playable: boolean;
   busy: string | null;
   onRun: (key: string, fn: () => Promise<unknown>) => void;
 }) {
@@ -314,7 +321,7 @@ function LedgerRowCard({
     setReason('');
     setOpen(false);
   };
-  const bucket = ledgerBucket(r.dueDate, r.completed, today);
+  const outcome = grantOutcome(r, today, playable);
 
   return (
     // Named, so a check about ONE student can be bound to their row. A regex
@@ -325,7 +332,7 @@ function LedgerRowCard({
         <View style={{ flex: 1 }}>
           <Text style={styles.name}>{r.name}</Text>
           <Text style={styles.sub}>
-            {Math.round(r.listenedPct * 100)}% listened
+            {listenedText(r.listenedPct)}
             {r.lastListened ? ` · last ${fmtDate(r.lastListened)}` : ''}
             {r.pending ? ' · pending sync' : ''}
           </Text>
@@ -333,7 +340,7 @@ function LedgerRowCard({
             <Text style={styles.override}>Override: {r.overrideReason}</Text>
           ) : null}
         </View>
-        <Text style={[styles.status, statusStyle(bucket)]}>{statusLabel(r, today)}</Text>
+        <Text style={[styles.status, statusStyle(outcome)]}>{statusLabel(r, today, playable)}</Text>
       </View>
 
       {/* NOT pushed to the foot. Grid row-mates are equal height, so pinning the
@@ -425,19 +432,33 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: 'su
   );
 }
 
-function statusLabel(r: RequiredRow, today: string): string {
-  if (r.completed) return r.source === 'override' ? 'Completed (override)' : 'Completed';
-  if (isOverdue(r.dueDate, today)) return 'Missed';
-  return 'Not complete';
+/** "42% listened" — or, when the recording's length is unknown, no number at
+ *  all: the row must not print a share nobody can compute as if it were 0. */
+function listenedText(pct: number | null): string {
+  return pct === null ? 'Listened' : `${Math.round(pct * 100)}% listened`;
 }
 
-// Typed as DueBucket, not string: this branched on a removed union member for a
-// while and rendered every Missed row amber, which a `string` parameter cannot
-// catch and this one would have.
-function statusStyle(bucket: DueBucket) {
-  if (bucket === 'done') return styles.ok;
-  if (bucket === 'missed') return styles.bad;
-  return styles.warn;
+function statusLabel(r: RequiredRow, today: string, playable: boolean): string {
+  switch (grantOutcome(r, today, playable)) {
+    case 'complete':
+      return r.source === 'override' ? 'Completed (override)' : 'Completed';
+    case 'missed':
+      return 'Missed';
+    case 'closed':
+      return 'Closed (course archived)';
+    case 'open':
+      return 'Not complete';
+  }
+}
+
+// Typed as GrantOutcome, not string: this branched on a removed union member
+// for a while and rendered every Missed row amber, which a `string` parameter
+// cannot catch and this one would have. Closed draws like Missed: nothing
+// further will happen to either row on its own.
+function statusStyle(outcome: GrantOutcome) {
+  if (outcome === 'complete') return styles.ok;
+  if (outcome === 'open') return styles.warn;
+  return styles.bad;
 }
 
 /**

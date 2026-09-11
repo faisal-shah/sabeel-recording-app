@@ -8,6 +8,7 @@ import {
   isEmptyDraft,
   isVisibleToStudents,
   listenedFraction,
+  listenedShare,
   mergeProgress,
   progressId,
   publishBlockers,
@@ -234,6 +235,29 @@ describe('listenedFraction', () => {
     // A recording whose duration could not be read still has to render.
     expect(listenedFraction(30_000, null)).toBe(0);
     expect(listenedFraction(30_000, 0)).toBe(0);
+  });
+});
+
+/*
+ * THE LEDGER'S NUMBER, which is read as a fact about the student. A bar can
+ * draw an unknown share as empty; a row saying "0% listened" beside "last
+ * listened yesterday" is a confident wrong answer on the screen staff use to
+ * decide who to chase. Unknown is unknown.
+ */
+describe('listenedShare', () => {
+  it('is the fraction when the length is known', () => {
+    expect(listenedShare(30_000, 60)).toBeCloseTo(0.5);
+    expect(listenedShare(500_000, 60)).toBe(1);
+  });
+
+  it('is unknown, not zero, when the recording has no length', () => {
+    expect(listenedShare(30_000, null)).toBeNull();
+    expect(listenedShare(30_000, 0)).toBeNull();
+  });
+
+  it('is zero for somebody who has not listened, whatever the length', () => {
+    expect(listenedShare(0, null)).toBe(0);
+    expect(listenedShare(0, 60)).toBe(0);
   });
 });
 

@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   INSTITUTE_TIMEZONE,
   allowedTransitions,
+  hasLedger,
   isDiscardable,
   isOverdue,
   publishBlockers,
@@ -787,7 +788,7 @@ function RecordingCard({
           </Notice>
         ) : null}
 
-        {r.status === 'published' ? (
+        {hasLedger(r.status) ? (
           <View style={styles.ledgerRow}>
             <Button
               testID="recording-ledger"

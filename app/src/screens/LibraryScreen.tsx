@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { isVisibleToStudents, type RecordingStatus } from '@sabeel/shared';
+import { hasLedger, isVisibleToStudents, type RecordingStatus } from '@sabeel/shared';
 import {
   Button,
   Card,
@@ -336,7 +336,7 @@ function RecordingLine({
           RENDERED WHEN THERE IS NOTHING IN IT, because the same `marginTop:
           'auto'` made an empty row reserve 76px of blank card under a recording
           with no audio, half the height of the card beside it. */}
-      {r.audioPath || r.status === 'published' ? (
+      {r.audioPath || hasLedger(r.status) ? (
         <View style={styles.actions}>
           <Row>
             {/* PRIMARY, and the only one on the card. Two identical sage bars
@@ -346,7 +346,7 @@ function RecordingLine({
             {r.audioPath ? (
               <Button testID={`library-listen-${r.title}`} label="Listen" onPress={onPlay} />
             ) : null}
-            {r.status === 'published' ? (
+            {hasLedger(r.status) ? (
               <Button
                 testID={`library-progress-${r.title}`}
                 label="Listening progress"

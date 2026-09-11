@@ -172,6 +172,19 @@ export function isVisibleToStudents(status: RecordingStatus): boolean {
   return status === 'published';
 }
 
+/**
+ * A recording whose listening ledger is worth opening: published now, or
+ * published once and since archived or unpublished. Archiving is how a term
+ * ENDS — and the term's record of who listened and who missed is the ledger,
+ * which offered its button on a published recording alone, so the history was
+ * unreachable from the moment it mattered most. The ledger already says what a
+ * closed grant means ("Excused, access closed"); this is what lets staff get
+ * to it. A draft has no ledger: nobody was ever granted it.
+ */
+export function hasLedger(status: RecordingStatus): boolean {
+  return status === 'published' || status === 'archived' || status === 'unpublished';
+}
+
 /** Storage object path for a recording's audio. One definition, used by the
  *  upload client, the rules tests and the signing callable. */
 export function audioStoragePath(recordingId: string): string {
@@ -234,5 +247,20 @@ export function mergeProgress(
  *  a recording with no duration renders an empty bar rather than NaN. */
 export function listenedFraction(listenedMs: number, durationSec: number | null): number {
   if (!durationSec || durationSec <= 0) return 0;
+  return Math.min(1, listenedMs / (durationSec * 1000));
+}
+
+/**
+ * Fraction listened, for a ledger row — or null when it cannot be known.
+ *
+ * `listenedFraction` answers 0 for a recording with no length because a bar has
+ * to draw something; a row that printed that 0 as "0% listened" beside "last
+ * listened yesterday" was a confident wrong answer on the screen staff use to
+ * decide who to chase. Somebody who has played nothing is 0 whatever the
+ * length; somebody who has, on a recording of unknown length, is unknown.
+ */
+export function listenedShare(listenedMs: number, durationSec: number | null): number | null {
+  if (listenedMs <= 0) return 0;
+  if (!durationSec || durationSec <= 0) return null;
   return Math.min(1, listenedMs / (durationSec * 1000));
 }
