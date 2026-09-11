@@ -461,9 +461,11 @@ recorded is kept.
   on their list marked *Missed*, with the date it closed, and can no longer play
   it. Move the session's Listen by date forward to reopen it.
 - **A student who joins late** wasn't on the roster when earlier attendance was
-  taken, so they are **not** retroactively given those older sessions. If you
-  *do* want a latecomer to catch up on an earlier one, open that session, mark
-  them **Excused**, and re-submit attendance.
+  taken, so they are **not** retroactively given those older sessions. On an
+  earlier session's register they appear as *not marked* — correcting somebody
+  else's mark there leaves them that way. If you *do* want a latecomer to catch
+  up on an earlier one, open that session, mark them **Excused**, and re-submit
+  attendance.
 - **Unpublishing** a recording closes it to everyone again.
 
 ## 2.6 The recording ledger — who has caught up

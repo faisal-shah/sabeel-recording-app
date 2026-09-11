@@ -48,6 +48,7 @@ import { canPickAudio, pickAudioFile } from '../filePicker';
 import { useWide } from '../useWidth';
 import { getTheme, spacing } from '../theme';
 import { errorText } from '../errors';
+import { attendancePayload, registerMark } from '../attendanceRegister';
 
 const t = getTheme();
 const STATUSES: AttendanceStatus[] = ['present', 'absent', 'excused'];
@@ -264,8 +265,9 @@ function AttendanceSection({ session }: { session: SessionRow }) {
   useEffect(() => {
     setMarks({});
   }, [session.attendanceSubmittedAt]);
-  const statusOf = (uid: string): AttendanceStatus =>
-    marks[uid] ?? session.attendance[uid] ?? 'present';
+  // A submitted register leaves a student who joined since UNMARKED — see
+  // `attendanceRegister`; a new one starts everyone as Present.
+  const statusOf = (uid: string) => registerMark(session, marks, uid);
   const setStatus = (uid: string, s: AttendanceStatus) =>
     setMarks((m) => ({ ...m, [uid]: s }));
   // "Everyone must listen" is now said by EXCUSING everyone: excused is the only
@@ -285,7 +287,7 @@ function AttendanceSection({ session }: { session: SessionRow }) {
       setError(null);
       setInfo(null);
       try {
-        const attendance = Object.fromEntries(activeUids.map((uid) => [uid, statusOf(uid)]));
+        const attendance = attendancePayload(session, activeUids, marks);
         const res = await submitAttendance({ sessionId: session.id, attendance });
         setMarks({});
         setInfo(`Attendance submitted for ${res.marked} student${res.marked === 1 ? '' : 's'}.`);
@@ -334,9 +336,14 @@ function AttendanceSection({ session }: { session: SessionRow }) {
                   wide ? styles.rosterRowWide : null,
                 ]}
               >
-                <Text style={[styles.rosterName, wide ? styles.rosterNameWide : null]}>
-                  {nameByUid.get(uid) ?? uid}
-                </Text>
+                <View style={[styles.rosterName, wide ? styles.rosterNameWide : null]}>
+                  <Text style={styles.rosterNameText}>{nameByUid.get(uid) ?? uid}</Text>
+                  {statusOf(uid) === null ? (
+                    <Text style={styles.rosterHint} testID={`att-${nameByUid.get(uid) ?? uid}-unmarked`}>
+                      Joined after this session — not marked
+                    </Text>
+                  ) : null}
+                </View>
                 <View style={[styles.segment, wide ? styles.segmentWide : null]}>
                   {STATUSES.map((s) => {
                     const on = statusOf(uid) === s;
@@ -817,8 +824,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: t.border.subtle,
   },
-  rosterName: { fontSize: 15, color: t.text.primary, marginBottom: spacing(1) },
+  rosterName: { marginBottom: spacing(1) },
   rosterNameWide: { flex: 1, marginBottom: 0 },
+  rosterNameText: { fontSize: 15, color: t.text.primary },
+  rosterHint: { fontSize: 12, color: t.text.secondary, marginTop: 2 },
   segment: {
     flexDirection: 'row',
     borderRadius: 8,
