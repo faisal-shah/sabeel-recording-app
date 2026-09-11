@@ -108,13 +108,15 @@ export function Screen({ title, titleLink, subtitle, status, parent, width = 're
               onPress={titleLink.onPress}
               style={({ pressed }) => [styles.h1Link, pressed ? styles.h1LinkPressed : null]}
             >
-              <Text style={styles.h1}>
+              <Text style={styles.h1} role="heading" aria-level={1} testID="screen-title">
                 {title}
                 <Text style={styles.h1Chevron}>{' ›'}</Text>
               </Text>
             </Pressable>
           ) : title ? (
-            <Text style={styles.h1}>{title}</Text>
+            <Text style={styles.h1} role="heading" aria-level={1} testID="screen-title">
+              {title}
+            </Text>
           ) : null}
           {status ? <StatusLight status={status} /> : null}
           {parent || subtitle ? (

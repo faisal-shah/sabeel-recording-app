@@ -264,6 +264,16 @@ async function more(page, option) {
 const shot = (page, name) => page.screenshot({ path: `${SHOTS}/${name}.png` });
 
 /**
+ * The screen's own H1 — what a pushed screen cannot share with the page before
+ * it. By test id and visibility, not by role: the stack header's title is a
+ * heading too, and the screens underneath keep theirs, hidden.
+ */
+const screenTitle = async (page) =>
+  (await page.getByTestId('screen-title').filter({ visible: true }).first().innerText())
+    .replace(/\s*›\s*$/, '')
+    .trim();
+
+/**
  * A page's visible text, with non-breaking punctuation normalised.
  *
  * Dates inside a sentence are rendered with non-breaking hyphens so a narrow
@@ -497,10 +507,11 @@ check('Forward returns to the course', admin.url() === courseUrl, path());
 // Cold-loading a deep URL must land on that screen, which only works because the
 // screen resolves its documents from the id rather than a passed-in snapshot.
 await admin.goto(courseUrl, { waitUntil: 'domcontentloaded' });
-await admin.waitForTimeout(5000);
+// The course page's own tabs, not a name the home screen lists as well.
+await admin.getByTestId('nav-sessions').waitFor({ timeout: 20000 });
 check(
   'a course URL opened cold renders that course',
-  (await bodyText(admin)).toLowerCase().includes('hikam foundations'),
+  (await screenTitle(admin)) === 'Hikam Foundations',
   path(),
 );
 // A URL whose subject is gone must SAY so. The screens resolve their subject
@@ -724,8 +735,10 @@ await shot(admin, '10-attendance');
 const chooser = admin.waitForEvent('filechooser');
 await tap(admin, 'recording-upload');
 await (await chooser).setFiles(AUDIO_FIXTURE);
-await sawText(admin, 'published', 90000).catch(() => {}); // status chip appears after finalize
-await admin.waitForTimeout(1500);
+// Listen appears only once `finalizeRecordingUpload` has recorded the audio
+// path — the one signal on screen that the upload is complete. (This used to
+// wait, with the failure swallowed, for a word the screen never shows.)
+await admin.getByTestId('recording-listen').waitFor({ timeout: 90000 });
 const recs = await readCollection('recordings');
 const rf = recs[0]?.fields ?? {};
 /*
@@ -1333,11 +1346,13 @@ const stuCard = admin
   .first();
 const stuName = (await stuCard.innerText()).split('\n')[0].trim();
 await stuCard.click();
-await admin.waitForTimeout(2500);
-let drill = await bodyText(admin);
+// WAIT FOR SOMETHING ONLY THE DESTINATION HAS. The report page already
+// carries every student's name and the words "required listening", so a
+// body-text check after a fixed wait passed when the tap did nothing.
+await admin.getByTestId('student-export').waitFor({ timeout: 10000 });
 check(
   'a by-student card opens THAT student’s listening progress',
-  /required listening/i.test(drill) && drill.includes(stuName),
+  (await screenTitle(admin)) === stuName,
   stuName,
 );
 
@@ -1350,11 +1365,11 @@ const sesCard = admin
   .first();
 const sesName = (await sesCard.innerText()).split('\n')[0].trim();
 await sesCard.click();
-await admin.waitForTimeout(2500);
-drill = await bodyText(admin);
+// Same again: the register's own controls exist on the session page alone.
+await admin.getByTestId('att-submit').waitFor({ timeout: 10000 });
 check(
   'a by-session card opens THAT session',
-  /ATTENDANCE/i.test(drill) && drill.includes(sesName),
+  (await screenTitle(admin)) === sesName,
   sesName,
 );
 
@@ -1390,6 +1405,18 @@ check(
   'archiving one course leaves the other alone',
   s['Hikam Foundations'].eff === false && s['Arabic I'].eff === true,
   JSON.stringify(s),
+);
+// The student's side of an archive with listening off: a recording they had
+// COMPLETED stays under Completed — done is done, and only an open grant is
+// filed under Archived. (An open grant on an archived class is the seeded
+// world's job; nobody here holds one at this point.)
+await goHome(student);
+const doneAfterArchive = student.getByTestId('group-done');
+await doneAfterArchive.waitFor({ timeout: 10000 });
+check(
+  'archiving the course leaves a completed recording under Completed, not Archived',
+  (await doneAfterArchive.getByTestId('task-Session 1').isVisible()) &&
+    (await student.getByTestId('group-archived').count()) === 0,
 );
 
 // cohort-archive lives INSIDE the cohort now, mirroring a course: the list is a
@@ -1456,11 +1483,12 @@ check('it lists the courses they are enrolled in', stuPage.includes('hikam found
 await shot(admin, '20-student-page');
 
 await tap(admin, 'student-course-open-Hikam Foundations');
-await admin.waitForTimeout(2500);
-const stuLedger = (await bodyText(admin)).toLowerCase();
+// The student page already says both names; only the ledger has its export.
+await admin.getByTestId('student-export').waitFor({ timeout: 10000 });
 check(
   'tapping a course opens THAT student\'s progress for it',
-  stuLedger.includes('bilal khan') && stuLedger.includes('hikam foundations'),
+  (await screenTitle(admin)) === 'Bilal Khan' &&
+    /hikam foundations/i.test(await bodyText(admin)),
 );
 
 // Disabling moves them into a section that is CLOSED, and closed means
@@ -1472,7 +1500,9 @@ await tap(admin, 'student-access');
 await admin.waitForTimeout(2500);
 await goHome(admin);
 await tap(admin, 'tab-people');
-await admin.waitForTimeout(2000);
+// The list has arrived when another student is on it; a count of zero on a
+// list that has not loaded yet proves nothing.
+await admin.getByTestId('student-open-fatima@example.com').waitFor({ timeout: 10000 });
 check(
   'a disabled student leaves the main list',
   (await admin.getByTestId('student-open-bilal@example.com').count()) === 0,
@@ -1958,7 +1988,9 @@ await goHome(admin);
 await tap(admin, 'tab-people');
 await tap(admin, 'segment-staff');
 await tap(admin, 'staff-access-manager@oursabeel.com');
-await admin.waitForTimeout(2500);
+// The Disabled section appears only once somebody is in it — that is the
+// change landing, not a fixed wait that a slow snapshot outlives.
+await admin.getByTestId('staff-disabled').waitFor({ timeout: 10000 });
 check(
   'a disabled staff member leaves the main list',
   (await admin.getByTestId('staff-role-manager@oursabeel.com').filter({ visible: true }).count()) === 0,
@@ -2054,6 +2086,16 @@ check(
   'not one live subscription was refused in the entire walkthrough',
   listenerDenials.length === 0,
   [...new Set(listenerDenials)].join(' | '),
+);
+// An exception or rejection that reached the top of ANY page is a defect,
+// whatever else passed — it was collected and printed for months without
+// failing anything. The outsider's page is the one exception: its account is
+// deleted under it by design, and the SDK's reaction to that is the point.
+const unhandled = consoleErrors.filter((e) => /UNHANDLED/.test(e) && !e.startsWith('[outsider]'));
+check(
+  'nothing reached the top of a page unhandled, except on the outsider\'s',
+  unhandled.length === 0,
+  unhandled.slice(0, 3).join(' | '),
 );
 
 // ------------------------------------------------------------------ result --
