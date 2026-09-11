@@ -36,6 +36,74 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-09-11 — **Five review passes over the whole product, and what they
+  found.** Five read-only reviews in parallel — backend callables and
+  triggers; rules against every client query; client playback and sync logic;
+  every screen's states; identity, notifications and the ops scripts — each
+  asked for `file:line` evidence, a reproduction, a proposed test and a note
+  on what else the change would touch. Every finding below was then confirmed
+  by a test that is red on the old code before anything was changed, or by
+  tracing the path end to end where a test cannot reach. Fixed:
+
+  **Entitlement and data.** A closed session revived a lapsed grant on any
+  later edit (the fixture that hid it had dates that were "next month" when
+  written and closed by September). `createRecordingDraft`, `applyEnrollmentActive`
+  and `clearOverride` were read-then-write like the enrolment double tap, and
+  are transactions now; the wrapper writes no audit row for a call that
+  changed nothing (`audit.noop`). `retryZoomImport` would re-download over a
+  published recording's audio and drop it to draft. `createStudent` left an
+  orphan Auth user when an admin named a stale course, and accepted a
+  colleague's `@oursabeel.com` address — which would have folded that
+  colleague's first Google sign-in into a student account with no way into
+  the approval queue. Dates like `2026-99-99` passed validation. The register
+  wrote "present" for a student who joined the class after a session was
+  taken, on the next correction of anybody else's mark.
+
+  **Notifications.** A send that failed kept its once-marker, so the one
+  delivery was spent on nobody, and the trigger did not retry. The last-day
+  reminder was keyed on the recording alone, so a reopened session's new last
+  day passed in silence. Neither student message respected an archived
+  course with listening off, nor (recordingReady) a due date already gone.
+
+  **Rules.** The two student-written collections took any type, so a string
+  `updatedAt` would have thrown in the ledger's date formatter for every
+  staff member of that class. A student removed from a class went on reading
+  it — the enrolment row exists for the history. Missing positive halves of
+  four rules tests added.
+
+  **Client.** The signed-URL cache reused a URL that would expire before the
+  recording ended. The native outbox replayed an old completion over a newer
+  one made on another device, an acknowledgement could forget a queued
+  un-mark, and two mutations could erase each other's entry. Audio failures
+  printed "audio error 2"; Storage failures printed the object path. The
+  player route re-used one instance across recordings; the cohort page was
+  reachable by a manager by URL; the player and the docked bar held a
+  student's deadline as it was when the link was made, not as their grant
+  has it now; a staff card and the ledger's override editor re-enabled
+  before the snapshot confirmed; the ledger said "no one was excused" of a
+  register never taken; two loading states stated an answer before the
+  listener had one; a slash in a course name broke the phone's CSV export
+  silently; the gate screen polled every three seconds for as long as it was
+  open.
+
+  **Ops.** `seed-demo-prod` wrote fabricated completions, progress and
+  overrides over REAL students' active grants (flagged as demo, so the wipe
+  then deleted them) — filtered to demo grants, and its committed password
+  minted per run. Checked against the live data: every real completion event
+  has its document and every real grant its progress, so nothing real was
+  lost. `prod-smoke`'s two bundle checks could not fail (an idle sign-in
+  screen makes no Auth request; the dev row's id was wrong); it now provokes
+  one and matches the prefix. The wipe's verify reads the `sent` and
+  `devices` groups and every Auth page.
+
+  **Reviewed and left as decisions**, recorded in TODO.md: whether a callable
+  should check the token against the user record on every call, closing the
+  up-to-an-hour window a disabled account keeps by holding its token (one
+  Auth lookup per call); whether the student home should move an archived
+  course's recordings out of "required listening"; whether the three
+  student-write creates should require an ACTIVE grant rather than any
+  grant; the remaining empty states that render before the first snapshot.
+
 - 2026-09-11 — **A review of v0.6.0 against production found the double tap.**
 
   Reading the five features back against the live data before Faisal tried

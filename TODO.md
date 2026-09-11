@@ -439,3 +439,31 @@ from here.
       Play-distributed app may not point at a sideload page for the update, so
       the message would name Google Play once that exists — the document can
       carry the text.
+
+### 8. Four decisions from the 2026-09-11 review (yours)
+
+- [ ] **Should every callable check the token against the user record?** A
+      disabled account keeps working through callables — minting playback
+      URLs, staff mutations — for up to an hour, because an ID token is a
+      bearer credential until it expires and nothing re-checks it. The app
+      signs itself out within seconds (the profile listener), so this only
+      bites someone holding a raw token. Closing it costs one Auth lookup per
+      callable (`verifyIdToken(token, true)`) and a hard dependency on the
+      Auth backend for every call. The manual and the brief currently promise
+      "immediately"; either the check goes in or the wording changes.
+- [ ] **Archived course, listening off, on the student home.** Its recordings
+      still count as required listening, one can be the "Next to listen" hero,
+      and the player then says the course is archived. The brief says archived
+      courses move out of default student views. Proposed: a quiet "Archived"
+      group below Missed, excluded from the hero and from "still to listen".
+- [ ] **Student writes on a lapsed grant.** A student whose grant is inactive
+      (corrected to present, unenrolled, unpublished) can still create a
+      progress row, a completion and a completion event — the rules require the
+      grant to EXIST, not to be active. No access is gained; the rows show on
+      the ledger as ticks for people who no longer hold the recording. Tighten
+      to active, or leave and say so?
+- [ ] **Empty states during a cold load.** Several screens still print "No
+      … yet" for the length of the first load (course detail counts, session
+      register, staff list, sessions, cohorts, students, audit, library). Two
+      of the worst are fixed; the rest want a `resolved` flag on `useLiveQuery`
+      and a sentence each.
