@@ -91,3 +91,35 @@ export const setCohortArchived = auditedCall('setCohortArchived', async (req) =>
   requireAdmin(req);
   return applyCohortArchived(validateSetCohortArchived(req.data));
 });
+
+export function validateRenameCohort(data: unknown): { cohortId: string; name: string } {
+  const d = data as { cohortId?: unknown } | null;
+  if (typeof d?.cohortId !== 'string' || !d.cohortId) {
+    throw new HttpsError('invalid-argument', 'cohortId is required.');
+  }
+  // The same rule a new cohort's name passes — one definition of a valid name,
+  // so a cohort cannot be renamed to something it could not have been created as.
+  return { cohortId: d.cohortId, name: validateCohortName(data) };
+}
+
+/**
+ * Rename a cohort. Its own callable rather than a `name` field on
+ * `setCohortArchived`: archiving cascades over every class in the cohort and a
+ * rename touches nothing but the one document, so one call that might do either
+ * would have to be read twice to know which it did — in the audit log most of
+ * all.
+ */
+export async function applyCohortRename(input: { cohortId: string; name: string }) {
+  const ref = getFirestore().collection(COLLECTIONS.cohorts).doc(input.cohortId);
+  if (!(await ref.get()).exists) throw new HttpsError('not-found', 'No such cohort.');
+  await ref.update({ name: input.name });
+  return { cohortId: input.cohortId, name: input.name };
+}
+
+export const renameCohort = auditedCall('renameCohort', async (req, audit) => {
+  requireAdmin(req);
+  const input = validateRenameCohort(req.data);
+  // The new name, so the log answers "renamed to what?" without a second lookup.
+  audit.detail = { name: input.name };
+  return applyCohortRename(input);
+});

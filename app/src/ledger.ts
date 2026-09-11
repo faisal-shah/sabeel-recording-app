@@ -4,6 +4,7 @@ import { httpsCallable } from 'firebase/functions';
 import {
   AUDIT_PAGE,
   COLLECTIONS,
+  QUEUE_SCOPE,
   attendanceGroups,
   attendanceReport,
   effectiveCompletion,
@@ -601,4 +602,74 @@ export function useAudit(courseId: string | null, enabled = true): AuditRow[] {
       empty: [],
     },
   );
+}
+
+/**
+ * Everything the log holds about one student, newest first — an ADMIN's read.
+ *
+ * One query, on the key every action on a student carries: `createStudent`,
+ * `setStudentAccess` and both enrolment callables all name the student under
+ * `targets.studentUid`. The admin arm of the audit rule reads no documents, so
+ * the query needs no other constraint. `studentHistory` turns the rows into the
+ * page's sentences.
+ */
+export function useStudentAudit(studentUid: string | null): AuditRow[] {
+  return useLiveQuery<AuditRow[]>(
+    () =>
+      studentUid
+        ? query(
+            collection(db, COLLECTIONS.auditLog),
+            where('targets.studentUid', '==', studentUid),
+            orderBy('at', 'desc'),
+            limit(AUDIT_PAGE),
+          )
+        : null,
+    [studentUid],
+    {
+      label: 'studentAudit',
+      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as AuditEntryDoc) })),
+      empty: [],
+    },
+  );
+}
+
+/**
+ * The same history, as a MANAGER may read it: pinned to the courses they run.
+ *
+ * The manager arm of the audit rule resolves a course lookup from each row, so
+ * the query has to say which courses — an `in` over their ids, the shape the
+ * work queue sends, and bounded the same way (`QUEUE_SCOPE.manager`, the
+ * per-query document-access ceiling). What it cannot reach is deliberate: a
+ * class-less row such as an access change is admin-only, and an enrolment in a
+ * course they do not run is not theirs to see. `truncated` says when the bound
+ * bit, so the page can say the history is partial rather than let it read as
+ * whole.
+ */
+export function useStudentAuditIn(
+  studentUid: string | null,
+  courseIds: readonly string[],
+): { rows: AuditRow[]; truncated: boolean } {
+  // A string first, the array from it — a stable subscription input from a
+  // course list that is a new array on every snapshot (see `useTodayQueue`).
+  const key = [...courseIds].sort().slice(0, QUEUE_SCOPE.manager).join(',');
+  const scope = useMemo(() => (key ? key.split(',') : []), [key]);
+  const rows = useLiveQuery<AuditRow[]>(
+    () =>
+      studentUid && scope.length > 0
+        ? query(
+            collection(db, COLLECTIONS.auditLog),
+            where('courseId', 'in', scope),
+            where('targets.studentUid', '==', studentUid),
+            orderBy('at', 'desc'),
+            limit(AUDIT_PAGE),
+          )
+        : null,
+    [studentUid, scope],
+    {
+      label: 'studentAuditScoped',
+      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as AuditEntryDoc) })),
+      empty: [],
+    },
+  );
+  return { rows, truncated: courseIds.length > QUEUE_SCOPE.manager };
 }

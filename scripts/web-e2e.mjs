@@ -119,11 +119,25 @@ async function reset() {
   }
 }
 
-/** Out-of-band read; 'Bearer owner' bypasses rules deliberately. */
+/**
+ * Out-of-band read; 'Bearer owner' bypasses rules deliberately.
+ *
+ * EVERY PAGE. The REST list answers thirty documents at a time and says so with
+ * a `nextPageToken`, which this ignored — so once a run wrote its thirty-first
+ * audit entry the audit assertions read an arbitrary thirty of them, and which
+ * actions were "missing" changed from run to run.
+ */
 async function readCollection(name) {
-  const r = await fetch(`${FS_READ}/${name}`, { headers: { Authorization: 'Bearer owner' } });
-  const j = await r.json();
-  return j.documents ?? [];
+  const out = [];
+  let token = '';
+  do {
+    const url = `${FS_READ}/${name}?pageSize=300${token ? `&pageToken=${encodeURIComponent(token)}` : ''}`;
+    const r = await fetch(url, { headers: { Authorization: 'Bearer owner' } });
+    const j = await r.json();
+    out.push(...(j.documents ?? []));
+    token = j.nextPageToken ?? '';
+  } while (token);
+  return out;
 }
 
 const activeAssignments = async () =>
@@ -162,14 +176,17 @@ const consoleErrors = [];
  */
 const listenerDenials = [];
 
-async function newSession() {
+/** `who` tags the errors a page reports, so a 400 can be traced to the session
+ *  that met it — the outsider's, whose account is deleted under it, is
+ *  expected to see one; anybody else's is news. */
+async function newSession(who) {
   const ctx = await browser.newContext({
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 2,
   });
   const page = await ctx.newPage();
   page.on('console', (m) => {
-    if (m.type() === 'error') consoleErrors.push(m.text());
+    if (m.type() === 'error') consoleErrors.push(`[${who}] ${m.text()}`);
     // Denials the app marks expected (a session ending) are excluded by design.
     if (m.type() === 'warning' && / listener\b/.test(m.text()) && !/expected/.test(m.text())) {
       listenerDenials.push(m.text());
@@ -179,7 +196,7 @@ async function newSession() {
   // Firebase SDK reporting something it handled; a `pageerror` is an exception
   // or an unhandled rejection that reached the top — a real defect, and one the
   // summary line used to render indistinguishably from the other.
-  page.on('pageerror', (e) => consoleErrors.push(`UNHANDLED: ${String(e)}`));
+  page.on('pageerror', (e) => consoleErrors.push(`[${who}] UNHANDLED: ${String(e)}`));
   await page.goto(WEB, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(3000);
   return page;
@@ -265,7 +282,7 @@ await reset();
 
 // ---------------------------------------------------------------- identity --
 console.log('\nIdentity');
-const admin = await newSession();
+const admin = await newSession('admin');
 await shot(admin, '01-signin');
 check('sign-in screen renders', (await bodyText(admin)).includes('Sign in with Google'));
 
@@ -310,7 +327,7 @@ const again = await fetch(`${FN}/bootstrapAdmin`);
 check('bootstrapAdmin refuses a second call', again.status === 409);
 
 // A second staff member, approved from the admin's session.
-const mgr = await newSession();
+const mgr = await newSession('mgr');
 await tap(mgr, 'dev-signin-manager');
 await sawText(mgr, 'Waiting for approval');
 await tap(admin, 'tab-people');
@@ -323,7 +340,7 @@ check(
 );
 
 // An off-domain account must be deleted outright, not marked rejected.
-const outsider = await newSession();
+const outsider = await newSession('outsider');
 await tap(outsider, 'dev-signin-outsider');
 /**
  * Wait for the TRANSITION, not for a duration.
@@ -427,6 +444,30 @@ check(
     (await shows(admin, 'course-open-Arabic I')),
 );
 await shot(admin, '04-courses');
+
+// Rename the cohort from its own page. The field is seeded from the live
+// document and the title reads the same document, so the heading follows the
+// write without a reload — and the list, reached fresh, carries the new name.
+// Renamed BACK afterwards, because every later step opens `Autumn 2026` by name.
+await admin.getByTestId('cohort-rename').fill('Autumn 2026 — Term 1');
+await tap(admin, 'cohort-rename-save');
+await sawText(admin, 'Autumn 2026 — Term 1');
+check('a cohort can be renamed, and its page follows the write live', await showsText(admin, 'Autumn 2026 — Term 1'));
+await goHome(admin);
+await tap(admin, 'tab-courses');
+await admin.getByTestId('cohort-open-Autumn 2026 — Term 1').waitFor({ timeout: 20000 }).catch(() => {});
+check(
+  'the cohort list carries the new name',
+  await shows(admin, 'cohort-open-Autumn 2026 — Term 1'),
+);
+await tap(admin, 'cohort-open-Autumn 2026 — Term 1');
+await admin.getByTestId('cohort-rename').fill('Autumn 2026');
+await tap(admin, 'cohort-rename-save');
+// Exact, because the heading it replaces contains these words as a prefix.
+await admin.getByText('Autumn 2026', { exact: true }).filter({ visible: true }).first().waitFor({ timeout: 20000 });
+await goHome(admin);
+await tap(admin, 'tab-courses');
+await admin.getByTestId('cohort-open-Autumn 2026').waitFor({ timeout: 20000 });
 
 // ------------------------------------------------------- browser history --
 // Back used to leave the site: with no `linking` config React Navigation never
@@ -556,7 +597,7 @@ const redeem = await fetch(
 );
 check('a set-password link is issued and redeemable', redeem.status === 200);
 
-const student = await newSession();
+const student = await newSession('student');
 await student.getByTestId('signin-email').fill('fatima@example.com');
 await student.getByTestId('signin-password').fill('StudentPass123!');
 await tap(student, 'signin-student');
@@ -1167,7 +1208,7 @@ const bilalRedeem = await fetch(
 );
 check('the overridden student can set their own password', bilalRedeem.status === 200);
 
-const overridden = await newSession();
+const overridden = await newSession('overridden');
 await overridden.getByTestId('signin-email').fill('bilal@example.com');
 await overridden.getByTestId('signin-password').fill('BilalPass123!');
 await tap(overridden, 'signin-student');
@@ -1382,6 +1423,22 @@ check(
   s['Arabic I'].eff === true && s['Hikam Foundations'].eff === false,
   JSON.stringify(s),
 );
+
+// ------------------------------------ an archived course is not offered --
+// Hikam Foundations is archived at this point (the cascade block above left it
+// so) and Arabic I is live. A new student is enrolled into something that is
+// running, so the create sheet offers only the live course.
+await goHome(admin);
+await tap(admin, 'tab-people');
+await tap(admin, 'students-add');
+await admin.getByTestId('student-course-Arabic I').waitFor({ timeout: 20000 });
+check(
+  'the create-student sheet offers the live course and not the archived one',
+  (await admin.getByTestId('student-course-Arabic I').count()) === 1 &&
+    (await admin.getByTestId('student-course-Hikam Foundations').count()) === 0,
+);
+await admin.getByText('Cancel', { exact: true }).filter({ visible: true }).first().click();
+await admin.waitForTimeout(800);
 
 // ------------------------------------------------------- the student's page --
 // Everything about one student in one place. The courses list is the part worth
@@ -1791,6 +1848,120 @@ check(
     (await admin.getByTestId('notify-attendanceMissing').count()) === 0,
 );
 
+// ------------------------------------------------------------ the library --
+console.log('\nRecording library');
+// The cohort and course dropdowns, driven as the real web controls they are:
+// `<select>`s, which is what gives them keyboard and type-ahead for free.
+await goHome(admin);
+await tap(admin, 'tab-library');
+await admin.getByTestId('library-listen-Session 1').waitFor({ timeout: 20000 });
+check('the library lists the recording with nothing chosen', await shows(admin, 'library-listen-Session 1'));
+check('…and offers no clear control when nothing is narrowing', (await admin.getByTestId('library-clear').count()) === 0);
+await admin.getByTestId('library-cohort').selectOption({ label: 'Autumn 2026' });
+await admin.waitForTimeout(600);
+check(
+  'choosing the cohort alone keeps every recording in it',
+  (await shows(admin, 'library-listen-Session 1')) && (await shows(admin, 'library-clear')),
+);
+// Inside a chosen cohort the course list carries no cohort suffix.
+await admin.getByTestId('library-course').selectOption({ label: 'Arabic I' });
+await admin.waitForTimeout(600);
+check(
+  'choosing a course narrows to that course — the other course\'s recording is gone',
+  (await admin.getByTestId('library-listen-Session 1').filter({ visible: true }).count()) === 0 &&
+    (await showsText(admin, 'No recordings match these filters')),
+);
+await admin.getByTestId('library-course').selectOption({ label: 'Hikam Foundations' });
+await admin.waitForTimeout(600);
+check('choosing the recording\'s own course shows it', await shows(admin, 'library-listen-Session 1'));
+await admin.getByTestId('library-course').selectOption({ label: 'Arabic I' });
+await admin.waitForTimeout(600);
+await tap(admin, 'library-clear');
+await admin.waitForTimeout(600);
+check(
+  'Clear filters restores the whole library and removes itself',
+  (await shows(admin, 'library-listen-Session 1')) &&
+    (await admin.getByTestId('library-clear').count()) === 0 &&
+    (await admin.getByTestId('library-cohort').inputValue()) === '' &&
+    (await admin.getByTestId('library-course').inputValue()) === '',
+);
+await shot(admin, '27-library-filters');
+
+// ---------------------------------------------------- a student's history --
+console.log('\nStudent history');
+// Bilal has been created into a course, disabled, re-enabled and removed from
+// the course over the course of this run — every kind of row the page reads,
+// in that order. It is read out of the audit log the same run wrote, which is
+// the only place it is recorded.
+await goHome(admin);
+await tap(admin, 'tab-people');
+await tap(admin, 'student-open-bilal@example.com');
+await admin.getByTestId('student-history').waitFor({ timeout: 20000 });
+await admin.waitForTimeout(2500);
+const history = await bodyText(admin);
+const order = [
+  'Account created',
+  'Enrolled in Hikam Foundations · Autumn 2026',
+  'Account disabled',
+  'Account re-enabled',
+  'Removed from Hikam Foundations · Autumn 2026',
+].map((line) => history.indexOf(line));
+check(
+  'the student\'s page tells their story in order: created, enrolled, disabled, re-enabled, removed',
+  order.every((i, n) => i >= 0 && (n === 0 || i > order[n - 1])),
+  order.join(','),
+);
+check(
+  'each row says who did it, by name',
+  (history.match(/by Faisal Shah/g) ?? []).length >= 5,
+  `${(history.match(/by Faisal Shah/g) ?? []).length} attributed row(s)`,
+);
+await shot(admin, '28-student-history');
+
+// A manager reads the same page pinned to their own courses: Fatima's creation
+// into Hikam Foundations is in their course, so it shows; a course-less row
+// never can, and the lede says what the list is.
+await goHome(mgr);
+await tap(mgr, 'tab-people');
+await tap(mgr, 'student-open-fatima@example.com');
+await mgr.getByTestId('student-history').waitFor({ timeout: 20000 });
+await mgr.waitForTimeout(2500);
+const mgrHistory = await bodyText(mgr);
+check(
+  'a manager sees the history in the courses they manage, and is told that is what it is',
+  mgrHistory.includes('Enrolment changes in the courses you manage') &&
+    mgrHistory.includes('Account created') &&
+    mgrHistory.includes('Enrolled in Hikam Foundations · Autumn 2026'),
+);
+check('…without a single refused read', !mgrHistory.includes('live data error'));
+
+// ----------------------------------------------------------- disabled staff --
+console.log('\nDisabled staff');
+// The manager's session is finished with; close it BEFORE disabling them, so
+// the sign-out their own listeners would otherwise meet cannot count as a
+// refused subscription below.
+await mgr.close();
+await goHome(admin);
+await tap(admin, 'tab-people');
+await tap(admin, 'segment-staff');
+await tap(admin, 'staff-access-manager@oursabeel.com');
+await admin.waitForTimeout(2500);
+check(
+  'a disabled staff member leaves the main list',
+  (await admin.getByTestId('staff-role-manager@oursabeel.com').filter({ visible: true }).count()) === 0,
+);
+await tap(admin, 'staff-disabled');
+await admin.getByTestId('staff-access-manager@oursabeel.com').waitFor({ timeout: 10000 });
+check('…and is found by expanding Disabled, with Re-enable still on the card', await shows(admin, 'staff-access-manager@oursabeel.com'));
+await shot(admin, '29-staff-disabled');
+await tap(admin, 'staff-access-manager@oursabeel.com');
+await admin.waitForTimeout(2500);
+check(
+  're-enabling from inside the section puts them back in the main list',
+  (await admin.getByTestId('staff-disabled').count()) === 0 &&
+    (await shows(admin, 'staff-role-manager@oursabeel.com')),
+);
+
 // -------------------------------------------------------------------- audit --
 // The auditedCall wrapper writes one entry per staff mutation — this whole run
 // has performed many, through the real functions emulator. Assert the log is
@@ -1835,9 +2006,23 @@ check(
 const targetsOf = (e) => e?.fields?.targets?.mapValue?.fields ?? {};
 const studentEntry = audit.find((e) => e.fields.action?.stringValue === 'createStudent');
 check(
-  'a createStudent entry names the account it created',
-  !!targetsOf(studentEntry).uid?.stringValue,
+  'a createStudent entry names the student it created, under the key their history is read by',
+  !!targetsOf(studentEntry).studentUid?.stringValue,
   JSON.stringify(Object.keys(targetsOf(studentEntry))),
+);
+// BOTH renames — there and back — each naming the cohort and the name it was
+// given. `find` would return whichever of the two the list happened to put
+// first, which is not a property of the log.
+const renames = audit.filter((e) => e.fields.action?.stringValue === 'renameCohort');
+check(
+  'each renameCohort entry names the cohort and the new name',
+  renames.length === 2 &&
+    renames.every((e) => !!targetsOf(e).cohortId?.stringValue) &&
+    renames
+      .map((e) => e.fields.detail?.mapValue?.fields?.name?.stringValue)
+      .sort()
+      .join('|') === ['Autumn 2026', 'Autumn 2026 — Term 1'].sort().join('|'),
+  renames.map((e) => e.fields.detail?.mapValue?.fields?.name?.stringValue).join(', '),
 );
 check(
   'a createCohort entry names the cohort it created',

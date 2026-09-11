@@ -308,6 +308,7 @@ const call = <T,>(name: string) => (input: T) => httpsCallable(functions, name)(
 
 export const createCohort = call<{ name: string }>('createCohort');
 export const setCohortArchived = call<{ cohortId: string; archived: boolean }>('setCohortArchived');
+export const renameCohort = call<{ cohortId: string; name: string }>('renameCohort');
 export const createCourse = call<{ cohortId: string; name: string }>('createCourse');
 export const updateCourse =
   call<{ courseId: string; name?: string; archived?: boolean; archivedAccess?: boolean }>('updateCourse');

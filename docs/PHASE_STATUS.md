@@ -36,6 +36,67 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-09-11 — **Five requests from use: a student's history, cohort and course
+  filters on the library, a cohort rename, disabled staff out of the way, and
+  archived courses out of the student picker.**
+
+  1. **A student's page carries their history, read out of the audit log.** When
+     the account was created and by whom (the student document's own
+     `createdAt`/`createdBy`, which every student has), then every enrolment,
+     removal, return, disable and re-enable — each with who did it and when.
+     **Not a second record.** Every one of those changes already lands in
+     `auditLog` through `auditedCall`, so the history is one query on the log
+     under `targets.studentUid`, and `studentHistory.ts` is only the reading of
+     it. What the log had to learn to make that reading honest: `createStudent`
+     and `setStudentAccess` now name the student under `studentUid` (they named
+     `uid`, the key `setStaffAccess` uses for a colleague), `setEnrollmentActive`
+     records WHICH WAY (`detail.active` — it audited a removal and a return
+     identically), and `createEnrollment` says when it was a return through
+     "Add a student" (`detail.reenrolled`). A row from before the boolean was
+     recorded reads as "Enrolment changed", never as a guessed direction. An
+     admin reads by the student; a manager's read is pinned to the courses they
+     run with the same `in` shape as the work queue, bounded at
+     `QUEUE_SCOPE.manager`, and the card says that is what it lists. Two
+     composite indexes (`targets.studentUid, at` and `courseId,
+     targets.studentUid, at`), both in the shape probe. Disable/enable rows
+     written before this change carry `targets.uid` and are not found — a few
+     days of production, and the creation line does not depend on them.
+
+  2. **The library filters by cohort and course, as dropdowns.** The brief had
+     recorded status as the one filter, with cohort and class left to the
+     Classes tab; by the third term the institute-wide list is mostly other
+     terms. The shape is the sibling kanban's Search: a `Select` seam — a real
+     `<select>` on the web, a `Sheet` of rows on native, one line until opened
+     — and one rule between the two: the cohort narrows what the course
+     dropdown offers, never the reverse, and choosing a cohort the chosen
+     course is not in lets the course go (`libraryFilters.ts`, unit-tested on
+     which recordings survive). The count line describes the narrowed set, and
+     **Clear filters** exists only while something is narrowing. The same two
+     controls serve a manager, built from the courses they run.
+
+  3. **A cohort can be renamed** — `renameCohort`, its own callable rather than a
+     `name` on `setCohortArchived`, because archiving cascades over every class
+     and a rename touches one document; one call that might do either would
+     have to be read twice in the audit log to know which. The name passes the
+     rule a new cohort's does.
+
+  4. **Disabled staff move into a closed Disabled section**, exactly as disabled
+     students do, with Re-enable still on the card. "Everyone else" became
+     "Staff".
+
+  5. **The create-student picker offers only running courses** (`effectiveActive`,
+     so a course switched off by its cohort's archiving goes too). Enrolling
+     into an archived course is still possible from the course's own page — it
+     is a deliberate act there and noise here.
+
+  Proved on the web: the e2e drives the rename and its live heading, the picker
+  with Hikam archived, the `<select>`s through every state and the clear
+  control, Bilal's five-row history in order and the manager's pinned view,
+  and the manager disabled into the section and re-enabled out of it; the
+  sweep tours the staff Disabled section open, the library with a cohort
+  chosen, and both student pages anchored on a seeded history row. Rules tests
+  hold the manager's pinned read and refuse it widened by one course.
+
 - 2026-09-07 — **The app can no longer create an account, which is what keeps it
   off the hook for in-app account deletion.**
 

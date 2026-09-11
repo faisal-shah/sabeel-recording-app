@@ -84,9 +84,11 @@ describe('deriveTargets', () => {
    * SHOULD derive nothing, which is what makes the explicit assignment load
    * bearing rather than belt and braces.
    *
-   * Six callables set `audit.targets` themselves (`createStudent`,
-   * `createCohort`, `createSession`, `submitAttendance`, `createRecording`,
-   * `importZoomRecording`); only these two would audit as `{}` without it. The
+   * Seven callables set `audit.targets` themselves (`createStudent`,
+   * `setStudentAccess`, `createCohort`, `createSession`, `submitAttendance`,
+   * `createRecording`, `importZoomRecording`); only these two would audit as
+   * `{}` without it — `setStudentAccess` would derive `{ uid }`, and sets
+   * `studentUid` so a student's page finds the row. The
    * others name something either way, and the ones whose explicit target is the
    * NEW id are asserted end to end in `scripts/web-e2e.mjs`, against the real
    * wrapper — the only place a callable's audit row can actually be read.

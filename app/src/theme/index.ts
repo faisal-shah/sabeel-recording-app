@@ -107,6 +107,19 @@ export function getTheme(): Theme {
 export const spacing = (n: number) => n * 4;
 
 /**
+ * The font the DOM seams set on a raw element — the web `<select>` and
+ * `<input type="date">`, which react-native-web does not style.
+ *
+ * `inherit` was wrong there: RNW puts its font on every `Text`, never on the
+ * body, so a raw element inherits the browser's default — a serif, beside a
+ * page set entirely in the system sans. This is the stack RNW resolves the
+ * `System` family to (`createReactDOMStyle`), restated once so the two seams
+ * cannot drift from it separately.
+ */
+export const SYSTEM_FONT_STACK =
+  '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+
+/**
  * The width the content column stops growing at.
  *
  * The READING maximum: prose, forms, a single record. Below it a screen is

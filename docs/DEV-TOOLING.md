@@ -246,16 +246,19 @@ something has to hold on a clean machine rather than this one:
 `gh workflow run ci.yml --ref <branch>`. The trigger block to restore is written
 out at the top of `ci.yml`.
 
-**Scale and cost, measured 2026-09-06:** 1057 checks over 5 viewports x 45
+**Scale and cost, measured 2026-09-11:** 1168 checks over 5 viewports x 49
 screens, **~7m wall clock** (including the shared/functions build, Metro's cold
 bundle and emulator boot). The staff tour covers the work queue, all four
-create sheets open, the People tab's staff half and the More sheet itself; the
-manager tour covers People and one student's page, which render a different
-screen from an admin's rather than the same one with rows removed; the student
-tour covers the docked now-playing bar, a row that exists in no other state and
-eats the bottom of every screen under it. Every navigating visit also asserts a
-testID only its destination renders, so a mis-landed tap fails rather than
-photographing the wrong screen under the right name.
+create sheets open, the People tab's staff half with its Disabled section open,
+the library with a cohort chosen (the state its clear control exists in) and
+the More sheet itself; the manager tour covers People and one student's page,
+which render a different screen from an admin's rather than the same one with
+rows removed; the student tour covers the docked now-playing bar, a row that
+exists in no other state and eats the bottom of every screen under it. Both
+student-page visits anchor on a seeded history row, so the page is measured
+with its history listener answered rather than before. Every navigating visit
+also asserts a testID only its destination renders, so a mis-landed tap fails
+rather than photographing the wrong screen under the right name.
 That is what the sweep adds to a CI run, and it is the reason the widths are
 five deliberate ones rather than a comfortable-looking grid.
 

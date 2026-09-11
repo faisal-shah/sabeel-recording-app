@@ -13,6 +13,21 @@ const auth=admin.auth(), db=admin.firestore();
 const now=Date.now(), day=86400000;
 const iso=(ms)=>new Date(ms).toISOString().slice(0,10);
 
+// ---- the admin the capture signs in as ----
+// PRE-PROVISIONED, so that every seeded change below is attributed to a real
+// person. The audit figure and a student's history print the actor's NAME from
+// the staff directory, and with a made-up actor id they printed "by admin
+// seed-admin" in a manual written for the institute's staff. Created here with
+// no provider (the shape `onUserCreate` ignores) and its claims set, the
+// capture's dev sign-in LINKS the Google credential to this account — same
+// email, same uid — and lands on the admin home without `bootstrapAdmin`.
+const ADMIN_EMAIL='faisal.shah@oursabeel.com';
+const adminUser=await auth.createUser({ email:ADMIN_EMAIL, displayName:'Faisal Shah' });
+await new Promise(r=>setTimeout(r,300));
+await auth.setCustomUserClaims(adminUser.uid,{ role:'admin', status:'active' });
+await db.collection('staffUsers').doc(adminUser.uid).set({ email:ADMIN_EMAIL, displayName:'Faisal Shah', photoUrl:null, role:'admin', status:'active', createdAt:now-90*day, approvedAt:now-90*day });
+const ADMIN=adminUser.uid;
+
 // ---- students ----
 const NAMES=['Fatima Ahmed','Bilal Khan','Omar Siddiqui','Ayesha Rahman','Yusuf Ali','Maryam Iqbal','Zainab Hassan','Ibrahim Malik'];
 const students=[];
@@ -24,7 +39,7 @@ for (const name of NAMES){
   let u; try { u=await auth.getUserByEmail(email); } catch { u=await auth.createUser({ email, displayName:name }); }
   await new Promise(r=>setTimeout(r,300));
   await auth.setCustomUserClaims(u.uid,{ role:'student', status });
-  await db.collection('students').doc(u.uid).set({ email, displayName:name, role:'student', status, createdAt:now-40*day, createdBy:'seed' });
+  await db.collection('students').doc(u.uid).set({ email, displayName:name, role:'student', status, createdAt:now-40*day, createdBy:ADMIN });
   students.push({ uid:u.uid, name, email });
 }
 // Fatima gets a password so she can be shown signing in for the STUDENT screenshots.
@@ -32,20 +47,20 @@ await auth.updateUser(students[0].uid,{ password:'HikamStudent1', emailVerified:
 
 // ---- cohort + courses ----
 const cohortId='guide-cohort';
-await db.collection('cohorts').doc(cohortId).set({ name:'Autumn 2026', archived:false, createdAt:now-45*day, createdBy:'seed' });
+await db.collection('cohorts').doc(cohortId).set({ name:'Autumn 2026', archived:false, createdAt:now-45*day, createdBy:ADMIN });
 // A finished term, so the cohort list has an "Archived" section to show. Its
 // course carries effectiveActive:false, which is what the cascade would leave.
-await db.collection('cohorts').doc('guide-cohort-past').set({ name:'Spring 2026', archived:true, createdAt:now-220*day, createdBy:'seed' });
-await db.collection('courses').doc('guide-past-course').set({ cohortId:'guide-cohort-past', name:'Seerah Survey', archived:false, effectiveActive:false, archivedAccess:false, managerUids:[], createdAt:now-220*day, createdBy:'seed' });
+await db.collection('cohorts').doc('guide-cohort-past').set({ name:'Spring 2026', archived:true, createdAt:now-220*day, createdBy:ADMIN });
+await db.collection('courses').doc('guide-past-course').set({ cohortId:'guide-cohort-past', name:'Seerah Survey', archived:false, effectiveActive:false, archivedAccess:false, managerUids:[], createdAt:now-220*day, createdBy:ADMIN });
 const courses={
   hikam:{ id:'guide-hikam', name:'Hikam Foundations' },
   arabic:{ id:'guide-arabic', name:'Arabic I' },
 };
 for (const c of Object.values(courses))
-  await db.collection('courses').doc(c.id).set({ cohortId, name:c.name, archived:false, effectiveActive:true, archivedAccess:false, managerUids:[], createdAt:now-45*day, createdBy:'seed' });
+  await db.collection('courses').doc(c.id).set({ cohortId, name:c.name, archived:false, effectiveActive:true, archivedAccess:false, managerUids:[], createdAt:now-45*day, createdBy:ADMIN });
 // enroll all 8 in Hikam; first 4 also in Arabic
-for (const s of students) await db.collection('enrollments').doc(`${s.uid}_${courses.hikam.id}`).set({ studentUid:s.uid, courseId:courses.hikam.id, cohortId, active:true, enrolledAt:now-40*day, enrolledBy:'seed' });
-for (const s of students.slice(0,4)) await db.collection('enrollments').doc(`${s.uid}_${courses.arabic.id}`).set({ studentUid:s.uid, courseId:courses.arabic.id, cohortId, active:true, enrolledAt:now-40*day, enrolledBy:'seed' });
+for (const s of students) await db.collection('enrollments').doc(`${s.uid}_${courses.hikam.id}`).set({ studentUid:s.uid, courseId:courses.hikam.id, cohortId, active:true, enrolledAt:now-40*day, enrolledBy:ADMIN });
+for (const s of students.slice(0,4)) await db.collection('enrollments').doc(`${s.uid}_${courses.arabic.id}`).set({ studentUid:s.uid, courseId:courses.arabic.id, cohortId, active:true, enrolledAt:now-40*day, enrolledBy:ADMIN });
 
 // ---- sessions + their recordings: attendance-driven ----
 const audio=readFileSync('e2e-shots/test-lecture.m4a');
@@ -72,12 +87,12 @@ async function mkSession(courseId, sid, rid, title, { status='published', dueOff
   await db.collection('sessions').doc(sid).set({
     courseId, cohortId, date, title, dueDate, notes,
     recordingId: rid, attendance: attendance??{}, attendanceSubmittedAt: submitted,
-    notRecorded:false, createdAt:now-daysAgo*day, createdBy:'seed', updatedAt:now-daysAgo*day,
+    notRecorded:false, createdAt:now-daysAgo*day, createdBy:ADMIN, updatedAt:now-daysAgo*day,
   });
   await db.collection('recordings').doc(rid).set({
     sessionId:sid, courseId, cohortId, title, notes, date, status, source:'manual',
     audioPath:hasAudio?path:null, durationSec:hasAudio?720:null, sizeBytes:hasAudio?audio.length:null,
-    createdAt:now-daysAgo*day, createdBy:'seed', updatedAt:now-daysAgo*day,
+    createdAt:now-daysAgo*day, createdBy:ADMIN, updatedAt:now-daysAgo*day,
     ...(status==='published'?{publishedAt:now-daysAgo*day}:{}),
     ...(attention?{attentionReason:attention}:{}),
   });
@@ -109,7 +124,7 @@ await mkSession(H,'g-s5','g-s5r','Session 5 — Reliance and Trust', {status:'pu
 // which no seeded session used to produce.
 await mkSession(H,'g-s6','g-s6r','Session 6 — (import needs review)', {status:'needsAttention', daysAgo:1, attendance:attend(4), attention:'Audio file looks truncated — re-upload before publishing.'});
 // Session 7: attendance taken TODAY, recording not added yet.
-await db.collection('sessions').doc('g-s7').set({ courseId:H, cohortId, date:iso(now), title:'Session 7 — Today (recording pending)', dueDate:iso(now+7*day), notes:'', recordingId:null, attendance:attend(5), attendanceSubmittedAt:now, notRecorded:false, createdAt:now, createdBy:'seed', updatedAt:now });
+await db.collection('sessions').doc('g-s7').set({ courseId:H, cohortId, date:iso(now), title:'Session 7 — Today (recording pending)', dueDate:iso(now+7*day), notes:'', recordingId:null, attendance:attend(5), attendanceSubmittedAt:now, notRecorded:false, createdAt:now, createdBy:ADMIN, updatedAt:now });
 // Arabic I: two published sessions.
 // Only the first four students are enrolled in Arabic, so its snapshot covers
 // only them — a mark for someone off the roster would be dropped on submit.
@@ -136,20 +151,35 @@ await progressOnly(uids[6],'g-s2r',0.5);
 await complete(uids[5],'g-s3r');
 await progressOnly(uids[0],'g-s3r',0.6);
 // One staff override with a reason (student 6 on s2r).
-await db.collection('completionOverrides').doc(`${uids[6]}_g-s2r`).set({ studentUid:uids[6], recordingId:'g-s2r', courseId:H, completed:true, reason:'Attended part of the class in person; caught up on the rest.', overriddenBy:'seed-admin', at:now-1*day });
+await db.collection('completionOverrides').doc(`${uids[6]}_g-s2r`).set({ studentUid:uids[6], recordingId:'g-s2r', courseId:H, completed:true, reason:'Attended part of the class in person; caught up on the rest.', overriddenBy:ADMIN, at:now-1*day });
 
 // ---- audit log: realistic recent history ----
-const A=(action,detail,extra={})=>({ at:now-(Math.random()*3*day), actorUid:'seed-admin', actorRole:'admin', action, courseId:H, targets:extra, ...(detail?{detail}:{}) });
+const A=(action,detail,extra={})=>({ at:now-(Math.random()*3*day), actorUid:ADMIN, actorRole:'admin', action, courseId:H, targets:extra, ...(detail?{detail}:{}) });
 const auditEntries=[
   A('overrideCompletion',{completed:true, reason:'Attended part of the class in person.'},{recordingId:'g-s2r', studentUid:uids[6]}),
   A('submitAttendance',null,{sessionId:'g-s4'}),
   A('setRecordingStatus',{status:'published'},{recordingId:'g-s4r'}),
   A('createSession',null,{sessionId:'g-s4'}),
-  A('createStudent',null,{uid:uids[7]}),
-  A('createEnrollment',null,{studentUid:uids[7]}),
+  A('createStudent',null,{studentUid:uids[7]}),
+  A('createEnrollment',null,{studentUid:uids[7], courseId:H}),
 ];
 for (const e of auditEntries) await db.collection('auditLog').add(e);
-await db.collection('auditLog').add({ at:now-2*day, actorUid:'seed-admin', actorRole:'admin', action:'createCohort', courseId:null, targets:{cohortId} });
+await db.collection('auditLog').add({ at:now-2*day, actorUid:ADMIN, actorRole:'admin', action:'createCohort', courseId:null, targets:{cohortId} });
+// Fatima's own history, as her page reads it out of the log: enrolled, then
+// removed from Arabic and brought back — every sentence the History card can
+// print, so the student-page figure shows the card with rows in it.
+const history=[
+  ['createEnrollment', H, null],
+  ['createEnrollment', courses.arabic.id, null],
+  ['setEnrollmentActive', courses.arabic.id, {active:false}],
+  ['setEnrollmentActive', courses.arabic.id, {active:true}],
+];
+for (const [i,[action,courseId,detail]] of history.entries()){
+  await db.collection('auditLog').doc(`guide-history-${i}`).set({
+    at:now-(38-i*9)*day, actorUid:ADMIN, actorRole:'admin', action, courseId,
+    targets:{studentUid:uids[0], courseId}, ...(detail?{detail}:{}),
+  });
+}
 
 // ---- staff ----
 // A PENDING staff account, so the approvals figure in the manual can show the
@@ -159,6 +189,12 @@ await db.collection('auditLog').add({ at:now-2*day, actorUid:'seed-admin', actor
 await db.collection('staffUsers').doc('guide-pending').set({
   email:'nadia.karim@oursabeel.com', displayName:'Nadia Karim',
   role:null, status:'pending', createdAt:now-2*day,
+});
+// And a DISABLED one, so the same figure shows the closed Disabled section the
+// prose describes, opened the way the students figure opens its own.
+await db.collection('staffUsers').doc('guide-disabled').set({
+  email:'yusuf.rahman@oursabeel.com', displayName:'Yusuf Rahman', photoUrl:null,
+  role:'manager', status:'disabled', createdAt:now-60*day, approvedAt:now-59*day,
 });
 
 console.log(JSON.stringify({ studentEmail:students[0].email, studentPw:'HikamStudent1', hikamCourseId:courses.hikam.id, managerUidNeeded:true }, null, 0));

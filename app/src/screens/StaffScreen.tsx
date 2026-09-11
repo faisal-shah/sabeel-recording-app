@@ -4,6 +4,7 @@ import type { Role } from '@sabeel/shared';
 import {
   Button,
   Card,
+  Collapsible,
   Empty,
   Grid,
   Notice,
@@ -28,6 +29,10 @@ const t = getTheme();
 export function StaffScreen({ selfUid, header }: { selfUid: string; header?: ReactNode }) {
   const pending = usePendingStaff(true);
   const decided = useDecidedStaff(true);
+  // Split the way the student list is split: a disabled account is history,
+  // not a colleague, and interleaved with the live ones it read as one.
+  const active = decided.filter((s) => s.status !== 'disabled');
+  const disabled = decided.filter((s) => s.status === 'disabled');
   const [busyUid, setBusyUid] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,64 +80,86 @@ export function StaffScreen({ selfUid, header }: { selfUid: string; header?: Rea
         </Grid>
       )}
 
-      <SectionTitle>Everyone else ({decided.length})</SectionTitle>
-      {decided.length === 0 ? (
+      <SectionTitle>Staff ({active.length})</SectionTitle>
+      {active.length === 0 ? (
         <Empty>No staff accounts yet.</Empty>
       ) : (
         <Grid min={330}>
-          {decided.map((s) => {
-            const isSelf = s.uid === selfUid;
-            return (
-              <Card key={s.uid}>
-                <Person row={s} />
-                {isSelf ? (
-                  // The server refuses this too; saying so up front is kinder than
-                  // a permission error. Without the rule, the last admin could lock
-                  // the institute out of its own user management.
-                  <Text style={styles.selfNote}>
-                    This is you. You cannot change your own role or access.
-                  </Text>
-                ) : (
-                  <Row>
-                    <Button
-                      testID={`staff-role-${s.email}`}
-                      label={s.role === 'admin' ? 'Make manager' : 'Make admin'}
-                      variant="secondary"
-                      busy={busyUid === s.uid}
-                      onPress={() =>
-                        void act(s.uid, {
-                          uid: s.uid,
-                          role: (s.role === 'admin' ? 'manager' : 'admin') as Extract<
-                            Role,
-                            'admin' | 'manager'
-                          >,
-                        })
-                      }
-                    />
-                    <Button
-                      label={s.status === 'disabled' ? 'Re-enable' : 'Disable'}
-                      // Secondary in BOTH directions, exactly as on a student's
-                      // page. Disabling an account is reversible and is the
-                      // RECOMMENDED action in this product; dressing one of the
-                      // two Disables in the app as destructive and the other as
-                      // routine teaches people the colour means nothing.
-                      variant="secondary"
-                      busy={busyUid === s.uid}
-                      onPress={() =>
-                        void act(s.uid, {
-                          uid: s.uid,
-                          status: s.status === 'disabled' ? 'active' : 'disabled',
-                        })
-                      }
-                    />
-                  </Row>
-                )}
-              </Card>
-            );
-          })}
+          {active.map((s) => (
+            <StaffCard key={s.uid} row={s} isSelf={s.uid === selfUid} busy={busyUid === s.uid} act={act} />
+          ))}
         </Grid>
       )}
+
+      {/* Out of the way but reachable, exactly as a disabled student is: the
+          card keeps its Re-enable, so bringing a colleague back is one tap
+          once the section is open. */}
+      {disabled.length > 0 ? (
+        <Collapsible testID="staff-disabled" title="Disabled" count={disabled.length}>
+          <Grid min={330}>
+            {disabled.map((s) => (
+              <StaffCard key={s.uid} row={s} isSelf={s.uid === selfUid} busy={busyUid === s.uid} act={act} />
+            ))}
+          </Grid>
+        </Collapsible>
+      ) : null}
     </Screen>
+  );
+}
+
+function StaffCard({
+  row: s,
+  isSelf,
+  busy,
+  act,
+}: {
+  row: StaffRow;
+  isSelf: boolean;
+  busy: boolean;
+  act: (uid: string, change: Parameters<typeof setStaffAccess>[0]) => Promise<void>;
+}) {
+  return (
+    <Card>
+      <Person row={s} />
+      {isSelf ? (
+        // The server refuses this too; saying so up front is kinder than
+        // a permission error. Without the rule, the last admin could lock
+        // the institute out of its own user management.
+        <Text style={styles.selfNote}>This is you. You cannot change your own role or access.</Text>
+      ) : (
+        <Row>
+          <Button
+            testID={`staff-role-${s.email}`}
+            label={s.role === 'admin' ? 'Make manager' : 'Make admin'}
+            variant="secondary"
+            busy={busy}
+            onPress={() =>
+              void act(s.uid, {
+                uid: s.uid,
+                role: (s.role === 'admin' ? 'manager' : 'admin') as Extract<Role, 'admin' | 'manager'>,
+              })
+            }
+          />
+          <Button
+            testID={`staff-access-${s.email}`}
+            label={s.status === 'disabled' ? 'Re-enable' : 'Disable'}
+            // Secondary in BOTH directions, exactly as on a student's
+            // page. Disabling an account is reversible and is the
+            // RECOMMENDED action in this product; dressing one of the
+            // two Disables in the app as destructive and the other as
+            // routine teaches people the colour means nothing.
+            variant="secondary"
+            busy={busy}
+            onPress={() =>
+              void act(s.uid, {
+                uid: s.uid,
+                status: s.status === 'disabled' ? 'active' : 'disabled',
+              })
+            }
+          />
+        </Row>
+      )}
+    </Card>
   );
 }
 

@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { useRoomy } from '../useWidth';
-import { getTheme, spacing } from '../theme';
+import { SYSTEM_FONT_STACK, getTheme, spacing } from '../theme';
 
 const t = getTheme();
 
@@ -30,7 +30,7 @@ export function DateField({ label, value, onChange }: DateFieldProps) {
         onChange={(e) => onChange((e.target as HTMLInputElement).value)}
         style={{
           fontSize: 16,
-          fontFamily: 'inherit',
+          fontFamily: SYSTEM_FONT_STACK,
           color: t.text.primary,
           backgroundColor: t.bg.inset,
           border: `1px solid ${t.border.subtle}`,

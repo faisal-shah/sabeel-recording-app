@@ -313,9 +313,10 @@ Finished terms move into an **Archived** section at the bottom of the cohort
 list — tap the heading to open it.
 
 Open a cohort to see **its settings and its courses**, and open a course to work
-with it. Archiving a cohort lives on the cohort's own page, not on the list, in
-the same way a course is archived from the course page. Archiving a cohort turns
-off every course in it; reactivating puts each course back to the setting it had.
+with it. The cohort's settings are where you **rename** it — change the name and
+tap **Rename** — and where you **archive** it, in the same way a course is
+renamed and archived from the course page. Archiving a cohort turns off every
+course in it; reactivating puts each course back to the setting it had.
 
 <div class="pair">
 <figure class="ph"><img src="manual/img/14-courses-phone.png" alt="Courses in a cohort on a phone"><figcaption>On a phone</figcaption></figure>
@@ -575,6 +576,14 @@ unpublished / needs attention**. It's the fastest way to answer "which recording
 still need audio?" or "what's flagged?" without walking course by course. Admins
 see everything; managers see their assigned courses.
 
+Two dropdowns narrow the list by where a recording belongs. Choose a **cohort**
+and leave the course alone to see everything in that term; choose a **course**
+as well to see just that course. The course list offers the courses in the
+cohort you chose — or every course, each with its term, when no cohort is
+chosen — and the count line describes whatever you have narrowed to. **Clear
+filters** appears whenever something is narrowing the list and puts everything
+back.
+
 ## 2.11 People — managing students
 
 <div class="pair">
@@ -593,6 +602,9 @@ the page shows only the courses that manager runs.
 To add a student, tap **Add a student**, enter their **full name** and **email**,
 optionally **enrol them in a course** right away, and tap **Create account**. The
 app emails them a link to set their own password — you never handle passwords.
+The course list offers only courses that are running; an archived course, or one
+in an archived cohort, is not listed there (you can still enrol someone into it
+from the course's own page).
 
 **Creating accounts is done on the website, not in the phone apps.** The
 **Add a student** button in the figures above is a capture of the website at a
@@ -628,6 +640,14 @@ If you're a **manager**, this lists the courses *you* manage — it's headed
 **Courses you manage** to say so. You aren't shown classes you don't run, so
 treat it as your view of the student rather than their whole record. An admin
 sees every course.
+
+**History**, at the bottom, is the student's record from the day the account
+was created: when it was made and by whom, then every enrolment, removal and
+return, and every time the account was disabled or re-enabled — each with who
+did it and when, in the institute's time. It is read from the same audit
+history admins see (Section 3.3), so nothing here is a second record. A manager's
+list covers the courses they manage; account changes are admin-only, and an
+admin sees everything.
 
 ---
 
@@ -670,9 +690,11 @@ in **Waiting for approval**. For each, you choose the role as you approve:
 - **Approve as manager** — they can run the courses you later assign to them.
 - **Approve as admin** — full access, including approving other staff.
 
-Below, **Everyone else** lists active staff. Your own account is marked "This is
+Below, **Staff** lists everyone with access. Your own account is marked "This is
 you" — you can't change your own role or access, which stops an admin from
-accidentally locking themselves out.
+accidentally locking themselves out. Staff you've disabled move out of that
+list into a **Disabled** section at the bottom, exactly as disabled students
+do — tap the heading to open it, and **Re-enable** is still on the card.
 
 Only staff on the institute's own Google domain can be approved at all — the app
 checks this on the server, not just in the browser.

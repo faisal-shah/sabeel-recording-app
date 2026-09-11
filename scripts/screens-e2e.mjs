@@ -286,7 +286,9 @@ const auth = admin.auth();
 await resetEmulators();
 const browser = await chromium.launch();
 const world = await seedWorld({ db, auth, browser, base: BASE });
-const { STUDENT, DISABLED_STUDENT, STUDENT_PASSWORD, missed, dueSoon, blocking } = world;
+const {
+  STUDENT, DISABLED_STUDENT, STUDENT_PASSWORD, missed, dueSoon, blocking, HISTORY_ROW, HISTORY_ROW_MANAGED,
+} = world;
 
 // ---- assertions ------------------------------------------------------------
 
@@ -924,8 +926,10 @@ const TAB_ROOTS = new Set([
   'my-courses',
   'people',
   'staff',
+  'staff-disabled',
   'students-disabled',
   'library',
+  'library-filtered',
   'my-classes',
   // Reached by opening a recording and leaving it — which lands back on a tab
   // root, with the now-playing bar on it.
@@ -955,7 +959,7 @@ const READ_ONLY_SCREENS = new Set([
   'notifications-none',
 ]);
 
-const STAFF_SCREENS = 29;
+const STAFF_SCREENS = 31;
 
 async function tourStaff(page, tag) {
   const counter = { seen: 0 };
@@ -989,6 +993,13 @@ async function tourStaff(page, tag) {
     await tap(byId(page, 'tab-people'));
     await tap(byId(page, 'segment-staff'));
   }, 'staff-role-manager@oursabeel.com');
+  // The staff list's disabled section EXPANDED — the same closed section the
+  // student list has, and the only card whose action row reads Re-enable.
+  await visit('staff-disabled', async () => {
+    await tap(byId(page, 'tab-people'));
+    await tap(byId(page, 'segment-staff'));
+    await tap(byId(page, 'staff-disabled'));
+  }, 'staff-access-yusuf.rahman@oursabeel.com');
   // The create sheet OPEN — a form that exists in no other state, and the one
   // affordance that is absent entirely on a native build.
   await visit('students-add', async () => {
@@ -1003,10 +1014,13 @@ async function tourStaff(page, tag) {
     // A ROW inside the section, not the section's own header: the collapsible's
     // Pressable renders open or closed, so anchoring on it asserts nothing.
   }, `student-open-${DISABLED_STUDENT.email}`);
+  // Anchored on the LAST seeded history row, not on the Access card: the
+  // history is a second listener, and a page measured before it answered is a
+  // page measured without the six rows at the bottom of it.
   await visit('student', async () => {
     await tap(byId(page, 'tab-people'));
     await tap(byId(page, `student-open-${STUDENT.email}`));
-  }, 'student-resend');
+  }, `student-history-${HISTORY_ROW}`);
   await visit('cohorts', () => tap(byId(page, 'tab-courses')), 'cohorts-add');
   /*
    * THE CREATE SHEETS, OPEN — these three, and `students-add` above.
@@ -1122,6 +1136,12 @@ async function tourStaff(page, tag) {
     'the picker loaded rows: extend this tour to measure one',
   );
   await visit('library', () => tap(byId(page, 'tab-library')), 'library-filter-all');
+  // With a cohort CHOSEN: the clear control exists in no other state, and two
+  // dropdowns plus a button is the row that has to wrap at 320px.
+  await visit('library-filtered', async () => {
+    await tap(byId(page, 'tab-library'));
+    await byId(page, 'library-cohort').selectOption({ index: 1 });
+  }, 'library-clear');
   await visit('player', async () => {
     await tap(byId(page, 'tab-library'));
     await tap(byId(page, `library-listen-${missed.title}`));
@@ -1198,10 +1218,13 @@ async function tourManager(page, tag) {
   // shows "Courses you manage" where an admin sees every enrolment. None of
   // that renders in an admin's run, so none of it was ever photographed.
   await visit('people', () => tap(byId(page, 'tab-people')), 'students-add');
+  // Anchored on a history row in THEIR course: a manager's history is read
+  // through the `in`-pinned arm of the audit rule, which is the one that can
+  // fail closed — and a denial there is an empty card, not an error.
   await visit('student', async () => {
     await tap(byId(page, 'tab-people'));
     await tap(byId(page, `student-open-${STUDENT.email}`));
-  }, 'student-resend');
+  }, `student-history-${HISTORY_ROW_MANAGED}`);
   // The ledger, which a manager reads through a DIFFERENT rule arm than an
   // admin: theirs resolves a course lookup from the row, so it is the only one
   // that can fail closed — and it did, silently, as an empty roster. A denial

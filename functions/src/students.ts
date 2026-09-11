@@ -148,7 +148,11 @@ export const createStudent = auditedCall('createStudent', async (req, audit) => 
   // exist until the line above — so the derivation had nothing to pick up, and
   // the most privilege-adjacent thing a manager can do audited as "someone
   // created a student", with no way to tell which.
-  audit.targets.uid = created.uid;
+  //
+  // Under `studentUid`, the key every other action on a student carries, so
+  // that one query — `targets.studentUid == uid` — is the whole of a student's
+  // history. It is what the student's page reads.
+  audit.targets.studentUid = created.uid;
   audit.detail = { email: created.email };
   return created;
 });
@@ -191,6 +195,10 @@ export async function applyStudentAccess(input: StudentAccessInput) {
 export const setStudentAccess = auditedCall('setStudentAccess', async (req, audit) => {
   requireAdmin(req);
   const input = validateStudentAccess(req.data);
+  // The payload says `uid`; the log says `studentUid`, like every other action
+  // on a student, so the student's page finds this with the same query it finds
+  // their enrolments.
+  audit.targets.studentUid = input.uid;
   audit.detail = { status: input.status };
   return applyStudentAccess(input);
 });

@@ -60,22 +60,37 @@ export function SheetOption({
   label,
   detail,
   tone = 'normal',
+  selected,
   testID,
   onPress,
 }: {
   label: string;
   detail?: string;
   tone?: 'normal' | 'danger';
+  /**
+   * Whether this row is the CURRENT choice, when the sheet is a picker
+   * (`Select`). Passing it at all makes the row a radio — one of a set, exactly
+   * one in force — marked with the accent tint the app uses for "on" everywhere
+   * else. Left undefined the row is a plain button, as in the More sheet.
+   */
+  selected?: boolean;
   testID?: string;
   onPress: () => void;
 }) {
   return (
     <Pressable
       testID={testID}
-      accessibilityRole="button"
+      accessibilityRole={selected === undefined ? 'button' : 'radio'}
       accessibilityLabel={label}
+      // `aria-checked`, because the role is `radio` — see the create-student
+      // picker for the same choice.
+      aria-checked={selected}
       onPress={onPress}
-      style={({ pressed }) => [styles.option, pressed ? styles.optionPressed : null]}
+      style={({ pressed }) => [
+        styles.option,
+        selected ? styles.optionSelected : null,
+        pressed ? styles.optionPressed : null,
+      ]}
     >
       <Text style={[styles.optionLabel, tone === 'danger' ? styles.optionDanger : null]}>
         {label}
@@ -120,6 +135,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   optionPressed: { backgroundColor: t.bg.inset },
+  optionSelected: { backgroundColor: t.bg.accentSoft },
   optionLabel: { fontSize: 15, fontWeight: '600', color: t.text.primary },
   optionDanger: { color: t.text.danger },
   optionDetail: { fontSize: 13, color: t.text.secondary, marginTop: 2 },

@@ -201,6 +201,7 @@ function AuditCard({ entry: e, people }: { entry: AuditRow; people: Map<string, 
 const ACTION_LABELS: Record<string, string> = {
   createCohort: 'Created cohort',
   setCohortArchived: 'Archived/unarchived cohort',
+  renameCohort: 'Renamed cohort',
   createCourse: 'Created course',
   updateCourse: 'Updated course',
   setCourseManagers: 'Set course managers',

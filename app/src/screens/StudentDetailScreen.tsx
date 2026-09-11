@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { INSTITUTE_TIMEZONE, QUEUE_SCOPE, stampInZone } from '@sabeel/shared';
 import {
   Button,
   Card,
@@ -11,16 +13,25 @@ import {
   SectionTitle,
   StatusChip,
 } from '../components/ui';
-import { resendPasswordSetup, setStudentAccess, useStudentState } from '../students';
+import { resendPasswordSetup, setStudentAccess, useStudentState, type StudentRow } from '../students';
+import { useDecidedStaff } from '../staff';
+import { useStudentAudit, useStudentAuditIn } from '../ledger';
+import { studentHistory } from '../studentHistory';
 import { errorText } from '../errors';
 import {
   useAllCourses,
+  useAllCoursesState,
   useCohortName,
   useEnrollmentIn,
   useMyCourses,
+  useMyCoursesState,
   useStudentEnrollments,
   type CourseRow,
 } from '../structure';
+import { getTheme, spacing } from '../theme';
+
+const t = getTheme();
+const NO_COURSES: CourseRow[] = [];
 
 /**
  * One student, everything about them in one place: their access, and the courses
@@ -146,9 +157,117 @@ export function StudentDetailScreen({
           ) : (
             <ManagerCourses studentUid={studentUid} uid={uid} who={who} onOpenCourse={onOpenCourse} />
           )}
+
+          <History student={student} isAdmin={isAdmin} uid={uid} />
         </>
       )}
     </Screen>
+  );
+}
+
+/**
+ * When the account was made, and everything that has happened to the student's
+ * standing since — enrolled, removed, brought back, disabled, re-enabled — each
+ * with who did it and when.
+ *
+ * The first row is the student document's own `createdAt`, which every student
+ * has. The rest is the audit log, which is the record of these changes and is
+ * not copied anywhere else (see `studentHistory`). An admin reads it by the
+ * student; a manager reads it pinned to the courses they run, and is told so —
+ * an access change is admin-only, and an enrolment in someone else's course is
+ * not theirs, so a manager's list is a true account of their own courses rather
+ * than a partial one that reads as whole.
+ */
+function History({ student, isAdmin, uid }: { student: StudentRow; isAdmin: boolean; uid: string }) {
+  const staff = useDecidedStaff(true);
+  // The `State` variants, whose "not subscribed" value is a stable `null`
+  // rather than a fresh `[]` per render — these feed memos below.
+  const allCourses = useAllCoursesState(isAdmin) ?? NO_COURSES;
+  const myCourses = useMyCoursesState(isAdmin ? null : uid) ?? NO_COURSES;
+  const courses = isAdmin ? allCourses : myCourses;
+  const cohortNameOf = useCohortName();
+  const adminRows = useStudentAudit(isAdmin ? student.uid : null);
+  const myCourseIds = useMemo(() => myCourses.map((c) => c.id), [myCourses]);
+  const scoped = useStudentAuditIn(isAdmin ? null : student.uid, myCourseIds);
+
+  // Names, not uids, for the same reason the audit screen resolves them: an id
+  // answers "who" with a string nobody can match to a person. One that no
+  // longer resolves — a staff account since removed — is still printed.
+  const nameOf = useMemo(() => {
+    const byUid = new Map(staff.map((r) => [r.uid, r.displayName]));
+    return (actorUid: string) => byUid.get(actorUid) ?? actorUid;
+  }, [staff]);
+  const courseLabel = useMemo(() => {
+    const byId = new Map(courses.map((c) => [c.id, c]));
+    return (courseId: string) => {
+      const c = byId.get(courseId);
+      if (!c) return courseId;
+      const cohort = cohortNameOf(c.cohortId);
+      return cohort ? `${c.name} · ${cohort}` : c.name;
+    };
+  }, [courses, cohortNameOf]);
+  const rows = useMemo(
+    () => studentHistory(isAdmin ? adminRows : scoped.rows, courseLabel),
+    [isAdmin, adminRows, scoped.rows, courseLabel],
+  );
+
+  return (
+    <>
+      <SectionTitle>History</SectionTitle>
+      <Card>
+        {isAdmin ? null : (
+          <Text style={styles.historyLede}>Enrolment changes in the courses you manage.</Text>
+        )}
+        {scoped.truncated ? (
+          <Notice tone="info">
+            Changes in {QUEUE_SCOPE.manager} of the {myCourseIds.length} courses you manage are
+            listed; the rest are not.
+          </Notice>
+        ) : null}
+        <View testID="student-history">
+          <HistoryRow
+            testID="student-created"
+            what="Account created"
+            at={student.createdAt}
+            by={nameOf(student.createdBy)}
+            first
+          />
+          {rows.map((r) => (
+            <HistoryRow
+              key={r.id}
+              testID={`student-history-${r.id}`}
+              what={r.what}
+              at={r.at}
+              by={nameOf(r.actorUid)}
+            />
+          ))}
+        </View>
+      </Card>
+    </>
+  );
+}
+
+function HistoryRow({
+  what,
+  at,
+  by,
+  first,
+  testID,
+}: {
+  what: string;
+  at: number;
+  by: string;
+  first?: boolean;
+  testID?: string;
+}) {
+  return (
+    <View testID={testID} style={[styles.historyRow, first ? null : styles.historyRowRule]}>
+      <Text style={styles.historyWhat}>{what}</Text>
+      {/* The institute's clock, like every date in the app — see `stampInZone`. */}
+      <Text style={styles.historyWhen}>
+        {stampInZone(INSTITUTE_TIMEZONE, at)} · by {by}
+      </Text>
+    </View>
   );
 }
 
@@ -322,3 +441,12 @@ function CourseEnrollmentRow({
     />
   );
 }
+
+const styles = StyleSheet.create({
+  historyLede: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(2) },
+  historyRow: { paddingVertical: spacing(2) },
+  historyRowRule: { borderTopWidth: 1, borderTopColor: t.border.subtle },
+  historyWhat: { fontSize: 15, color: t.text.primary },
+  // secondary, not muted: when and by whom is the point of the row.
+  historyWhen: { fontSize: 13, color: t.text.secondary, marginTop: 2 },
+});

@@ -128,11 +128,19 @@ interface CourseOption {
 /**
  * The courses this staff member may enrol into.
  *
- * An admin sees EVERY course in EVERY cohort (not just the latest — a course in an
- * older semester was invisible before, and two courses that share a name across
- * semesters looked like one). A manager sees only their own — which is also all
- * the security rules would let them read. Each option carries its cohort name so
- * same-named courses are distinguishable. Both roles may read cohorts.
+ * An admin sees every ACTIVE course in every cohort (not just the latest — a
+ * course in an older semester was invisible before, and two courses that share
+ * a name across semesters looked like one). A manager sees only their own —
+ * which is also all the security rules would let them read. Each option carries
+ * its cohort name so same-named courses are distinguishable. Both roles may
+ * read cohorts.
+ *
+ * ARCHIVED COURSES ARE NOT OFFERED. A new student is being enrolled into
+ * something that is running, and by the third term the archived courses
+ * outnumbered the live ones in this list — "Hikam Foundations" three times
+ * over, two of them finished. `effectiveActive` is the test, so a course
+ * switched off by its cohort's archiving goes too. Enrolling into an archived
+ * course is still possible, deliberately, from the course's own page.
  */
 
 /**
@@ -261,6 +269,7 @@ function useCourseOptions(isAdmin: boolean, uid: string): CourseOption[] {
   const courses = isAdmin ? adminCourses : myCourses;
   const cohortName = (id: string) => cohorts.find((c) => c.id === id)?.name ?? '';
   return courses
+    .filter((c) => c.effectiveActive)
     .map((c) => ({ id: c.id, name: c.name, cohortName: cohortName(c.cohortId) }))
     .sort(
       (a, b) => a.cohortName.localeCompare(b.cohortName) || a.name.localeCompare(b.name),

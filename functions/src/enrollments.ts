@@ -84,14 +84,18 @@ export async function createEnrollmentRecord(callerUid: string, input: Enrollmen
    * they are in no attendance snapshot, so it can only ever grant them nothing.
    */
   if (existing.exists) await reconcileCourseAssignments(db, input.courseId);
-  return { id, ...doc };
+  return { id, ...doc, reenrolled: existing.exists };
 }
 
 export const createEnrollment = auditedCall('createEnrollment', async (req, audit) => {
   const input = validateEnrollment(req.data);
   const uid = await requireCourseScope(req, input.courseId);
   audit.courseId = input.courseId;
-  return createEnrollmentRecord(uid, input);
+  const created = await createEnrollmentRecord(uid, input);
+  // A return through "Add a student" is a re-enrolment, and the student's
+  // history reads it as one; a first enrolment says nothing extra.
+  if (created.reenrolled) audit.detail = { reenrolled: true };
+  return created;
 });
 
 export interface SetEnrollmentActiveInput extends EnrollmentInput {
@@ -161,5 +165,10 @@ export const setEnrollmentActive = auditedCall('setEnrollmentActive', async (req
   const input = validateSetEnrollmentActive(req.data);
   await requireCourseScope(req, input.courseId);
   audit.courseId = input.courseId;
+  // WHICH WAY. The derivation picks up the ids and drops the boolean, so the
+  // log said "changed enrolment" of a removal and a return alike — and the
+  // student's history, which reads these rows, could not tell a student who
+  // was removed from one who came back.
+  audit.detail = { active: input.active };
   return applyEnrollmentActive(input);
 });

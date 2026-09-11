@@ -13,12 +13,30 @@ import {
   StatusChip,
   statusWord,
 } from '../components/ui';
+import { Select } from '../components/Select';
 import { useAllRecordings, useCourseRecordings, type RecordingRow } from '../recordings';
 import { useListenerFailed } from '../liveQuery';
-import { useAllCoursesState, useCohortName, useMyCoursesState, type CourseRow } from '../structure';
+import {
+  useAllCoursesState,
+  useCohortName,
+  useCohorts,
+  useMyCoursesState,
+  type CourseRow,
+} from '../structure';
+import {
+  WHOLE_LIBRARY,
+  cohortOptions,
+  courseOptions,
+  inScope,
+  isNarrowed,
+  pickCohort,
+  type LibraryScope,
+} from '../libraryFilters';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
+// One empty list, not a fresh `[]` per render: the lists below feed memos.
+const NO_COURSES: CourseRow[] = [];
 type StatusFilter = 'all' | RecordingStatus;
 /**
  * The filter, and the words a person reads on it.
@@ -50,15 +68,48 @@ export function LibraryScreen({
   onOpenProgress: (recording: RecordingRow, cls: CourseRow) => void;
 }) {
   const [status, setStatus] = useState<StatusFilter>('all');
+  const [scope, setScope] = useState<LibraryScope>(WHOLE_LIBRARY);
   // The `State` variant: before the first snapshot "you are not assigned to any
   // courses" is not the answer, it is the absence of one — and it reads to a
   // manager as their access having been revoked.
   const myCoursesLoaded = useMyCoursesState(isAdmin ? null : uid);
-  const myCourses = myCoursesLoaded ?? [];
+  const myCourses = myCoursesLoaded ?? NO_COURSES;
   // A refusal is not a load — see `MyCoursesScreen`.
   const myCoursesFailed = useListenerFailed(['myCourses']);
+  // Real course rows so the admin's flat list can show which course each
+  // recording is in, and the ledger it opens shows the course NAME — not the
+  // raw id (which is what a placeholder `{ name: courseId }` row leaked into
+  // the ledger subtitle). Held here rather than in `AdminLibrary` because the
+  // course dropdown is built from the same rows.
+  const allCourses = useAllCoursesState(isAdmin);
   // A course name alone is ambiguous across cohorts; this library spans them.
   const cohortNameOf = useCohortName();
+  const cohorts = useCohorts(true);
+
+  /*
+   * THE SAME TWO DROPDOWNS FOR BOTH ROLES, built from the courses each can see.
+   * A manager's cohort list is therefore the cohorts their own courses are in,
+   * and nothing else — every other cohort would filter to an empty page.
+   */
+  const courses = isAdmin ? (allCourses ?? NO_COURSES) : myCourses;
+  // A manager's sections, narrowed. The dropdowns only ever offer courses they
+  // run, so this is normally non-empty — but a course can be taken off them
+  // while it is chosen, and then the page has to say so itself, because there
+  // is no section left to say it.
+  const mySections = useMemo(
+    () => myCourses.filter((cls) => inScope({ cohortId: cls.cohortId, courseId: cls.id }, scope)),
+    [myCourses, scope],
+  );
+  const cohortChoices = useMemo(() => cohortOptions(cohorts, courses), [cohorts, courses]);
+  const courseChoices = useMemo(
+    () => courseOptions(courses, scope.cohortId, cohortNameOf),
+    [courses, scope.cohortId, cohortNameOf],
+  );
+  const narrowed = isNarrowed(status, scope);
+  const clear = () => {
+    setStatus('all');
+    setScope(WHOLE_LIBRARY);
+  };
 
   return (
     <Screen
@@ -68,11 +119,36 @@ export function LibraryScreen({
     >
       <View style={styles.filter}>
         <Chips value={status} testIdPrefix="library-filter" options={STATUSES} onChange={setStatus} />
+        {/* Cohort first, then course: the cohort narrows what the course
+            dropdown offers, never the other way round (`libraryFilters`). */}
+        <View style={styles.scope}>
+          <Select
+            testID="library-cohort"
+            label="Cohort"
+            value={scope.cohortId}
+            options={cohortChoices}
+            onChange={(cohortId) => setScope((s) => pickCohort(s, cohortId, courses))}
+          />
+          <Select
+            testID="library-course"
+            label="Course"
+            value={scope.courseId}
+            options={courseChoices}
+            onChange={(courseId) => setScope((s) => ({ ...s, courseId }))}
+          />
+          {/* Only ever present when there is something to clear, so it is
+              never a dead control. Quiet: it undoes, it does not act. */}
+          {narrowed ? (
+            <Button testID="library-clear" label="Clear filters" variant="quiet" hug onPress={clear} />
+          ) : null}
+        </View>
       </View>
 
       {isAdmin ? (
         <AdminLibrary
           status={status}
+          scope={scope}
+          courses={allCourses}
           cohortNameOf={cohortNameOf}
           onPlay={onPlay}
           onOpenProgress={onOpenProgress}
@@ -85,8 +161,10 @@ export function LibraryScreen({
         </Empty>
       ) : myCourses.length === 0 ? (
         <Empty>You are not assigned to any courses.</Empty>
+      ) : mySections.length === 0 ? (
+        <Empty>No recordings match these filters.</Empty>
       ) : (
-        myCourses.map((cls) => (
+        mySections.map((cls) => (
           <CourseSection
             key={cls.id}
             cls={cls}
@@ -103,25 +181,30 @@ export function LibraryScreen({
 
 function AdminLibrary({
   status,
+  scope,
+  courses,
   cohortNameOf,
   onPlay,
   onOpenProgress,
 }: {
   status: StatusFilter;
+  scope: LibraryScope;
+  /** `null` until the course list has arrived — see the note on the wait below. */
+  courses: CourseRow[] | null;
   cohortNameOf: (cohortId: string) => string;
   onPlay: (r: RecordingRow, c: CourseRow) => void;
   onOpenProgress: (r: RecordingRow, c: CourseRow) => void;
 }) {
   const all = useAllRecordings(true);
-  // Real course rows so the flat list can show which course each recording is in,
-  // and the ledger it opens shows the course NAME — not the raw id (which is what
-  // a placeholder `{ name: courseId }` row leaked into the ledger subtitle).
-  const courses = useAllCoursesState(true);
   const coursesFailed = useListenerFailed(['allCourses']);
   const courseById = useMemo(() => new Map((courses ?? []).map((c) => [c.id, c])), [courses]);
+  // The cohort and course scope first, then the status within it — so the
+  // counts line describes the term or course being looked at, and the status
+  // pills break THAT down rather than the whole institute.
+  const scoped = useMemo(() => all.filter((r) => inScope(r, scope)), [all, scope]);
   const filtered = useMemo(
-    () => (status === 'all' ? all : all.filter((r) => r.status === status)),
-    [all, status],
+    () => (status === 'all' ? scoped : scoped.filter((r) => r.status === status)),
+    [scoped, status],
   );
   const clsFor = (r: RecordingRow): CourseRow =>
     courseById.get(r.courseId) ??
@@ -130,7 +213,7 @@ function AdminLibrary({
     ({ id: r.courseId, name: r.courseId, cohortId: r.cohortId } as CourseRow);
   return (
     <>
-      <Counts recordings={all} />
+      <Counts recordings={scoped} />
       {/* THE COURSES, NOT THE RECORDINGS, ARE WHAT THIS WAITS FOR. Every row
           names its course, and `clsFor`'s fallback — meant for a recording
           whose course was deleted — otherwise fires for EVERY row on a cold
@@ -139,7 +222,7 @@ function AdminLibrary({
       {courses === null ? (
         <Empty>{coursesFailed ? 'The library could not be read.' : 'Loading the library…'}</Empty>
       ) : filtered.length === 0 ? (
-        <Empty>No recordings with that status.</Empty>
+        <Empty>No recordings match these filters.</Empty>
       ) : (
         <Grid min={330}>
           {filtered.map((r) => {
@@ -181,7 +264,7 @@ function CourseSection({
       <SectionTitle>{cohortName ? `${cls.name} · ${cohortName}` : cls.name}</SectionTitle>
       <Counts recordings={recordings} />
       {filtered.length === 0 ? (
-        <Empty>No recordings with that status.</Empty>
+        <Empty>No recordings match these filters.</Empty>
       ) : (
         <Grid min={330}>
           {filtered.map((r) => (
@@ -274,6 +357,15 @@ function RecordingLine({
 const styles = StyleSheet.create({
   actions: { marginTop: 'auto' },
   filter: { marginBottom: spacing(4) },
+  // Wraps, like the pills above it: two dropdowns and a clear control are one
+  // line on a laptop and two on a 320px phone.
+  scope: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing(2),
+    marginTop: spacing(3),
+  },
   counts: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(2) },
   title: { fontSize: 16, fontWeight: '600', color: t.text.primary },
   courseName: { fontSize: 13, color: t.text.secondary, marginTop: 2 },

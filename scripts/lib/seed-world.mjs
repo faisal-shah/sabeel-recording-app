@@ -228,6 +228,18 @@ export async function seedWorld({ db, auth, browser, base }) {
     status: 'pending',
     createdAt: now - 2 * DAY,
   });
+  /** A DISABLED staff account, written the same way, so the staff list's closed
+   *  "Disabled" section has a card in it — the only card there whose action row
+   *  reads Re-enable, and a section that is otherwise never opened. */
+  await db.collection('staffUsers').doc('sw-disabled').set({
+    email: 'yusuf.rahman@oursabeel.com',
+    displayName: 'Yusuf Rahman',
+    photoUrl: null,
+    role: 'manager',
+    status: 'disabled',
+    createdAt: now - 60 * DAY,
+    approvedAt: now - 59 * DAY,
+  });
 
   /**
    * A roster LONGER THAN ONE SCREEN, because the bug being looked for is what
@@ -521,11 +533,41 @@ export async function seedWorld({ db, auth, browser, base }) {
       detail: { note: 'Seeded so the audit list has rows at every width.' },
     });
   }
+  /**
+   * The demo student's own history — the rows their page reads out of the
+   * audit log, one of each kind, so the History card is measured with every
+   * sentence it can print rather than with "Account created" alone. The last
+   * is the one the tours anchor on: a row is only there once the audit
+   * listener has answered, which the card's frame cannot say.
+   */
+  const history = [
+    ['createEnrollment', COURSE, {}],
+    ['setEnrollmentActive', COURSE, { active: false }],
+    ['setEnrollmentActive', COURSE, { active: true }],
+    ['setStudentAccess', null, { status: 'disabled' }],
+    ['setStudentAccess', null, { status: 'active' }],
+    ['createEnrollment', LONG_COURSE, { reenrolled: true }],
+  ];
+  for (const [i, [action, courseId, detail]] of history.entries()) {
+    await db.collection('auditLog').doc(`sw-history-${i}`).set({
+      at: now - (30 - i * 4) * DAY, actorUid: i % 2 ? managerUid : adminUid,
+      actorRole: i % 2 ? 'manager' : 'admin', action, courseId,
+      targets: courseId ? { studentUid: STUDENT.uid, courseId } : { studentUid: STUDENT.uid },
+      ...(Object.keys(detail).length ? { detail } : {}),
+    });
+  }
+  /** The last row, for the admin's tour — and the last one INSIDE the
+   *  manager's course for theirs, since a manager's read is pinned to the
+   *  courses they run and the final row is in a course they do not. */
+  const HISTORY_ROW = `sw-history-${history.length - 1}`;
+  const HISTORY_ROW_MANAGED = `sw-history-${history.findLastIndex(([, courseId]) => courseId === COURSE)}`;
 
   // WHAT A TOUR NEEDS TO NAME A THING, and nothing else. Twelve handles were
   // returned and four were read; the rest were a standing invitation to reach
   // past the fixture's own vocabulary into its internals.
-  return { STUDENT, DISABLED_STUDENT, STUDENT_PASSWORD, missed, dueSoon, blocking };
+  return {
+    STUDENT, DISABLED_STUDENT, STUDENT_PASSWORD, missed, dueSoon, blocking, HISTORY_ROW, HISTORY_ROW_MANAGED,
+  };
 }
 
 export { byId, byName, backButton, tap };

@@ -11,8 +11,10 @@ import {
 } from '@sabeel/shared';
 import {
   applyCohortArchived,
+  applyCohortRename,
   createCohortRecord,
   validateCohortName,
+  validateRenameCohort,
   validateSetCohortArchived,
 } from '../../src/cohorts';
 import {
@@ -129,6 +131,29 @@ describe('cohort archive cascade', () => {
   });
 });
 
+describe('cohort rename', () => {
+  const cohortDoc = async (id: string) =>
+    (await getFirestore().collection(COLLECTIONS.cohorts).doc(id).get()).data();
+
+  it('changes the name and nothing else', async () => {
+    const { id: cohortId } = await createCohortRecord(ADMIN, 'Autum 2026');
+    const { id: courseId } = await createCourseRecord(ADMIN, { cohortId, name: 'K' });
+    await applyCohortArchived({ cohortId, archived: true });
+    const before = await cohortDoc(cohortId);
+
+    await applyCohortRename({ cohortId, name: 'Autumn 2026' });
+
+    // The whole document, not just the name: a rename that also reset
+    // `archived` would quietly reopen every course in a finished term.
+    expect(await cohortDoc(cohortId)).toEqual({ ...before, name: 'Autumn 2026' });
+    expect((await classDoc(courseId)).effectiveActive).toBe(false);
+  });
+
+  it('rejects an unknown cohort', async () => {
+    await expect(applyCohortRename({ cohortId: 'nope', name: 'X' })).rejects.toThrow(/No such/);
+  });
+});
+
 describe('setCourseManagers', () => {
   it('assigns an active staff member', async () => {
     const { id: cohortId } = await createCohortRecord(ADMIN, 'C');
@@ -205,7 +230,11 @@ describe('enrollments', () => {
     const { courseId, studentUid } = await setup();
     const first = await createEnrollmentRecord(ADMIN, { studentUid, courseId });
     await applyEnrollmentActive({ studentUid, courseId, active: false });
-    await createEnrollmentRecord(MGR, { studentUid, courseId });
+    const again = await createEnrollmentRecord(MGR, { studentUid, courseId });
+    // Says so — the student's history reads a return as a return, not as a
+    // second first enrolment.
+    expect(first.reenrolled).toBe(false);
+    expect(again.reenrolled).toBe(true);
 
     const all = await getFirestore()
       .collection(COLLECTIONS.enrollments)
@@ -276,6 +305,16 @@ describe('validators', () => {
     expect(validateCohortName({ name: '  Autumn  ' })).toBe('Autumn');
     for (const bad of [null, {}, { name: '   ' }, { name: 'x'.repeat(200) }]) {
       expect(() => validateCohortName(bad)).toThrow();
+    }
+  });
+
+  it('a cohort rename needs the cohort and passes the same name rule', () => {
+    expect(validateRenameCohort({ cohortId: 'c', name: '  Autumn  ' })).toEqual({
+      cohortId: 'c',
+      name: 'Autumn',
+    });
+    for (const bad of [null, {}, { name: 'X' }, { cohortId: 'c' }, { cohortId: 'c', name: ' ' }]) {
+      expect(() => validateRenameCohort(bad)).toThrow();
     }
   });
 

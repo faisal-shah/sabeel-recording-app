@@ -9,11 +9,9 @@
  * requires them to listen, until the session's Listen by date.
  */
 import { chromium } from 'playwright';
-import { EMULATOR_PORTS, WEB_PORTS } from './lib/ports.mjs';
-import { EMULATOR_PROJECT_ID } from './lib/project.mjs';
+import { WEB_PORTS } from './lib/ports.mjs';
 
 const WEB = `http://127.0.0.1:${WEB_PORTS.e2e}/`;
-const FN = `http://127.0.0.1:${EMULATOR_PORTS.functions}/${EMULATOR_PROJECT_ID}/us-central1`;
 const DIR = 'docs/manual/img';
 const PHONE = { width: 390, height: 844 };
 const DESKTOP = { width: 1280, height: 900 };
@@ -175,8 +173,10 @@ await stu.context().close();
 
 console.log('Admin / staff');
 const adm = await newPage(PHONE);
+// No `bootstrapAdmin`: the seed pre-provisions this account as an approved admin
+// (see `seed-guide.mjs`), and the dev sign-in links to it. A bootstrap call
+// would be refused anyway — an admin already exists.
 await tap(adm, 'dev-signin-first-admin');
-await fetch(`${FN}/bootstrapAdmin`).catch(() => {});
 await adm.getByTestId('tab-today').waitFor({ timeout: 30000 });
 await adm.waitForTimeout(2500);
 await pair(adm, '10-staff-home');
@@ -194,6 +194,8 @@ await pair(adm, '11b-student-page');
 await home(adm);
 await tap(adm, 'tab-people'); await adm.waitForTimeout(1500);
 await tap(adm, 'segment-staff'); await adm.waitForTimeout(1200);
+// The Disabled section open, as on the students figure.
+await tap(adm, 'staff-disabled'); await adm.waitForTimeout(800);
 await pair(adm, '12-staff-approvals');
 
 await home(adm);

@@ -165,6 +165,28 @@ const shapes = [
     'auditLog — global, newest first (admin audit view)',
     () => db.collection('auditLog').orderBy('at', 'desc').limit(AUDIT_PAGE),
   ],
+  // A student's history, on their page. The admin reads it by the student
+  // alone; a manager's read is pinned to the courses they run, because the
+  // manager arm of the audit rule resolves a course lookup from each row.
+  [
+    "auditLog — one student's history (admin)",
+    () =>
+      db
+        .collection('auditLog')
+        .where('targets.studentUid', '==', ID)
+        .orderBy('at', 'desc')
+        .limit(AUDIT_PAGE),
+  ],
+  [
+    "auditLog — one student's history in the courses a manager runs",
+    () =>
+      db
+        .collection('auditLog')
+        .where('courseId', 'in', [ID])
+        .where('targets.studentUid', '==', ID)
+        .orderBy('at', 'desc')
+        .limit(AUDIT_PAGE),
+  ],
   /*
    * THE ONE SHAPE NO SCREEN SENDS — `onDeviceRegistered`'s sweep.
    *

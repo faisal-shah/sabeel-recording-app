@@ -43,6 +43,8 @@ The product should be designed for Android, web, and future iOS support. Initial
 - Staff quick-create student accounts with full name, email, and enrolled cohort/class — **on the web only**. The affordance is absent from the native builds, so an app-store reviewer never meets an account-creation flow; everything else about a student account (roles, enrolment, disabling, resending the set-password link) works on every surface.
 - After staff create a student account, the student receives an email to set their own password.
 - Disabling a student prevents login while preserving all history, enrollments, and reports.
+- A student's page carries their **history**: when the account was created and by whom, then every enrolment, removal and return, and every time the account was disabled or re-enabled — each with who did it and when. It is read out of the audit log, which is the record of those changes, not kept as a second one. A manager's view of it is pinned to the classes they manage; account changes are admin-only.
+- The student picker on the create-student form offers only courses that are running — an archived course, or one in an archived cohort, is not offered there. Enrolling into an archived course remains possible from the course's own page.
 
 ## Academic structure
 
@@ -57,7 +59,7 @@ Cohort/Semester -> Course -> Session -> Recording
 - A **recording** is the audio for a session, linked by `recording.sessionId`. It is pure media + lifecycle; the student-facing title/notes/date are copied (denormalised) from the session, because students cannot read sessions.
 - A student account can be enrolled in multiple cohorts/courses over time.
 - Listening history is preserved across enrollments.
-- Admins and Managers can create and manage cohorts, courses, and sessions within their permissions.
+- Admins and Managers can create and manage cohorts, courses, and sessions within their permissions. A cohort can be renamed from its own page; a rename touches nothing but the name.
 - Cohorts are manually marked inactive or archived when they end.
 - Courses can be inactive or archived independently.
 - A course is effectively active only when both its cohort and the course itself are active.
@@ -303,6 +305,7 @@ The recording library:
 
 - Is cross-cohort: an admin sees every recording in the institute as one list, a manager sees theirs grouped by class. Cohort/semester is not a level of grouping here — the Classes tab is where the hierarchy lives, and repeating it made a short list twice as tall.
 - Filters by recording status, and shows the count under each status so it does not become a wall of recordings. Everything is shown by default; a filter narrows it.
+- Filters by **cohort** and by **class**, as two dropdowns: a cohort alone shows everything in that term, a class narrows to that class, and the class dropdown offers the classes of the chosen cohort (every class, each with its term, when none is chosen). The count line describes the narrowed set. A clear control appears whenever anything is narrowing, and puts everything back.
 - Surfaces needs-attention states, which are the rows that want a person.
 
 Staff can play recordings in the app to verify imports and metadata.
@@ -313,12 +316,14 @@ Staff reach everything through complete lists rather than search: Recordings,
 Students, Classes, and the ledger views. Each list is whole — nothing is hidden
 behind a query — and each is ordered so the list itself is the navigation.
 
-Filtering is deliberately narrow. **Recording status** is the one filter the
-product has, on the library, because status is the only attribute of a recording
-that decides whether somebody has to act. Cohort and class are structure, and the
-Classes tab already navigates them; completion state is what a ledger is for and
-belongs on the ledger rather than on a list of recordings; and there is no
-"no due date" to filter for, because every session has one — it is required.
+Filtering is deliberately narrow. The library filters by **recording status** —
+the one attribute of a recording that decides whether somebody has to act — and
+by **cohort and class**, because by the third term an institute-wide list is
+mostly other terms, and "the recordings of this class" is a question the
+Classes tab answers only one class at a time. Completion state is what a ledger
+is for and belongs on the ledger rather than on a list of recordings; and there
+is no "no due date" to filter for, because every session has one — it is
+required.
 
 Sorting is fixed rather than user-chosen: students by name, sessions and
 recordings by date, newest meeting first. A sort control on a list whose right

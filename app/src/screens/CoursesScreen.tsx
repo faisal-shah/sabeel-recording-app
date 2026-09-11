@@ -15,9 +15,11 @@ import {
 } from '../components/ui';
 import {
   createCourse,
+  renameCohort,
   setCohortArchived,
   useCohortState,
   useCoursesInCohort,
+  type CohortRow,
   type CourseRow,
 } from '../structure';
 import { getTheme, spacing } from '../theme';
@@ -141,6 +143,7 @@ export function CoursesScreen({
 
       <SectionTitle>Settings</SectionTitle>
       <Card>
+        <CohortName cohort={cohort} busy={busy === 'rename'} run={run} />
         {/* State the blast radius rather than gating it behind a confirm:
             archiving is the SAFE action in this product, and obstructing the
             safe action is how people learn to click through warnings. */}
@@ -181,6 +184,43 @@ export function CoursesScreen({
         </Grid>
       )}
     </Screen>
+  );
+}
+
+/**
+ * The cohort's name, editable — the same field-and-Rename shape a course's
+ * settings card has, so the two pages read as one design.
+ *
+ * Its own component because the draft has to be SEEDED from the cohort once,
+ * and the screen renders the cohort live: seeding in the screen's own state
+ * would either race the first snapshot (an empty field) or need an effect that
+ * overwrites what is being typed every time the document changes. Mounted only
+ * once the cohort has resolved, the initial state is simply its name.
+ */
+function CohortName({
+  cohort,
+  busy,
+  run,
+}: {
+  cohort: CohortRow;
+  busy: boolean;
+  run: (key: string, fn: () => Promise<void>) => Promise<void>;
+}) {
+  const [name, setName] = useState(cohort.name);
+  const trimmed = name.trim();
+  return (
+    <>
+      <Field testID="cohort-rename" label="Name" value={name} onChangeText={setName} autoCapitalize="words" />
+      <Button
+        testID="cohort-rename-save"
+        label="Rename"
+        // Nothing to save until the name differs — a Rename that writes the
+        // same name again is a button that does nothing.
+        disabled={!trimmed || trimmed === cohort.name}
+        busy={busy}
+        onPress={() => void run('rename', () => renameCohort({ cohortId: cohort.id, name: trimmed }))}
+      />
+    </>
   );
 }
 

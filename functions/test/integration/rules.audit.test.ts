@@ -78,7 +78,7 @@ beforeEach(async () => {
         actorRole: 'manager',
         action: 'createStudent',
         courseId: null,
-        targets: { uid: 'newStudent' },
+        targets: { studentUid: 'newStudent' },
       }),
     ]);
   });
@@ -153,6 +153,61 @@ describe('auditLog reads', () => {
 
   it('a manager cannot list unconstrained (would expose other courses + global)', async () => {
     await assertFails(getDocs(collection(mgrMine().firestore(), COLLECTIONS.auditLog)));
+  });
+
+  /*
+   * A STUDENT'S HISTORY, as the student's page reads it.
+   *
+   * The admin asks by the student alone. A manager's read is pinned to the
+   * courses they run with an `in` clause — the same shape the work queue sends —
+   * and the rule judges the query, not the rows: pinned to their own class it
+   * is served, and widened by one class that is not theirs it is refused
+   * outright, whether or not that class has a row about the student.
+   */
+  it("an admin lists one student's history by the student alone", async () => {
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(admin().firestore(), COLLECTIONS.auditLog),
+          where('targets.studentUid', '==', 'newStudent'),
+        ),
+      ),
+    );
+  });
+
+  it("a manager lists a student's history pinned to the courses they run", async () => {
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(mgrMine().firestore(), COLLECTIONS.auditLog),
+          where('courseId', 'in', [CLASS_MINE]),
+          where('targets.studentUid', '==', 'newStudent'),
+        ),
+      ),
+    );
+  });
+
+  it('…and is refused the moment the pin reaches a course that is not theirs', async () => {
+    await assertFails(
+      getDocs(
+        query(
+          collection(mgrMine().firestore(), COLLECTIONS.auditLog),
+          where('courseId', 'in', [CLASS_MINE, CLASS_THEIRS]),
+          where('targets.studentUid', '==', 'newStudent'),
+        ),
+      ),
+    );
+  });
+
+  it('…and cannot ask by the student alone, which would reach class-less entries', async () => {
+    await assertFails(
+      getDocs(
+        query(
+          collection(mgrMine().firestore(), COLLECTIONS.auditLog),
+          where('targets.studentUid', '==', 'newStudent'),
+        ),
+      ),
+    );
   });
 
   it('a student cannot read the audit log at all', async () => {
