@@ -36,6 +36,65 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-09-11 — **A review of v0.6.0 against production found the double tap.**
+
+  Reading the five features back against the live data before Faisal tried
+  them, rather than against the fixture that shipped them. Two things the
+  fixture could not show:
+
+  1. **Two enrolments from one tap.** Two `createEnrollment` audit rows 24 ms
+     apart for the same student and course — twice over, for two real students.
+     The "Add a student" row was a bare `Pressable` with no in-flight lock, and
+     stayed listed until the roster snapshot took it away; a second tap in that
+     window sent a second call, and `createEnrollmentRecord` read "not enrolled"
+     for both before either wrote. Nothing was wrong on the roster — the two
+     writes set the same document — but the History card, which reads those
+     rows, said "Enrolled in Tafseer" twice. Three layers, each for a different
+     reader: the callable now checks and writes inside a **transaction**, so
+     the second call is refused as already enrolled (a concurrency test that
+     is red on the old code); the row **locks on tap** and stays locked until
+     the roster holds the student, the lock in a ref so a same-frame second
+     click is refused before any render — the same shape as the manager rows,
+     for the same reason; and `studentHistory` **collapses a row identical to
+     the one before it**, by the same person, within a minute, because the two
+     rows already in the log are one enrolment. The audit screen keeps showing
+     both, because both calls ran.
+  2. **Every student created before v0.6.0 had no "Enrolled in" line.** The
+     page reads `targets.studentUid`, which the callables have written since
+     8b250bb; the sixteen `createStudent` rows already in the log named the
+     student under `targets.uid` (nine) or under nothing (seven — the wrapper
+     derives targets from the payload, and a new account has no uid in it).
+     `scripts/backfill-audit-student-key.mjs` adds the one key and nothing
+     else, from `targets.uid`, from `detail.email`, or from the student the
+     same actor created within five seconds before the row who is enrolled in
+     the row's course; anything ambiguous is left alone. Dry run by default;
+     run once, 16 of 16 keyed, and the History card now reads whole for every
+     existing student. The manual's promise was already "from the day the
+     account was created".
+
+  Also found: the sign-in screen's fallback printed the raw message, and the
+  functions SDK reports a server it cannot reach as the bare word `internal` —
+  so a Google sign-in on a phone that lost signal between the chooser and the
+  `accountExists` call would have shown `internal` in the error band. The copy
+  now lives in `auth/signInMessage.ts` and falls back to `errorText`, which
+  turns machine tokens away; the store-exemption guard reads that module too.
+
+  Reviewed and left alone: the manager-scoped history query and its rules
+  (served pinned to their courses, refused widened by one — asserted in
+  `rules.audit.test.ts`); the library filters' pure logic (unit-tested at
+  every branch, and the archived-cohort, cross-cohort-course and
+  manager-with-no-courses cases driven in a browser); rename validation on
+  the real control (blank and unchanged disabled, 121 characters refused with
+  the server's sentence in the page, a rename followed live by the page title
+  and by the History card's course label); the create-student picker with
+  every course archived (hidden, creation still works, history reads
+  "Account created" alone). Production after the demo wipe: every reference
+  resolves — each Auth user has exactly one document and each document an
+  Auth user, every enrolment, assignment, projection, recording and
+  completion points at things that exist, every submitted mark has its
+  projection, and the bucket holds audio for exactly the recordings that
+  claim it.
+
 - 2026-09-11 — **Five requests from use: a student's history, cohort and course
   filters on the library, a cohort rename, disabled staff out of the way, and
   archived courses out of the student picker.**
