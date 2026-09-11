@@ -5,6 +5,7 @@ import {
   COLLECTIONS,
   INSTITUTE_TIMEZONE,
   bucketRank,
+  canPlayFromCourse,
   dueBucket,
   todayInZone,
   unbreakableDate,
@@ -85,6 +86,15 @@ export function StudentHomeScreen({
           cls: r.cls,
           dueDate: a.dueDate,
           bucket,
+          /*
+           * THE COURSE IS CLOSED. Archived with listening off, the server
+           * refuses the audio (`class-listening-off`), so a row like this is
+           * not required listening any more, whatever its date says: it is
+           * neither the hero nor a thing still to do, and the brief has
+           * archived courses out of the default student views. A row already
+           * completed stays Completed — the record is the student's.
+           */
+          archived: !canPlayFromCourse(r.cls) && bucket !== 'done',
           pending: state?.pending ?? false,
           override: state?.override ?? null,
         };
@@ -124,16 +134,21 @@ export function StudentHomeScreen({
    */
   const checking = ((granted === null && !failed) || resolving) && rows.length === 0;
 
-  const next = rows.find((r) => r.bucket === 'dueSoon' || r.bucket === 'upcoming') ?? null;
+  const next =
+    rows.find((r) => !r.archived && (r.bucket === 'dueSoon' || r.bucket === 'upcoming')) ?? null;
   const listed = next ? rows.filter((r) => r.key !== next.key) : rows;
 
-  const groups: { bucket: DueBucket; label: string; rows: TaskRow[] }[] = [
+  const groups: { bucket: DueBucket | 'archived'; label: string; rows: TaskRow[] }[] = [
     { bucket: 'missed', label: 'Missed', rows: [] },
+    // Quiet, like Missed, and right below it: closed, not owed, not tappable.
+    { bucket: 'archived', label: 'Archived', rows: [] },
     { bucket: 'dueSoon', label: 'Due soon', rows: [] },
     { bucket: 'upcoming', label: 'Upcoming', rows: [] },
     { bucket: 'done', label: 'Completed', rows: [] },
   ];
-  for (const row of listed) groups.find((g) => g.bucket === row.bucket)?.rows.push(row);
+  for (const row of listed) {
+    groups.find((g) => g.bucket === (row.archived ? 'archived' : row.bucket))?.rows.push(row);
+  }
 
   return (
     <Screen
@@ -247,6 +262,8 @@ interface TaskRow {
   cls: CourseRow;
   dueDate: string;
   bucket: DueBucket;
+  /** The course is archived with listening off — see the note where it is set. */
+  archived: boolean;
   pending: boolean;
   /** Set by a teacher, and not the student's to change — see the note on the card. */
   override: { completed: boolean; reason: string } | null;
@@ -260,7 +277,9 @@ interface TaskRow {
  */
 function TaskCard({ row, onOpen }: { row: TaskRow; onOpen: () => void }) {
   const done = row.bucket === 'done';
-  const missed = row.bucket === 'missed';
+  // An archived course's row is closed the way a missed one is: not a button,
+  // since the server refuses the audio, and quiet.
+  const missed = row.bucket === 'missed' || row.archived;
   const body = (
     <>
       <View style={styles.cardMain}>
@@ -294,9 +313,11 @@ function TaskCard({ row, onOpen }: { row: TaskRow; onOpen: () => void }) {
           <Text style={styles.doneChip}>Completed</Text>
         ) : (
           <Text style={[styles.due, missed ? styles.missed : null]}>
-            {missed
-              ? `Closed ${unbreakableDate(row.dueDate)}`
-              : `Listen by ${unbreakableDate(row.dueDate)}`}
+            {row.archived
+              ? 'Course archived'
+              : missed
+                ? `Closed ${unbreakableDate(row.dueDate)}`
+                : `Listen by ${unbreakableDate(row.dueDate)}`}
           </Text>
         )}
       </View>

@@ -105,6 +105,8 @@ slips past you:
 - **Missed** — the date to listen by has passed, with the date it closed.
   Nothing can be done about these, so they are set quietly rather than as an
   alarm.
+- **Archived** — the class has been archived and listening turned off, so
+  these are no longer required and cannot be played. Quiet, like Missed.
 - **Due soon** — the date to listen by is within the next week.
 - **Upcoming** — opened to you, with more time.
 - **Completed** — recordings you've already marked done.

@@ -1,24 +1,32 @@
-import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useMemo } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import {
   INSTITUTE_TIMEZONE,
+  canPlayFromCourse,
   isOverdue,
   todayInZone,
   unbreakableDate,
   type AttendanceStatus,
-} from '@sabeel/shared';
-import { Card, Empty, Grid, Notice, Screen, SectionTitle } from '../components/ui';
-import { useMyAttendance } from '../attendance';
-import { useMyAssignments, useMyCompletions } from '../completion';
-import type { CourseRow } from '../structure';
-import { getTheme, spacing } from '../theme';
+} from "@sabeel/shared";
+import {
+  Card,
+  Empty,
+  Grid,
+  Notice,
+  Screen,
+  SectionTitle,
+} from "../components/ui";
+import { useMyAttendance } from "../attendance";
+import { useMyAssignments, useMyCompletions } from "../completion";
+import type { CourseRow } from "../structure";
+import { getTheme, spacing } from "../theme";
 
 const t = getTheme();
 
 const STATUS_LABEL: Record<AttendanceStatus, string> = {
-  present: 'Present',
-  absent: 'Absent',
-  excused: 'Excused',
+  present: "Present",
+  absent: "Absent",
+  excused: "Excused",
 };
 
 /**
@@ -55,7 +63,11 @@ export function StudentAttendanceScreen({
   );
 
   const rows = useMemo(
-    () => [...marks].sort((a, b) => b.date.localeCompare(a.date) || a.title.localeCompare(b.title)),
+    () =>
+      [...marks].sort(
+        (a, b) =>
+          b.date.localeCompare(a.date) || a.title.localeCompare(b.title),
+      ),
     [marks],
   );
 
@@ -70,18 +82,22 @@ export function StudentAttendanceScreen({
   // the number un-clearable.
   const outstanding = useMemo(
     () =>
-      assignments.filter(
-        (a) =>
-          // THIS CLASS. `useMyAssignments` is constrained on the student and on
-          // `active`, so it spans every class they are enrolled in — and the
-          // sentence this number drives says "for this class". A student in two
-          // classes with one open recording in each read "2 still to listen to"
-          // on both pages.
-          a.courseId === cls.id &&
-          !isOverdue(a.dueDate, today) &&
-          !completions.get(a.recordingId)?.completed,
-      ).length,
-    [assignments, completions, today, cls.id],
+      // Nothing is owed in a course archived with listening off: the audio is
+      // refused, so "still to listen to" would name a thing that cannot be done.
+      !canPlayFromCourse(cls)
+        ? 0
+        : assignments.filter(
+            (a) =>
+              // THIS CLASS. `useMyAssignments` is constrained on the student and on
+              // `active`, so it spans every class they are enrolled in — and the
+              // sentence this number drives says "for this class". A student in two
+              // classes with one open recording in each read "2 still to listen to"
+              // on both pages.
+              a.courseId === cls.id &&
+              !isOverdue(a.dueDate, today) &&
+              !completions.get(a.recordingId)?.completed,
+          ).length,
+    [assignments, completions, today, cls],
   );
 
   return (
@@ -91,7 +107,6 @@ export function StudentAttendanceScreen({
        window grew: 680px of phone layout fits two cards, and crossing the 900px
        breakpoint capped the column at 656 and dropped it to one. */
     <Screen title={cls.name} subtitle="Your attendance" width="list">
-
       {/* WHAT THEY STILL OWE COMES FIRST, and in their words. Three attendance
           counts are the register a teacher keeps; the number an adult student
           opens this screen for is how much listening is still outstanding — and
@@ -100,7 +115,7 @@ export function StudentAttendanceScreen({
       {outstanding > 0 ? (
         <Notice tone="info">
           {outstanding === 1
-            ? '1 recording still to listen to for this class.'
+            ? "1 recording still to listen to for this class."
             : `${outstanding} recordings still to listen to for this class.`}
         </Notice>
       ) : null}
@@ -121,7 +136,11 @@ export function StudentAttendanceScreen({
           {rows.map((m) => {
             const a = bySession.get(m.sessionId);
             return (
-              <View key={m.id} testID={`attendance-${m.title}`} style={styles.row}>
+              <View
+                key={m.id}
+                testID={`attendance-${m.title}`}
+                style={styles.row}
+              >
                 <View style={styles.rowMain}>
                   <Text style={styles.title}>{m.title}</Text>
                   <Text style={styles.date}>{m.date}</Text>
@@ -152,16 +171,21 @@ export function StudentAttendanceScreen({
  * marked it complete has done what was asked, and telling them afterwards that
  * they "missed" it would be both wrong and the punitive tone the brief rules out.
  */
-function listeningLine(completed: boolean, dueDate: string, today: string): string {
+function listeningLine(
+  completed: boolean,
+  dueDate: string,
+  today: string,
+): string {
   // Non-breaking spaces around the date AND non-breaking hyphens inside it: it
   // is the whole point of the line, and it is the one token a wrap split — see
   // `unbreakableDate`.
   const when = unbreakableDate(dueDate);
-  if (completed) return 'Recording required · completed';
+  if (completed) return "Recording required · completed";
   // "Missed", the word the student's own home uses for the same session. "not
   // listened" was a second name for one state, and outside the vocabulary the
   // brief declares.
-  if (isOverdue(dueDate, today)) return `Recording required · missed, closed\u00A0${when}`;
+  if (isOverdue(dueDate, today))
+    return `Recording required · missed, closed\u00A0${when}`;
   return `Recording required · listen\u00A0by\u00A0${when}`;
 }
 
@@ -171,7 +195,10 @@ function Tally({ label, value }: { label: string; value: number }) {
       {/* The NUMBER carries the id, so a check can read one counter rather than
           matching a digit somewhere near a word — which matched the counter next
           door and would have passed with the labels swapped. */}
-      <Text testID={`attendance-tally-${label.toLowerCase()}`} style={styles.tallyNum}>
+      <Text
+        testID={`attendance-tally-${label.toLowerCase()}`}
+        style={styles.tallyNum}
+      >
         {value}
       </Text>
       <Text style={styles.tallyLabel}>{label}</Text>
@@ -180,13 +207,13 @@ function Tally({ label, value }: { label: string; value: number }) {
 }
 
 const styles = StyleSheet.create({
-  tally: { flexDirection: 'row', justifyContent: 'space-around' },
-  tallyItem: { alignItems: 'center' },
-  tallyNum: { fontSize: 24, fontWeight: '700', color: t.text.primary },
+  tally: { flexDirection: "row", justifyContent: "space-around" },
+  tallyItem: { alignItems: "center" },
+  tallyNum: { fontSize: 24, fontWeight: "700", color: t.text.primary },
   tallyLabel: {
     fontSize: 12,
     color: t.text.secondary,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 0.6,
     marginTop: spacing(1),
   },
@@ -194,8 +221,8 @@ const styles = StyleSheet.create({
     // Fills the grid cell it is given, so a row of these ends level instead
     // of ragged with its actions at three different heights.
     flexGrow: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: t.bg.surface,
     borderRadius: 12,
     padding: spacing(4),
@@ -204,12 +231,17 @@ const styles = StyleSheet.create({
     borderColor: t.border.subtle,
   },
   rowMain: { flex: 1, paddingRight: spacing(3) },
-  title: { fontSize: 15, fontWeight: '600', color: t.text.primary },
+  title: { fontSize: 15, fontWeight: "600", color: t.text.primary },
   date: { fontSize: 13, color: t.text.secondary, marginTop: spacing(1) },
   // The row's point, so it reads as one: what this session asks of them. The
   // attendance mark beside it is the reason it asks, and is set quieter for
   // that — it had the colour and the weight while the sentence that says what
   // to DO was a muted caption under the date.
-  listening: { fontSize: 14, fontWeight: '600', color: t.text.primary, marginTop: spacing(1) },
-  status: { fontSize: 13, fontWeight: '600', color: t.text.secondary },
+  listening: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: t.text.primary,
+    marginTop: spacing(1),
+  },
+  status: { fontSize: 13, fontWeight: "600", color: t.text.secondary },
 });
