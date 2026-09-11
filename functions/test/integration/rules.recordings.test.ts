@@ -496,6 +496,18 @@ describe('listeningProgress', () => {
     );
   });
 
+  it('refuses progress once the grant has lapsed — a first row and a later update alike', async () => {
+    const ref = doc(student().firestore(), COLLECTIONS.listeningProgress, mineId());
+    await assertSucceeds(setDoc(ref, row(STUDENT)));
+    await testEnv.withSecurityRulesDisabled(async (c) => {
+      await updateDoc(doc(c.firestore(), COLLECTIONS.assignments, assignmentId(STUDENT, PUBLISHED)), { active: false });
+    });
+    await assertFails(setDoc(ref, { ...row(STUDENT), positionMs: 9000 }));
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.listeningProgress, `${STUDENT}_${PUBLISHED}`), row(STUDENT)),
+    );
+  });
+
   it('refuses a row whose numbers are not numbers, or that carries an extra key', async () => {
     // `updatedAt: 'x'` reached the ledger's date formatter, which throws on an
     // invalid date; with no error boundary the class's ledger went blank for

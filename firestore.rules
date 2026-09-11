@@ -67,6 +67,17 @@ service cloud.firestore {
     function grantedCourse(recordingId) {
       return get(/databases/$(database)/documents/assignments/$(request.auth.uid + '_' + recordingId)).data.courseId;
     }
+    /*
+     * AND THE GRANT IS ACTIVE. A grant lapses — corrected to present after all,
+     * unenrolled, unpublished — by being switched off, never deleted, so a
+     * check on its class alone accepted rows from students who no longer held
+     * the recording; they surfaced on the ledger as ticks for people the
+     * class was closed to. The same document as `grantedCourse`, so the same
+     * one read — Firestore caches a path within a request.
+     */
+    function holdsGrant(recordingId) {
+      return get(/databases/$(database)/documents/assignments/$(request.auth.uid + '_' + recordingId)).data.active == true;
+    }
 
     // ---- Staff ----
     // Read-only to clients; every write goes through the setStaffAccess
@@ -324,14 +335,18 @@ service cloud.firestore {
        * `courseId` is free — so the class is fixed once, when the row is born.
        */
       allow create: if mine() && progressShape()
+        && holdsGrant(request.resource.data.recordingId)
         && request.resource.data.courseId == grantedCourse(request.resource.data.recordingId);
       // Three things matter: `mine()` stops a student writing someone else's uid
       // into the row, the studentUid check stops them overwriting a row that is
       // already someone else's, and the courseId check stops them moving a row
-      // out of the class its grant belongs to.
+      // out of the class its grant belongs to. The grant is checked on update
+      // too: a row born under a live grant must not go on growing after the
+      // grant was switched off — one read, the same path as on create.
       allow update: if mine() && progressShape()
         && resource.data.studentUid == request.auth.uid
-        && request.resource.data.courseId == resource.data.courseId;
+        && request.resource.data.courseId == resource.data.courseId
+        && holdsGrant(request.resource.data.recordingId);
       allow delete: if false;
     }
 
@@ -396,10 +411,12 @@ service cloud.firestore {
       // complete to the manager chasing them. `get` on create only; an update
       // may not move it.
       allow create: if mineC() && completionShape()
+        && holdsGrant(request.resource.data.recordingId)
         && request.resource.data.courseId == grantedCourse(request.resource.data.recordingId);
       allow update: if mineC() && completionShape()
         && resource.data.studentUid == request.auth.uid
-        && request.resource.data.courseId == resource.data.courseId;
+        && request.resource.data.courseId == resource.data.courseId
+        && holdsGrant(request.resource.data.recordingId);
       allow delete: if false;
     }
 
@@ -423,6 +440,7 @@ service cloud.firestore {
         && request.resource.data.actor == 'student'
         && request.resource.data.action in ['complete', 'uncomplete']
         && request.resource.data.at is int
+        && holdsGrant(request.resource.data.recordingId)
         && request.resource.data.courseId == grantedCourse(request.resource.data.recordingId);
       /*
        * NO NULL ARM HERE, unlike its neighbours — and the difference is the id.

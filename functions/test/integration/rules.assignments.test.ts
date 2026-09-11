@@ -6,7 +6,7 @@ import {
   assertSucceeds,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { COLLECTIONS, EMULATOR_PROJECT_ID, assignmentId, completionId } from '@sabeel/shared';
 
 let testEnv: RulesTestEnvironment;
@@ -288,6 +288,51 @@ describe('completions: self-only client writes', () => {
     await assertFails(setDoc(ref, { ...honest, note: 'extra' }));
     await assertSucceeds(setDoc(ref, honest));
     await assertFails(setDoc(ref, { ...honest, completedAt: 'x' }));
+  });
+
+  it('a student cannot record a completion once their grant has lapsed', async () => {
+    /*
+     * A grant is switched off, never deleted — corrected to present after
+     * all, unenrolled, unpublished — so "the grant exists" was true of every
+     * student who had ever held the recording. Their marks then showed on the
+     * ledger as ticks for people the class was closed to. Both arms: a first
+     * completion under a lapsed grant, and an update to one born under a live
+     * grant after it lapsed.
+     */
+    await testEnv.withSecurityRulesDisabled(async (c) => {
+      await updateDoc(doc(c.firestore(), COLLECTIONS.assignments, assignmentId(STUDENT, REC2)), { active: false });
+      await updateDoc(doc(c.firestore(), COLLECTIONS.assignments, assignmentId(STUDENT, REC)), { active: false });
+    });
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.completions, completionId(STUDENT, REC2)), {
+        studentUid: STUDENT,
+        recordingId: REC2,
+        courseId: CLASS_MINE,
+        completed: true,
+        completedAt: 2,
+        updatedAt: 2,
+      }),
+    );
+    await assertFails(
+      setDoc(doc(student().firestore(), COLLECTIONS.completions, completionId(STUDENT, REC)), {
+        studentUid: STUDENT,
+        recordingId: REC,
+        courseId: CLASS_MINE,
+        completed: false,
+        completedAt: null,
+        updatedAt: 2,
+      }),
+    );
+    await assertFails(
+      addDoc(collection(student().firestore(), COLLECTIONS.completionEvents), {
+        studentUid: STUDENT,
+        recordingId: REC2,
+        courseId: CLASS_MINE,
+        action: 'complete',
+        actor: 'student',
+        at: 2,
+      }),
+    );
   });
 
   it('a student updates the completion they already have', async () => {
