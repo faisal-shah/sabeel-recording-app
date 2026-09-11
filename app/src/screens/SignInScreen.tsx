@@ -125,8 +125,9 @@ export function SignInScreen() {
  * the sign-in screen is the only one an unauthenticated screenshot can capture,
  * and it is evidence about nothing else.
  *
- * Gated on IS_DEV *and* the emulator flag. Verify it is absent from a production
- * export by grepping the bundle for this label.
+ * Gated on IS_DEV *and* the emulator flag. Grepping the bundle proves nothing —
+ * strings survive minification; `npm run smoke:prod` proves it does not RENDER
+ * on the live site (no `dev-signin-*` rows).
  */
 function DevRow({ busy }: { busy: boolean }) {
   const [pending, setPending] = useState(false);

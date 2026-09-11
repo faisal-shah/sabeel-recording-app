@@ -112,7 +112,8 @@ slips past you:
 - **Completed** — recordings you've already marked done.
 
 Each card shows the recording's title, which class it's from, and **Listen by**
-its date. Tap any card to open it and listen.
+its date. Tap a card to open it and listen — except a Missed or Archived one,
+which can no longer be played and so does not open.
 
 **Every recording has a closing date.** After it passes you can no longer play
 that recording — the card stays on your list marked *Missed*, so you can still
@@ -315,10 +316,11 @@ Finished terms move into an **Archived** section at the bottom of the cohort
 list — tap the heading to open it.
 
 Open a cohort to see **its settings and its courses**, and open a course to work
-with it. The cohort's settings are where you **rename** it — change the name and
-tap **Rename** — and where you **archive** it, in the same way a course is
-renamed and archived from the course page. Archiving a cohort turns off every
-course in it; reactivating puts each course back to the setting it had.
+with it. The cohort's settings — **admins only**, like everything that shapes
+the structure — are where you **rename** it (change the name and tap
+**Rename**) and where you **archive** it, in the same way a course is renamed
+and archived from the course page. Archiving a cohort turns off every course in
+it; reactivating puts each course back to the setting it had.
 
 <div class="pair">
 <figure class="ph"><img src="manual/img/14-courses-phone.png" alt="Courses in a cohort on a phone"><figcaption>On a phone</figcaption></figure>
@@ -339,11 +341,12 @@ The **course page** is your dashboard for that course:
 - The counts card — *N required listening / not complete / missed* — is the
   whole course's required listening at a glance, and links straight to the
   course **Audit history**.
-- **Settings** lets you rename the course, **archive** it when the term ends, and
-  choose whether students may still listen to an archived course's recordings.
-- **Managers** lists the staff assigned to *this* course. Managers only ever see
-  and act on the courses they're assigned to here — being in a cohort grants
-  nothing by itself.
+- **Settings** (admins) lets you rename the course, **archive** it when the term
+  ends, and choose whether students may still listen to an archived course's
+  recordings.
+- **Managers** (admins) lists the staff assigned to *this* course. Managers only
+  ever see and act on the courses they're assigned to here — being in a cohort
+  grants nothing by itself. A manager's own course page has neither section.
 - **Roster** lists the enrolled students. Tap a student to see their personal
   ledger for the course (Section 2.8).
 

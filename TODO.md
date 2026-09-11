@@ -180,9 +180,10 @@ secret** (`SENTRY_DSN`) and the functions redeployed, so server reporting is now
 active (secret bound to all 19 functions, verified by name). Reporting is off in
 dev/debug bundles by design — events come only from deployed surfaces.
 
-One small deferral, not blocking: **source-map upload** (needs a Sentry auth
-token + a `prebuild`), so release stack traces are minified until then; the
-errors still report.
+One small deferral, not blocking: **native source-map upload** (the Gradle
+plugin needs a `prebuild`), so release APK stack traces are minified until
+then; the errors still report. Web source maps upload on every hosting deploy
+(`scripts/web-release.mjs`).
 
 ### 1. Nothing for the excused-only change
 
@@ -414,9 +415,6 @@ class at import time — no auto-map by topic).
 
 ## Optional / whenever
 
-- [ ] **Sentry project + DSN** if you want off-device error visibility.
-      `app/src/sentry.ts` is a working no-op seam until then.
-
 ### 7. A student is running the 0.3.0 APK, and nothing tells them to update
 
 Sentry, 2026-09-08: `Missing or insufficient permissions` from
@@ -445,10 +443,6 @@ from here.
 Three taken on 2026-09-11 and shipped: every call re-checks the account behind
 the token (a disabled account is refused at once); an archived course's
 recordings move into a quiet Archived group on the student home; a student's
-progress and completion writes need an ACTIVE grant. One left:
-
-- [ ] **Empty states during a cold load.** Several screens still print "No
-      … yet" for the length of the first load (course detail counts, session
-      register, staff list, sessions, cohorts, students, audit, library). Two
-      of the worst are fixed; the rest want a `resolved` flag on `useLiveQuery`
-      and a sentence each.
+progress and completion writes need an ACTIVE grant. The empty-state item that
+was left open here is done too: every list screen waits for its first snapshot
+before it says "No … yet".
