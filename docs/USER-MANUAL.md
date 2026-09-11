@@ -542,7 +542,9 @@ From a course's **Roster**, tap a student to see *their* view: the recordings
 they're required to listen to in that course, each with its status, the same
 action-first filters, and its own **Export CSV**. It's the per-person counterpart
 to the per-recording ledger in 2.6 — the right screen when a parent or student
-asks "where do I stand?"
+asks "where do I stand?" Tap the student's **name** at the top to open their
+profile — the same page People opens — for their access, every course they are
+in, and their history.
 
 ## 2.9 The attendance report
 

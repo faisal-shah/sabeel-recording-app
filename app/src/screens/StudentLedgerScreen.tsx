@@ -15,10 +15,13 @@ export function StudentLedgerScreen({
   studentUid,
   studentName,
   cls,
+  onOpenStudent,
 }: {
   studentUid: string;
   studentName: string;
   cls: CourseRow;
+  /** The student's profile — the same page People opens. */
+  onOpenStudent: () => void;
 }) {
   const today = todayInZone(INSTITUTE_TIMEZONE);
   const items = useStudentLedger(studentUid, cls.id);
@@ -27,7 +30,7 @@ export function StudentLedgerScreen({
   const [filter, setFilter] = useState<LedgerFilter>('all');
 
   const rows = useMemo(() => {
-    const withTitle = items.map((it) => ({ ...it, title: titleById.get(it.recordingId) ?? it.recordingId }));
+    const withTitle = (items ?? []).map((it) => ({ ...it, title: titleById.get(it.recordingId) ?? it.recordingId }));
     if (filter === 'notComplete') return withTitle.filter((r) => !r.completed);
     if (filter === 'missed') return withTitle.filter((r) => !r.completed && isOverdue(r.dueDate, today));
     return withTitle;
@@ -40,7 +43,18 @@ export function StudentLedgerScreen({
   };
 
   return (
-    <Screen title={studentName} subtitle={`${cls.name} · required listening`} width="list">
+    <Screen
+      title={studentName}
+      // The name is the way to the student's profile: staff arrive here from
+      // a course roster, and the next question is usually about the person.
+      titleLink={{
+        testID: 'student-ledger-profile',
+        label: `Open ${studentName}'s profile`,
+        onPress: onOpenStudent,
+      }}
+      subtitle={`${cls.name} · required listening`}
+      width="list"
+    >
       <View style={styles.toolbar}>
         {/* The same options object as the recording ledger's, not a second copy
             of the same three words in the same order. */}
@@ -49,7 +63,9 @@ export function StudentLedgerScreen({
         <Button testID="student-export" label="Export CSV" variant="secondary" disabled={rows.length === 0} onPress={exportRows} />
       </View>
 
-      {rows.length === 0 ? (
+      {items === null ? (
+        <Empty>Checking their required listening…</Empty>
+      ) : rows.length === 0 ? (
         <Empty>No required recordings here.</Empty>
       ) : (
         <Grid min={330}>

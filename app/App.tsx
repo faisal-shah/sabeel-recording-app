@@ -897,6 +897,7 @@ function RecordingLedger() {
 }
 
 function StudentLedger() {
+  const navigation = useNavigation<Nav>();
   const { studentUid, courseId } = useRoute<RouteProp<RootStackParamList, 'StudentLedger'>>().params;
   const cls = useCourseState(courseId);
   const student = useStudent(studentUid);
@@ -909,6 +910,7 @@ function StudentLedger() {
       // the account is gone rather than out of scope.
       studentName={student?.displayName ?? ''}
       cls={cls.value}
+      onOpenStudent={() => navigation.navigate('StudentDetail', { studentUid })}
     />
   );
 }

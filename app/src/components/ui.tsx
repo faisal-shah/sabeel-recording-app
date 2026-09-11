@@ -46,8 +46,15 @@ export const ScreenOwnsTopInset = createContext(false);
  * Page wrapper. Renders the latest live-data error above the content — a
  * rejected listener otherwise dies as a console warning nobody sees on a phone.
  */
-export function Screen({ title, subtitle, status, parent, width = 'read', actions, children }: {
+export function Screen({ title, titleLink, subtitle, status, parent, width = 'read', actions, children }: {
   title?: string;
+  /**
+   * Makes the title itself the way to the thing it names — a student's name
+   * on their progress page opening their profile. The name is already the
+   * biggest text on the screen; a chevron after it says it goes somewhere, and
+   * the accessible label says where.
+   */
+  titleLink?: { testID: string; label: string; onPress: () => void };
   subtitle?: string;
   /**
    * Which maximum this screen's content stops growing at. See `LAYOUT_WIDTHS` —
@@ -93,7 +100,22 @@ export function Screen({ title, subtitle, status, parent, width = 'read', action
               label beneath it — the page read as indented from its own content.
               It rides the lede line instead, where it is still the first thing
               under the name. */}
-          {title ? <Text style={styles.h1}>{title}</Text> : null}
+          {title && titleLink ? (
+            <Pressable
+              testID={titleLink.testID}
+              role="link"
+              aria-label={titleLink.label}
+              onPress={titleLink.onPress}
+              style={({ pressed }) => [styles.h1Link, pressed ? styles.h1LinkPressed : null]}
+            >
+              <Text style={styles.h1}>
+                {title}
+                <Text style={styles.h1Chevron}>{' ›'}</Text>
+              </Text>
+            </Pressable>
+          ) : title ? (
+            <Text style={styles.h1}>{title}</Text>
+          ) : null}
           {status ? <StatusLight status={status} /> : null}
           {parent || subtitle ? (
             <Text style={styles.lede}>
@@ -1076,6 +1098,11 @@ const styles = StyleSheet.create({
   contentWide: { paddingHorizontal: spacing(8), paddingTop: spacing(7) },
   headActions: { flexDirection: 'row', gap: spacing(2), alignItems: 'flex-start' },
   h1: { fontSize: 26, fontWeight: '700', color: t.text.primary },
+  // Hugs the name rather than spanning the row, so the press target is the
+  // words and the chevron, not the empty space beside them.
+  h1Link: { alignSelf: 'flex-start' },
+  h1LinkPressed: { opacity: 0.6 },
+  h1Chevron: { color: t.text.accent, fontWeight: '400' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3) },
   chips: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing(2) },
   /*

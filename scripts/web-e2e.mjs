@@ -1918,6 +1918,19 @@ check(
 );
 await shot(admin, '28-student-history');
 
+// From a course's roster to a student's progress, and from the name at the top
+// of that page to the same profile People opens.
+await openHikam(admin);
+await tap(admin, 'student-ledger-fatima@example.com');
+await admin.getByTestId('student-export').waitFor({ timeout: 20000 });
+await tap(admin, 'student-ledger-profile');
+await admin.getByTestId('student-history').waitFor({ timeout: 20000 });
+const viaLedger = await bodyText(admin);
+check(
+  "the student's name on their progress page opens their profile",
+  /Fatima Ahmed/.test(viaLedger) && /Account created/.test(viaLedger),
+);
+
 // A manager reads the same page pinned to their own courses: Fatima's creation
 // into Hikam Foundations is in their course, so it shows; a course-less row
 // never can, and the lede says what the list is.
