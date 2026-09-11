@@ -16,10 +16,21 @@ import { COLLECTIONS, type TokenClaims } from '@sabeel/shared';
  * "immediately". The app signs itself out within seconds through the profile
  * listener; this is for whoever does not.
  *
- * `checkRevoked` re-reads the user: disabled, or its tokens revoked since this
- * one was issued, and the call is refused with the same sentence
- * `requireActive` uses. One Auth lookup per call. An unauthenticated call has
- * nothing to check — `accountExists` is one — and the handler decides.
+ * `checkRevoked` re-reads the user. One Auth lookup per call. An
+ * unauthenticated call has nothing to check — `accountExists` is one — and the
+ * handler decides. Three answers are refusals, each in the words that are
+ * true of it:
+ *
+ *  - DISABLED, or the account gone: "Account is not active.", the sentence
+ *    `requireActive` uses. A deleted account's token is not a fault to report
+ *    — rethrown, it reached the wrapper as `internal` and Sentry on every call
+ *    the still-valid token made.
+ *  - REVOKED: "Your session has ended. Sign in again." Revocation is what
+ *    disabling does, but not only that — Firebase revokes every session when a
+ *    password is reset, so a student who asked for a password link from a
+ *    browser held, on their phone, a token this refuses for up to an hour.
+ *    Told their account was not active, they had no reason to sign in again,
+ *    which is the one thing that fixes it.
  */
 export async function assertAccountLive(req: CallableRequest): Promise<void> {
   if (!req.auth) return;
@@ -27,8 +38,11 @@ export async function assertAccountLive(req: CallableRequest): Promise<void> {
     await getAuth().verifyIdToken(req.auth.rawToken, true);
   } catch (e) {
     const code = (e as { code?: string }).code ?? '';
-    if (code === 'auth/user-disabled' || code === 'auth/id-token-revoked') {
+    if (code === 'auth/user-disabled' || code === 'auth/user-not-found') {
       throw new HttpsError('permission-denied', 'Account is not active.');
+    }
+    if (code === 'auth/id-token-revoked') {
+      throw new HttpsError('unauthenticated', 'Your session has ended. Sign in again.');
     }
     throw e;
   }

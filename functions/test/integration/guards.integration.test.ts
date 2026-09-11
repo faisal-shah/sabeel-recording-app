@@ -174,15 +174,35 @@ describe('assertAccountLive', () => {
     await refused(() => assertAccountLive(withToken(LIVE, token)), 'permission-denied');
   });
 
-  it('refuses a token issued before its account\'s tokens were revoked', async () => {
+  /*
+   * AS "SIGN IN AGAIN", NOT "NOT ACTIVE". Revocation is not only what
+   * disabling does: Firebase revokes every session when a password is reset,
+   * so a student who used "Email me a password link" from a browser held, on
+   * their phone, a token this check refuses for up to an hour — and for that
+   * hour the phone said their account was not active. The account is fine;
+   * the session is over.
+   */
+  it('refuses a token issued before its account\'s tokens were revoked, as a session that ended', async () => {
     const token = await idTokenFor(LIVE);
     // Revocation is stamped to the second; a token minted in the same second
     // would read as issued after it.
     await new Promise((r) => setTimeout(r, 1100));
     await getAuth().revokeRefreshTokens(LIVE);
-    await refused(() => assertAccountLive(withToken(LIVE, token)), 'permission-denied');
+    await expect(assertAccountLive(withToken(LIVE, token))).rejects.toMatchObject({
+      code: 'unauthenticated',
+      message: 'Your session has ended. Sign in again.',
+    });
     // A token minted after the revocation is fine again.
     await new Promise((r) => setTimeout(r, 1100));
     await expect(assertAccountLive(withToken(LIVE, await idTokenFor(LIVE)))).resolves.toBeUndefined();
+  });
+
+  it('refuses a token whose account no longer exists, without calling it a fault', async () => {
+    // Rethrown, `auth/user-not-found` reached the wrapper as an unknown error:
+    // reported to Sentry as `internal` on every call the deleted account's
+    // still-valid token made.
+    const token = await idTokenFor(LIVE);
+    await getAuth().deleteUser(LIVE);
+    await refused(() => assertAccountLive(withToken(LIVE, token)), 'permission-denied');
   });
 });
