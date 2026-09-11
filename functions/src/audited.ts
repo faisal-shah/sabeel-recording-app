@@ -1,6 +1,7 @@
 import { onCall, HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import { getFirestore } from 'firebase-admin/firestore';
 import { COLLECTIONS, type AuditEntryDoc, type Role } from '@sabeel/shared';
+import { assertAccountLive } from './guards';
 import { SENTRY_DSN, type CallableRuntime, type Secret } from './reported';
 import { reportError } from './sentry';
 
@@ -97,6 +98,8 @@ export function auditedCall<T>(
     const audit: AuditContext = { courseId: null, targets: {} };
     let result: T;
     try {
+      // The account, not just the token — see `assertAccountLive`.
+      await assertAccountLive(req);
       result = await handler(req, audit);
     } catch (e) {
       if (!(e instanceof HttpsError)) await reportError(e, { source: action });

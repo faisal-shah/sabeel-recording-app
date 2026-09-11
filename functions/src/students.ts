@@ -220,6 +220,7 @@ export async function applyStudentAccess(input: StudentAccessInput) {
   if (!(await ref.get()).exists) throw new HttpsError('not-found', 'No such student.');
 
   await getAuth().updateUser(input.uid, { disabled: input.status === 'disabled' });
+  if (input.status === 'disabled') await getAuth().revokeRefreshTokens(input.uid);
   await getAuth().setCustomUserClaims(input.uid, { role: 'student', status: input.status });
   await ref.update({ status: input.status });
   return { uid: input.uid, status: input.status };

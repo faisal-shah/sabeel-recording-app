@@ -1,5 +1,6 @@
 import { onCall, HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
+import { assertAccountLive } from './guards';
 import { reportError } from './sentry';
 
 /** A `defineSecret` handle — bound to a function so its value is in the env. */
@@ -42,6 +43,8 @@ export function reportedCall<T>(
 ) {
   return onCall({ secrets: [SENTRY_DSN, ...extraSecrets], ...runtime }, async (req) => {
     try {
+      // The account, not just the token — see `assertAccountLive`.
+      await assertAccountLive(req);
       return await handler(req);
     } catch (e) {
       if (!(e instanceof HttpsError)) await reportError(e);

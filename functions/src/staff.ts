@@ -85,6 +85,10 @@ export async function applyStaffAccess(callerUid: string, input: StaffAccessInpu
    * happened, and there would be no control left that looked like the repair.
    */
   await getAuth().updateUser(input.uid, { disabled: next.status === 'disabled' });
+  // And the tokens already out there: every callable re-checks the account
+  // (`assertAccountLive`), and revocation is what makes a token issued before
+  // this moment fail that check as well as the disabled flag.
+  if (next.status === 'disabled') await getAuth().revokeRefreshTokens(input.uid);
   await getAuth().setCustomUserClaims(input.uid, next);
 
   const update: Record<string, unknown> = { ...next };

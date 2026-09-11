@@ -1,6 +1,38 @@
 import { CallableRequest, HttpsError } from 'firebase-functions/v2/https';
+import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { COLLECTIONS, type TokenClaims } from '@sabeel/shared';
+
+/**
+ * The account behind the token is still live — checked against the user
+ * record, on every call.
+ *
+ * An ID token is a bearer credential until it expires, up to an hour: the
+ * platform verifies its signature and hands the callable its claims, and
+ * neither consults the user record again. So `setStaffAccess` and
+ * `setStudentAccess` disabled the Auth user, wrote `status: 'disabled'` into
+ * the claims, and a client holding the OLD token went on minting playback URLs
+ * and submitting registers until it expired — with the manual promising
+ * "immediately". The app signs itself out within seconds through the profile
+ * listener; this is for whoever does not.
+ *
+ * `checkRevoked` re-reads the user: disabled, or its tokens revoked since this
+ * one was issued, and the call is refused with the same sentence
+ * `requireActive` uses. One Auth lookup per call. An unauthenticated call has
+ * nothing to check — `accountExists` is one — and the handler decides.
+ */
+export async function assertAccountLive(req: CallableRequest): Promise<void> {
+  if (!req.auth) return;
+  try {
+    await getAuth().verifyIdToken(req.auth.rawToken, true);
+  } catch (e) {
+    const code = (e as { code?: string }).code ?? '';
+    if (code === 'auth/user-disabled' || code === 'auth/id-token-revoked') {
+      throw new HttpsError('permission-denied', 'Account is not active.');
+    }
+    throw e;
+  }
+}
 
 /**
  * Callable authorisation, read from the TOKEN — never from a user document.

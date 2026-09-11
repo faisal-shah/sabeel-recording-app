@@ -1,9 +1,10 @@
 import { describe, it, beforeAll, beforeEach, expect } from 'vitest';
 import { initializeApp, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import type { CallableRequest } from 'firebase-functions/v2/https';
 import { COLLECTIONS, EMULATOR_PROJECT_ID } from '@sabeel/shared';
-import { requireAdmin, requireCourseScope, requireStaff } from '../../src/guards';
+import { assertAccountLive, requireAdmin, requireCourseScope, requireStaff } from '../../src/guards';
 
 /**
  * The write side of authorization — which `firestore.rules` cannot cover at all.
@@ -127,5 +128,61 @@ describe('requireCourseScope', () => {
   it('refuses a student and an unauthenticated call before reading anything', async () => {
     await refused(() => requireCourseScope(req('stu', 'student'), CLASS), 'permission-denied');
     await refused(() => requireCourseScope(anonymous(), CLASS), 'unauthenticated');
+  });
+});
+
+/**
+ * THE ACCOUNT, NOT THE TOKEN. A real ID token from the Auth emulator, the way
+ * a callable receives one, and the user record changed underneath it: the
+ * platform would still accept the token for up to an hour, and this is the
+ * check that refuses it the moment the account is disabled or its tokens are
+ * revoked.
+ */
+describe('assertAccountLive', () => {
+  const LIVE = 'live-uid';
+
+  async function idTokenFor(uid: string): Promise<string> {
+    const custom = await getAuth().createCustomToken(uid);
+    const host = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+    const res = await fetch(
+      `http://${host}/identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=fake-api-key`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: custom, returnSecureToken: true }),
+      },
+    );
+    return ((await res.json()) as { idToken: string }).idToken;
+  }
+  const withToken = (uid: string, rawToken: string): CallableRequest =>
+    ({ auth: { uid, token: { role: 'manager', status: 'active' }, rawToken } }) as unknown as CallableRequest;
+
+  beforeEach(async () => {
+    await getAuth().deleteUser(LIVE).catch(() => undefined);
+    await getAuth().createUser({ uid: LIVE, email: 'live@oursabeel.com' });
+  });
+
+  it('lets a live account through, and an unauthenticated call past to the handler', async () => {
+    const token = await idTokenFor(LIVE);
+    await expect(assertAccountLive(withToken(LIVE, token))).resolves.toBeUndefined();
+    await expect(assertAccountLive(anonymous())).resolves.toBeUndefined();
+  });
+
+  it('refuses a token whose account has since been disabled', async () => {
+    const token = await idTokenFor(LIVE);
+    await getAuth().updateUser(LIVE, { disabled: true });
+    await refused(() => assertAccountLive(withToken(LIVE, token)), 'permission-denied');
+  });
+
+  it('refuses a token issued before its account\'s tokens were revoked', async () => {
+    const token = await idTokenFor(LIVE);
+    // Revocation is stamped to the second; a token minted in the same second
+    // would read as issued after it.
+    await new Promise((r) => setTimeout(r, 1100));
+    await getAuth().revokeRefreshTokens(LIVE);
+    await refused(() => assertAccountLive(withToken(LIVE, token)), 'permission-denied');
+    // A token minted after the revocation is fine again.
+    await new Promise((r) => setTimeout(r, 1100));
+    await expect(assertAccountLive(withToken(LIVE, await idTokenFor(LIVE)))).resolves.toBeUndefined();
   });
 });
