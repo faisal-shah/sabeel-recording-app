@@ -135,22 +135,38 @@ export function pickAudioRecording(m: ZoomMeeting): ZoomAudioRecording | null {
 }
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
+const DAY_MS = 86_400_000;
+
+/**
+ * The `from`/`to` pairs to ask Zoom for, covering `fromDate..toDate` INCLUSIVE
+ * in windows of at most 30 days — Zoom caps each query at about a month and
+ * treats both bounds as inclusive. Pure, so the boundary is testable: a walk
+ * written `start < to` asked for nothing at all when staff typed the same day
+ * in both fields, which is "today's class", the commonest range there is. An
+ * empty range (`from` after `to`) yields no windows.
+ */
+export function dateWindows(fromDate: string, toDate: string): { from: string; to: string }[] {
+  const to = Date.parse(`${toDate}T00:00:00Z`);
+  const out: { from: string; to: string }[] = [];
+  for (let start = Date.parse(`${fromDate}T00:00:00Z`); start <= to; ) {
+    const end = Math.min(to, start + 30 * DAY_MS);
+    out.push({ from: ymd(new Date(start)), to: ymd(new Date(end)) });
+    start = end + DAY_MS;
+  }
+  return out;
+}
 
 export const zoomClient: ZoomClient = {
   async listAudioRecordings(fromDate, toDate) {
-    const from = new Date(`${fromDate}T00:00:00Z`);
-    const to = new Date(`${toDate}T00:00:00Z`);
     const byUuid = new Map<string, ZoomAudioRecording>();
-    // Zoom caps each query at ~1 month, so walk the range in 30-day windows.
-    for (let start = new Date(from); start < to; ) {
-      const end = new Date(Math.min(to.getTime(), start.getTime() + 30 * 86_400_000));
+    for (const window of dateWindows(fromDate, toDate)) {
       let pageToken = '';
       do {
         const url = new URL(
           `https://api.zoom.us/v2/users/${encodeURIComponent(ZOOM_SOURCE_EMAIL)}/recordings`,
         );
-        url.searchParams.set('from', ymd(start));
-        url.searchParams.set('to', ymd(end));
+        url.searchParams.set('from', window.from);
+        url.searchParams.set('to', window.to);
         url.searchParams.set('page_size', '300');
         if (pageToken) url.searchParams.set('next_page_token', pageToken);
         const body = await api<ZoomListResp>(url.toString());
@@ -160,7 +176,6 @@ export const zoomClient: ZoomClient = {
         }
         pageToken = body.next_page_token ?? '';
       } while (pageToken);
-      start = new Date(end.getTime() + 86_400_000);
     }
     return [...byUuid.values()].sort((a, b) => b.startTime.localeCompare(a.startTime));
   },

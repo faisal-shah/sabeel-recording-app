@@ -3,6 +3,7 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
   audioStoragePath,
+  isEmptyDraft,
   type CourseDoc,
   type RecordingDoc,
   type SessionDoc,
@@ -108,6 +109,14 @@ export async function applyRetryZoomImport(
   if (rec.source !== 'zoom' || !rec.zoomUuid || !rec.zoomFileId) {
     throw new HttpsError('failed-precondition', 'That recording is not a Zoom import.');
   }
+  // ONLY AN IMPORT THAT NEVER FINISHED. A retry writes over the audio object
+  // and drops the status to `draft`, which on a recording that already has
+  // its audio is an unpublish nobody asked for: the fan-out switches every
+  // grant off, and the audit row reads "Retried a Zoom import". The button
+  // appears only on a failed import; the callable has to be the judge too.
+  if (!isEmptyDraft(rec)) {
+    throw new HttpsError('failed-precondition', 'That recording already has its audio.');
+  }
   const { rec: fresh, downloadUrl } = await client.freshAudioFile(rec.zoomUuid, rec.zoomFileId);
   await downloadIntoRecording(recordingId, downloadUrl, fresh.durationSec, client);
   return { recordingId };
@@ -134,6 +143,7 @@ export const listZoomRecordings = reportedCall(async (req) => {
   if (!DATE_ONLY.test(from) || !DATE_ONLY.test(to)) {
     throw new HttpsError('invalid-argument', 'from and to must be YYYY-MM-DD.');
   }
+  if (from > to) throw new HttpsError('invalid-argument', 'The range ends before it starts.');
   const recs = await zoomClient.listAudioRecordings(from, to);
   return annotateImported(recs);
 }, ZOOM_SECRETS);

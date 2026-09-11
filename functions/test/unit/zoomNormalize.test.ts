@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pickAudioRecording } from '../../src/zoom';
+import { dateWindows, pickAudioRecording } from '../../src/zoom';
 
 describe('pickAudioRecording', () => {
   it('selects the audio_only M4A among mixed files and takes duration from the file', () => {
@@ -50,5 +50,24 @@ describe('pickAudioRecording', () => {
       recording_files: [{ id: 'v', recording_type: 'shared_screen_with_speaker_view', file_type: 'MP4' }],
     });
     expect(r).toBeNull();
+  });
+});
+
+describe('dateWindows', () => {
+  it('asks for a single day when both bounds are that day — "today\'s class"', () => {
+    expect(dateWindows('2026-09-10', '2026-09-10')).toEqual([{ from: '2026-09-10', to: '2026-09-10' }]);
+  });
+
+  it('covers a long range in 30-day windows that meet without overlap or gap', () => {
+    const windows = dateWindows('2026-01-01', '2026-03-15');
+    expect(windows).toEqual([
+      { from: '2026-01-01', to: '2026-01-31' },
+      { from: '2026-02-01', to: '2026-03-03' },
+      { from: '2026-03-04', to: '2026-03-15' },
+    ]);
+  });
+
+  it('asks for nothing when the range ends before it starts', () => {
+    expect(dateWindows('2026-09-11', '2026-09-10')).toEqual([]);
   });
 });

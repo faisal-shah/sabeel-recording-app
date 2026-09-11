@@ -297,6 +297,29 @@ describe('applyRetryZoomImport', () => {
     expect(await audioExists(failed.id)).toBe(true);
   });
 
+  it('refuses to retry a recording that already has its audio, and touches nothing', async () => {
+    /*
+     * A retry re-downloads over `recordings/<id>/audio.m4a` and drops the
+     * status to `draft`. On a PUBLISHED recording that is an unpublish nobody
+     * asked for — every grant switched off by the fan-out, the audio replaced
+     * under students mid-lecture, audited as "Retried a Zoom import". The
+     * button only appears on a failed import, but the callable is the boundary.
+     */
+    await applyImportZoomRecording(ADMIN, { meetingUuid: 'uuid-1', fileId: 'file-1', sessionId }, fakeClient(REC));
+    const imported = (
+      await getFirestore().collection(COLLECTIONS.recordings).where('zoomUuid', '==', 'uuid-1').get()
+    ).docs[0];
+    await imported.ref.update({ status: 'published', publishedAt: Date.now() });
+    const [before] = await getStorage().bucket().file(audioStoragePath(imported.id)).getMetadata();
+
+    await expect(applyRetryZoomImport(imported.id, fakeClient({ ...REC, sizeBytes: 8192 }))).rejects.toThrow(
+      /already has its audio/i,
+    );
+    expect((await rec(imported.id)).status).toBe('published');
+    const [after] = await getStorage().bucket().file(audioStoragePath(imported.id)).getMetadata();
+    expect(after.size).toBe(before.size);
+  });
+
   it('refuses to retry a non-Zoom recording', async () => {
     const ref = await getFirestore().collection(COLLECTIONS.recordings).add({
       courseId,
