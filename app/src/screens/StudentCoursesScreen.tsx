@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Empty, Grid, Screen } from '../components/ui';
 import { useMyAttendance } from '../attendance';
-import { useCourse, useStudentEnrollments } from '../structure';
+import { useCourse, useStudentEnrollmentsState } from '../structure';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -22,9 +22,11 @@ export function StudentCoursesScreen({
   uid: string;
   onOpen: (courseId: string) => void;
 }) {
-  const enrollments = useStudentEnrollments(uid);
+  // `null` until the listener answers: the empty sentence below is a claim
+  // about the student's standing, not a placeholder.
+  const enrollments = useStudentEnrollmentsState(uid);
   const courseIds = useMemo(
-    () => enrollments.filter((e) => e.active).map((e) => e.courseId),
+    () => (enrollments ?? []).filter((e) => e.active).map((e) => e.courseId),
     [enrollments],
   );
 
@@ -39,7 +41,9 @@ export function StudentCoursesScreen({
           then stacking full-width rows is the worst of both: a card holding a
           class name and one caption line ran to 1114px with 640px of it empty,
           beside staff cards of identical shape flowing two across. */}
-      {courseIds.length === 0 ? (
+      {enrollments === null ? (
+        <Empty>Checking your classes…</Empty>
+      ) : courseIds.length === 0 ? (
         <Empty>You are not enrolled in any classes yet.</Empty>
       ) : (
         <Grid min={330}>

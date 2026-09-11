@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { Role } from '@sabeel/shared';
 import {
@@ -35,14 +35,57 @@ export function StaffScreen({ selfUid, header }: { selfUid: string; header?: Rea
   const disabled = decided.filter((s) => s.status === 'disabled');
   const [busyUid, setBusyUid] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /*
+   * A CARD STAYS LOCKED UNTIL THE SNAPSHOT AGREES, not until the callable
+   * answers — the same shape as the enrol row on a course. `busyUid` clears
+   * on the response, and the row is still drawn from the previous snapshot
+   * for a moment: a pending card still offers both approvals, so a second
+   * tap on "Approve as admin" after "Approve as manager" had already returned
+   * sent `role: 'admin'` and won; a staff card still shows the old label and
+   * re-sends it. The lock holds what was asked for and lifts when the live
+   * row says the same.
+   */
+  const [settling, setSettling] = useState<ReadonlyMap<string, Parameters<typeof setStaffAccess>[0]>>(
+    () => new Map(),
+  );
+  useEffect(() => {
+    setSettling((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Map(prev);
+      for (const [uid, want] of prev) {
+        const row = decided.find((r) => r.uid === uid);
+        const stillPending = pending.some((r) => r.uid === uid);
+        const agrees =
+          !stillPending &&
+          (row === undefined ||
+            ((want.role === undefined || row.role === want.role) &&
+              (want.status === undefined || row.status === want.status)));
+        if (agrees) next.delete(uid);
+      }
+      return next.size === prev.size ? prev : next;
+    });
+    // `settling` too: the snapshot can land BEFORE the callable's response
+    // does, so the lock may be set after the row already agrees — and with
+    // only the rows as dependencies nothing would run again to lift it.
+  }, [pending, decided, settling]);
+  const locked = (uid: string) => busyUid === uid || settling.has(uid);
 
   const act = async (uid: string, change: Parameters<typeof setStaffAccess>[0]) => {
+    if (locked(uid)) return;
     setBusyUid(uid);
     setError(null);
+    // Locked from the tap, as the enrol row is, and released on failure only:
+    // on success the snapshot releases it, whichever of the two lands first.
+    setSettling((prev) => new Map(prev).set(uid, change));
     try {
       await setStaffAccess(change);
     } catch (e) {
       setError(errorText(e));
+      setSettling((prev) => {
+        const next = new Map(prev);
+        next.delete(uid);
+        return next;
+      });
     } finally {
       setBusyUid(null);
     }
@@ -65,13 +108,13 @@ export function StaffScreen({ selfUid, header }: { selfUid: string; header?: Rea
                 <Button
                   testID={`approve-${s.email}`}
                   label="Approve as manager"
-                  busy={busyUid === s.uid}
+                  busy={locked(s.uid)}
                   onPress={() => void act(s.uid, { uid: s.uid, status: 'active', role: 'manager' })}
                 />
                 <Button
                   label="Approve as admin"
                   variant="secondary"
-                  busy={busyUid === s.uid}
+                  busy={locked(s.uid)}
                   onPress={() => void act(s.uid, { uid: s.uid, status: 'active', role: 'admin' })}
                 />
               </Row>
@@ -86,7 +129,7 @@ export function StaffScreen({ selfUid, header }: { selfUid: string; header?: Rea
       ) : (
         <Grid min={330}>
           {active.map((s) => (
-            <StaffCard key={s.uid} row={s} isSelf={s.uid === selfUid} busy={busyUid === s.uid} act={act} />
+            <StaffCard key={s.uid} row={s} isSelf={s.uid === selfUid} busy={locked(s.uid)} act={act} />
           ))}
         </Grid>
       )}
@@ -98,7 +141,7 @@ export function StaffScreen({ selfUid, header }: { selfUid: string; header?: Rea
         <Collapsible testID="staff-disabled" title="Disabled" count={disabled.length}>
           <Grid min={330}>
             {disabled.map((s) => (
-              <StaffCard key={s.uid} row={s} isSelf={s.uid === selfUid} busy={busyUid === s.uid} act={act} />
+              <StaffCard key={s.uid} row={s} isSelf={s.uid === selfUid} busy={locked(s.uid)} act={act} />
             ))}
           </Grid>
         </Collapsible>

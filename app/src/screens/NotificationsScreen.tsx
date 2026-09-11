@@ -109,6 +109,9 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
    * definition in at least one.
    */
   const myCourses = useMyCoursesState(isStudent ? null : uid, 'notifications');
+  // `null` is "not answered yet", not "none": a manager saw "You are not
+  // assigned to any class" for the length of every cold load.
+  const checking = !isStudent && myCourses === null;
   const managesAClass = (myCourses?.length ?? 0) > 0;
   const kinds: NotificationKind[] = isStudent
     ? STUDENT_KINDS
@@ -176,7 +179,9 @@ export function NotificationsScreen({ uid, isStudent }: { uid: string; isStudent
         {/* NEVER AN EMPTY CARD. An admin who manages no class has no switches,
             and a bare ring with nothing in it reads as a screen that failed to
             load rather than as an answer. */}
-        {kinds.length === 0 ? (
+        {checking ? (
+          <Text style={styles.none}>Checking your classes…</Text>
+        ) : kinds.length === 0 ? (
           <Text style={styles.none} testID="notify-none">
             Messages about a class go to the people who manage it. You are not
             assigned to any class, so there is nothing to send you.

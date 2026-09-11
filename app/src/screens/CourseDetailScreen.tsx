@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   Button,
   Card,
@@ -467,7 +467,12 @@ export function CourseDetailScreen({
         {notEnrolled.length === 0 ? (
           <Empty>
             {students.filter((s) => s.status === 'active').length === 0
-              ? 'No student accounts yet. Create one from the People screen first.'
+              ? // The People screen has an Add button on the web only; on the
+                // phone the sentence sent people to a screen where the thing
+                // does not exist.
+                Platform.OS === 'web'
+                ? 'No student accounts yet. Create one from the People screen first.'
+                : 'No student accounts yet.'
               : 'Every active student is already in this course.'}
           </Empty>
         ) : (
@@ -479,7 +484,10 @@ export function CourseDetailScreen({
                 testID={`enrol-${s.email}`}
                 accessibilityRole="button"
                 accessibilityLabel={`Enrol ${s.displayName}`}
-                accessibilityState={{ busy: inFlight, disabled: inFlight }}
+                // aria-*, as the manager row above: react-native-web maps no
+                // accessibilityState, so it reached the DOM as nothing at all.
+                aria-busy={inFlight}
+                aria-disabled={inFlight}
                 disabled={inFlight}
                 onPress={() => enrol(s.uid)}
                 style={[styles.pickRow, inFlight ? styles.pickRowBusy : null]}

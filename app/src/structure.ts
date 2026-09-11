@@ -244,7 +244,18 @@ export function useRoster(courseId: string | null): EnrollmentRow[] {
  * inverts the loop — see useEnrollmentIn and StudentDetailScreen.
  */
 export function useStudentEnrollments(uid: string | null): EnrollmentRow[] {
-  return useLiveQuery<EnrollmentRow[]>(
+  return useStudentEnrollmentsState(uid) ?? NO_ENROLLMENTS;
+}
+
+const NO_ENROLLMENTS: EnrollmentRow[] = [];
+
+/**
+ * The `State` variant: `null` until the first snapshot. "You are not enrolled
+ * in any classes yet" is the answer to a question the listener has not yet
+ * answered, and a student's Classes tab said it on every cold load.
+ */
+export function useStudentEnrollmentsState(uid: string | null): EnrollmentRow[] | null {
+  return useLiveQuery<EnrollmentRow[] | null>(
     () =>
       uid
         ? query(collection(db, COLLECTIONS.enrollments), where('studentUid', '==', uid))
@@ -253,7 +264,7 @@ export function useStudentEnrollments(uid: string | null): EnrollmentRow[] {
     {
       label: 'studentEnrollments',
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as EnrollmentDoc) })),
-      empty: [],
+      empty: null,
     },
   );
 }

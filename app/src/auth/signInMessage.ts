@@ -29,7 +29,8 @@ export function signInMessage(e: unknown): string {
        */
       return "This account isn't set up for the app yet. Contact your administrator.";
     case 'auth/user-disabled':
-      return 'That account has been disabled. Ask your teacher.';
+      // Staff are disabled the same way, and a manager has no teacher to ask.
+      return 'That account has been disabled. Contact your teacher or an administrator.';
     case 'auth/too-many-requests':
       return 'Too many attempts. Wait a few minutes and try again.';
     case 'auth/network-request-failed':

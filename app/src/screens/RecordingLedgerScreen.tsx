@@ -59,6 +59,10 @@ export function RecordingLedgerScreen({
   }, [accountable, filter, today]);
 
   const run = async (key: string, fn: () => Promise<unknown>) => {
+    // One write at a time on this screen: the three buttons on an open editor
+    // each locked on their own key, so "Remove override" stayed live while
+    // "Mark complete" was in flight, and two callables raced on one override.
+    if (busy !== null) return;
     setBusy(key);
     setError(null);
     try {
@@ -151,7 +155,12 @@ export function RecordingLedgerScreen({
               : accountable.length === 0
               ? lapsed.length > 0
                 ? 'Nobody holds this recording now — every grant from this session has lapsed. See below.'
-                : 'No one was excused from this session, so nobody has been granted this recording.'
+                : session.attendanceSubmittedAt === null
+                  ? // A register never taken is not a register with nobody excused:
+                    // the grants come from the submit, and Today counts this
+                    // session as blocking for exactly that reason.
+                    'Attendance has not been taken for this session, so nobody has been granted this recording yet. Take attendance on the session.'
+                  : 'No one was excused from this session, so nobody has been granted this recording.'
               : filter === 'missed'
                 ? 'Nobody missed the deadline — nice.'
                 : 'Everyone required has completed this — nice.'}
@@ -173,7 +182,11 @@ export function RecordingLedgerScreen({
 
       <SectionTitle>Present ({attendees.length})</SectionTitle>
       {attendees.length === 0 ? (
-        <Empty>No one was marked present at this session.</Empty>
+        <Empty>
+          {session.attendanceSubmittedAt === null
+            ? 'Attendance has not been taken for this session.'
+            : 'No one was marked present at this session.'}
+        </Empty>
       ) : (
         <>
           <Notice tone="info">
@@ -343,7 +356,7 @@ function LedgerRowCard({
               testID={`override-complete-${r.name}`}
               label="Mark complete"
               disabled={!reason.trim()}
-              busy={busy === `ov-${r.studentUid}`}
+              busy={busy === `ov-${r.studentUid}` || busy === `rm-${r.studentUid}`}
               onPress={() =>
                 onRun(`ov-${r.studentUid}`, async () => {
                   await overrideCompletion({ studentUid: r.studentUid, recordingId, completed: true, reason: reason.trim() });
@@ -356,7 +369,7 @@ function LedgerRowCard({
               label="Mark not complete"
               variant="secondary"
               disabled={!reason.trim()}
-              busy={busy === `ov-${r.studentUid}`}
+              busy={busy === `ov-${r.studentUid}` || busy === `rm-${r.studentUid}`}
               onPress={() =>
                 onRun(`ov-${r.studentUid}`, async () => {
                   await overrideCompletion({ studentUid: r.studentUid, recordingId, completed: false, reason: reason.trim() });
@@ -371,7 +384,7 @@ function LedgerRowCard({
               label="Remove override"
               variant="secondary"
               disabled={!reason.trim()}
-              busy={busy === `rm-${r.studentUid}`}
+              busy={busy === `ov-${r.studentUid}` || busy === `rm-${r.studentUid}`}
               onPress={() =>
                 onRun(`rm-${r.studentUid}`, async () => {
                   await clearCompletionOverride({ studentUid: r.studentUid, recordingId, reason: reason.trim() });
@@ -380,7 +393,12 @@ function LedgerRowCard({
               }
             />
           ) : null}
-          <Button label="Cancel" variant="quiet" onPress={close} />
+          <Button
+            label="Cancel"
+            variant="quiet"
+            disabled={busy === `ov-${r.studentUid}` || busy === `rm-${r.studentUid}`}
+            onPress={close}
+          />
         </View>
       ) : (
         <View>
