@@ -99,7 +99,13 @@ export function useRecording(recordingId: string | null): RecordingRow | null {
  * docked bar's success then clears the banner a screen's genuinely denied read
  * had raised. Anything mounted alongside a screen rather than by it passes one.
  */
-export function useRecordingState(recordingId: string | null, scope?: string) {
+export function useRecordingState(
+  recordingId: string | null,
+  scope?: string,
+  /** A student's read: the rules withhold an unpublished recording from them by
+   *  design, so a refusal is the recording going away, not a fault. */
+  denialIsAnswer = false,
+) {
   return useLiveDocState<RecordingRow | null>(
     () => (recordingId ? doc(db, COLLECTIONS.recordings, recordingId) : null),
     [recordingId],
@@ -108,6 +114,7 @@ export function useRecordingState(recordingId: string | null, scope?: string) {
       context: scope ? { scope } : undefined,
       map: (snap) => ({ id: snap.id, ...(snap.data() as RecordingDoc) }),
       empty: null,
+      denialIsAnswer,
     },
   );
 }

@@ -74,7 +74,7 @@ export function MiniPlayer({
    * keyed by label, so an unscoped success here clears the banner a screen's
    * own denied `course` or `recording` read had raised.
    */
-  const loaded = useRecordingState(now?.recordingId ?? null, 'miniPlayer');
+  const loaded = useRecordingState(now?.recordingId ?? null, 'miniPlayer', !!now?.studentUid);
   const course = useCourseState(now?.courseId ?? null, 'miniPlayer');
   // The student's deadline, live: `now.dueDate` was captured when the recording
   // was opened, and a Listen-by date moved forward since is the documented way

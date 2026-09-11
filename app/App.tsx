@@ -843,7 +843,9 @@ function Play({ studentUid }: { studentUid: string | null }) {
   // Chained: the recording names its own course, so the course resolves only
   // once the recording has. Both are live, so an unpublish or an archive lands
   // on screen rather than waiting for the listener to be torn down.
-  const recording = useRecordingState(recordingId);
+  // For a student a refusal is the recording being withdrawn — unpublished or
+  // archived under them — which is the app working, not a listener fault.
+  const recording = useRecordingState(recordingId, undefined, studentUid !== null);
   const cls = useCourseState(recording.value?.courseId ?? null);
   // A student's deadline comes from their live grant, not from the date the
   // link was made with — see `useMyAssignmentState`. Staff keep the session's.

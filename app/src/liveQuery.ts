@@ -215,6 +215,17 @@ export interface LiveQueryOptions<T> {
    * identify the failing one — see the note in reportListenerError.
    */
   context?: Record<string, string>;
+  /**
+   * A refusal is an ordinary answer for this reader, not a defect: the
+   * document exists and the rules withhold it from them by design. A student's
+   * recording is the case — unpublished or archived while they have it open,
+   * the rules close it and the listener is refused, which is the app working.
+   * Reported, that refusal painted "Live data error: permission-denied" over
+   * the "it may have been removed" screen and filed two Sentry events per
+   * unpublish. With this set a denial resolves to `empty` and is logged as
+   * expected; any other error still reports.
+   */
+  denialIsAnswer?: boolean;
 }
 
 /**
@@ -281,6 +292,17 @@ export interface LiveDocOptions<T> {
    * identify the failing one — see the note in reportListenerError.
    */
   context?: Record<string, string>;
+  /**
+   * A refusal is an ordinary answer for this reader, not a defect: the
+   * document exists and the rules withhold it from them by design. A student's
+   * recording is the case — unpublished or archived while they have it open,
+   * the rules close it and the listener is refused, which is the app working.
+   * Reported, that refusal painted "Live data error: permission-denied" over
+   * the "it may have been removed" screen and filed two Sentry events per
+   * unpublish. With this set a denial resolves to `empty` and is logged as
+   * expected; any other error still reports.
+   */
+  denialIsAnswer?: boolean;
 }
 
 /**
@@ -308,7 +330,7 @@ export interface LiveDocOptions<T> {
 export function useLiveDocState<T>(
   make: () => DocumentReference | null,
   deps: readonly unknown[],
-  { label, map, empty, context }: LiveDocOptions<T>,
+  { label, map, empty, context, denialIsAnswer }: LiveDocOptions<T>,
 ): { value: T; resolved: boolean } {
   const [state, setState] = useState<{ value: T; resolved: boolean }>({
     value: empty,
@@ -329,6 +351,12 @@ export function useLiveDocState<T>(
         // A denial is an answer too: the caller may not read it, and telling
         // them it is unavailable beats a spinner that never stops.
         setState({ value: empty, resolved: true });
+        if (denialIsAnswer && e.code === 'permission-denied') {
+          // Marked, like a denial after sign-out: the e2e counts unmarked
+          // listener warnings and must not be blinded, nor fail on this one.
+          console.warn(`${label} listener`, e.code, '(withheld by the rules — expected)');
+          return;
+        }
         reportListenerError(key, label, e, context);
       },
     );
