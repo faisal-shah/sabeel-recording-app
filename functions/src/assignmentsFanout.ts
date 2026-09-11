@@ -5,6 +5,7 @@ import {
   accountableUids,
   assignmentId,
   enrollmentId,
+  isOverdue,
   todayInZone,
   type AssignmentDoc,
   type EnrollmentDoc,
@@ -175,7 +176,36 @@ export async function reconcileSessionAssignments(
 
   const ready = !!rec && rec.status === 'published' && !!session.attendanceSubmittedAt;
   const excused = ready ? accountableUids(session.attendance) : [];
-  const target = await stillEnrolled(db, session.courseId, excused);
+  let target = await stillEnrolled(db, session.courseId, excused);
+
+  /*
+   * A CLOSED SESSION NEVER MINTS OR REVIVES A GRANT. Once the listen-by date
+   * has gone, the only grants that may be active are the ones that already
+   * are — the ledger's Missed rows, which are the record and must stand. A
+   * student whose grant lapsed while they were out of the class and who came
+   * back after the date is not handed the obligation again: "nothing is ever
+   * born expired", and a new active assignment is a false→true edge that
+   * pushes "ready to listen… by <a date long gone>" at them over audio
+   * `getPlaybackUrl` then refuses. Re-enrolment already skipped closed
+   * sessions for exactly this reason; then a typo fixed in the session's title
+   * reconciled it here, where the rule was missing, and the grant came back.
+   *
+   * Deactivation is untouched: an unpublish or a corrected mark still switches
+   * grants off after the date, as before. And the reopen valve still works —
+   * moving the due date forward makes the session open again before this runs.
+   */
+  if (isOverdue(session.dueDate, todayInZone(INSTITUTE_TIMEZONE)) && target.length > 0) {
+    const alreadyActive = new Set<string>();
+    for (const group of chunked(target)) {
+      const rows = await db.getAll(
+        ...group.map((uid) => db.collection(COLLECTIONS.assignments).doc(assignmentId(uid, recId))),
+      );
+      group.forEach((uid, i) => {
+        if ((rows[i].data() as AssignmentDoc | undefined)?.active) alreadyActive.add(uid);
+      });
+    }
+    target = target.filter((uid) => alreadyActive.has(uid));
+  }
 
   await assignToStudents(db, session, sessionId, recId, target, 'system');
   await deactivateExcept(db, recId, new Set(target));
@@ -209,25 +239,13 @@ export async function reconcileCourseAssignments(db: Firestore, courseId: string
     .collection(COLLECTIONS.sessions)
     .where('courseId', '==', courseId)
     .get();
-  const today = todayInZone(INSTITUTE_TIMEZONE);
   for (const doc of sessions.docs) {
     const session = doc.data() as SessionDoc;
     if (!session.recordingId) continue;
-    /*
-     * ONLY WHAT IS STILL OPEN. Restoring a session whose listen-by date went
-     * while the student was out of the class would MINT an obligation already
-     * past — the thing the product forbids in as many words ("nothing is ever
-     * born expired"; no callable excuses anyone for a session whose deadline has
-     * gone). It would also be announced: a brand-new active assignment is a
-     * false→true edge, so `onAssignmentWritten` would push "a recording is
-     * ready… listen by <a date last March>" at somebody, over audio
-     * `getPlaybackUrl` then refuses.
-     *
-     * Their record of it is not lost — the deactivated assignment stays, and the
-     * ledger goes on listing them under "Excused, access closed", which is what
-     * that group is for.
-     */
-    if (session.dueDate < today) continue;
+    // A closed session hands nothing back — the rule lives in
+    // `reconcileSessionAssignments`, once, so every path that reconciles a
+    // session agrees. The deactivated assignment stays, and the ledger goes on
+    // listing the student under "Excused, access closed".
     const rec = (
       await db.collection(COLLECTIONS.recordings).doc(session.recordingId).get()
     ).data() as RecordingDoc | undefined;

@@ -78,7 +78,11 @@ async function seedSession(
     cohortId,
     date: '2026-07-06',
     title: id,
-    dueDate: fields.dueDate ?? '2026-08-01',
+    // OPEN, by a margin the calendar will not close: the reconcile now refuses
+    // to mint a grant on a session whose listen-by date has gone, and a fixture
+    // dated for "next month" when it was written became a closed session by
+    // September and granted nobody. The closed cases below say `2020-01-01`.
+    dueDate: fields.dueDate ?? '2099-08-01',
     notes: '',
     recordingId: fields.recordingId ?? null,
     attendance: fields.attendance,
@@ -181,14 +185,14 @@ beforeEach(async () => {
 describe('reconcileSessionAssignments', () => {
   it('grants the EXCUSED alone — present and absent get nothing', async () => {
     await seedSession('sess', {
-      dueDate: '2026-08-01',
+      dueDate: '2099-08-01',
       attendance: { s1: 'absent', s2: 'present', s3: 'excused' },
       submitted: true,
     });
     await seedRecording('r1', 'sess', 'published');
     await reconcile('sess');
 
-    expect(await getAssignment('s3', 'r1')).toMatchObject({ active: true, dueDate: '2026-08-01' });
+    expect(await getAssignment('s3', 'r1')).toMatchObject({ active: true, dueDate: '2099-08-01' });
     // An unexcused absence opens nothing: the student missed the class and has
     // no claim on the recording. This is the whole policy change in one line.
     expect(await getAssignment('s1', 'r1')).toBeUndefined();
@@ -275,17 +279,17 @@ describe('reconcileSessionAssignments', () => {
 
   it('a due-date edit re-flows to the assignments', async () => {
     await seedSession('sess', {
-      dueDate: '2026-08-01',
+      dueDate: '2099-08-01',
       attendance: { s1: 'excused' },
       submitted: true,
     });
     await seedRecording('r1', 'sess', 'published');
     await reconcile('sess');
-    expect((await getAssignment('s1', 'r1'))?.dueDate).toBe('2026-08-01');
+    expect((await getAssignment('s1', 'r1'))?.dueDate).toBe('2099-08-01');
 
-    await db().collection(COLLECTIONS.sessions).doc(ns('sess')).update({ dueDate: '2026-08-10' });
+    await db().collection(COLLECTIONS.sessions).doc(ns('sess')).update({ dueDate: '2099-08-10' });
     await reconcile('sess');
-    expect((await getAssignment('s1', 'r1'))?.dueDate).toBe('2026-08-10');
+    expect((await getAssignment('s1', 'r1'))?.dueDate).toBe('2099-08-10');
   });
 });
 
@@ -429,14 +433,66 @@ describe('unenrolment', () => {
    * refuses. Their record of it survives in the deactivated assignment, which is
    * what the ledger's "Excused, access closed" group reads.
    */
+  /**
+   * Let the emulator's own triggers land. Every session write here also fires
+   * `onSessionWritten` out of band, and one that read the session BEFORE a
+   * date change can write its answer after the test has moved on — which is
+   * how a test that flips a due date twice became a coin toss. Production has
+   * the same window and converges on the next write; a test cannot wait for
+   * "the next write", so it waits for the queue to drain instead.
+   */
+  const settle = () => new Promise((r) => setTimeout(r, 1500));
+
   it('does not hand back an obligation whose deadline passed while they were away', async () => {
-    await seedSession('closed', { dueDate: '2020-01-01', attendance: { s1: 'excused' }, submitted: true });
+    await seedSession('closed', { dueDate: '2099-01-01', attendance: { s1: 'excused' }, submitted: true });
     await seedRecording('rClosed', 'closed', 'published');
     await reconcile('closed');
+    expect((await getAssignment('s1', 'rClosed'))?.active).toBe(true);
+    // The listen-by date goes by.
+    await db().collection(COLLECTIONS.sessions).doc(ns('closed')).update({ dueDate: '2020-01-01' });
+    await settle();
     await applyEnrollmentActive({ studentUid: 's1', courseId, active: false });
 
     await createEnrollmentRecord(ADMIN, { studentUid: 's1', courseId });
     expect((await getAssignment('s1', 'rClosed'))?.active).toBe(false);
+
+    /*
+     * AND NOT ON THE NEXT EDIT EITHER. Re-enrolment skipped the closed session
+     * deliberately; then a staff member fixed a typo in its title, the session
+     * trigger reconciled it like any other, and the grant came back — a
+     * false→true edge that pushed "ready to listen… by <a date long gone>" and
+     * moved the student from "Excused, access closed" to Missed. One rule, in
+     * the one reconcile: a closed session never mints or revives a grant.
+     */
+    await db().collection(COLLECTIONS.sessions).doc(ns('closed')).update({ title: 'Renamed' });
+    await reconcile('closed');
+    expect((await getAssignment('s1', 'rClosed'))?.active).toBe(false);
+  });
+
+  it('keeps a Missed grant active on a closed session, and reopens it when the date moves', async () => {
+    // s1 was excused, never left, and did not listen: the ledger's Missed row.
+    // A reconcile after the date must not switch that grant off — it is the
+    // record — and moving the due date forward (the documented reopen valve)
+    // must reach anybody excused, including a student whose grant lapsed while
+    // they were out of the class.
+    await seedSession('late', { dueDate: '2099-01-01', attendance: { s1: 'excused', s2: 'excused' }, submitted: true });
+    await seedRecording('rLate', 'late', 'published');
+    await reconcile('late');
+    await db().collection(COLLECTIONS.sessions).doc(ns('late')).update({ dueDate: '2020-01-01' });
+    await settle();
+    await reconcile('late');
+    expect((await getAssignment('s1', 'rLate'))?.active).toBe(true); // Missed stays Missed
+    expect((await getAssignment('s2', 'rLate'))?.active).toBe(true);
+
+    await applyEnrollmentActive({ studentUid: 's2', courseId, active: false });
+    await createEnrollmentRecord(ADMIN, { studentUid: 's2', courseId });
+    expect((await getAssignment('s2', 'rLate'))?.active).toBe(false); // came back after the date
+    expect((await getAssignment('s1', 'rLate'))?.active).toBe(true);
+
+    await db().collection(COLLECTIONS.sessions).doc(ns('late')).update({ dueDate: '2099-01-01' });
+    await settle();
+    await reconcile('late');
+    expect((await getAssignment('s2', 'rLate'))?.active).toBe(true); // reopened for everyone excused
   });
 
   it('gives the audio back when the student is re-enrolled', async () => {
