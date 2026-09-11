@@ -228,9 +228,27 @@ export async function seedWorld({ db, auth, browser, base }) {
     status: 'pending',
     createdAt: now - 2 * DAY,
   });
-  /** A DISABLED staff account, written the same way, so the staff list's closed
-   *  "Disabled" section has a card in it — the only card there whose action row
-   *  reads Re-enable, and a section that is otherwise never opened. */
+  /**
+   * A DISABLED staff account, so the staff list's closed "Disabled" section has
+   * a card in it — the only card there whose action row reads Re-enable, and a
+   * section that is otherwise never opened.
+   *
+   * WITH AN AUTH USER BEHIND IT, unlike the pending one above. `setStaffAccess`
+   * writes the Auth record (`updateUser` + claims) before the document, so a
+   * document with no Auth user makes Re-enable fail `auth/user-not-found` — a
+   * shape production cannot produce, since every staff document there was
+   * written by the trigger for a real sign-in. The 2026-09-11 device pass
+   * pressed Re-enable against exactly that and learned nothing about the app.
+   * Password-less and provider-less, which is the shape `onUserCreate` ignores,
+   * so no pending document is written over this one.
+   */
+  await auth.createUser({
+    uid: 'sw-disabled',
+    email: 'yusuf.rahman@oursabeel.com',
+    displayName: 'Yusuf Rahman',
+    disabled: true,
+  });
+  await auth.setCustomUserClaims('sw-disabled', { role: 'manager', status: 'disabled' });
   await db.collection('staffUsers').doc('sw-disabled').set({
     email: 'yusuf.rahman@oursabeel.com',
     displayName: 'Yusuf Rahman',
