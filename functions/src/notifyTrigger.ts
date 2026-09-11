@@ -22,14 +22,6 @@ import { SENTRY_DSN } from './reported';
  */
 
 /**
- * A grant became active: tell the student their recording is ready.
- *
- * Fires only on the false→true edge. Reconciles are frequent and idempotent —
- * every attendance correction rewrites every grant on the session — so firing on
- * any write would send one notification per staff edit. The `sent` marker would
- * catch it anyway; this keeps the work off the wire in the first place.
- */
-/**
  * A device registered to one account stops being registered to any other.
  *
  * SIGN-OUT CANNOT BE RELIED ON TO DO THIS. `unregisterThisDevice` runs while the
@@ -123,6 +115,14 @@ export const onDeviceRegistered = onDocumentWritten(
   },
 );
 
+/**
+ * A grant became active: tell the student their recording is ready.
+ *
+ * Fires only on the false→true edge. Reconciles are frequent and idempotent —
+ * every attendance correction rewrites every grant on the session — so firing on
+ * any write would send one notification per staff edit. The `sent` marker would
+ * catch it anyway; this keeps the work off the wire in the first place.
+ */
 export const onAssignmentWritten = onDocumentWritten(
   /*
    * RETRIED, because the one delivery a "recording ready" ever gets is claimed
@@ -130,7 +130,9 @@ export const onAssignmentWritten = onDocumentWritten(
    * reached or delivered to nobody; without `retry` that throw was the end of
    * it — v2 triggers do not retry by default — and the message was lost for
    * good. The retry finds the claim open and tries again; a delivery that
-   * succeeded is never repeated, because the marker then stands.
+   * succeeded is never repeated, because the marker then stands. A retry is
+   * handed the ORIGINAL payload, so `notifyRecordingReady` treats `after` as
+   * no more than the grant's id and reads the document for the rest.
    */
   { document: `${COLLECTIONS.assignments}/{assignmentId}`, secrets: [SENTRY_DSN], retry: true },
   async (event) => {

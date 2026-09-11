@@ -14,6 +14,7 @@ import {
   type UserStatus,
 } from '@sabeel/shared';
 import { requireAdmin, requireCourseScope, requireStaff } from './guards';
+import { shutOutAccount } from './shutOut';
 
 export interface CreateStudentInput {
   displayName: string;
@@ -211,16 +212,18 @@ export function validateStudentAccess(data: unknown): StudentAccessInput {
  * Enable or disable a student.
  *
  * Disabling preserves all history, enrollments and ledger entries — the brief is
- * explicit that normal operations never delete. It also disables the Auth user,
- * so an already-signed-in session cannot simply keep working off a cached token.
+ * explicit that normal operations never delete. It also shuts the account out
+ * (`shutOutAccount`): the Auth user, the tokens already issued and the device
+ * registrations, so an already-signed-in session cannot keep working off a
+ * cached token and no reminder reaches a phone the account no longer holds.
  */
 export async function applyStudentAccess(input: StudentAccessInput) {
   const db = getFirestore();
   const ref = db.collection(COLLECTIONS.students).doc(input.uid);
   if (!(await ref.get()).exists) throw new HttpsError('not-found', 'No such student.');
 
-  await getAuth().updateUser(input.uid, { disabled: input.status === 'disabled' });
-  if (input.status === 'disabled') await getAuth().revokeRefreshTokens(input.uid);
+  if (input.status === 'disabled') await shutOutAccount(input.uid);
+  else await getAuth().updateUser(input.uid, { disabled: false });
   await getAuth().setCustomUserClaims(input.uid, { role: 'student', status: input.status });
   await ref.update({ status: input.status });
   return { uid: input.uid, status: input.status };

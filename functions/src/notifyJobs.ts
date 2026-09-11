@@ -1,6 +1,7 @@
 import { type Firestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
+  assignmentId,
   attendanceMissingMessage,
   canPlayFromCourse,
   effectiveCompletion,
@@ -55,9 +56,26 @@ function courseLookup(db: Firestore) {
  */
 export async function notifyRecordingReady(
   db: Firestore,
-  assignment: AssignmentDoc,
+  edge: Pick<AssignmentDoc, 'studentUid' | 'recordingId'>,
   today: string,
 ): Promise<boolean> {
+  /*
+   * THE EVENT SAYS WHICH GRANT; THE DOCUMENT SAYS WHETHER. The trigger is
+   * retried, and a retry is handed the ORIGINAL event's payload — hours old,
+   * still reading `active: true`. A register corrected from excused to present
+   * in between, an unpublish, an unenrolment: each had closed the grant, and a
+   * send that trusted the payload told the student "ready to listen" about
+   * audio `getPlaybackUrl` was already refusing. The stored grant is also where
+   * the CURRENT deadline is: a listen-by date moved after the edge fired is
+   * rewritten onto it by the reconcile, and the payload keeps the old one.
+   */
+  const assignment = (
+    await db
+      .collection(COLLECTIONS.assignments)
+      .doc(assignmentId(edge.studentUid, edge.recordingId))
+      .get()
+  ).data() as AssignmentDoc | undefined;
+  if (!assignment?.active) return false;
   // NOTHING IS ANNOUNCED PAST ITS DATE. The reconcile never revives a grant on
   // a closed session, so an active edge here on a past due date is a grant that
   // should not exist; saying "yours to listen to until <a date long gone>" over

@@ -740,7 +740,7 @@ full; nothing is deleted, and older history is still in the record.
 The app is built around **reversible** actions:
 
 - **Disable** a student or staff member to switch off access while keeping their
-  history.
+  history. It ends their session and stops reminders reaching their phone.
 - **Unpublish** a recording to pull it from students without losing it, or
   **archive** it once a term is over. Both close it to the students who were
   excused; archiving is the one you reach for when nothing is wrong.

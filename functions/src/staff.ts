@@ -4,6 +4,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { COLLECTIONS, type Role, type UserStatus } from '@sabeel/shared';
 import { requireAdmin } from './guards';
+import { shutOutAccount } from './shutOut';
 
 export interface StaffAccessInput {
   uid: string;
@@ -84,11 +85,8 @@ export async function applyStaffAccess(callerUid: string, input: StaffAccessInpu
    * screen would report the change as done while the enforcement had not
    * happened, and there would be no control left that looked like the repair.
    */
-  await getAuth().updateUser(input.uid, { disabled: next.status === 'disabled' });
-  // And the tokens already out there: every callable re-checks the account
-  // (`assertAccountLive`), and revocation is what makes a token issued before
-  // this moment fail that check as well as the disabled flag.
-  if (next.status === 'disabled') await getAuth().revokeRefreshTokens(input.uid);
+  if (next.status === 'disabled') await shutOutAccount(input.uid);
+  else await getAuth().updateUser(input.uid, { disabled: false });
   await getAuth().setCustomUserClaims(input.uid, next);
 
   const update: Record<string, unknown> = { ...next };

@@ -10,9 +10,14 @@ import {
   type PushMessage,
   type RecordingDoc,
   type SessionDoc,
+  type StaffUserDoc,
+  type StudentDoc,
 } from '@sabeel/shared';
+import { getAuth } from 'firebase-admin/auth';
 import { setSender, resetSender, type SendOutcome } from '../../src/messaging';
 import { notifyAttendanceMissing, notifyLastDay, notifyRecordingReady } from '../../src/notifyJobs';
+import { applyStudentAccess } from '../../src/students';
+import { applyStaffAccess } from '../../src/staff';
 
 /**
  * Everything about notifications EXCEPT delivery.
@@ -73,6 +78,8 @@ beforeEach(async () => {
     COLLECTIONS.assignments,
     COLLECTIONS.completions,
     COLLECTIONS.courses,
+    COLLECTIONS.students,
+    COLLECTIONS.staffUsers,
   ]) {
     await db().recursiveDelete(db().collection(c));
   }
@@ -150,6 +157,64 @@ function grant(studentUid: string, recordingId: string, dueDate = '2026-08-20'):
   };
 }
 
+/*
+ * The grant as STORED, which is what `notifyRecordingReady` reads — the event
+ * payload it is handed only says which one to look at.
+ *
+ * Writing it fires the real `onAssignmentWritten` in the Functions emulator,
+ * whose sender claims the "sent" marker as if it had delivered. That trigger
+ * reads the wall clock, and every due date in this file is behind it, so it
+ * refuses on "past its date" before it can claim anything; the calls below
+ * inject `TODAY` and see the grant open. If a fixture date is ever moved past
+ * the real today, the emulator's own trigger wins the marker first and every
+ * send here comes back false.
+ */
+async function seedGrant(studentUid: string, recordingId: string, dueDate?: string, active = true) {
+  const doc = { ...grant(studentUid, recordingId, dueDate), active };
+  await db()
+    .collection(COLLECTIONS.assignments)
+    .doc(assignmentId(studentUid, doc.recordingId))
+    .set(doc);
+  return doc;
+}
+
+/*
+ * An account that can be DISABLED: the directory row `applyStudentAccess` /
+ * `applyStaffAccess` look up, and the Auth user they switch off. With an email
+ * and no password, the shape `onUserCreate` leaves alone.
+ */
+async function seedStudentAccount(uid: string) {
+  const doc: StudentDoc = {
+    displayName: uid,
+    email: `${uid}@example.com`,
+    role: 'student',
+    status: 'active',
+    createdAt: 1,
+    createdBy: ADMIN,
+  };
+  await db().collection(COLLECTIONS.students).doc(uid).set(doc);
+  await getAuth()
+    .deleteUser(uid)
+    .catch(() => undefined);
+  await getAuth().createUser({ uid, email: doc.email });
+}
+
+async function seedStaffAccount(uid: string) {
+  const doc: StaffUserDoc = {
+    displayName: uid,
+    email: `${uid}@oursabeel.com`,
+    photoUrl: null,
+    role: 'manager',
+    status: 'active',
+    createdAt: 1,
+  };
+  await db().collection(COLLECTIONS.staffUsers).doc(uid).set(doc);
+  await getAuth()
+    .deleteUser(uid)
+    .catch(() => undefined);
+  await getAuth().createUser({ uid, email: doc.email });
+}
+
 async function seedSession(id: string, fields: Partial<SessionDoc>) {
   const s: SessionDoc = {
     courseId: COURSE,
@@ -175,7 +240,7 @@ describe('recordingReady', () => {
     await withDevice('s1');
     await seedRecording('r1', 'sess1', 'published');
     await db().collection(COLLECTIONS.courses).doc(COURSE).update({ effectiveActive: false, archivedAccess: false });
-    expect(await notifyRecordingReady(db(), grant('s1', 'r1'), TODAY)).toBe(false);
+    expect(await notifyRecordingReady(db(), await seedGrant('s1', 'r1'), TODAY)).toBe(false);
     expect(outbox).toHaveLength(0);
   });
 
@@ -184,16 +249,16 @@ describe('recordingReady', () => {
     // have revived; announcing it would tell a student to listen by last month.
     await withDevice('s1');
     await seedRecording('r1', 'sess1', 'published');
-    expect(await notifyRecordingReady(db(), grant('s1', 'r1', '2026-08-11'), TODAY)).toBe(false);
+    expect(await notifyRecordingReady(db(), await seedGrant('s1', 'r1', '2026-08-11'), TODAY)).toBe(false);
     expect(outbox).toHaveLength(0);
     // The due day itself is still on time.
-    expect(await notifyRecordingReady(db(), grant('s1', 'r1', TODAY), TODAY)).toBe(true);
+    expect(await notifyRecordingReady(db(), await seedGrant('s1', 'r1', TODAY), TODAY)).toBe(true);
   });
 
   it('tells the excused student, naming the class and the deadline', async () => {
     await withDevice('s1');
     await seedRecording('r1', 'sess1', 'published');
-    expect(await notifyRecordingReady(db(), grant('s1', 'r1'), TODAY)).toBe(true);
+    expect(await notifyRecordingReady(db(), await seedGrant('s1', 'r1'), TODAY)).toBe(true);
     expect(outbox).toHaveLength(1);
     expect(outbox[0].tokens).toEqual(['tok-s1']);
     expect(outbox[0].message.title).toContain('Hikam Foundations');
@@ -205,15 +270,15 @@ describe('recordingReady', () => {
     // is the normal case, not an edge one.
     await withDevice('s1');
     await seedRecording('r1', 'sess1', 'published');
-    expect(await notifyRecordingReady(db(), grant('s1', 'r1'), TODAY)).toBe(true);
-    expect(await notifyRecordingReady(db(), grant('s1', 'r1'), TODAY)).toBe(false);
+    expect(await notifyRecordingReady(db(), await seedGrant('s1', 'r1'), TODAY)).toBe(true);
+    expect(await notifyRecordingReady(db(), await seedGrant('s1', 'r1'), TODAY)).toBe(false);
     expect(outbox).toHaveLength(1);
   });
 
   it('says nothing about a recording that is not published', async () => {
     await withDevice('s1');
     await seedRecording('r1', 'sess1', 'draft');
-    expect(await notifyRecordingReady(db(), grant('s1', 'r1'), TODAY)).toBe(false);
+    expect(await notifyRecordingReady(db(), await seedGrant('s1', 'r1'), TODAY)).toBe(false);
     expect(outbox).toHaveLength(0);
   });
 
@@ -221,7 +286,7 @@ describe('recordingReady', () => {
     await withDevice('s1');
     await db().collection(COLLECTIONS.notifications).doc('s1').set({ recordingReady: false });
     await seedRecording('r1', 'sess1', 'published');
-    expect(await notifyRecordingReady(db(), grant('s1', 'r1'), TODAY)).toBe(false);
+    expect(await notifyRecordingReady(db(), await seedGrant('s1', 'r1'), TODAY)).toBe(false);
     expect(outbox).toHaveLength(0);
   });
 
@@ -243,7 +308,7 @@ describe('recordingReady', () => {
     await withDevice('s1');
     await db().collection(COLLECTIONS.notifications).doc('s1').set({ lastDay: false });
     await seedRecording('r1', 'sess1', 'published');
-    expect(await notifyRecordingReady(db(), grant('s1', 'r1'), TODAY)).toBe(true);
+    expect(await notifyRecordingReady(db(), await seedGrant('s1', 'r1'), TODAY)).toBe(true);
     expect(outbox).toHaveLength(1);
   });
 
@@ -252,7 +317,7 @@ describe('recordingReady', () => {
     // ever be notified until they visited a screen for turning it off.
     await withDevice('s1');
     await seedRecording('r1', 'sess1', 'published');
-    expect(await notifyRecordingReady(db(), grant('s1', 'r1'), TODAY)).toBe(true);
+    expect(await notifyRecordingReady(db(), await seedGrant('s1', 'r1'), TODAY)).toBe(true);
   });
 
   it('does not spend the one delivery on a student with no device yet', async () => {
@@ -260,7 +325,7 @@ describe('recordingReady', () => {
     // would mean they are never told about this recording — registering a device
     // an hour later would find the notification already marked as sent.
     await seedRecording('r1', 'sess1', 'published');
-    expect(await notifyRecordingReady(db(), grant('s1', 'r1'), TODAY)).toBe(false);
+    expect(await notifyRecordingReady(db(), await seedGrant('s1', 'r1'), TODAY)).toBe(false);
     const claimed = await db()
       .collection(COLLECTIONS.notifications)
       .doc('s1')
@@ -269,7 +334,7 @@ describe('recordingReady', () => {
     expect(claimed.empty).toBe(true);
 
     await withDevice('s1');
-    expect(await notifyRecordingReady(db(), grant('s1', 'r1'), TODAY)).toBe(true);
+    expect(await notifyRecordingReady(db(), await seedGrant('s1', 'r1'), TODAY)).toBe(true);
     expect(outbox).toHaveLength(1);
   });
 
@@ -278,7 +343,7 @@ describe('recordingReady', () => {
     await withDevice('s1', 'tok-live');
     staleTokens = ['tok-dead'];
     await seedRecording('r1', 'sess1', 'published');
-    await notifyRecordingReady(db(), grant('s1', 'r1'), TODAY);
+    await notifyRecordingReady(db(), await seedGrant('s1', 'r1'), TODAY);
     const left = await db()
       .collection(COLLECTIONS.notifications)
       .doc('s1')
@@ -304,13 +369,13 @@ describe('recordingReady', () => {
       outbox.push({ tokens, message });
       return { stale: [], sent: tokens.length };
     });
-    await expect(notifyRecordingReady(db(), grant('s1', 'r1'), TODAY)).rejects.toThrow(/unreachable/);
-    await expect(notifyRecordingReady(db(), grant('s1', 'r1'), TODAY)).rejects.toThrow(/none of 1/);
+    await expect(notifyRecordingReady(db(), await seedGrant('s1', 'r1'), TODAY)).rejects.toThrow(/unreachable/);
+    await expect(notifyRecordingReady(db(), await seedGrant('s1', 'r1'), TODAY)).rejects.toThrow(/none of 1/);
     expect(outbox).toHaveLength(0);
-    expect(await notifyRecordingReady(db(), grant('s1', 'r1'), TODAY)).toBe(true);
+    expect(await notifyRecordingReady(db(), await seedGrant('s1', 'r1'), TODAY)).toBe(true);
     expect(outbox).toHaveLength(1);
     // And now it has been delivered, it stays delivered.
-    expect(await notifyRecordingReady(db(), grant('s1', 'r1'), TODAY)).toBe(false);
+    expect(await notifyRecordingReady(db(), await seedGrant('s1', 'r1'), TODAY)).toBe(false);
     expect(outbox).toHaveLength(1);
   });
 
@@ -318,14 +383,82 @@ describe('recordingReady', () => {
     await withDevice('s1', 'tok-dead');
     staleTokens = ['tok-dead'];
     await seedRecording('r1', 'sess1', 'published');
-    expect(await notifyRecordingReady(db(), grant('s1', 'r1'), TODAY)).toBe(false);
+    expect(await notifyRecordingReady(db(), await seedGrant('s1', 'r1'), TODAY)).toBe(false);
     // A device registered afterwards is not told about a recording whose
     // delivery already ran against a dead token: the marker stands, as after
     // a real delivery. (Registering a device an hour later is the case the
     // no-device branch protects; this one had a device, and it was gone.)
     staleTokens = [];
     await withDevice('s1', 'tok-new');
+    expect(await notifyRecordingReady(db(), await seedGrant('s1', 'r1'), TODAY)).toBe(false);
+  });
+
+  /*
+   * THE EVENT IS A HINT; THE DOCUMENT IS THE FACT.
+   *
+   * The trigger is retried, and a retry is handed the payload of the ORIGINAL
+   * event — hours old by then, and still saying `active: true`. In between, the
+   * grant may have been closed: the register corrected from excused to present,
+   * the recording unpublished, the student unenrolled. A send that trusted the
+   * payload told a student "ready to listen" about audio `getPlaybackUrl` had
+   * already begun refusing. What is asserted is the send, not a flag.
+   */
+  it('says nothing when the grant has been closed since the event fired', async () => {
+    await withDevice('s1');
+    await seedRecording('r1', 'sess1', 'published');
+    const stalePayload = await seedGrant('s1', 'r1');
+    await db()
+      .collection(COLLECTIONS.assignments)
+      .doc(assignmentId('s1', ns('r1')))
+      .update({ active: false });
+    expect(await notifyRecordingReady(db(), stalePayload, TODAY)).toBe(false);
+    expect(outbox).toHaveLength(0);
+  });
+
+  it('names the deadline as it stands now, not as the event had it', async () => {
+    // Staff moved the listen-by date after the grant appeared and before the
+    // retry ran; the reconcile rewrote the stored grant, the event payload
+    // still carries the old date.
+    await withDevice('s1');
+    await seedRecording('r1', 'sess1', 'published');
+    const stalePayload = await seedGrant('s1', 'r1', '2026-08-20');
+    await db()
+      .collection(COLLECTIONS.assignments)
+      .doc(assignmentId('s1', ns('r1')))
+      .update({ dueDate: '2026-08-27' });
+    expect(await notifyRecordingReady(db(), stalePayload, TODAY)).toBe(true);
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0].message.body).toContain('2026-08-27');
+    expect(outbox[0].message.body).not.toContain('2026-08-20');
+  });
+
+  it('says nothing about a grant that no longer exists at all', async () => {
+    // Nothing in the app deletes a grant, but a retry of a fixture's delete
+    // event is exactly the shape a stale payload takes; the document is what
+    // decides.
+    await withDevice('s1');
+    await seedRecording('r1', 'sess1', 'published');
     expect(await notifyRecordingReady(db(), grant('s1', 'r1'), TODAY)).toBe(false);
+    expect(outbox).toHaveLength(0);
+  });
+
+  /*
+   * DISABLING SWITCHES OFF ACCESS, and a push is access. The account is shut
+   * out of Auth and every callable refuses it — but the device registrations
+   * it left behind are still valid tokens, and a sweep that found them kept
+   * sending "last day to listen" for audio the person could no longer open, to
+   * a phone that is no longer theirs to act on. The registration goes with the
+   * session: they cannot stay signed in, and signing in again re-registers the
+   * device, so an account re-enabled loses nothing.
+   */
+  it('says nothing to a student whose account has been disabled', async () => {
+    await seedStudentAccount('s1');
+    await withDevice('s1');
+    await seedRecording('r1', 'sess1', 'published');
+    const edge = await seedGrant('s1', 'r1');
+    await applyStudentAccess({ uid: 's1', status: 'disabled' });
+    expect(await notifyRecordingReady(db(), edge, TODAY)).toBe(false);
+    expect(outbox).toHaveLength(0);
   });
 });
 
@@ -582,6 +715,18 @@ describe('attendanceMissing', () => {
     await seedSession('sess1', { date: '2026-08-10', attendanceSubmittedAt: null });
     expect(await notifyAttendanceMissing(db(), TODAY)).toBe(1);
     expect(outbox[0].tokens).toEqual(['tok-mgr1']);
+  });
+
+  it('says nothing to a manager whose account has been disabled', async () => {
+    // The same promise as the student case: the registrations go with the
+    // account, so a disabled manager is not chased about a class they can no
+    // longer open.
+    await seedStaffAccount('mgr1');
+    await withDevice('mgr1');
+    await seedSession('sess1', { date: '2026-08-10', attendanceSubmittedAt: null });
+    await applyStaffAccess(ADMIN, { uid: 'mgr1', status: 'disabled' });
+    expect(await notifyAttendanceMissing(db(), TODAY)).toBe(0);
+    expect(outbox).toHaveLength(0);
   });
 });
 
