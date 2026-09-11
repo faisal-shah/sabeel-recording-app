@@ -14,6 +14,18 @@ import { requireAdmin, requireCourseScope } from './guards';
 import { applyDeleteRecording } from './recordings';
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * A calendar date that exists. The shape alone let `2026-99-99` through: a
+ * string compare then kept it "open" until 2027, the day count came out `NaN`
+ * (bucketed as upcoming), and the last-day sweep never matched it. Round-trip
+ * through the UTC calendar and require the same text back.
+ */
+function isCalendarDate(value: string): boolean {
+  if (!DATE_ONLY.test(value)) return false;
+  const ms = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 10) === value;
+}
 const ATTENDANCE: AttendanceStatus[] = ['present', 'absent', 'excused'];
 
 /**
@@ -22,7 +34,7 @@ const ATTENDANCE: AttendanceStatus[] = ['present', 'absent', 'excused'];
  * by leaving a field alone.
  */
 function validateDueDateShape(value: unknown): string {
-  if (typeof value !== 'string' || !DATE_ONLY.test(value)) {
+  if (typeof value !== 'string' || !isCalendarDate(value)) {
     throw new HttpsError('invalid-argument', 'A due date is required, as YYYY-MM-DD.');
   }
   return value;
@@ -78,7 +90,7 @@ export function validateCreateSession(
   if (typeof d?.courseId !== 'string' || !d.courseId) {
     throw new HttpsError('invalid-argument', 'courseId is required.');
   }
-  if (typeof d.date !== 'string' || !DATE_ONLY.test(d.date)) {
+  if (typeof d.date !== 'string' || !isCalendarDate(d.date)) {
     throw new HttpsError('invalid-argument', 'date must be YYYY-MM-DD.');
   }
   const title = typeof d.title === 'string' ? d.title.trim() : '';
@@ -144,7 +156,7 @@ export function validateUpdateSession(data: unknown): UpdateSessionInput {
   }
   const out: UpdateSessionInput = { sessionId: d.sessionId };
   if (d.date !== undefined) {
-    if (typeof d.date !== 'string' || !DATE_ONLY.test(d.date)) {
+    if (typeof d.date !== 'string' || !isCalendarDate(d.date)) {
       throw new HttpsError('invalid-argument', 'date must be YYYY-MM-DD.');
     }
     out.date = d.date;
@@ -191,7 +203,9 @@ export const updateSession = auditedCall('updateSession', async (req, audit) => 
   // Named in the audit, unlike a title or a note: this one stops the work queue
   // and the morning reminder, so "why did we never chase that class?" has an
   // answer with a person and a time on it.
-  if (input.notRecorded !== undefined) audit.detail = { notRecorded: input.notRecorded };
+  // The due date too: moving it is the documented way to reopen a closed
+  // recording, so the log should carry the date the class was given.
+  audit.detail = { notRecorded: input.notRecorded, dueDate: input.dueDate, date: input.date };
   // A dueDate edit re-flows to obligations via the onSessionWritten trigger.
   await ref.update({ ...fields, updatedAt: Date.now() });
 

@@ -42,6 +42,16 @@ describe('validateCreateSession', () => {
     expect(() => create({ dueDate: '1 Aug 2026' })).toThrow(/YYYY-MM-DD/);
   });
 
+  it('refuses a date that is not on the calendar, however well it is shaped', () => {
+    // `2026-99-99` passed the shape check, stayed "open" by string compare
+    // until 2027, and never matched the last-day sweep.
+    for (const bad of ['2026-99-99', '2026-02-30', '2026-13-01', '2026-00-10']) {
+      expect(() => create({ dueDate: bad })).toThrow(/YYYY-MM-DD/);
+      expect(() => create({ date: bad })).toThrow(/YYYY-MM-DD/);
+    }
+    expect(create({ dueDate: '2028-02-29' }).dueDate).toBe('2028-02-29'); // a leap day exists
+  });
+
   it('still refuses the pre-existing invalid inputs', () => {
     expect(() => create({ courseId: '' })).toThrow(/courseId/);
     expect(() => create({ date: 'soon' })).toThrow(/YYYY-MM-DD/);

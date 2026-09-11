@@ -87,9 +87,13 @@ export async function applyCohortArchived(input: { cohortId: string; archived: b
   return { cohortId: input.cohortId, archived: input.archived, coursesUpdated: courses.size };
 }
 
-export const setCohortArchived = auditedCall('setCohortArchived', async (req) => {
+export const setCohortArchived = auditedCall('setCohortArchived', async (req, audit) => {
   requireAdmin(req);
-  return applyCohortArchived(validateSetCohortArchived(req.data));
+  const input = validateSetCohortArchived(req.data);
+  // Which way: the log's label is "Archived/unarchived cohort", and without
+  // this the row could not say which of the two it was.
+  audit.detail = { archived: input.archived };
+  return applyCohortArchived(input);
 });
 
 export function validateRenameCohort(data: unknown): { cohortId: string; name: string } {

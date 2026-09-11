@@ -120,6 +120,10 @@ export const updateCourse = auditedCall('updateCourse', async (req, audit) => {
   requireAdmin(req);
   const input = validateUpdateCourse(req.data);
   audit.courseId = input.courseId;
+  // What changed: a rename, an archive and the archived-access switch — which
+  // opens or closes every recording in the class to students — all read
+  // "Updated course" otherwise. `pruneDetail` drops the fields not sent.
+  audit.detail = { name: input.name, archived: input.archived, archivedAccess: input.archivedAccess };
   return applyCourseUpdate(input);
 });
 
