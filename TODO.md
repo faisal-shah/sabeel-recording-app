@@ -416,3 +416,26 @@ class at import time — no auto-map by topic).
 
 - [ ] **Sentry project + DSN** if you want off-device error visibility.
       `app/src/sentry.ts` is a working no-op seam until then.
+
+### 7. A student is running the 0.3.0 APK, and nothing tells them to update
+
+Sentry, 2026-09-08: `Missing or insufficient permissions` from
+`studentRecordings` on a Samsung SM-S931U, release `0.3.0+19`, Katy TX. That
+build lists a course's published recordings directly; the rules have refused
+that to students since 2026-08-14, when a recording began opening on an active
+assignment. The student sees an empty library and no reason, and the app has
+no minimum-version check, so every rules change since has broken that phone
+silently. Sentry attaches no identity by design, so the person cannot be named
+from here.
+
+- [ ] Tell students to install the current build from the download page. The
+      staff who last signed in on 2026-09-10 (Israa, Khadija, Rukaiya) can pass
+      it on.
+- [ ] Decide whether the app should carry a **minimum build number** it reads
+      from Firestore on launch and refuses to run below, with a message saying
+      to update. Cheap to build (a `config` document, a rule to let signed-in
+      users read it, one gate screen); it is the only way a future rules change
+      cannot strand an old install again. Note for later store builds: a
+      Play-distributed app may not point at a sideload page for the update, so
+      the message would name Google Play once that exists — the document can
+      carry the text.

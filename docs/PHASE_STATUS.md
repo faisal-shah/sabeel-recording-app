@@ -1292,6 +1292,44 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-09-11 — **v0.6.1: the review's fixes, through the gate and a device.**
+
+  Gate on 13b6af4: lint, typecheck, knip, **393 unit** (+4 sign-in copy, +1
+  history collapse), **398 emulator** (+1: two simultaneous enrolments, one
+  through — red on the read-then-write version, green on the transaction),
+  **1168/1168** sweep, **141/141** `test:e2e`. Then 24 exploratory checks in a
+  browser against the seeded world — rename validation on the real control,
+  the History label following a rename live, the archived cohort marked in the
+  library dropdown and a cross-cohort course let go, the picker hidden with
+  every course archived and creation still working, a double-clicked enrol
+  row producing one enrolment and one audit row, a manager with no courses.
+
+  **Device, debug build against the seeded world**: a double tap on an "Add a
+  student" row — two `input tap`s in one shell — produced one enrolment and
+  one `createEnrollment` row; the row left the list, no error band, and the
+  student's History reads "Account created" then one "Enrolled in Hikam
+  Foundations · Autumn 2026". **Release APK** on `tb_emu`: `versionName
+  0.6.1`, `versionCode 29`, `v0.6.1 · fdc3ea4` on sign-in, no dev panel. Not
+  re-proved on this release: push delivery and signed-URL minting, which
+  v0.6.0 proved a day earlier on unchanged code and which now have no demo
+  account left in production to sign in with — by design.
+
+  Shipped: `createEnrollment` updated (the only function that changed;
+  indexes, rules and storage untouched), hosting with fdc3ea4 inlined, no
+  emulator flag in the bundle, `.map` served as `text/html`, `smoke:prod`
+  green on all ten. `check:queries` and `check:push` green. Tag v0.6.1 →
+  fdc3ea4, four APKs on the source release and on `recording-latest`;
+  download page reads v0.6.1 with a What's new; published manual cover reads
+  0.6.1; public arm64 APK 43,178,781 bytes.
+
+  **Seen in Sentry on the way**: one Android error in thirty days, on
+  2026-09-08 — `Missing or insufficient permissions` from `studentRecordings`,
+  on a real phone running **0.3.0 (build 19)**. That build lists a course's
+  published recordings directly, which the rules have refused to students
+  since 2026-08-14 (a recording opens on an active assignment). Nothing in
+  the app tells an old build to update, so that student sees an empty
+  library and no reason. Left for Faisal's decision — see TODO.md.
+
 - 2026-09-11 — **The demo dataset is out of production, and the wipe had to grow
   to do it.**
 
