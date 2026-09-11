@@ -222,13 +222,8 @@ const shapes = [
   // which made this check pass while covering queries no longer issued and
   // missing the ones that were.
   [
-    'assignments — a recording\'s accountable roster (recording ledger)',
-    () =>
-      db
-        .collection('assignments')
-        .where('courseId', '==', ID)
-        .where('recordingId', '==', ID)
-        .where('active', '==', true),
+    "assignments — every grant a recording made (recording ledger)",
+    () => db.collection('assignments').where('courseId', '==', ID).where('recordingId', '==', ID),
   ],
   [
     "completions — a recording's roster (recording ledger)",
