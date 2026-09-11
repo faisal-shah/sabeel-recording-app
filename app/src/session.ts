@@ -13,6 +13,7 @@ import {
 import { googleSignOut } from './auth/google';
 import { auth, db } from './firebase';
 import { setLiveDataSession } from './liveQuery';
+import { nextPollDelay } from './pollDelay';
 import { registerThisDevice, unregisterThisDevice } from './notifications';
 
 export type Profile =
@@ -113,7 +114,9 @@ export function useSession(): Session {
 
   useEffect(() => {
     let unsubDoc: (() => void) | null = null;
-    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+    /** When the current stretch of polling began, for the back-off. */
+    let pollingSince = 0;
     let cancelled = false;
     /*
      * WHICH SIGN-IN THE WORK IN FLIGHT BELONGS TO.
@@ -140,9 +143,26 @@ export function useSession(): Session {
 
     const stopPoll = () => {
       if (pollTimer) {
-        clearInterval(pollTimer);
+        clearTimeout(pollTimer);
         pollTimer = null;
       }
+      pollingSince = 0;
+    };
+    /**
+     * One timer at a time, re-armed after each tick for as long as polling is
+     * on — by the tick itself, not only by `publish`, so a tick that failed
+     * (a dropped connection on the gate screen) does not end the polling.
+     */
+    const armPoll = (poll: () => Promise<void>) => {
+      if (pollTimer) return;
+      if (!pollingSince) pollingSince = Date.now();
+      pollTimer = setTimeout(async () => {
+        pollTimer = null;
+        await poll();
+        // `stopPoll` (a new sign-in, or the account becoming usable) zeroes
+        // `pollingSince`, which is what ends a stretch of polling.
+        if (pollingSince) armPoll(poll);
+      }, nextPollDelay(Date.now() - pollingSince));
     };
 
     const unsubAuth = onAuthStateChanged(auth, (user) => {
@@ -216,7 +236,15 @@ export function useSession(): Session {
         if (!ready) {
           void closePlayback();
           forgetPlaybackUrls();
-          if (!pollTimer) pollTimer = setInterval(poll, 3000);
+          /*
+           * Every tick is a forced token refresh and a document read, and the
+           * gate screen stays open for as long as an approval takes — hours,
+           * on a tab somebody forgot. Quick while an admin is likely acting on
+           * a fresh request, then a slow heartbeat; the profile listener
+           * carries the approval itself the moment it lands, so the poll is
+           * only ever a backstop for the claims.
+           */
+          armPoll(poll);
           return;
         }
         stopPoll();
