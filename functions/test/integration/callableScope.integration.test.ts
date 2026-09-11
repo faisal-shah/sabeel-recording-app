@@ -3,6 +3,7 @@ import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import type { CallableRequest } from 'firebase-functions/v2/https';
 import { COLLECTIONS, EMULATOR_PROJECT_ID, enrollmentId } from '@sabeel/shared';
+import { idTokenFor } from './emulatorToken';
 import { createEnrollment, setEnrollmentActive } from '../../src/enrollments';
 import { clearCompletionOverride, overrideCompletion } from '../../src/overrides';
 import { createSession, deleteSession, submitAttendance, updateSession } from '../../src/sessions';
@@ -60,8 +61,11 @@ const SESSION = 'session-theirs';
 const RECORDING = 'recording-theirs';
 const STUDENT = 'student-theirs';
 
-const req = (uid: string, role: 'manager' | 'admin', data: unknown): CallableRequest =>
-  ({ auth: { uid, token: { role, status: 'active' } }, data }) as unknown as CallableRequest;
+const req = async (uid: string, role: 'manager' | 'admin', data: unknown): Promise<CallableRequest> =>
+  ({
+    auth: { uid, token: { role, status: 'active' }, rawToken: await idTokenFor(uid) },
+    data,
+  }) as unknown as CallableRequest;
 
 /**
  * A class that belongs to somebody else, complete enough that every row's
@@ -170,14 +174,14 @@ const codeOf = async (p: Promise<unknown>): Promise<string | null> => {
 
 describe('every course-scoped callable is scoped', () => {
   it.each(SCOPED)('$name refuses a manager who does not run the class', async (entry) => {
-    expect(await codeOf(entry.call(req(OTHER, 'manager', entry.data)))).toBe('permission-denied');
+    expect(await codeOf(entry.call(await req(OTHER, 'manager', entry.data)))).toBe('permission-denied');
   });
 
   it.each(SCOPED)('$name does not refuse the manager who does — so the row above is about scope', async (entry) => {
     const caller =
       entry.owner === 'admin'
-        ? req(ADMIN, 'admin', entry.data)
-        : req(OWNER, 'manager', entry.data);
+        ? await req(ADMIN, 'admin', entry.data)
+        : await req(OWNER, 'manager', entry.data);
     expect(await codeOf(entry.call(caller))).not.toBe('permission-denied');
   });
 });

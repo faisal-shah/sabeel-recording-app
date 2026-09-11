@@ -11,6 +11,7 @@ import {
   audioStoragePath,
 } from '@sabeel/shared';
 import { getPlaybackUrl } from '../../src/playback';
+import { idTokenFor } from './emulatorToken';
 
 /**
  * The one callable that hands out audio, driven end to end.
@@ -42,9 +43,9 @@ const STUDENT = 'student-play';
 const OTHER_STUDENT = 'student-play-other';
 const MANAGER = 'manager-play';
 
-const req = (uid: string, role: string, status = 'active'): CallableRequest =>
+const req = async (uid: string, role: string, status = 'active'): Promise<CallableRequest> =>
   ({
-    auth: { uid, token: { role, status } },
+    auth: { uid, token: { role, status }, rawToken: await idTokenFor(uid) },
     data: { recordingId: RECORDING },
   }) as unknown as CallableRequest;
 
@@ -118,7 +119,7 @@ const denialOf = async (r: CallableRequest): Promise<string | null> => {
 describe('getPlaybackUrl', () => {
   it('gives the excused student their audio', async () => {
     await grant(STUDENT, FUTURE);
-    expect(await denialOf(req(STUDENT, 'student'))).toBeNull();
+    expect(await denialOf(await req(STUDENT, 'student'))).toBeNull();
   });
 
   /*
@@ -128,27 +129,27 @@ describe('getPlaybackUrl', () => {
    */
   it('refuses the same student once their listen-by date has passed', async () => {
     await grant(STUDENT, PAST);
-    expect(await denialOf(req(STUDENT, 'student'))).toMatch(/due date/i);
+    expect(await denialOf(await req(STUDENT, 'student'))).toMatch(/due date/i);
   });
 
   it('refuses a student with no grant, and one whose grant was withdrawn', async () => {
-    expect(await denialOf(req(OTHER_STUDENT, 'student'))).toMatch(/not assigned/i);
+    expect(await denialOf(await req(OTHER_STUDENT, 'student'))).toMatch(/not assigned/i);
     await grant(OTHER_STUDENT, FUTURE, false);
-    expect(await denialOf(req(OTHER_STUDENT, 'student'))).toMatch(/not assigned/i);
+    expect(await denialOf(await req(OTHER_STUDENT, 'student'))).toMatch(/not assigned/i);
   });
 
   it('refuses a student whose account is not active, grant or no grant', async () => {
     await grant(STUDENT, FUTURE);
-    expect(await denialOf(req(STUDENT, 'student', 'disabled'))).toMatch(/not active/i);
-    expect(await denialOf(req(STUDENT, 'student', 'pending'))).toMatch(/not active/i);
+    expect(await denialOf(await req(STUDENT, 'student', 'disabled'))).toMatch(/not active/i);
+    expect(await denialOf(await req(STUDENT, 'student', 'pending'))).toMatch(/not active/i);
   });
 
   it('gives the class manager their audio, with no grant of their own', async () => {
-    expect(await denialOf(req(MANAGER, 'manager'))).toBeNull();
+    expect(await denialOf(await req(MANAGER, 'manager'))).toBeNull();
   });
 
   it('refuses a manager who does not run the class', async () => {
-    expect(await denialOf(req('manager-elsewhere', 'manager'))).toMatch(/not assigned to that class/i);
+    expect(await denialOf(await req('manager-elsewhere', 'manager'))).toMatch(/not assigned to that class/i);
   });
 
   it('refuses an unauthenticated call', async () => {
@@ -159,7 +160,7 @@ describe('getPlaybackUrl', () => {
 
   it('refuses a recording that does not exist, without leaking whether it might', async () => {
     const r = {
-      auth: { uid: STUDENT, token: { role: 'student', status: 'active' } },
+      auth: { uid: STUDENT, token: { role: 'student', status: 'active' }, rawToken: await idTokenFor(STUDENT) },
       data: { recordingId: 'no-such-recording' },
     } as unknown as CallableRequest;
     expect(await denialOf(r)).toMatch(/no such recording/i);
@@ -184,6 +185,6 @@ describe('getPlaybackUrl', () => {
       .collection(COLLECTIONS.courses)
       .doc(COURSE)
       .update({ archived: true, effectiveActive: false, archivedAccess: false });
-    expect(await denialOf(req(STUDENT, 'student'))).toMatch(/archived/i);
+    expect(await denialOf(await req(STUDENT, 'student'))).toMatch(/archived/i);
   });
 });
