@@ -446,3 +446,77 @@ recordings move into a quiet Archived group on the student home; a student's
 progress and completion writes need an ACTIVE grant. The empty-state item that
 was left open here is done too: every list screen waits for its first snapshot
 before it says "No … yet".
+
+### 9. Decisions from the 2026-09-11 second round
+
+Fixed and shipped in v0.6.4 without a decision: a retried "recording ready"
+push no longer trusts its stale payload; a disabled account's device
+registrations go with its session; a register submission removes no stored
+mark; "not recorded" and a recording can no longer both be true; a
+needs-attention Zoom import is always retryable; a revoked session says "sign
+in again"; a tapped web push opens the app; archived and unpublished
+recordings keep their ledger, with the rows as they stood when it closed; a
+grant on a course archived with listening off reads "Closed", not "Listen
+by"; the gate-screen poll cannot be carried by a previous sign-in; Play no
+longer raises the notification prompt; a withdrawn recording is not reported
+as a fault; four crash-in-the-middle states repair themselves. Left for you:
+
+- [ ] **The release APK is signed with the public debug keystore.**
+      `app/android/app/build.gradle` `release { signingConfig
+      signingConfigs.debug }` — the certificate is `CN=Android Debug`, the
+      SHA-1 registered with Firebase is the debug key's. Anyone with the
+      Android SDK holds that key, so an APK carrying this package name could
+      be built by anyone and would install OVER the real one as an update.
+      For a sideloaded, private-institute app this is a known deferral (the
+      note under item 4 above); before Play, or before the app is on any
+      phone you do not control, it needs: a keystore generated and kept
+      outside the repo (`keytool`, password in your password manager, the
+      file backed up — losing it means no update path ever again), the
+      release signing config reading it from the environment or a gitignored
+      `keystore.properties`, ITS SHA-1 added in the Firebase console (Google
+      sign-in breaks on the new key without it), and one round of
+      uninstall/reinstall for every current install, since Android refuses an
+      update signed with a different key. Say when, and whether now: it
+      forces the reinstall on every staff phone.
+- [ ] **The term's record at course level.** The recording ledger now keeps
+      its rows after the recording is archived. The COURSE counts card
+      ("N required listening / not complete / missed"), the attendance
+      report's catch-up columns and the student's per-course counts still
+      read ACTIVE grants only — so once the term's recordings are archived,
+      all three read zero for the term, while each recording's own ledger
+      still says who missed what. Three ways out: (a) leave it — archive
+      recordings only when the record is no longer wanted at course level;
+      (b) count a grant an archived recording closed as part of the record
+      (needs the fan-out to say WHY a grant went inactive — archived vs
+      unenrolled — one field, a small server change); (c) archive the
+      COURSE at term end and leave its recordings published, which keeps
+      every count and only turns listening off. (c) is what the manual's
+      course-archive path already does; (b) is the durable fix.
+- [ ] **Headphones unplugged keeps playing.** Android's convention is to pause
+      when the output route disappears (`ACTION_AUDIO_BECOMING_NOISY`).
+      expo-audio does not handle it; it needs a small native receiver, i.e. a
+      native change in `android/`. Decide whether it matters before the first
+      real-phone complaint.
+- [ ] **A push arriving while the app is open shows nothing.** FCM's own
+      banner appears only in the background; a foreground handler would have
+      to render the message itself. Decide whether an in-app banner is worth
+      building, or whether background delivery is enough for three messages a
+      term.
+- [ ] **The work queue never lets a "no recording yet" row go.** A session
+      whose attendance is in but whose audio never arrived sits on Today for
+      the life of the course — and once its listen-by date has gone, the
+      upload it prompts leads to a Publish the server refuses. Options: retire
+      the row at the listen-by date like the publish reminder does, or keep it
+      and say "past its date — move the date, or mark it not recorded".
+- [ ] **A completion written after the deadline counts.** The rules gate a
+      student's completion on an ACTIVE grant, not on the date (the date
+      lives in `getPlaybackUrl`; comparing it in rules would be a second copy
+      of the maths). So a hand-built write after midnight, or an offline
+      completion syncing the next morning, reads as complete everywhere.
+      The second is by design; the first needs the SDK. If it ever matters,
+      flag `completedAt > dueDate` on the ledger rather than dating the rules.
+- [ ] Not decisions, noted for a quieter week: the reconcile is read-then-
+      write outside a transaction (a register correction racing an unenrol
+      can leave a grant on until the next write); publish and Remove audio
+      can interleave into a published recording with no object. Both need a
+      collision nobody has produced.
