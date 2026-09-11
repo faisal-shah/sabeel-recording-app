@@ -1360,6 +1360,58 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Verification log
 
+- 2026-09-11 — **v0.6.4: the second review round.**
+
+  Five review agents over the round-1 diff and the areas beside it, then
+  one over this round's own diff; every fix with a test red first where
+  the seam allows it, and the two that do not (the trigger-shadowed cascade
+  in `deleteSession`, the range branch of the index parser) say so in the
+  test file. Backend: `notifyRecordingReady` reads the grant it is handed,
+  not the retried event; `shutOutAccount` drops a disabled account's device
+  registrations for both populations; a register submission overlays the
+  stored map; "not recorded" and a recording are refused together at both
+  boundaries, in one transaction; a needs-attention import is always
+  retryable; a revoked session is `unauthenticated` "sign in again"; web
+  push carries `fcmOptions.link`; four crash-in-the-middle states repair
+  (enrolment side-effect on no-op, delete + pointer in one transaction,
+  dangling pointer tolerated by draft and delete, attendance projection
+  cascaded); a disabled student is refused re-enrolment on both doors; an
+  identical override is a no-op. Client: the poll chain (`pollChain.ts`,
+  fake-timer race red on the old rule); `hasLedger` (with `publishedAt`),
+  `grantOutcome`, `listenedShare`; the recording ledger reads every grant
+  and keeps a closed recording's rows; the student's class record says
+  "course archived"; a student's withdrawn recording is not a listener
+  fault; Play no longer prompts for notifications. Scripts and tests: the
+  three drill-down e2e checks wait for their destination and read the
+  screen's own H1 (`screen-title`); unhandled page errors fail the run;
+  the seeded world carries an open grant on an archived class and the
+  sweep reads both its home group and its ledger row; the index parser
+  reads ranges and one shape per `query(`; the scope table holds every
+  audited callable; the store-exemption scan tokenizes every shipped file;
+  the service worker's config is held to `firebase-config.ts`; the release
+  script refuses an emulator flag, a bundle without HEAD's commit, and
+  warns on a dirty tree; the smoke asserts the live label and that the
+  `.map` is not served.
+
+  Device pass on the API 35 AVD with the manifest changes: no storage
+  permissions, `allowBackup=false`, `SYSTEM_ALERT_WINDOW` debug-only, the
+  document picker opens, the dev overlay still shows; with
+  POST_NOTIFICATIONS denied ("don't ask again") the media controls appear
+  and playback runs, so the prompt at Play was removed and re-verified
+  from a clean install. Found on the way: the AVD needs `adb reverse
+  tcp:61107` for the emulator's playback URL (DEPLOY.md). Two decisions
+  from Faisal: an archived recording leaves the course totals (manual
+  reworded — closing a term is archiving the course), and the release key
+  stays the debug key for this release (TODO §9 has the switch).
+
+  Gate on 9cf10d8: lint, typecheck, knip, 433 unit (121 shared, 132
+  functions, 180 app), **436 emulator**, **148/148** e2e, **1228/1228**
+  sweep. Release APK `v0.6.4 · 9cf10d8`, `versionCode 32`, no dev rows.
+  Deployed every function (`--force`; 33 updated, none deleted) and
+  hosting; `smoke:prod` green including the new label and `.map` checks,
+  `check:queries` servable including the ledger's every-grant shape. Tag
+  v0.6.4, APKs on both releases, download page and manual on 0.6.4.
+
 - 2026-09-11 — **v0.6.3: three decisions taken.**
 
   Faisal's three answers to the review's open questions, each built the same
