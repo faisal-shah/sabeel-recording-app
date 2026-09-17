@@ -349,6 +349,8 @@ The **course page** is your dashboard for that course:
   grants nothing by itself. A manager's own course page has neither section.
 - **Roster** lists the enrolled students. Tap a student to see their personal
   ledger for the course (Section 2.8).
+- **Export workbook** downloads the whole course — every student, session,
+  register and required listening — as one Excel file (Section 2.13).
 
 ## 2.4 Sessions, attendance, and adding a recording
 
@@ -521,8 +523,9 @@ The screen has five parts:
   for example a student you excused, who listened, and whom you then corrected to
   present. Kept as history.
 
-**Export CSV** downloads the required rows — the same rows, the same filter —
-as a spreadsheet, for records or a follow-up.
+For a copy you can keep or hand on, export the course's **workbook** from the
+course page (Section 2.13); its **Detail** tab is this ledger for every
+recording in the course.
 
 ## 2.7 Overriding a completion
 
@@ -555,9 +558,9 @@ about.
 ## 2.8 One student's ledger
 
 From a course's **Roster**, tap a student to see *their* view: the recordings
-they're required to listen to in that course, each with its status, the same
-action-first filters, and its own **Export CSV**. It's the per-person counterpart
-to the per-recording ledger in 2.6 — the right screen when a parent or student
+they're required to listen to in that course, each with its status, and the same
+action-first filters. It's the per-person counterpart to the per-recording
+ledger in 2.6 — the right screen when a parent or student
 asks "where do I stand?" Tap the student's **name** at the top to open their
 profile — the same page People opens — for their access, every course they are
 in, and their history.
@@ -578,7 +581,9 @@ two ways — a toggle switches between them:
   first), plus their **catch-up** status: of the recordings they were excused
   from, how many are complete and how many they missed.
 
-Each view has its own **Export CSV**.
+The course **workbook** (Section 2.13) carries the same numbers in a form you
+can keep: the **Students** and **Sessions** tabs are these two views, and the
+**Register** tab is the roster with every mark.
 
 **Tap any card to go straight to the detail.** A session opens that session — its
 attendance roster and its recording; a student opens that student's listening
@@ -647,8 +652,10 @@ open it.
 </div>
 
 It shows their name, address and whether they're **active** or **disabled**, and
-carries the two actions:
+carries three actions:
 
+- **Export workbook** — one Excel file for this student across their courses
+  (Section 2.13).
 - **Resend password link** — if they lost the email or the link expired.
 - **Disable account** — turns off access without deleting anything. (Disable,
   don't delete — deletion is a separate, deliberate, admin-only step.) Admins
@@ -694,6 +701,81 @@ once, on Today after you sign in; you can also tap **Enable notifications** on
 this screen at any time. If it says they are blocked, use
 **Open settings** on a phone, or allow them from the site settings behind the
 icon in your browser's address bar.
+
+## 2.13 Exporting a workbook
+
+Two buttons produce every export the app has, and both make an **Excel
+workbook** — one `.xlsx` file with several tabs — rather than a flat list. On a
+phone the file goes to the share sheet, so you can send it to yourself or save
+it; on a computer it downloads.
+
+**Export workbook on a course page** covers the whole course:
+
+- **Summary** — the course's cohort, status and managers, the size of the
+  roster, how many registers have been taken, the attendance and catch-up
+  rates for the class, how much required listening is still open, and when the
+  file was made and by whom.
+- **Students** — one row per student: when they joined and left, their
+  attendance counts and rate, and their catch-up on excused sessions —
+  required, listened, still open, missed deadline, closed. Sorted so the
+  students with the most missed deadlines are at the top. A **Note** column
+  flags registers they were never marked on and completions that came from a
+  staff override.
+- **Sessions** — one row per meeting: when its register was taken and the
+  marks on it, the recording's status, when it was published and its listen-by
+  date, and how the excused students have done with it. A recording that has
+  been archived or unpublished is noted as *withdrawn from the totals*.
+- **Register** — students down the side, sessions across the top, one mark in
+  each cell: **P**, **A**, **E**, a dot for a register never taken, a dash for
+  a session outside the time the student was enrolled.
+- **Listening** — the same grid for published recordings: whether each excused
+  student listened (and when), or is still open, missed the deadline, or was
+  closed — with how much of the recording they have heard.
+- **Detail** — every required listening as its own row, with heard, last
+  listened, completed at, and any override with its reason. This is the ledger
+  of Section 2.6 for the whole course; filter it in Excel.
+- **Definitions** — what every term in the file means, so the workbook explains
+  itself to whoever you send it to.
+
+**Export workbook on a student's page** covers one person across courses:
+
+- **Summary** — their account, how many courses they are in, and their
+  attendance and catch-up totals across all of them.
+- **Courses** — one row per course, with the same enrolment, attendance and
+  catch-up columns the course workbook gives each student.
+- **Sessions** — every meeting in the time they were enrolled, in date order
+  across courses, with their mark and — if excused — the recording's listen-by
+  date and outcome.
+- **Listening** — every recording they were required to listen to, with the
+  evidence behind it.
+- **History** — their record from the day the account was created: enrolments,
+  removals and returns, account changes — each with who did it and when. It is
+  the history the student's page shows (Section 2.11), plus the completion
+  overrides the page leaves to each recording's ledger.
+- **Definitions** — as above.
+
+A manager's student workbook covers **the courses they manage**, and its
+Summary says so on the **Scope** line — the same view of the student their
+screens give. An admin's covers every course.
+
+The file's **Definitions** tab reads:
+
+| Term | Meaning |
+|---|---|
+| **Held** | Registers submitted for sessions between the day the student joined the class and the day they left it, in which they were marked. A session whose register was never taken is not held for anyone. |
+| **Present / Absent / Excused** | The mark on the register. Excused is the only mark that opens the recording and requires listening. |
+| **Attendance rate** | Present ÷ Held. |
+| **Required** | Excused sessions whose recording is published — one recording the student must listen to, by its listen-by date. A recording that has been archived or unpublished is withdrawn: it counts nowhere, and the Sessions tab says so. |
+| **Listened** | The student marked the recording complete, or staff overrode it as complete (the override’s reason is recorded). |
+| **Still open** | Not yet listened, and the listen-by date has not passed. |
+| **Missed deadline** | Not listened by the listen-by date. Access has closed; nothing further can happen to it unless the date is moved. |
+| **Closed** | A required recording that was withdrawn from the student before its listen-by date: they left the class, or the class was archived with listening off. Neither listened nor missed. |
+| **Catch-up rate** | Listened ÷ (Listened + Missed deadline). Open and closed items are not held against anyone. |
+| **Heard** | Listening time as a share of the recording’s length. Evidence, not the gate — completion is the student’s own mark. |
+| **Times** | Institute time (America/Chicago). Dates are real dates; sort and filter them in Excel. |
+
+The columns hold real dates and real numbers, not text — so they sort, filter
+and add up in Excel. A rate shows a dash where there is nothing to divide by.
 
 ---
 
@@ -790,7 +872,8 @@ confirmation, and is audited. Reach for disable, unpublish, or archive first.
 | **Give someone credit anyway** *(staff)* | Ledger → **Override** → reason (required) → **Mark complete**. |
 | **Make a latecomer catch up on an old session** *(staff)* | Open that session → mark them **Excused** → **Submit attendance**. (Move **Listen by** forward first if it has passed.) |
 | **See course attendance** *(staff)* | Course → **Attendance report** (toggle by session / by student). |
-| **Export for records** *(staff)* | Any ledger or the attendance report → **Export CSV**. |
+| **Export a course for records** *(staff)* | Course page → **Export workbook**. |
+| **Export one student's record** *(staff)* | **People** → the student → **Export workbook**. |
 | **Turn a notification off** | **More** → **Notifications** → tap the one you don't want. |
 | **Approve a new teacher** *(admin)* | **People** → **Staff** → **Approve as manager / admin**. |
 | **Give a manager a course** *(admin)* | Course page → **Managers** → add them. |

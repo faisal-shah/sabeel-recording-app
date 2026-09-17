@@ -756,8 +756,7 @@ export function useAddAction(): () => void {
  *
  * DISTINCT FROM `Segmented`, which is a switch between two views of the same
  * subject (Students / Staff). These narrow a list without changing what the
- * screen is about, and they share their row with the control that acts on the
- * result — Export CSV, usually — so they wrap rather than sitting in a box.
+ * screen is about, so they wrap in a row rather than sitting in a box.
  */
 export function Chips<T extends string>({
   value,
@@ -1267,8 +1266,8 @@ const styles = StyleSheet.create({
    * line `numberOfLines={2}` already allows.
    *
    * On the button unconditionally, this reached every OTHER row in the app too:
-   * the Export CSV beside a segmented control grew to 840px, a slab holding one
-   * word and the largest thing on the page.
+   * an export button beside a segmented control grew to 840px, a slab holding
+   * two words and the largest thing on the page.
    */
   btnFill: { flexGrow: 1, flexShrink: 1 },
   btnSecondary: { backgroundColor: t.bg.sage },
