@@ -21,15 +21,22 @@
     </intent>
   </queries>
   <application android:name=".MainApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="false" android:theme="@style/AppTheme" android:supportsRtl="true" android:enableOnBackInvokedCallback="false">
-    <!-- The small icon and tint FCM uses when it displays a message itself,
-         which is every push this app sends: nothing here renders one in the
-         foreground. Without these Android falls back to the launcher icon,
-         whose silhouette is a featureless square. Set in the manifest rather
-         than through the expo-notifications config plugin, which does nothing
-         in this bare workflow because android/ is committed and prebuild never
+    <!-- The small icon and tint of a push, once per component that draws
+         one. FCM displays a message itself when the app is in the background
+         or closed and reads the first pair; expo-notifications presents a
+         foreground push or a local notification and reads the second — and
+         without it falls back to the launcher icon, whose silhouette is a
+         featureless square, untinted. Nothing here presents in the foreground
+         today (push.ts sets no handler), so the second pair is what keeps the
+         icon the same on the day something does; notificationIcon.test.ts
+         holds the two pairs to one resource. Set in the manifest rather than
+         through the expo-notifications config plugin, which does nothing in
+         this bare workflow because android/ is committed and prebuild never
          runs. -->
     <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_notification"/>
     <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/notification_icon_color"/>
+    <meta-data android:name="expo.modules.notifications.default_notification_icon" android:resource="@drawable/ic_notification"/>
+    <meta-data android:name="expo.modules.notifications.default_notification_color" android:resource="@color/notification_icon_color"/>
     <meta-data android:name="expo.modules.updates.ENABLED" android:value="false"/>
     <meta-data android:name="expo.modules.updates.ENABLE_BSDIFF_PATCH_SUPPORT" android:value="true"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
