@@ -15,10 +15,11 @@ import {
 } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { Role } from '@sabeel/shared';
+import { useMinVersion } from './src/minVersion';
 import { useSession } from './src/session';
 import { liveDueDate, useMyAssignmentState } from './src/completion';
 import { SignInScreen } from './src/screens/SignInScreen';
-import { DisabledScreen, PendingScreen, ProvisioningScreen } from './src/screens/GateScreens';
+import { DisabledScreen, PendingScreen, ProvisioningScreen, UpdateScreen } from './src/screens/GateScreens';
 import { StaffScreen } from './src/screens/StaffScreen';
 import { StudentsScreen } from './src/screens/StudentsScreen';
 import { StudentDetailScreen } from './src/screens/StudentDetailScreen';
@@ -228,10 +229,15 @@ const navTheme = {
 
 export default function App() {
   const session = useSession();
+  // The institute's floor for Android builds, read before anything else: a
+  // retired build shows the update screen whether or not anyone is signed in.
+  const { outdated } = useMinVersion();
 
   let content;
   let headerless = true;
-  if (session.phase === 'loading') {
+  if (outdated) {
+    content = <UpdateScreen signedIn={session.phase === 'signedIn'} />;
+  } else if (session.phase === 'loading') {
     content = (
       <View style={styles.centre}>
         <ActivityIndicator size="large" color={t.accent.base} />

@@ -583,6 +583,17 @@ service cloud.firestore {
       }
     }
 
+    // ---- Config ----
+    // `config/app` holds the oldest Android build allowed to run, and the app
+    // reads it BEFORE anyone signs in — a build the institute has retired
+    // should say so on its first screen, not after a sign-in the rules then
+    // refuse. Readable by anyone: it is one integer, and a signed-out read is
+    // the point. Written by nobody but the Admin SDK (`scripts/set-min-version.mjs`).
+    match /config/{doc} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // ---- Everything else ----
     // The backend-stats collection stays denied until it is opened deliberately
     // with its consumer.

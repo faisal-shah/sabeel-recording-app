@@ -385,6 +385,23 @@ a `prebuild` in this bare workflow. The token is already in place for when that
 happens; Sentry reporting itself works on native today, with minified release
 stack traces.
 
+## Retiring old builds
+
+Every Android build from v0.7.0 reads `config/app.minVersionCode` before sign-in
+and shows an update screen — with the download page — when its own
+`versionCode` is below it. After a release that older builds can no longer run
+against (a rules change refusing a listener they still open is the case that
+made this exist), raise the floor by hand:
+
+```bash
+node scripts/set-min-version.mjs 33     # the versionCode of the oldest build to keep
+```
+
+It is a decision, not a deploy step: nothing raises it for you. The floor is a
+`versionCode` (`app/android/app/build.gradle`), not a version name, and a build
+that predates the gate (anything before 0.7.0) cannot be reached by it —
+those need a person.
+
 ## After deploying
 
 "Deployed" is not "working." Load the production URL, sign in, and check the

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   COLLECTIONS,
   EMULATOR_PROJECT_ID,
+  isBuildOutdated,
   REGION,
   SIGNED_URL_REFRESH_MS,
   SIGNED_URL_TTL_MS,
@@ -43,5 +44,19 @@ describe('collections', () => {
   it('has no duplicate collection names', () => {
     const names = Object.values(COLLECTIONS);
     expect(new Set(names).size).toBe(names.length);
+  });
+});
+
+describe('isBuildOutdated', () => {
+  it('refuses a build below the floor and nothing else', () => {
+    expect(isBuildOutdated(31, 32)).toBe(true);
+    expect(isBuildOutdated(32, 32)).toBe(false);
+    expect(isBuildOutdated(33, 32)).toBe(false);
+  });
+
+  it('refuses nobody while the floor is unknown', () => {
+    // No document yet, or a read that has not arrived: the app runs.
+    expect(isBuildOutdated(1, null)).toBe(false);
+    expect(isBuildOutdated(1, undefined)).toBe(false);
   });
 });

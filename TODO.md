@@ -428,15 +428,21 @@ from here.
 
 - [ ] Tell students to install the current build from the download page. The
       staff who last signed in on 2026-09-10 (Israa, Khadija, Rukaiya) can pass
-      it on.
-- [ ] Decide whether the app should carry a **minimum build number** it reads
-      from Firestore on launch and refuses to run below, with a message saying
-      to update. Cheap to build (a `config` document, a rule to let signed-in
-      users read it, one gate screen); it is the only way a future rules change
-      cannot strand an old install again. Note for later store builds: a
-      Play-distributed app may not point at a sideload page for the update, so
-      the message would name Google Play once that exists — the document can
-      carry the text.
+      it on. Sentry saw the same phone (Galaxy S25, Houston) still on 0.3.0 on
+      2026-09-16 (SABEEL-RECORDING-ANDROID-3); the gate below cannot reach a
+      build that predates it, so this one is a message from a person.
+- ✅ **The minimum build number — decided and built, 2026-09-17.** `config/app`
+      carries `minVersionCode`, read by every Android build before sign-in
+      (`app/src/minVersion.ts`); a build below it shows the update screen with
+      the download page. Readable by anyone, written only by
+      `scripts/set-min-version.mjs <versionCode>`, which is yours to run after
+      a release older builds can no longer work against — see DEPLOY.md.
+- [ ] **Raise the floor once v0.7.0 is out**: `node scripts/set-min-version.mjs 33`
+      retires every build before it (0.3.0 through 0.6.4 do not have the
+      gate, so the floor reaches only builds from 0.7.0 on — it is for the
+      NEXT rules change, not this one). Note for later store builds: a
+      Play-distributed app may not point at a sideload page for the update,
+      so the screen would name Google Play once that exists.
 
 ### 8. Decisions from the 2026-09-11 review
 

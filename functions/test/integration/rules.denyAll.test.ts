@@ -72,8 +72,10 @@ const anon = () => testEnv.unauthenticatedContext();
 describe('firestore rules: deny-all baseline', () => {
   // Every collection the product will eventually use. Adding a collection to
   // @sabeel/shared without opening it in the rules should keep failing here,
-  // which is exactly the behaviour we want between now and Phase 1.
-  const names = Object.values(COLLECTIONS);
+  // which is exactly the behaviour we want between now and Phase 1. `config`
+  // is the one collection readable by everyone, on purpose — the update gate
+  // reads it before sign-in — and has its own suite (`rules.config.test.ts`).
+  const names = Object.values(COLLECTIONS).filter((n) => n !== COLLECTIONS.config);
 
   it('denies reads to a signed-in user', async () => {
     const db = signedIn().firestore();

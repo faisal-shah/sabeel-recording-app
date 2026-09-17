@@ -45,6 +45,12 @@ export const COLLECTIONS = {
   backendStats: 'backendStats',
   /** Staff and system changes that must remain inspectable. */
   auditLog: 'auditLog',
+  /** Institute-wide settings the app reads before anyone signs in: today one
+   *  document, `config/app`, carrying the oldest build still allowed to run. */
+  config: 'config',
 } as const;
+
+/** The one document under `config`. */
+export const APP_CONFIG_DOC = 'app';
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];

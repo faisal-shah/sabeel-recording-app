@@ -18,8 +18,9 @@ import { resolve } from 'node:path';
  * `docs/DEPLOY.md` asks a person to keep the two in step; this is what makes
  * forgetting fail loudly.
  *
- * `versionCode` is deliberately not checked against anything: it is Android's
- * own monotonic counter and has no counterpart in the manifest.
+ * `versionCode` is checked the same way since the update gate began reading
+ * it from the manifest (`BUILD_VERSION_CODE`): a bundle that believed itself
+ * newer than its APK would pass a floor the APK does not.
  *
  * Lives in `functions/test/unit` because that workspace is the only one here
  * with a runner wired up — same reasoning as `emulatorPorts.test.ts` next door.
@@ -38,5 +39,12 @@ describe('the shipped version', () => {
 
   it('is the same in the manifest and in the APK', () => {
     expect(gradle).toBe(manifest);
+  });
+
+  it('carries the same versionCode in both files', () => {
+    const manifestCode = JSON.parse(read('app/app.json')).expo.android.versionCode as number;
+    const gradleCode = Number(read('app/android/app/build.gradle').match(/versionCode\s+(\d+)/)?.[1]);
+    expect(Number.isInteger(manifestCode)).toBe(true);
+    expect(gradleCode).toBe(manifestCode);
   });
 });

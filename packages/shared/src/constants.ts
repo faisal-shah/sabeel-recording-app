@@ -103,6 +103,35 @@ export const WEB_APP_URL = 'https://sabeel-class-recordings.web.app/';
 export const PRIVACY_URL = `${WEB_APP_URL}privacy`;
 
 /**
+ * Where the Android build is downloaded from — the GitHub Pages site, which
+ * `docs/DEPLOY.md` updates on every release. The update gate opens it, which
+ * is allowed under the store rule the sign-in screen lives by: it points at
+ * the APP, not at a way to get an account.
+ */
+export const DOWNLOAD_PAGE_URL = 'https://faisal-shah.github.io/sabeel-recording-app/';
+
+/**
+ * The oldest Android build still allowed to run, read from `config/app` at
+ * launch and compared with the build's own `versionCode`.
+ *
+ * A rules change can strand an old install silently: on 2026-09-08 a student
+ * on the 12 August build saw an empty library because a listener that build
+ * still opened had been refused since 2026-08-15, and nothing on their phone
+ * said why. Raising this floor (`scripts/set-min-version.mjs`) puts every
+ * build below it on the update screen instead. Web has no floor: the site
+ * always serves the current bundle.
+ */
+export interface AppConfigDoc {
+  /** Android `versionCode`; a build below this shows the update screen. */
+  minVersionCode: number;
+}
+
+/** Is a build too old to run? Unknown floors (no document yet) refuse nobody. */
+export function isBuildOutdated(versionCode: number, minVersionCode: number | null | undefined): boolean {
+  return typeof minVersionCode === 'number' && versionCode < minVersionCode;
+}
+
+/**
  * How many courses the staff work queue may span in one query, per role.
  *
  * TWO DIFFERENT CEILINGS, because the two roles pay different prices for the

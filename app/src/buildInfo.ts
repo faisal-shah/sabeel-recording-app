@@ -13,3 +13,12 @@ import appConfig from '../app.json';
 const APP_VERSION: string = appConfig.expo.version;
 const APP_COMMIT: string = process.env.EXPO_PUBLIC_COMMIT ?? 'dev';
 export const BUILD_LABEL = `v${APP_VERSION} · ${APP_COMMIT}`;
+
+/**
+ * The Android `versionCode` this bundle was built as — what the update gate
+ * compares with the institute's floor. Read from the manifest rather than a
+ * native module: `functions/test/unit/appVersion.test.ts` holds it equal to
+ * the gradle value that actually ends up in the APK, and a release build
+ * bundles its JS with its own APK, so the two cannot drift in what ships.
+ */
+export const BUILD_VERSION_CODE: number = appConfig.expo.android.versionCode;
