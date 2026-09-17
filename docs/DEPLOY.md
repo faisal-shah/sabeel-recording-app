@@ -157,6 +157,14 @@ A release bumps one version and ships it to both surfaces. In order:
    `v<version> · <commit>` label, and — crucially — that the dev sign-in panel is
    **absent** (which proves it is a production build, not an emulator one).
 
+   **`EXPO_PUBLIC_COMMIT` is not a Gradle input.** A rebuild after a commit
+   that changed no JS (a manifest fix, say) reports
+   `createBundleReleaseJsAndAssets UP-TO-DATE` and ships the previous bundle
+   with the previous commit in its label — an 11-second `BUILD SUCCESSFUL`
+   is the tell. Rebuild with `--rerun-tasks`, and check the bundle before
+   installing: `unzip -p app/build/outputs/apk/release/app-x86_64-release.apk
+   assets/index.android.bundle | grep -ao "$(git rev-parse --short HEAD)"`.
+
 4. **Publish the APKs to BOTH release homes** (never commit an APK — `*.apk` is
    gitignored; committed APKs bloated the sibling pages history and had to be
    rewritten out):
