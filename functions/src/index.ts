@@ -2,6 +2,7 @@ import './setup';
 import { initializeApp } from 'firebase-admin/app';
 import { EMULATOR_PROJECT_ID, EMULATOR_STORAGE_BUCKET } from '@sabeel/shared';
 import { isEmulatorProject } from './env';
+import * as bootstrap from './bootstrap';
 
 // Once, before any handler runs. Credentials come from the environment on both
 // the emulator and Cloud Functions, but the STORAGE BUCKET does not: the Admin
@@ -48,8 +49,12 @@ export { overrideCompletion, clearCompletionOverride } from './overrides';
  * admin, which is the same bootstrap problem in miniature. So it is scoped to
  * the project where that is safe. Spent in production anyway — it refuses with
  * 409 once any admin exists.
+ *
+ * A static import, not a lazy `require`: the deploy discovers functions by
+ * walking this module's exports, so an imported-but-unexported handler is
+ * never deployed — and one `require()` in an otherwise-ESM entry made esbuild
+ * wrap every module lazily, which switched off the tree-shaking that keeps
+ * `@sabeel/shared`'s app-only code (and its npm dependency) out of the
+ * bundle. `bundleExternals.test.ts` holds that line.
  */
-export const bootstrapAdmin = isEmulatorProject()
-  ? // eslint-disable-next-line @typescript-eslint/no-require-imports
-    (require('./bootstrap') as typeof import('./bootstrap')).bootstrapAdmin
-  : undefined;
+export const bootstrapAdmin = isEmulatorProject() ? bootstrap.bootstrapAdmin : undefined;

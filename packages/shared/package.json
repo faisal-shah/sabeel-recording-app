@@ -2,6 +2,7 @@
   "name": "@sabeel/shared",
   "version": "0.0.0",
   "private": true,
+  "sideEffects": false,
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
