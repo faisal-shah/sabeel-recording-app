@@ -82,6 +82,40 @@ and commit messages, and renaming them would strand every one of those.
   APK 0.3.0, whose `studentRecordings` listener the excused-only rules of
   2026-08-15 refuse; there is no minimum-version gate.
 
+  **Production checks, 2026-09-17 (read-only, Admin SDK; uids by email).**
+  Incidents 2 and 3 are the `remove` variant, and the removal is dated: on
+  2026-09-15 20:41–20:44Z the admin cleared the managers of four courses and
+  archived three (`setCourseManagers` and `updateCourse {archived:true}` on
+  Quran Immersion, Tafseer, Arabic Year 3, Board meetings). Both managers
+  in the incidents had acted AS managers on those courses — Khadija in Quran
+  Immersion and Board meetings, Rida in Quran Immersion and Tafseer (their
+  own audit rows and session writes) — so both were on their `managerUids`
+  before that minute, and neither is now. Khadija had been signed in since
+  2026-09-10 (a persisted session; her `createSession` lands at 03:38Z, one
+  minute after incident 2, Chrome/Mac); Rida's Safari opened cold at 19:30Z
+  on 2026-09-16 and her `createSession` rows follow at 19:30–19:35Z (she
+  re-signed-in at 20:10Z). Each browser's cached course list still held a
+  course whose `managerUids` no longer named them; the manager arm judges
+  every `in` value, so the queue's two queries were refused until the
+  server's course list replaced the scope. The demo wipe is not involved:
+  the demo seed made only demo staff managers of demo courses, and no audit
+  row since 2026-09-01 names a course that no longer exists. Diagnostic gap
+  found on the way: `setCourseManagers` audits no detail, so the rows say a
+  course's managers changed and not who was added or removed.
+
+  Incident 1 is not a student tab. No student signed in or refreshed a token
+  on 2026-09-15 after 02:21Z (`test.student@oursabeel.com` has never signed
+  in; Test One last on 2026-08-25). What the minute holds is the admin
+  herself: `lastSignInTime` 2026-09-15 20:43:25Z — a fresh sign-in — while
+  her existing session was mid-burst (`setCourseManagers` at 20:41Z,
+  `renameCohort`, three `setCourseManagers` and an archive at 20:43Z, more
+  at 20:44–20:45Z). The refused labels are exactly the admin-only reads.
+  The most consistent account is listeners issued across the credential
+  swap of a re-sign-in in a browser that already had an admin tab open;
+  unconfirmed, and it cannot be settled from stored data — the release,
+  user id and role that item B adds to web events are what would settle a
+  recurrence.
+
 - 2026-09-11 — **Five review passes over the whole product, and what they
   found.** Five read-only reviews in parallel — backend callables and
   triggers; rules against every client query; client playback and sync logic;
