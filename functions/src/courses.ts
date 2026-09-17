@@ -156,7 +156,9 @@ export function validateSetCourseManagers(data: unknown): SetCourseManagersInput
 export async function applyCourseManagers(input: SetCourseManagersInput) {
   const db = getFirestore();
   const ref = db.collection(COLLECTIONS.courses).doc(input.courseId);
-  if (!(await ref.get()).exists) throw new HttpsError('not-found', 'No such class.');
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'No such class.');
+  const before = (snap.data() as CourseDoc).managerUids ?? [];
 
   const checks = await Promise.all(
     input.managerUids.map((uid) => db.collection(COLLECTIONS.staffUsers).doc(uid).get()),
@@ -172,12 +174,31 @@ export async function applyCourseManagers(input: SetCourseManagersInput) {
   });
 
   await ref.update({ managerUids: input.managerUids });
-  return { courseId: input.courseId, managerUids: input.managerUids };
+  // WHO CAME AND WHO WENT, for the audit row. The row used to say only that
+  // a course's managers changed; when a manager's stale cache refused their
+  // work queue the question was "who was taken off which course when", and
+  // thirty rows could not answer it.
+  const after = new Set(input.managerUids);
+  const was = new Set(before);
+  return {
+    courseId: input.courseId,
+    managerUids: input.managerUids,
+    added: input.managerUids.filter((u) => !was.has(u)),
+    removed: before.filter((u) => !after.has(u)),
+  };
 }
 
 export const setCourseManagers = auditedCall('setCourseManagers', async (req, audit) => {
   requireAdmin(req);
   const input = validateSetCourseManagers(req.data);
   audit.courseId = input.courseId;
-  return applyCourseManagers(input);
+  const result = await applyCourseManagers(input);
+  // Only the sides that moved: `pruneDetail` drops an empty one, and a call
+  // that changed nothing is not a change.
+  audit.detail = {
+    added: result.added.length ? result.added : undefined,
+    removed: result.removed.length ? result.removed : undefined,
+  };
+  audit.noop = result.added.length === 0 && result.removed.length === 0;
+  return result;
 });

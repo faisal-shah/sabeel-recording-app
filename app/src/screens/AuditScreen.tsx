@@ -159,7 +159,11 @@ export function MyAuditScreen({ uid }: { uid: string }) {
 }
 
 function AuditCard({ entry: e, people }: { entry: AuditRow; people: Map<string, string> }) {
-  const detail = e.detail ? Object.entries(e.detail).map(([k, v]) => `${k}: ${String(v)}`).join(' · ') : '';
+  // A list of uids in a detail — the managers added to or removed from a
+  // course — reads as names where the directory has them, like a target does.
+  const named = (v: unknown) =>
+    Array.isArray(v) ? v.map((u) => people.get(String(u)) ?? String(u)).join(', ') : String(v);
+  const detail = e.detail ? Object.entries(e.detail).map(([k, v]) => `${k}: ${named(v)}`).join(' · ') : '';
   const targets = Object.entries(e.targets ?? {})
     .map(([k, v]) =>
       PERSON_TARGETS[k] ? `${PERSON_TARGETS[k]}: ${people.get(String(v)) ?? v}` : `${k}=${v}`,

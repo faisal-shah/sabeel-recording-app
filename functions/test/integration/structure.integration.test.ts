@@ -162,6 +162,26 @@ describe('setCourseManagers', () => {
     expect((await classDoc(id)).managerUids).toEqual([MGR]);
   });
 
+  it('says who was added and who was removed', async () => {
+    // The audit row used to say only that a course's managers changed. When
+    // a manager's stale cache refused their work queue (WEB-4), the question
+    // was "who was taken off which course when" — and 30 rows could not
+    // answer it. The diff against the stored list is what the wrapper logs.
+    const { id: cohortId } = await createCohortRecord(ADMIN, 'C');
+    const { id } = await createCourseRecord(ADMIN, { cohortId, name: 'K' });
+    await seedStaff('mgr2', 'manager', 'active');
+    const first = await applyCourseManagers({ courseId: id, managerUids: [MGR, 'mgr2'] });
+    expect(first.added).toEqual([MGR, 'mgr2']);
+    expect(first.removed).toEqual([]);
+    const second = await applyCourseManagers({ courseId: id, managerUids: ['mgr2'] });
+    expect(second.added).toEqual([]);
+    expect(second.removed).toEqual([MGR]);
+    // The same list again is no change at all.
+    const third = await applyCourseManagers({ courseId: id, managerUids: ['mgr2'] });
+    expect(third.added).toEqual([]);
+    expect(third.removed).toEqual([]);
+  });
+
   it('REFUSES a uid that is not an active staff member', async () => {
     // managerUids is read directly by the security rules, so writing an
     // invented or disabled uid into it is granting access, not mislabelling.

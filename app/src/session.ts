@@ -15,6 +15,7 @@ import { auth, db } from './firebase';
 import { setLiveDataSession } from './liveQuery';
 import { createPollChain } from './pollChain';
 import { registerThisDevice, unregisterThisDevice } from './notifications';
+import { setSentryRole } from './sentry';
 
 export type Profile =
   | { kind: 'staff'; doc: StaffUserDoc }
@@ -153,6 +154,7 @@ export function useSession(): Session {
 
       if (!user) {
         pushRegisteredFor = null;
+        setSentryRole(null);
         // NOT ONLY `signOut()`. Playback is a module-level session now, so
         // nothing unmounts it — and this branch is every INVOLUNTARY end: a
         // disabled account whose refresh token is rejected, a sign-out in
@@ -187,6 +189,9 @@ export function useSession(): Session {
         // nothing. Being disabled mid-session is the case that matters: the
         // claim flips under a screen that is still subscribed.
         setLiveDataSession(ready);
+        // The role, so a refused read says which arm of the rules refused it.
+        // The role only — no uid, no email: the privacy policy's promise.
+        setSentryRole(claims.role ?? null);
         setSession({ phase: 'signedIn', user, profile, claims });
 
         /*
