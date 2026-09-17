@@ -1,4 +1,4 @@
-import type { AuditEntryDoc } from '@sabeel/shared';
+import type { AuditEntryDoc, StudentHistoryRow } from '@sabeel/shared';
 
 /**
  * A student's history, read out of the audit log.
@@ -106,4 +106,33 @@ export function studentHistory(
     if (!sameTap) out.push(r);
   }
   return out;
+}
+
+/**
+ * A row for the student workbook's History tab: the standing events above,
+ * plus the ones the page leaves to their own screens — a completion override
+ * and its removal — because a file that has the term in it can hold them
+ * beside the listening they changed. `null` for a row that is not about this
+ * student (an attendance submission names the whole roster, say).
+ */
+export function describeHistoryRow(
+  e: AuditEntryDoc,
+  courseLabel: (courseId: string) => string,
+): StudentHistoryRow | null {
+  const standing = describeStudentEvent(e, courseLabel);
+  const reason = typeof e.detail?.reason === 'string' ? e.detail.reason : '';
+  const row = (what: string, detail = '') => ({
+    at: e.at,
+    actorUid: e.actorUid,
+    what,
+    courseId: e.courseId,
+    detail,
+  });
+  if (standing) return row(standing);
+  if (e.action === 'createStudent') return row('Account created');
+  if (e.action === 'overrideCompletion') {
+    return row(e.detail?.completed === false ? 'Marked not complete by staff' : 'Marked complete by staff', reason);
+  }
+  if (e.action === 'clearCompletionOverride') return row('Staff mark removed', reason);
+  return null;
 }

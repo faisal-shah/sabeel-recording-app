@@ -323,7 +323,7 @@ export default function App() {
                     </Stack.Screen>
                   ) : null}
                   <Stack.Screen name="CourseDetail" options={screenOptions('CourseDetail', 'Course')}>
-                    {() => <CourseDetail isAdmin={isAdmin} />}
+                    {() => <CourseDetail isAdmin={isAdmin} uid={user.uid} />}
                   </Stack.Screen>
                   <Stack.Screen name="CourseAttendance" options={screenOptions('CourseAttendance', 'Attendance')}>
                     {() => <CourseAttendance />}
@@ -748,7 +748,7 @@ function Courses() {
   );
 }
 
-function CourseDetail({ isAdmin }: { isAdmin: boolean }) {
+function CourseDetail({ isAdmin, uid }: { isAdmin: boolean; uid: string }) {
   const navigation = useNavigation<Nav>();
   const { courseId } = useRoute<RouteProp<RootStackParamList, 'CourseDetail'>>().params;
   const cls = useCourseState(courseId);
@@ -758,6 +758,7 @@ function CourseDetail({ isAdmin }: { isAdmin: boolean }) {
       key={courseId}
       cls={cls.value}
       isAdmin={isAdmin}
+      uid={uid}
       onOpenSessions={() => navigation.navigate('Sessions', { courseId })}
       onOpenAttendance={() => navigation.navigate('CourseAttendance', { courseId })}
       onOpenStudent={(studentUid) => navigation.navigate('StudentLedger', { studentUid, courseId })}

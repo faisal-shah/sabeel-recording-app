@@ -19,7 +19,6 @@ import {
   type LedgerRow,
   type RequiredRow,
 } from '../ledger';
-import { exportCsv } from '../exportCsv';
 import { useCohortName, type CourseRow } from '../structure';
 import type { SessionRow } from '../sessions';
 import type { RecordingRow } from '../recordings';
@@ -80,21 +79,6 @@ export function RecordingLedgerScreen({
     }
   };
 
-  const exportRows = () => {
-    const header = ['Student', 'Attendance', 'Status', 'Listened %', 'Last listened', 'Completed at', 'Due', 'Override reason'];
-    const body = rows.map((r) => [
-      r.name,
-      r.attendance ?? '',
-      statusLabel(r, today, closedBy),
-      r.listenedPct === null ? '' : `${Math.round(r.listenedPct * 100)}`,
-      fmtDate(r.lastListened),
-      fmtDate(r.completedAt),
-      r.dueDate ?? '',
-      r.overrideReason ?? '',
-    ]);
-    void exportCsv(`${cls.name} - ${recording.title} progress.csv`, [header, ...body]);
-  };
-
   return (
     <Screen
       title={recording.title}
@@ -136,14 +120,6 @@ export function RecordingLedgerScreen({
 
       <View style={styles.toolbar}>
         <Chips value={filter} testIdPrefix="ledger-filter" options={LEDGER_FILTERS} onChange={setFilter} />
-        <View style={{ flex: 1 }} />
-        <Button
-          testID="ledger-export"
-          label="Export CSV"
-          variant="secondary"
-          disabled={rows.length === 0}
-          onPress={exportRows}
-        />
       </View>
 
       {rows.length === 0 ? (

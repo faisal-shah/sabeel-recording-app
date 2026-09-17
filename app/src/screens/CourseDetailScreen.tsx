@@ -29,6 +29,7 @@ import {
 } from '../structure';
 import { getTheme, spacing } from '../theme';
 import { errorText } from '../errors';
+import { exportCourseWorkbook } from '../workbookData';
 
 const t = getTheme();
 const NO_ROSTER: EnrollmentRow[] = [];
@@ -45,6 +46,7 @@ const NO_STUDENTS: StudentRow[] = [];
 export function CourseDetailScreen({
   cls,
   isAdmin,
+  uid,
   onOpenSessions,
   onOpenAttendance,
   onOpenStudent,
@@ -52,6 +54,8 @@ export function CourseDetailScreen({
 }: {
   cls: CourseRow;
   isAdmin: boolean;
+  /** Who is exporting — named on the workbook's cover. */
+  uid: string;
   onOpenSessions: () => void;
   onOpenAttendance: () => void;
   onOpenStudent: (studentUid: string) => void;
@@ -269,7 +273,20 @@ export function CourseDetailScreen({
           // answer, stated as fact — see `useRecordingLedger`.
           <Text style={styles.ledgerLine}>Counting the listening…</Text>
         )}
-        <Button testID="nav-audit" label="Audit history" variant="secondary" onPress={onOpenAudit} />
+        <Row>
+          <Button testID="nav-audit" label="Audit history" variant="secondary" onPress={onOpenAudit} />
+          {/* THE ONE EXPORT: every student, every session, every grant of this
+              course in one .xlsx — Summary, Students, Sessions, the Register
+              and Listening grids, Detail, Definitions. It replaced four CSVs
+              that each photographed one screen and closed on no arithmetic. */}
+          <Button
+            testID="course-export"
+            label="Export workbook"
+            variant="secondary"
+            busy={busy === 'export'}
+            onPress={() => void run('export', () => exportCourseWorkbook(cls, uid))}
+          />
+        </Row>
       </Card>
 
       {isAdmin ? (

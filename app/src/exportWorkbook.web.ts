@@ -1,13 +1,13 @@
-// Web side of the CSV-export seam (native sibling: exportCsv.ts).
+// Web side of the workbook-export seam (native sibling: exportWorkbook.ts).
 // A Blob + a temporary anchor is the whole browser download story.
-import { csvFilename, toCsv } from '@sabeel/shared';
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-export async function exportCsv(filename: string, rows: string[][]): Promise<void> {
-  const blob = new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' });
+export async function saveWorkbook(filename: string, bytes: Uint8Array): Promise<void> {
+  const blob = new Blob([bytes as BlobPart], { type: XLSX_MIME });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = csvFilename(filename);
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();

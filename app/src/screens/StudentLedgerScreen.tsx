@@ -8,10 +8,9 @@ import {
   todayInZone,
   unbreakableDate,
 } from '@sabeel/shared';
-import { Button, Chips, Empty, Grid, Screen } from '../components/ui';
+import { Chips, Empty, Grid, Screen } from '../components/ui';
 import { LEDGER_FILTERS, useStudentLedger, type LedgerFilter, type StudentLedgerItem } from '../ledger';
 import { useCourseRecordings } from '../recordings';
-import { exportCsv } from '../exportCsv';
 import type { CourseRow } from '../structure';
 import { getTheme, spacing } from '../theme';
 
@@ -46,12 +45,6 @@ export function StudentLedgerScreen({
     return withTitle;
   }, [items, titleById, filter, today]);
 
-  const exportRows = () => {
-    const header = ['Recording', 'Status', 'Due', 'Override reason'];
-    const body = rows.map((r) => [r.title, statusLabel(r, today, playable), r.dueDate, r.overrideReason ?? '']);
-    void exportCsv(`${cls.name} - ${studentName} ledger.csv`, [header, ...body]);
-  };
-
   return (
     <Screen
       title={studentName}
@@ -69,8 +62,6 @@ export function StudentLedgerScreen({
         {/* The same options object as the recording ledger's, not a second copy
             of the same three words in the same order. */}
         <Chips value={filter} testIdPrefix="student-filter" options={LEDGER_FILTERS} onChange={setFilter} />
-        <View style={{ flex: 1 }} />
-        <Button testID="student-export" label="Export CSV" variant="secondary" disabled={rows.length === 0} onPress={exportRows} />
       </View>
 
       {items === null ? (

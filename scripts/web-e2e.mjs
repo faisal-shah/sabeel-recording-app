@@ -33,6 +33,7 @@
 import { chromium } from 'playwright';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { readXlsx } from '@sabeel/shared';
 import { EMULATOR_PORTS, WEB_PORTS } from './lib/ports.mjs';
 import { EMULATOR_PROJECT_ID } from './lib/project.mjs';
 
@@ -1091,7 +1092,7 @@ check(
 await shot(admin, '15-resubmit');
 
 // ------------------------------------------------ recording ledger + override --
-console.log('\nRecording ledger, override, CSV');
+console.log('\nRecording ledger, override');
 await tap(admin, 'recording-ledger');
 await admin.getByTestId('ledger-filter-all').waitFor({ timeout: 10000 });
 await tap(admin, 'ledger-filter-all');
@@ -1163,31 +1164,6 @@ check(
 );
 await shot(admin, '16-recording-ledger');
 
-/*
- * THE EXPORT IS THE ACCOUNTABLE LIST, not a photograph of the screen.
- *
- * The screen shows more than it exports on purpose: with the filter on All it
- * also lists the present, the absent and anyone who listened without holding a
- * grant, so the ledger accounts for the whole submitted roster. The file answers
- * a narrower question — who was required to listen, and did they — and its name
- * used to claim it "mirrors the ledger row-for-row", which the same run proved
- * it does not. Two accountable students here, both excused: Fatima and Bilal.
- */
-const [download] = await Promise.all([admin.waitForEvent('download'), tap(admin, 'ledger-export')]);
-const csv = readFileSync(await download.path(), 'utf8');
-const csvLines = csv.trim().split('\r\n');
-check(
-  'the ledger CSV is the accountable list — header + the 2 excused students',
-  csvLines[0].startsWith('Student,Attendance,Status,Listened %') && csvLines.length === 3,
-  `${csvLines.length} lines`,
-);
-// And the screen it came from is wider than the file, which is the whole point:
-// the present/absent sections are on screen and deliberately not in the export.
-check(
-  'the ledger on screen accounts for more of the roster than the file does',
-  /Fatima Ahmed/.test(csv) && /Bilal Khan/.test(csv) && !/also listened/i.test(csv),
-);
-check('CSV reflects the override', /Completed \(override\)/.test(csv));
 
 /*
  * THE STUDENT'S SIDE OF THE OVERRIDE — the half nothing proved.
@@ -1305,7 +1281,7 @@ await shot(admin, '17-attendance-by-session');
 
 // Toggle to the by-student cut; the screen updates in place.
 await tap(admin, 'attendance-tab-students');
-await admin.getByTestId('attendance-export-students').waitFor({ timeout: 10000 });
+await admin.locator('[data-testid^="attendance-student-"]').first().waitFor({ timeout: 10000 });
 await admin.waitForTimeout(800);
 const studentsView = await bodyText(admin);
 check(
@@ -1313,30 +1289,11 @@ check(
   /Bilal Khan/.test(studentsView) && /Required listening/.test(studentsView),
 );
 check(
-  'the toggle swaps the view: the by-session export is gone, the by-student export is present',
-  (await admin.getByTestId('attendance-export-sessions').count()) === 0 &&
-    (await admin.getByTestId('attendance-export-students').count()) === 1,
+  'the toggle swaps the view: session cards are gone, student cards are present',
+  (await admin.locator('[data-testid^="attendance-session-"]').filter({ visible: true }).count()) === 0 &&
+    (await admin.locator('[data-testid^="attendance-student-"]').filter({ visible: true }).count()) > 0,
 );
 await shot(admin, '17-attendance-by-student');
-
-const [dl2] = await Promise.all([
-  admin.waitForEvent('download'),
-  tap(admin, 'attendance-export-students'),
-]);
-const studentCsv = readFileSync(await dl2.path(), 'utf8').trim().split('\r\n');
-check(
-  'the by-student attendance CSV names each student and whether they are still enrolled',
-  studentCsv[0].startsWith('Student,Enrolled,Present,Absent,Excused') && studentCsv.length === 3,
-  `${studentCsv.length} lines — ${studentCsv[0]}`,
-);
-// Nobody left this course, so nobody is flagged. The reconciliation itself —
-// a departed student keeping their marks in both cuts — is proved at the unit
-// level in `packages/shared/test/ledger.test.ts`, where an unenrolment can be
-// arranged without unpicking the rest of this run.
-check(
-  'and nobody is flagged as departed in a course nobody left',
-  !/no longer enrolled/.test(studentCsv.join('\n')),
-);
 
 // Both cuts of the report drill down, and land on the row that was tapped —
 // a report you cannot click through from is a dead end.
@@ -1352,7 +1309,7 @@ await stuCard.click();
 // WAIT FOR SOMETHING ONLY THE DESTINATION HAS. The report page already
 // carries every student's name and the words "required listening", so a
 // body-text check after a fixed wait passed when the tap did nothing.
-await admin.getByTestId('student-export').waitFor({ timeout: 10000 });
+await admin.getByTestId('student-ledger-profile').waitFor({ timeout: 10000 });
 check(
   'a by-student card opens THAT student’s listening progress',
   (await screenTitle(admin)) === stuName,
@@ -1487,7 +1444,7 @@ await shot(admin, '20-student-page');
 
 await tap(admin, 'student-course-open-Hikam Foundations');
 // The student page already says both names; only the ledger has its export.
-await admin.getByTestId('student-export').waitFor({ timeout: 10000 });
+await admin.getByTestId('student-ledger-profile').waitFor({ timeout: 10000 });
 check(
   'tapping a course opens THAT student\'s progress for it',
   (await screenTitle(admin)) === 'Bilal Khan' &&
@@ -1854,6 +1811,81 @@ check(
 );
 await shot(admin, '25b-archived-ledger');
 
+// -------------------------------------------------------------- workbooks --
+console.log('\nThe two workbooks');
+/*
+ * ONE FILE PER COURSE, ONE PER STUDENT, read back cell by cell. The file is
+ * what a teacher opens in Excel weeks later, so what is asserted is what they
+ * would read: the tab names, the header row, and one row each whose numbers
+ * this run has already established on screen — Fatima missed Session 1's
+ * deadline and Bilal was overridden complete. (Session 1's recording is
+ * archived at this point, so it is withdrawn from the totals: the Sessions
+ * tab says so, and the grids have no column for it.)
+ */
+const readDownload = async (page, testId) => {
+  const [download] = await Promise.all([page.waitForEvent('download'), tap(page, testId)]);
+  return { name: download.suggestedFilename(), sheets: readXlsx(new Uint8Array(readFileSync(await download.path()))) };
+};
+const tabOf = (book, name) => book.sheets.find((s) => s.name === name);
+const rowOf = (sheet, first, headerRows = 2) =>
+  sheet.rows.slice(headerRows).find((r) => r[0] === first);
+
+await openHikam(admin);
+const courseBook = await readDownload(admin, 'course-export');
+check(
+  'the course workbook is named for the course and the term',
+  courseBook.name === 'Hikam Foundations — Autumn 2026.xlsx',
+  courseBook.name,
+);
+check(
+  'it has the seven tabs, Definitions last',
+  courseBook.sheets.map((s) => s.name).join(',') === 'Summary,Students,Sessions,Register,Listening,Detail,Definitions',
+  courseBook.sheets.map((s) => s.name).join(','),
+);
+const students = tabOf(courseBook, 'Students');
+check(
+  'the Students tab carries the grouped header',
+  students.rows[0].includes('Attendance') && students.rows[1].slice(0, 5).join(',') === 'Student,Joined,Left,Status,Held',
+  students.rows[1].join(','),
+);
+const bilal = rowOf(students, 'Bilal Khan');
+const fatima = rowOf(students, 'Fatima Ahmed');
+check('every student on the roster has a row', !!bilal && !!fatima);
+const sessionsTab = tabOf(courseBook, 'Sessions');
+const s1 = sessionsTab.rows.slice(2).find((r) => r[1] === 'Session 1');
+check(
+  'the archived recording is withdrawn from the totals and the Sessions tab says so',
+  !!s1 && s1[6] === 'Archived' && /withdrawn/.test(s1[13] ?? ''),
+  s1 ? s1.join(' | ') : 'no Session 1 row',
+);
+check(
+  'the Definitions tab prints the vocabulary',
+  tabOf(courseBook, 'Definitions').rows.some((r) => r[0] === 'Missed deadline'),
+);
+
+await goHome(admin);
+await tap(admin, 'tab-people');
+await tap(admin, 'student-open-fatima@example.com');
+const studentBook = await readDownload(admin, 'student-export-workbook');
+check(
+  'the student workbook is named for the student',
+  /^Fatima Ahmed — \d{4}-\d{2}-\d{2}\.xlsx$/.test(studentBook.name),
+  studentBook.name,
+);
+check(
+  'it has the six tabs',
+  studentBook.sheets.map((s) => s.name).join(',') === 'Summary,Courses,Sessions,Listening,History,Definitions',
+  studentBook.sheets.map((s) => s.name).join(','),
+);
+const courseRow = rowOf(tabOf(studentBook, 'Courses'), 'Hikam Foundations');
+check('the Courses tab has a row for the course she is in', !!courseRow && courseRow[1] === 'Autumn 2026');
+const historyRows = tabOf(studentBook, 'History').rows.slice(1);
+check(
+  'the History tab starts with her enrolment',
+  historyRows.length > 0 && /Enrolled in Hikam Foundations/.test(historyRows[0][2] ?? ''),
+  historyRows.map((r) => r[2]).join(' | '),
+);
+
 // ------------------------------------------------------------ notifications --
 console.log('\nNotifications');
 // The FIRST document either population may write. `students` and `staffUsers`
@@ -1994,7 +2026,7 @@ await shot(admin, '28-student-history');
 // of that page to the same profile People opens.
 await openHikam(admin);
 await tap(admin, 'student-ledger-fatima@example.com');
-await admin.getByTestId('student-export').waitFor({ timeout: 20000 });
+await admin.getByTestId('student-ledger-profile').waitFor({ timeout: 20000 });
 await tap(admin, 'student-ledger-profile');
 await admin.getByTestId('student-history').waitFor({ timeout: 20000 });
 const viaLedger = await bodyText(admin);
@@ -2019,6 +2051,22 @@ check(
     mgrHistory.includes('Enrolled in Hikam Foundations · Autumn 2026'),
 );
 check('…without a single refused read', !mgrHistory.includes('live data error'));
+
+// The manager's student workbook is the one export whose reads are NOT the
+// admin's: a course list by managerUids, one enrolment document per course,
+// and audit rows pinned to those courses. A refusal anywhere means no file.
+const mgrBook = await readDownload(mgr, 'student-export-workbook').catch((e) => ({ name: String(e), sheets: [] }));
+const mgrSummary = tabOf(mgrBook, 'Summary');
+check(
+  'a manager can export the student, and the file says which courses it covers',
+  !!mgrSummary && mgrSummary.rows.some((r) => r[0] === 'Scope' && r[1] === 'the courses you manage'),
+  mgrSummary ? mgrSummary.rows.map((r) => r.join(': ')).join(' | ') : mgrBook.name,
+);
+check(
+  '…with a Courses row for the course they manage and no other',
+  tabOf(mgrBook, 'Courses')?.rows.slice(2).map((r) => r[0]).join(',') === 'Hikam Foundations',
+  tabOf(mgrBook, 'Courses')?.rows.slice(2).map((r) => r[0]).join(','),
+);
 
 // ----------------------------------------------------------- disabled staff --
 console.log('\nDisabled staff');

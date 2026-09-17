@@ -1,0 +1,189 @@
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
+import {
+  AUDIT_PAGE,
+  COLLECTIONS,
+  INSTITUTE_TIMEZONE,
+  buildXlsx,
+  courseWorkbook,
+  enrollmentId,
+  studentWorkbook,
+  todayInZone,
+  workbookFilename,
+  type AssignmentDoc,
+  type AuditEntryDoc,
+  type CohortDoc,
+  type CompletionDoc,
+  type CompletionOverrideDoc,
+  type CourseData,
+  type CourseDoc,
+  type EnrollmentDoc,
+  type ListeningProgressDoc,
+  type RecordingDoc,
+  type SessionDoc,
+  type StaffUserDoc,
+  type StudentDoc,
+  type StudentHistoryRow,
+  type WorkbookContext,
+} from '@sabeel/shared';
+import { db } from './firebase';
+import { saveWorkbook } from './exportWorkbook';
+import { describeHistoryRow } from './studentHistory';
+
+/**
+ * The reads behind the two export buttons, and the file each produces.
+ *
+ * ONE-SHOT `getDocs`, not listeners: an export is a photograph, taken when
+ * the button is pressed. Every query is a shape a screen already sends —
+ * course-pinned where the rules want it, per managed course for a manager's
+ * student — so the file can never show a manager more than their screens do.
+ * The building is `@sabeel/shared` (`courseWorkbook`, `studentWorkbook`); this
+ * file only fetches, joins and saves.
+ */
+
+const rows = async <T>(q: ReturnType<typeof query>): Promise<(T & { id: string })[]> =>
+  (await getDocs(q)).docs.map((d) => ({ id: d.id, ...(d.data() as T) }));
+const byCourse = (name: string, courseId: string) =>
+  query(collection(db, name), where('courseId', '==', courseId));
+
+/** Everyone's name and address: the two directories every staff member may read. */
+async function directory(): Promise<Pick<WorkbookContext, 'names' | 'emails'>> {
+  const [staff, students] = await Promise.all([
+    rows<StaffUserDoc>(query(collection(db, COLLECTIONS.staffUsers))),
+    rows<StudentDoc>(query(collection(db, COLLECTIONS.students))),
+  ]);
+  const names = new Map<string, string>();
+  const emails = new Map<string, string>();
+  for (const p of [...staff, ...students]) {
+    names.set(p.id, p.displayName);
+    emails.set(p.id, p.email);
+  }
+  return { names, emails };
+}
+
+async function cohortName(cohortId: string): Promise<string> {
+  const snap = await getDoc(doc(db, COLLECTIONS.cohorts, cohortId));
+  return (snap.data() as CohortDoc | undefined)?.name ?? '';
+}
+
+/** A course and everything the workbook needs about it. */
+async function courseData(course: CourseDoc & { id: string }, forStudent?: string): Promise<CourseData> {
+  const pin = (name: string) =>
+    forStudent
+      ? query(collection(db, name), where('studentUid', '==', forStudent), where('courseId', '==', course.id))
+      : byCourse(name, course.id);
+  const [cohort, sessions, recordings, enrollments, assignments, completions, overrides, progress] =
+    await Promise.all([
+      cohortName(course.cohortId),
+      rows<SessionDoc>(byCourse(COLLECTIONS.sessions, course.id)),
+      rows<RecordingDoc>(byCourse(COLLECTIONS.recordings, course.id)),
+      forStudent
+        ? getDoc(doc(db, COLLECTIONS.enrollments, enrollmentId(forStudent, course.id))).then((s) =>
+            s.exists() ? [{ id: s.id, ...(s.data() as EnrollmentDoc) }] : [],
+          )
+        : rows<EnrollmentDoc>(byCourse(COLLECTIONS.enrollments, course.id)),
+      rows<AssignmentDoc>(pin(COLLECTIONS.assignments)),
+      rows<CompletionDoc>(pin(COLLECTIONS.completions)),
+      rows<CompletionOverrideDoc>(pin(COLLECTIONS.completionOverrides)),
+      rows<ListeningProgressDoc>(pin(COLLECTIONS.listeningProgress)),
+    ]);
+  return { course, cohortName: cohort, sessions, recordings, enrollments, assignments, completions, overrides, progress };
+}
+
+function context(
+  dir: Pick<WorkbookContext, 'names' | 'emails'>,
+  exportedBy: string,
+  scopeNote?: string,
+): WorkbookContext {
+  return {
+    ...dir,
+    timeZone: INSTITUTE_TIMEZONE,
+    today: todayInZone(INSTITUTE_TIMEZONE),
+    exportedAt: Date.now(),
+    exportedBy: dir.names.get(exportedBy) ?? exportedBy,
+    scopeNote,
+  };
+}
+
+/** The course workbook: every student, every session, every grant. */
+export async function exportCourseWorkbook(course: CourseDoc & { id: string }, byUid: string): Promise<void> {
+  const [dir, data] = await Promise.all([directory(), courseData(course)]);
+  const ctx = context(dir, byUid);
+  await saveWorkbook(workbookFilename(`${course.name} — ${data.cohortName}`), buildXlsx(courseWorkbook(data, ctx)));
+}
+
+/**
+ * The student workbook: every course the file may cover.
+ *
+ * An admin's covers every course the student is or was in; a manager's the
+ * courses they run, read one enrolment document at a time — the only shape
+ * a manager may issue — and the Summary's Scope line says so.
+ */
+export async function exportStudentWorkbook(
+  student: StudentDoc & { uid: string },
+  byUid: string,
+  isAdmin: boolean,
+): Promise<void> {
+  const dir = await directory();
+  let courses: (CourseDoc & { id: string })[];
+  if (isAdmin) {
+    const enrolled = await rows<EnrollmentDoc>(
+      query(collection(db, COLLECTIONS.enrollments), where('studentUid', '==', student.uid)),
+    );
+    const snaps = await Promise.all(enrolled.map((e) => getDoc(doc(db, COLLECTIONS.courses, e.courseId))));
+    courses = snaps.filter((s) => s.exists()).map((s) => ({ id: s.id, ...(s.data() as CourseDoc) }));
+  } else {
+    courses = await rows<CourseDoc>(
+      query(collection(db, COLLECTIONS.courses), where('managerUids', 'array-contains', byUid)),
+    );
+  }
+  const data = (await Promise.all(courses.map((c) => courseData(c, student.uid)))).filter((d) =>
+    d.enrollments.some((e) => e.studentUid === student.uid),
+  );
+  const scope = data.map((d) => d.course.id);
+  const audit =
+    scope.length === 0
+      ? []
+      : await rows<AuditEntryDoc>(
+          isAdmin
+            ? query(
+                collection(db, COLLECTIONS.auditLog),
+                where('targets.studentUid', '==', student.uid),
+                orderBy('at', 'desc'),
+                limit(AUDIT_PAGE),
+              )
+            : query(
+                collection(db, COLLECTIONS.auditLog),
+                where('courseId', 'in', scope.slice(0, 30)),
+                where('targets.studentUid', '==', student.uid),
+                orderBy('at', 'desc'),
+                limit(AUDIT_PAGE),
+              ),
+        );
+  const courseLabel = (id: string) => {
+    const d = data.find((x) => x.course.id === id);
+    return d ? `${d.course.name} (${d.cohortName})` : id;
+  };
+  const history: StudentHistoryRow[] = audit
+    .map((e) => describeHistoryRow(e, courseLabel))
+    .filter((h): h is StudentHistoryRow => h !== null);
+  const ctx = context(dir, byUid, isAdmin ? undefined : 'the courses you manage');
+  await saveWorkbook(
+    workbookFilename(`${student.displayName} — ${ctx.today}`),
+    buildXlsx(
+      studentWorkbook(
+        {
+          student: {
+            uid: student.uid,
+            name: student.displayName,
+            email: student.email,
+            status: student.status,
+            createdAt: student.createdAt,
+          },
+          courses: data,
+          history,
+        },
+        ctx,
+      ),
+    ),
+  );
+}

@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { INSTITUTE_TIMEZONE, todayInZone } from '@sabeel/shared';
-import { Button, Card, Empty, Grid, Screen, Segmented } from '../components/ui';
+import { Card, Empty, Grid, Screen, Segmented } from '../components/ui';
 import { useCourseAttendance } from '../ledger';
-import { exportCsv } from '../exportCsv';
 import { useStudents } from '../students';
 import type { CourseRow } from '../structure';
 import { getTheme, spacing } from '../theme';
@@ -49,37 +48,6 @@ export function CourseAttendanceScreen({
     [report.students, nameOf],
   );
 
-  const exportSessions = () => {
-    const header = ['Date', 'Title', 'Attendance taken', 'Present', 'Absent', 'Excused'];
-    const body = report.sessions.map((s) => [
-      s.date,
-      s.title,
-      s.submitted ? 'yes' : 'no',
-      s.submitted ? `${s.present}` : '',
-      s.submitted ? `${s.absent}` : '',
-      s.submitted ? `${s.excused}` : '',
-    ]);
-    void exportCsv(`${cls.name} - attendance by session.csv`, [header, ...body]);
-  };
-
-  const exportStudents = () => {
-    const header = ['Student', 'Enrolled', 'Present', 'Absent', 'Excused', 'Not marked', 'Required listening', 'Completed', 'Missed'];
-    const body = studentRows.map((s) => [
-      nameOf(s.studentUid),
-      // The file is read months later by someone reconciling counts. A row of
-      // marks for a name that is no longer on the roster needs the reason on it.
-      s.departed ? 'no longer enrolled' : 'yes',
-      `${s.present}`,
-      `${s.absent}`,
-      `${s.excused}`,
-      `${s.notMarked}`,
-      `${s.assigned}`,
-      `${s.completed}`,
-      `${s.missed}`,
-    ]);
-    void exportCsv(`${cls.name} - attendance by student.csv`, [header, ...body]);
-  };
-
   return (
     <Screen
       parent={{ label: cls.name, testID: 'up-to-course-from-attendance', onPress: onOpenCourse }}
@@ -109,13 +77,6 @@ export function CourseAttendanceScreen({
             onChange={setTab}
           />
         </View>
-        <Button
-          testID={tab === 'sessions' ? 'attendance-export-sessions' : 'attendance-export-students'}
-          label="Export CSV"
-          variant="secondary"
-          disabled={tab === 'sessions' ? report.sessions.length === 0 : studentRows.length === 0}
-          onPress={tab === 'sessions' ? exportSessions : exportStudents}
-        />
       </View>
 
       {!report.resolved ? (

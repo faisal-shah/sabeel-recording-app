@@ -1110,7 +1110,7 @@ async function tourStaff(page, tag) {
   await visit('student-ledger', async () => {
     await openCourse();
     await tap(byId(page, `student-ledger-${STUDENT.email}`));
-  }, 'student-export');
+  }, 'student-ledger-profile');
   // The ledger of a recording on a course ARCHIVED WITH LISTENING OFF: the one
   // row state — "Closed (course archived)" — that no live course can show, on
   // a recording that is still published and inside its date. Reached through

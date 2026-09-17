@@ -18,6 +18,7 @@ import { useDecidedStaff } from '../staff';
 import { useStudentAudit, useStudentAuditIn } from '../ledger';
 import { studentHistory } from '../studentHistory';
 import { errorText } from '../errors';
+import { exportStudentWorkbook } from '../workbookData';
 import {
   useAllCoursesState,
   useCohortName,
@@ -104,6 +105,16 @@ export function StudentDetailScreen({
                 Card they stacked at the left of an 1114px card, two different
                 widths, while the equivalent pair on a course sits side by side. */}
             <Row>
+              {/* Everything about this student, across the courses the reader
+                  may see, in one .xlsx — the student's counterpart of the
+                  course workbook. */}
+              <Button
+                testID="student-export-workbook"
+                label="Export workbook"
+                variant="secondary"
+                busy={busy === 'export'}
+                onPress={() => void run('export', () => exportStudentWorkbook(student, uid, isAdmin))}
+              />
               <Button
                 testID="student-resend"
                 label="Resend password link"
