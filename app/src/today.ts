@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { collection, query, where } from 'firebase/firestore';
 import {
   COLLECTIONS,
@@ -15,7 +15,7 @@ export { KIND_ORDER, type TodayItem, type TodayKind, type TodayQueue } from './t
 import { buildTodayQueue, queueScope, type TodayQueue } from './todayQueue';
 import { db } from './firebase';
 import { useListenerFailed, useLiveQuery } from './liveQuery';
-import { useAllCoursesState, useMyCoursesState, type CourseRow } from './structure';
+import { useAllCoursesSource, useMyCoursesSource, type CourseRow } from './structure';
 
 /**
  * The staff work queue, derived — never stored.
@@ -37,6 +37,8 @@ function useTodayQueue(
   max: number,
   /** See `buildTodayQueue`: "nothing will ever be subscribed", not "loaded". */
   settled: boolean,
+  /** Whether `courses` has come from the server, or is still the cache. */
+  confirmed: boolean,
 ): TodayQueue {
   /*
    * A STRING FIRST, THE ARRAY FROM IT — not the other way round.
@@ -50,7 +52,43 @@ function useTodayQueue(
    * here would cost more than the two lines it saves.
    */
   const { key, truncated } = queueScope(courses, max);
-  const scope = useMemo(() => (key ? key.split(',') : []), [key]);
+
+  /*
+   * A REFUSAL OF A SCOPE THE SERVER HAS NOT CONFIRMED IS NOT NEWS.
+   *
+   * On a cold load `courses` is the cache, and one course the manager no
+   * longer runs — deleted, or they were taken off it while the browser was
+   * closed — makes the rules refuse the whole `in` query (every value is
+   * judged against live data). The server's course list then replaces the
+   * scope and the re-issued queries are served: a banner flash and two Sentry
+   * events per stale cache, for nothing anyone could act on (WEB-4). So while
+   * the scope is provisional a denial is expected; once the server has
+   * confirmed it, a denial is a fault again.
+   *
+   * The queries are still issued on the provisional scope — withholding them
+   * until the server answers would cost offline staff their cached queue.
+   *
+   * AND A SWALLOWED REFUSAL IS RETRIED ONCE CONFIRMED. A refused listener is
+   * dead, and if the server's list turns out identical to the cache the scope
+   * does not change and nothing would re-subscribe: the queue would sit on
+   * "Checking your courses…" with the fault unreported. `retry` flips exactly
+   * then — a refusal was swallowed and the scope has since been confirmed —
+   * and the second attempt reports if it is refused again.
+   */
+  const [swallowed, setSwallowed] = useState(false);
+  const expectDenial = () => {
+    if (confirmed) return false;
+    setSwallowed(true);
+    return true;
+  };
+  const retry = confirmed && swallowed;
+  // `retry` is folded into the scope's identity rather than listed as a
+  // second dependency on the queries: they read the scope and nothing else,
+  // and a fresh array is what makes them subscribe again.
+  const scope = useMemo(() => {
+    void retry;
+    return key ? key.split(',') : [];
+  }, [key, retry]);
 
   /*
    * `null` UNTIL THE FIRST SNAPSHOT, deliberately — not an empty array.
@@ -71,6 +109,8 @@ function useTodayQueue(
       label: 'todaySessions',
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as SessionDoc) })),
       empty: null,
+      expectDenial,
+      extra: { scope: key },
     },
   );
 
@@ -85,6 +125,8 @@ function useTodayQueue(
       map: (snap) =>
         new Map(snap.docs.map((d) => [d.id, { id: d.id, ...(d.data() as RecordingDoc) }])),
       empty: null,
+      expectDenial,
+      extra: { scope: key },
     },
   );
 
@@ -149,14 +191,15 @@ export function useStaffQueue(isStaff: boolean, isAdmin: boolean, uid: string): 
   // deletes the shell's error entry — and `useListenerFailed` above then goes
   // false with `courses` still null, so the landing screen falls back from
   // "Could not read your courses" to "Checking your courses…" for good.
-  const all = useAllCoursesState(isStaff && isAdmin, 'todayQueue');
-  const mine = useMyCoursesState(isStaff && !isAdmin ? uid : null, 'todayQueue');
+  const all = useAllCoursesSource(isStaff && isAdmin, 'todayQueue');
+  const mine = useMyCoursesSource(isStaff && !isAdmin ? uid : null, 'todayQueue');
   const courses = isAdmin ? all : mine;
   return useTodayQueue(
-    courses,
+    courses.rows,
     isAdmin ? QUEUE_SCOPE.admin : QUEUE_SCOPE.manager,
     // A student subscribes to nothing, so "no courses" is their settled answer
     // rather than one still arriving.
     !isStaff,
+    !courses.fromCache,
   );
 }

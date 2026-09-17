@@ -19,9 +19,10 @@
  * snapshot then changes the scope and the re-issued queries succeed: a banner
  * flash and two Sentry events per stale state, self-healing.
  *
- * `delete` and `remove` reproduce the signature (two refusals, then a rendered
- * queue); `none` is the control (no refusal). Whatever fix lands, all three must
- * still render the queue and the first two must report NO refusal.
+ * `delete` and `remove` reproduced the signature (two refusals, then a rendered
+ * queue); `none` is the control. Since the fix — a denial of a scope the server
+ * has not yet confirmed is expected, and re-tried once it is — all three must
+ * render the queue and report NO refusal, and the exit code says so.
  */
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
@@ -96,12 +97,19 @@ attach(page, 'cold');
 await page.goto(BASE, { waitUntil: 'domcontentloaded' });
 await page.getByTestId('tab-today').waitFor({ timeout: 60_000 });
 await page.waitForTimeout(8000);
-console.log(`cold: ${await queueLine(page)}`);
+const cold = await queueLine(page);
+console.log(`cold: ${cold}`);
 
-const refused = logs.filter((l) => /today(Sessions|Recordings) listener permission-denied/.test(l));
+// A denial the app marks expected — the provisional scope of a cold load — is
+// logged and not reported, the same convention the e2e's listener count uses.
+const refused = logs.filter(
+  (l) => /today(Sessions|Recordings) listener permission-denied/.test(l) && !/expected/.test(l),
+);
 for (const l of logs.filter((l) => !/Require cycle/.test(l))) console.log(`  ${l}`);
 console.log(`\n${MODE}: ${refused.length} queue-listener refusal(s) reported`);
 await browser.close();
-// `none` must never refuse; the other two document the defect until it is fixed,
-// so the exit code says only whether the run itself completed.
-process.exit(0);
+// All three must render the queue after the cold load, and none may report a
+// refusal: a provisional scope's denial is expected and re-tried, not news.
+const rendered = /\d+ waiting/.test(cold);
+if (!rendered) console.log(`${MODE}: the queue did not render after the cold load`);
+process.exit(refused.length === 0 && rendered ? 0 : 1);

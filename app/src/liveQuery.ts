@@ -9,7 +9,7 @@
 //     slow connection that showed one week's entries under another week.
 //  2. Listener errors also reset to `empty`: an empty screen plus a console
 //     warning beats silently-wrong data that never corrects itself.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   onSnapshot,
   type DocumentReference,
@@ -112,6 +112,7 @@ function reportListenerError(
   label: string,
   e: { code?: string; message: string },
   context?: Record<string, string>,
+  extra?: Record<string, unknown>,
 ) {
   const code = e.code ?? '';
   if (!sessionCanRead && (code === 'permission-denied' || code === 'unauthenticated')) {
@@ -136,17 +137,34 @@ function reportListenerError(
   // guessing which of two dozen subscriptions produced it. The label is the
   // whole diagnostic, so it belongs in the title; the code and the original
   // message ride along, and the SDK frames were never worth reading.
-  captureError(new Error(message), {
-    source: label,
-    code: e.code ?? 'none',
-    detail: e.message,
-    // `scope` names WHICH subscription of this label failed. A label alone is
-    // ambiguous wherever a screen mounts one listener per row — the library runs
-    // a `courseRecordings` listener per course a manager teaches, so a denial
-    // there says a course is unreadable without saying which one, and the event
-    // cannot be chased any further. Set it wherever the label is not unique.
-    ...(context ?? {}),
-  });
+  captureError(
+    new Error(message),
+    {
+      source: label,
+      code: e.code ?? 'none',
+      detail: e.message,
+      // `scope` names WHICH subscription of this label failed. A label alone is
+      // ambiguous wherever a screen mounts one listener per row — the library
+      // runs a `courseRecordings` listener per course a manager teaches, so a
+      // denial there says a course is unreadable without saying which one, and
+      // the event cannot be chased any further. Set it wherever the label is
+      // not unique.
+      ...(context ?? {}),
+    },
+    {
+      // What the listener was asking for — the queue's `in` scope, say — which
+      // a tag cannot hold (200 characters) and a triage cannot do without:
+      // WEB-4 was three days of guessing which course a manager's stale cache
+      // still named.
+      ...(extra ?? {}),
+      // GROUPED BY LISTENER AND CODE, not by the frame that reports them all.
+      // Every listener failure in the app is thrown from this one line, so
+      // Sentry's default fingerprint filed a student's refused recording, a
+      // manager's refused queue and an admin's refused people list as one
+      // issue, and the three incidents in it had three different causes.
+      fingerprint: ['listener', label, e.code ?? 'none'],
+    },
+  );
 }
 
 /** Latest live-listener failure, app-wide; null when healthy. */
@@ -216,16 +234,21 @@ export interface LiveQueryOptions<T> {
    */
   context?: Record<string, string>;
   /**
-   * A refusal is an ordinary answer for this reader, not a defect: the
-   * document exists and the rules withhold it from them by design. A student's
-   * recording is the case — unpublished or archived while they have it open,
-   * the rules close it and the listener is refused, which is the app working.
-   * Reported, that refusal painted "Live data error: permission-denied" over
-   * the "it may have been removed" screen and filed two Sentry events per
-   * unpublish. With this set a denial resolves to `empty` and is logged as
-   * expected; any other error still reports.
+   * Asked, at the moment of a refusal, whether this one was expected — read
+   * fresh each time, so it may depend on state that has moved since the
+   * subscription was made. `true` logs the denial as expected and resolves to
+   * `empty` without a banner or a Sentry event; anything else, and any error
+   * that is not a denial, reports as usual. The work queue uses it: its `in`
+   * scope is built from the FIRST courses snapshot, which on a cold load is
+   * the cache, and the rules judge every value against live data — so a
+   * course the manager no longer runs refuses the whole query until the
+   * server's snapshot corrects the scope. That refusal is the cache being
+   * stale, not a fault, and it was two Sentry events per cold load.
    */
-  denialIsAnswer?: boolean;
+  expectDenial?: () => boolean;
+  /** Extra fields for the Sentry event if this listener fails — what it was
+   *  asking for, when the label alone cannot say. */
+  extra?: Record<string, unknown>;
 }
 
 /**
@@ -242,9 +265,13 @@ export interface LiveQueryOptions<T> {
 export function useLiveQuery<T>(
   make: () => Query | null,
   deps: readonly unknown[],
-  { label, map, empty, includeMetadataChanges = false, context }: LiveQueryOptions<T>,
+  { label, map, empty, includeMetadataChanges = false, context, expectDenial, extra }: LiveQueryOptions<T>,
 ): T {
   const [value, setValue] = useState<T>(empty);
+  // Read at the refusal, not at the subscription: whether a denial is expected
+  // can depend on state that moved after the listener was opened.
+  const expectDenialRef = useRef(expectDenial);
+  expectDenialRef.current = expectDenial;
   useEffect(() => {
     setValue(empty);
     const q = make();
@@ -259,7 +286,13 @@ export function useLiveQuery<T>(
       },
       (e) => {
         setValue(empty);
-        reportListenerError(key, label, e, context);
+        if (e.code === 'permission-denied' && expectDenialRef.current?.()) {
+          // Marked, like a denial after sign-out: the e2e counts unmarked
+          // listener warnings and must not be blinded, nor fail on this one.
+          console.warn(`${label} listener`, e.code, '(provisional scope — expected)');
+          return;
+        }
+        reportListenerError(key, label, e, context, extra);
       },
     );
     return () => {

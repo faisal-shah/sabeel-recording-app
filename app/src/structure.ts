@@ -177,6 +177,66 @@ export function useAllCoursesState(enabled: boolean, scope?: string): CourseRow[
 }
 
 /**
+ * A course list AND where it came from — the cache, or the server.
+ *
+ * With IndexedDB persistence the first snapshot of a cold load is the cache,
+ * and the work queue builds its `courseId in [...]` scope from it. The rules
+ * judge every value of that scope against live data, so a course the reader
+ * no longer runs — deleted, or they were taken off it while the browser was
+ * closed — refuses the whole query until the server's snapshot corrects the
+ * list. The queue needs to know which of those two it is holding, so this
+ * variant asks for metadata changes and says so; the plain `State` hooks do
+ * not, because every other screen only renders rows and the metadata
+ * doubles the callbacks. `fromCache` starts true: before the first snapshot
+ * nothing has been confirmed.
+ */
+export interface CourseSource {
+  rows: CourseRow[] | null;
+  fromCache: boolean;
+}
+const UNCONFIRMED: CourseSource = { rows: null, fromCache: true };
+
+export function useAllCoursesSource(enabled: boolean, scope?: string): CourseSource {
+  return useLiveQuery<CourseSource>(
+    () =>
+      enabled
+        ? query(collection(db, COLLECTIONS.courses), orderBy('createdAt', 'asc'))
+        : null,
+    [enabled],
+    {
+      label: 'allCourses',
+      context: scope ? { scope } : undefined,
+      includeMetadataChanges: true,
+      map: (snap) => ({
+        rows: snap.docs.map((d) => ({ id: d.id, ...(d.data() as CourseDoc) })),
+        fromCache: snap.metadata.fromCache,
+      }),
+      empty: UNCONFIRMED,
+    },
+  );
+}
+
+export function useMyCoursesSource(uid: string | null, scope?: string): CourseSource {
+  return useLiveQuery<CourseSource>(
+    () =>
+      uid
+        ? query(collection(db, COLLECTIONS.courses), where('managerUids', 'array-contains', uid))
+        : null,
+    [uid],
+    {
+      label: 'myCourses',
+      context: scope ? { scope } : undefined,
+      includeMetadataChanges: true,
+      map: (snap) => ({
+        rows: snap.docs.map((d) => ({ id: d.id, ...(d.data() as CourseDoc) })),
+        fromCache: snap.metadata.fromCache,
+      }),
+      empty: UNCONFIRMED,
+    },
+  );
+}
+
+/**
  * The courses a manager is scoped to.
  *
  * The `array-contains` constraint is not a convenience — the security rule's
