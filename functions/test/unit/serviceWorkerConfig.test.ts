@@ -41,3 +41,24 @@ describe('the push service worker restates the app’s Firebase config', () => {
     for (const major of workerMajors) expect(major).toBe(appMajor);
   });
 });
+
+/**
+ * The click on a banner the PAGE shows is handled in the worker, and the two
+ * agree on one marker: the page puts `page: true` in the notification's data,
+ * the worker acts only when it is there and leaves FCM's own banners to the
+ * SDK. Rename either side and a foreground banner's click does nothing.
+ */
+describe('the click on a page-shown banner', () => {
+  const page = readFileSync(resolve(ROOT, 'app', 'src', 'push.web.ts'), 'utf8');
+
+  it('is marked by the page and recognised by the worker', () => {
+    expect(page).toMatch(/showNotification\([\s\S]*?data:\s*\{\s*page:\s*true/);
+    expect(worker).toMatch(/addEventListener\('notificationclick'/);
+    expect(worker).toMatch(/if \(!data \|\| !data\.page\) return;/);
+  });
+
+  it('focuses an open window or opens the app', () => {
+    expect(worker).toMatch(/clients\.matchAll\(\{ type: 'window'/);
+    expect(worker).toMatch(/openWindow\(data\.link\)/);
+  });
+});

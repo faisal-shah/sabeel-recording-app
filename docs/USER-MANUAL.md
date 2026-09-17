@@ -231,6 +231,10 @@ The app can send you two messages, and only two. Tap **More**, then
 Both start switched on. There's deliberately no message *after* a recording
 closes: by then there'd be nothing you could do about it.
 
+A message is shown whether the app is open or closed, on the phone and on the
+website. While you're in the app — listening, say — it appears as a banner,
+without a sound.
+
 Your choices follow you — they apply on every device you sign in on. Reaching
 this device needs its permission as well. The app offers to set that up once, on
 your listening screen after you sign in; you can also tap **Enable

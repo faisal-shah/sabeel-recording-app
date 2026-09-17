@@ -13,6 +13,7 @@ vi.mock('expo-notifications', () => ({
   requestPermissionsAsync: vi.fn(),
   getPermissionsAsync: vi.fn(),
   getDevicePushTokenAsync: vi.fn(),
+  setNotificationHandler: vi.fn(),
   AndroidImportance: { DEFAULT: 3, HIGH: 4 },
 }));
 vi.mock('react-native', () => ({ Linking: { openSettings: vi.fn(() => Promise.resolve()) } }));
@@ -23,6 +24,7 @@ import {
   getDevicePushTokenAsync,
   requestPermissionsAsync,
   setNotificationChannelAsync,
+  setNotificationHandler,
 } from 'expo-notifications';
 import { PUSH_CHANNEL_ID, PUSH_CHANNEL_NAME } from '@sabeel/shared';
 
@@ -134,5 +136,26 @@ describe('the notification channel', () => {
     asMock(deleteNotificationChannelAsync).mockRejectedValueOnce(new Error('no such channel'));
     const { devicePushToken } = await loadPush();
     await expect(devicePushToken(false)).resolves.toBe('fcm-native-token');
+  });
+});
+
+/**
+ * A push that arrives while the app is OPEN is shown. expo-notifications'
+ * default with no handler is to show nothing in the foreground, so the
+ * promise lives entirely in one registered handler and its answer; the
+ * mutation is deleting the call, or answering false.
+ */
+describe('a push while the app is open', () => {
+  it('is shown as a banner, without a sound, from the moment the module loads', async () => {
+    await loadPush();
+    expect(setNotificationHandler).toHaveBeenCalledTimes(1);
+    const { handleNotification } = asMock(setNotificationHandler).mock.calls[0][0] as {
+      handleNotification: (n: unknown) => Promise<Record<string, boolean>>;
+    };
+    await expect(handleNotification({})).resolves.toMatchObject({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: false,
+    });
   });
 });

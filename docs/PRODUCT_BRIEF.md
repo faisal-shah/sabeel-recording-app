@@ -401,6 +401,8 @@ To the class's managers and to nobody else: an admin who manages no class cannot
 
 Each has its own on/off switch, per person, defaulting on. Notifications are a convenience, not the accountability mechanism.
 
+A message is shown whether the app is open, in the background, or closed — on Android and on the website alike. While the app is open it appears as a banner without a sound: the person is already there, and the live screen carries the news.
+
 ## Data policy and audit history
 
 - Recording access state and accountability history are retained indefinitely by default unless an Admin deletes or archives data according to policy.

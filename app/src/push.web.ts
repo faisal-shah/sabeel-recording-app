@@ -1,4 +1,5 @@
-import { getMessaging, getToken, isSupported } from 'firebase/messaging';
+import { getMessaging, getToken, isSupported, onMessage, type MessagePayload } from 'firebase/messaging';
+import { WEB_APP_URL } from '@sabeel/shared';
 import { app } from './firebase';
 import { VAPID_PUBLIC_KEY } from './firebase-config';
 
@@ -36,6 +37,8 @@ export const pushPlatform = 'web' as const;
  * no way back but a reload.
  */
 let cached: string | null = null;
+/** Whether this tab already listens for a push arriving while it is open. */
+let listening = false;
 
 /**
  * The checks that can be made WITHOUT awaiting anything.
@@ -139,14 +142,50 @@ async function resolveToken(prompt: boolean): Promise<string | null> {
       new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000)),
     ]);
     if (!registration) return null;
-    return await getToken(getMessaging(app), {
+    const messaging = getMessaging(app);
+    const token = await getToken(messaging, {
       vapidKey: VAPID_PUBLIC_KEY,
       serviceWorkerRegistration: registration,
     });
+    if (!listening) {
+      listening = true;
+      onMessage(messaging, (payload) => void showForegroundPush(payload).catch(() => undefined));
+    }
+    return token;
   } catch {
     // A missing service worker, a revoked key, a browser in a private mode that
     // refuses registration. None of them is worth an error banner over a
     // convenience feature.
     return null;
   }
+}
+
+/**
+ * A push that arrives while this tab is OPEN is shown, as a banner.
+ *
+ * FCM's service worker displays a message itself only when no window of this
+ * origin is visible; with one visible it forwards the payload to the page and
+ * draws nothing — so until 2026-09-17 a push that arrived at an open tab was
+ * dropped, silently. Decided that day: shown whether the app is open or
+ * closed, on every surface. One banner, never two: when the tab is visible
+ * the worker does not display, and when it is not, `onMessage` does not fire.
+ *
+ * Shown THROUGH the registration, not `new Notification()`: a page-created
+ * notification dies with the page and has no click handler once the tab is
+ * gone, while one the worker owns is clicked in the worker — which focuses
+ * this tab or opens the app (`notificationclick` in firebase-messaging-sw.js,
+ * acting only on notifications carrying the `page` marker below, so FCM's own
+ * click handling is left alone). `tag` collapses an exact repeat into one —
+ * and two visible tabs of the same person into one banner, not two.
+ */
+export async function showForegroundPush(payload: MessagePayload): Promise<void> {
+  const title = payload.notification?.title ?? payload.data?.title;
+  const body = payload.notification?.body ?? payload.data?.body;
+  if (!title) return;
+  const registration = await navigator.serviceWorker.ready;
+  await registration.showNotification(title, {
+    body,
+    tag: `${title}|${body ?? ''}`,
+    data: { page: true, link: WEB_APP_URL },
+  });
 }

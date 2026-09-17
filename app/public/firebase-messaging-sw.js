@@ -1,5 +1,5 @@
 /* eslint-env serviceworker */
-/* global importScripts, firebase */
+/* global importScripts, firebase, self */
 /**
  * Web push service worker.
  *
@@ -31,7 +31,27 @@ firebase.initializeApp({
   appId: '1:977423479850:web:ffb551dcf015bd5f33bf53',
 });
 
-// Registering messaging is enough: the SDK shows the notification payload
-// itself when the page is not in the foreground. A custom onBackgroundMessage
-// handler here would produce a SECOND banner alongside the automatic one.
+// Registering messaging is enough for a closed or hidden tab: the SDK shows the
+// notification payload itself when no window of this origin is visible, and its
+// click opens the link the server set. A custom onBackgroundMessage handler
+// here would produce a SECOND banner alongside the automatic one.
+//
+// With a window visible the SDK draws nothing and forwards the payload to the
+// page, which shows it through this registration (push.web.ts,
+// showForegroundPush) — so the click on THAT banner lands here too, and the
+// SDK's own click handler ignores it (no FCM_MSG in its data). This one acts
+// only on notifications the page shaped, marked `data.page`, and leaves the
+// SDK's to the SDK: focus a window of ours if one is open, else open the app.
 firebase.messaging();
+
+self.addEventListener('notificationclick', (event) => {
+  const data = event.notification.data;
+  if (!data || !data.page) return;
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      const open = clients.find((c) => 'focus' in c);
+      return open ? open.focus() : self.clients.openWindow(data.link);
+    }),
+  );
+});

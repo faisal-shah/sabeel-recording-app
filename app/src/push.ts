@@ -6,6 +6,7 @@ import {
   getPermissionsAsync,
   requestPermissionsAsync,
   setNotificationChannelAsync,
+  setNotificationHandler,
 } from 'expo-notifications';
 import { PUSH_CHANNEL_ID, PUSH_CHANNEL_NAME } from '@sabeel/shared';
 
@@ -25,6 +26,28 @@ import { PUSH_CHANNEL_ID, PUSH_CHANNEL_NAME } from '@sabeel/shared';
  */
 
 export const pushPlatform = 'android' as const;
+
+/**
+ * A push that arrives while the app is OPEN is shown, as a banner.
+ *
+ * FCM displays a message itself only when the app is in the background or
+ * closed; in the foreground it hands the message to expo-notifications, whose
+ * default with no handler is to show nothing — so until 2026-09-17 a push
+ * that arrived while the app was open was dropped, silently. Decided that
+ * day: shown whether the app is open or closed, on every surface. No sound,
+ * because the person is already here; the banner is enough. Registered at
+ * module scope so it is in place before the first message can arrive. The
+ * icon it draws with is the manifest's `expo.modules.notifications` pair —
+ * see AndroidManifest.xml, and notificationIcon.test.ts.
+ */
+setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+  }),
+});
 
 
 /**

@@ -12,8 +12,8 @@ import { resolve } from 'node:path';
  * — and with those absent, `ExpoNotificationBuilder` falls back to the
  * launcher icon, whose silhouette is a full-bleed square, untinted. The
  * sibling kanban app shipped with only the FCM pair and showed two different
- * small icons from one app minutes apart (2026-09-16). This app presents no
- * foreground push today, so the second pair is a guard for the day it does;
+ * small icons from one app minutes apart (2026-09-16). This app shows a push
+ * that arrives while it is open (push.ts), so both pairs are load-bearing;
  * whoever draws the push must draw the same icon.
  */
 const manifest = readFileSync(

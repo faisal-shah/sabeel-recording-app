@@ -36,6 +36,34 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-09-17 — **A push is shown whether the app is open or closed, on both
+  surfaces.** Faisal's decision, made after the sibling kanban app showed the
+  same push in two styles on his phone. Until now a push that arrived while
+  this app was OPEN was dropped silently on both surfaces, and only a comment
+  in the manifest said so: on Android, FCM displays a message itself only
+  when the app is in the background or closed, and in the foreground hands it
+  to expo-notifications, whose default with no `setNotificationHandler` is
+  to show nothing; on the web, FCM's service worker forwards a message to any
+  visible window instead of displaying it, and `push.web.ts` never wired
+  `onMessage`. Now `push.ts` registers a handler at module scope (banner and
+  list, no sound — the person is already in the app) and the manifest carries
+  the `expo.modules.notifications` icon and colour pair beside FCM's, pointing
+  at the same resources, because expo-notifications' fallback is the launcher
+  icon untinted — kanban's symptom (`notificationIcon.test.ts` holds the two
+  pairs to one resource). On the web, once the tab holds a token it listens
+  with `onMessage` and shows the payload through the worker's registration,
+  marked `data.page`; the worker's `notificationclick` acts only on those,
+  focusing an open window or opening the app, and leaves FCM's own banners to
+  the SDK. One banner, never two: the worker displays only when no window is
+  visible, and `onMessage` fires only when one is. Tests: `push.test.ts`
+  (the handler and its answer), `push.web.test.ts` (listened for once a token
+  is held, shown with title and body, not listened for while push is
+  unavailable), `serviceWorkerConfig.test.ts` (the marker the page sets is
+  the one the worker checks). What no test can reach is delivery itself —
+  no emulator sends a push — so the device check is a real message to a real
+  device with the app open and then closed, and the `dumpsys notification`
+  icon id for both.
+
 - 2026-09-17 — **Sentry SABEEL-RECORDING-WEB-4, triaged and reproduced: a
   manager's cold load refuses the work queue when the cached course list is
   stale.** Three incidents in one Sentry group (grouped by the frame that
