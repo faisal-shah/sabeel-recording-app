@@ -352,10 +352,12 @@ export function readXlsx(bytes: Uint8Array): { name: string; rows: string[][] }[
   return sheets.map(({ name, id }) => {
     const xml = strFromU8(files[`xl/worksheets/sheet${id}.xml`]);
     const rows: string[][] = [];
-    for (const row of xml.matchAll(/<row r="(\d+)">(.*?)<\/row>/g)) {
+    // `s` flags throughout: a grid header carries a newline in its text, and
+    // a reader that skipped that row would hide the header it is there to check.
+    for (const row of xml.matchAll(/<row r="(\d+)">(.*?)<\/row>/gs)) {
       const cells: string[] = [];
-      for (const cell of row[2].matchAll(/<c r="([A-Z]+)\d+"[^>]*?(?:\/>|>(.*?)<\/c>)/g)) {
-        const text = cell[2]?.match(/<t[^>]*>(.*?)<\/t>/)?.[1] ?? cell[2]?.match(/<v>(.*?)<\/v>/)?.[1] ?? '';
+      for (const cell of row[2].matchAll(/<c r="([A-Z]+)\d+"[^>]*?(?:\/>|>(.*?)<\/c>)/gs)) {
+        const text = cell[2]?.match(/<t[^>]*>(.*?)<\/t>/s)?.[1] ?? cell[2]?.match(/<v>(.*?)<\/v>/s)?.[1] ?? '';
         cells.push(text.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"'));
       }
       rows.push(cells);

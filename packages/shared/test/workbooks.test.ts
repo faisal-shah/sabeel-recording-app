@@ -5,6 +5,7 @@ import {
   courseStudentStats,
   courseWorkbook,
   excelSerial,
+  readXlsx,
   studentWorkbook,
   WORKBOOK_DEFINITIONS,
   type CourseData,
@@ -312,6 +313,17 @@ describe('courseWorkbook', () => {
     expect(workbook).toMatch(/_xlnm\._FilterDatabase/);
     // A date is a serial number with the date style, not text.
     expect(excelSerial(new Date('2026-09-15T00:00:00Z'))).toBe(46280);
+  });
+
+  it('reads back every row it wrote — the grids\' headers carry a newline', () => {
+    // `readXlsx` is what the e2e reads a download with; a row it silently
+    // dropped would be a header nobody checked.
+    const back = readXlsx(buildXlsx(wb));
+    for (const sheet of wb.sheets) {
+      expect(back.find((s) => s.name === sheet.name)?.rows.length, sheet.name).toBe(sheet.rows.length);
+    }
+    const register = back.find((s) => s.name === 'Register')!;
+    expect(register.rows[1][1]).toMatch(/^\d\d-\d\d\n/);
   });
 });
 
