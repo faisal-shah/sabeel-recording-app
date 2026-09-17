@@ -36,6 +36,52 @@ and commit messages, and renaming them would strand every one of those.
 
 ## Decision log
 
+- 2026-09-17 — **Sentry SABEEL-RECORDING-WEB-4, triaged and reproduced: a
+  manager's cold load refuses the work queue when the cached course list is
+  stale.** Three incidents in one Sentry group (grouped by the frame that
+  reports every listener failure): 2026-09-15 20:43Z on the People tab, with
+  `students`, `allCourses`, `todaySessions` and `todayRecordings` all refused;
+  2026-09-16 03:37Z on Today and 2026-09-16 19:30Z on a student's ledger, each
+  refusing ONLY `todaySessions` and `todayRecordings` while the courses listener
+  that feeds them, and everything else on the screen, was served. Breadcrumbs on
+  the last two show a cold page load: token refresh, Listen stream opened,
+  the two refusals, nothing else.
+
+  **The mechanism, reproduced locally** (`scripts/repro-stale-scope.mjs`,
+  against the emulator and the e2e dev server): the shell builds the queue's
+  `courseId in [...]` scope from the FIRST courses snapshot, which on a cold
+  load with IndexedDB persistence comes from the cache. Rules judge every `in`
+  value against live data — each value must pass — and `get(courses/X)` on a
+  course that no longer exists is an evaluation error, so one course the
+  manager no longer runs (deleted, or they were taken off it while their
+  browser was closed) refuses the whole query. The server's courses snapshot
+  then changes the scope and the re-issued queries succeed: a banner flash and
+  two Sentry events per stale state, self-healing, no data exposed. The
+  emulator's error text names the line production hides (the sessions rule's
+  `.data.managerUids` on a missing course). Both `delete` and `remove` variants
+  reproduce the signature; the control does not. Two refusals per label on
+  2026-09-15 night were two stale states before the server caught up. The demo
+  wipe of 2026-09-11 deleted courses, which is the likeliest way a real
+  manager's cache came to hold one.
+
+  The first incident is a different cause: a token that was not staff at all
+  under an admin's tab while the session believed itself readable — most
+  likely a second tab of the same browser signed in as a student, since
+  Firebase Auth shares the credential across tabs. Unconfirmed; the Auth
+  sign-in times around that minute would settle it.
+
+  **Not fixed yet.** The fix is for the queue's `in` queries to stop being
+  judged on a cache-derived scope, or for a refusal of one to stop counting as
+  an error: expose `fromCache` from the courses `State` hooks and treat the
+  queue's refusal as expected until the server has confirmed the scope. The
+  repro script is the test — `delete` and `remove` must report no refusal and
+  still render the queue, `none` unchanged. Two diagnostic gaps found on the
+  way: the web Sentry init sets no `release` and no user, so no event says
+  which build or which account; and every listener failure shares one issue.
+  Also seen: SABEEL-RECORDING-ANDROID-3 is a student still on the 12 August
+  APK 0.3.0, whose `studentRecordings` listener the excused-only rules of
+  2026-08-15 refuse; there is no minimum-version gate.
+
 - 2026-09-11 — **Five review passes over the whole product, and what they
   found.** Five read-only reviews in parallel — backend callables and
   triggers; rules against every client query; client playback and sync logic;
