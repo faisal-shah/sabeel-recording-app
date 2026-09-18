@@ -32,9 +32,45 @@ and commit messages, and renaming them would strand every one of those.
 | 6 | Zoom import | **built** — waiting on institute credentials and its first live import |
 | 7 | Notifications | **complete** (2026-08-15: delivered to an Android device end to end; web delivery still a browser check) |
 | 8 | Admin backend stats | not started |
-| 9 | Deploy, manual, release | **complete** (2026-09-07: v0.5.0 deployed, device pass on tb_emu, published to both release homes and the download page) |
+| 9 | Deploy, manual, release | **complete** (2026-09-17: v0.7.0 deployed, device pass on tb_emu including a real push, published to both release homes and the download page) |
 
 ## Decision log
+
+- 2026-09-17 — **v0.7.0 shipped to every surface** (build commit `8cbddc5`,
+  versionCode 33): rules → functions → hosting, `smoke:prod` and
+  `check:queries` green against the live site, tagged, both release homes,
+  download page and manual PDF. In it: the two Excel workbooks in place of
+  the CSV exports; the queue's stale-scope fix (SABEEL-RECORDING-WEB-4,
+  resolved with this release); Sentry events carrying release and role, never
+  identity; `setCourseManagers` auditing who was added and removed; the
+  minimum-build gate (`config/app.minVersionCode`, unset — the floor raise to
+  33 is Faisal's, TODO §7); a push shown while the app is open, on both
+  surfaces. Device pass on `tb_emu` with the debug build against the
+  emulators and a REAL push to its token (`scripts/send-test-push.mjs`):
+  with the app open, expo-notifications drew it — `dumpsys` record tagged
+  with the FCM message id, `icon=…id=0x7f080102` = `drawable/ic_notification`,
+  `color=0xff83114f`, channel `sabeel-alerts`, tap brought the app forward;
+  with the app in the background, FCM drew it — record tagged
+  `FCM-Notification:…`, the same icon id and colour, tap launched the app.
+  The release APK installed clean at `v0.7.0 · 8cbddc5` with no dev panel.
+  What no emulator can show and remains for a person: the web banner on a
+  focused tab (`onMessage` → `showNotification`), which needs a signed-in
+  production browser holding a token.
+
+  **Two things the first deploy taught.** (1) `firebase deploy --only
+  functions` failed every container's start-up probe — `Cannot find module
+  'fflate'`: esbuild inlined `@sabeel/shared` from its compiled CommonJS
+  `lib/`, which cannot be tree-shaken, so the app-only .xlsx writer and its
+  dependency rode into a package that never declared it. Cloud Run kept the
+  previous revisions serving throughout; nothing local could see it because
+  the emulator resolves the hoisted workspace `node_modules`. Fixed in
+  `fcaf658` (inline from source, `sideEffects: false`, a static import in
+  place of the one lazy `require` that had switched tree-shaking off) and
+  held by `bundleExternals.test.ts`, which builds the real bundle and
+  refuses a bare `require()` this package does not declare. (2) A release
+  rebuilt after a JS-free commit reused the cached bundle with the previous
+  label — `EXPO_PUBLIC_COMMIT` is not a Gradle input; DEPLOY.md says how to
+  tell and what to check.
 
 - 2026-09-17 — **A push is shown whether the app is open or closed, on both
   surfaces.** Faisal's decision, made after the sibling kanban app showed the

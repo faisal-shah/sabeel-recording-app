@@ -437,7 +437,7 @@ from here.
       the download page. Readable by anyone, written only by
       `scripts/set-min-version.mjs <versionCode>`, which is yours to run after
       a release older builds can no longer work against — see DEPLOY.md.
-- [ ] **Raise the floor once v0.7.0 is out**: `node scripts/set-min-version.mjs 33`
+- [ ] **Raise the floor — v0.7.0 is out (2026-09-17)**: `node scripts/set-min-version.mjs 33`
       retires every build before it (0.3.0 through 0.6.4 do not have the
       gate, so the floor reaches only builds from 0.7.0 on — it is for the
       NEXT rules change, not this one). Note for later store builds: a
