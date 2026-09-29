@@ -33,7 +33,7 @@ Two installed skills are authoritative and must not be copied into this repo:
   proof the APK installed (check `adb shell dumpsys package <id> | grep
   versionName`); and a screenshot of the sign-in screen is evidence about nothing
   else — authenticated screens need a `__DEV__`-only emulator sign-in row to reach.
-- **`sabeel-color-scheme`** — the Option 1 brand palette, its role proportions,
+- **`sabeel-brand`** — the Option 1 brand palette, its role proportions,
   the accessibility-driven text and gold cuts, and the **single light theme**
   rule. Applied in Phase 0 so no colour debt accrues; hardcoded colours become
   ESLint-banned in the same phase.
@@ -97,7 +97,7 @@ Fork the sibling skeleton; get a hello screen running on both surfaces.
 - Reorganise docs to match siblings: `docs/PRODUCT_BRIEF.md` (the existing brief),
   `docs/PHASE_STATUS.md`, `docs/BRAND.md`, `docs/DEPLOY.md`, `docs/SECRETS.md`,
   `docs/STACK-GOTCHAS.md` (stub pointing at the skill), `TODO.md`.
-- Theme from `sabeel-color-scheme`: `app/src/theme/{palette,index}.ts`, semantic
+- Theme from `sabeel-brand`: `app/src/theme/{palette,index}.ts`, semantic
   tokens, `useTheme()`, light-only, ESLint ban on hardcoded colours.
 - Firebase project created, emulator suite wired (Auth, Firestore, Functions,
   **Storage**), `demo-` project id for tests.

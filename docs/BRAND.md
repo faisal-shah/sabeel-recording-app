@@ -1,8 +1,10 @@
 # Brand
 
-**Authority: the shared `sabeel-color-scheme` skill.** This file restates what
-this app needs and records where its token set goes beyond the common one. When
-the two disagree, the skill wins — and the disagreement is a bug to fix here.
+**Authority: the shared `sabeel-brand` skill** in
+[Sabeel-Institute/brand](https://github.com/Sabeel-Institute/brand). This file
+restates what this app needs and records where its token set goes beyond the
+common one. When the two disagree, the skill wins — and the disagreement is a
+bug to fix here.
 
 The palette is the designer's **Option 1** (2026-07-21), shared exactly with the
 sibling time-tracker and kanban apps. The test that catches drift: **put two

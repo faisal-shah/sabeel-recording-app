@@ -111,7 +111,7 @@ Do not silently change any of these.
   file can be replaced. Neither destroys history, both are audited with a
   required reason, and both are ordinary corrections to their own class — see
   `docs/PRODUCT_BRIEF.md`.
-- **BRAND COLORS ARE FIXED.** `docs/BRAND.md` and the shared `sabeel-color-scheme`
+- **BRAND COLORS ARE FIXED.** `docs/BRAND.md` and the shared `sabeel-brand`
   skill are the authority. Single light theme, **no dark mode**. Never hardcode a
   colour; the ESLint rule will reject it. `app/src/theme/palette.ts` is the only
   exception.
